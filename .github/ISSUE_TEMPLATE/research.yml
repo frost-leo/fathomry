@@ -1,0 +1,63 @@
+# fathomry
+# Copyright (C) 2026  Frost Leo
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+name: Architecture or research proposal
+description: Investigate a bounded question using sources and experiments.
+title: "research: "
+labels: ["type: research", "area: architecture", "status: triage"]
+body:
+  - type: textarea
+    id: decision
+    attributes:
+      label: Question or decision
+      description: State the uncertainty to resolve; do not assume the preferred solution is correct.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Requirements, constraints, and non-goals
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sources and current evidence
+      description: Link authoritative documentation and exact SDK versions/files/symbols where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Competing approaches
+      description: Compare ownership, dependency direction, compatibility, complexity, and failure modes.
+    validations:
+      required: true
+  - type: textarea
+    id: experiments
+    attributes:
+      label: Experiments and decision criteria
+      description: Specify representative workloads, controls/ablations, measurements, and disconfirming evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Bounded deliverable
+      description: A decision record, prototype, capability matrix, or verified vertical slice.
+    validations:
+      required: true

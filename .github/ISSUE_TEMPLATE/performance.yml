@@ -1,0 +1,55 @@
+# fathomry
+# Copyright (C) 2026  Frost Leo
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+name: Performance or capacity investigation
+description: Investigate a measured bottleneck with equivalent workloads and correctness controls.
+title: "perf: "
+labels: ["type: research", "concern: performance", "status: triage"]
+body:
+  - type: textarea
+    id: workload
+    attributes:
+      label: Workload and environment
+      description: Versions, hardware, payload distribution, concurrency, duration, and warm/cold state.
+    validations:
+      required: true
+  - type: textarea
+    id: baseline
+    attributes:
+      label: Baseline and observed bottleneck
+      description: Include latency distribution, throughput, allocations, memory, goroutines, or connections.
+    validations:
+      required: true
+  - type: textarea
+    id: experiment
+    attributes:
+      label: Controlled experiment and ablations
+      description: Compare equivalent SDK/wrapper settings and identify what evidence would reject the hypothesis.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Correctness and resource guarantees that must remain intact
+    validations:
+      required: true
+  - type: textarea
+    id: target
+    attributes:
+      label: Acceptance target and limitations
+    validations:
+      required: true

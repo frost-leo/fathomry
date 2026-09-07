@@ -1,0 +1,305 @@
+{
+  "schema": "fathomry.github-labels/v1",
+  "copyright": "Copyright (C) 2026 Frost Leo",
+  "license": "GPL-3.0-or-later",
+  "labels": [
+    {
+      "name": "type: bug",
+      "color": "d73a4a",
+      "description": "Incorrect behavior with a reproducible failure."
+    },
+    {
+      "name": "type: feature",
+      "color": "0e8a16",
+      "description": "A new user-visible capability."
+    },
+    {
+      "name": "type: task",
+      "color": "1d76db",
+      "description": "A bounded implementation or operational task."
+    },
+    {
+      "name": "type: design",
+      "color": "5319e7",
+      "description": "An architectural or public-contract decision."
+    },
+    {
+      "name": "type: research",
+      "color": "d4c5f9",
+      "description": "Resolve uncertainty using primary sources and experiments."
+    },
+    {
+      "name": "type: refactor",
+      "color": "5319e7",
+      "description": "Improve structure while preserving intended behavior."
+    },
+    {
+      "name": "type: docs",
+      "color": "0075ca",
+      "description": "Documentation, examples, or developer guidance."
+    },
+    {
+      "name": "type: test",
+      "color": "1d76db",
+      "description": "Tests, fault injection, or verification infrastructure."
+    },
+    {
+      "name": "type: dependency",
+      "color": "0366d6",
+      "description": "SDK, toolchain, or automation dependency changes."
+    },
+    {
+      "name": "type: security",
+      "color": "b60205",
+      "description": "Public-safe security hardening; private reports use Security Advisories."
+    },
+    {
+      "name": "type: maintenance",
+      "color": "cfd3d7",
+      "description": "Repository, release, or infrastructure maintenance."
+    },
+    {
+      "name": "priority: p0",
+      "color": "b60205",
+      "description": "Critical safety, data integrity, or availability problem; address immediately."
+    },
+    {
+      "name": "priority: p1",
+      "color": "d93f0b",
+      "description": "High impact or a prerequisite blocking the current milestone."
+    },
+    {
+      "name": "priority: p2",
+      "color": "fbca04",
+      "description": "Normal planned work."
+    },
+    {
+      "name": "priority: p3",
+      "color": "c5def5",
+      "description": "Lower urgency; schedule when capacity permits."
+    },
+    {
+      "name": "status: triage",
+      "color": "ededed",
+      "description": "Needs classification, scope, or acceptance criteria."
+    },
+    {
+      "name": "status: ready",
+      "color": "0e8a16",
+      "description": "Scope and prerequisites are clear; work may start."
+    },
+    {
+      "name": "status: in-progress",
+      "color": "1d76db",
+      "description": "Actively being investigated or implemented."
+    },
+    {
+      "name": "status: blocked",
+      "color": "b60205",
+      "description": "Cannot proceed until an explicit dependency or decision is resolved."
+    },
+    {
+      "name": "status: needs-info",
+      "color": "d876e3",
+      "description": "Specific missing evidence or clarification is requested."
+    },
+    {
+      "name": "area: architecture",
+      "color": "5319e7",
+      "description": "Responsibility boundaries, dependency direction, and system design."
+    },
+    {
+      "name": "area: framework",
+      "color": "0052cc",
+      "description": "Public framework APIs and business orchestration mechanisms."
+    },
+    {
+      "name": "area: internal",
+      "color": "0052cc",
+      "description": "Private process-local infrastructure and resource ownership."
+    },
+    {
+      "name": "area: adapters",
+      "color": "0052cc",
+      "description": "Boundary adapters between framework contracts and implementations."
+    },
+    {
+      "name": "area: workflows",
+      "color": "0052cc",
+      "description": "Workflow definitions, run modes, root/chunk/item execution."
+    },
+    {
+      "name": "area: temporal",
+      "color": "0052cc",
+      "description": "Temporal SDK integration, workers, replay, cancellation, and Nexus."
+    },
+    {
+      "name": "area: cli",
+      "color": "006b75",
+      "description": "Commands, project/workflow scaffolding, and machine output."
+    },
+    {
+      "name": "area: config",
+      "color": "006b75",
+      "description": "Configuration layering, validation, defaults, and frozen snapshots."
+    },
+    {
+      "name": "area: failure",
+      "color": "b60205",
+      "description": "Shared error identity, facts, scope, rendering, and transport."
+    },
+    {
+      "name": "area: i18n",
+      "color": "1d76db",
+      "description": "Language resources, fallback, and locale-aware presentation."
+    },
+    {
+      "name": "area: control",
+      "color": "006b75",
+      "description": "Control persistence, subscriptions, run registration, and progress."
+    },
+    {
+      "name": "area: data-protocol",
+      "color": "006b75",
+      "description": "Frozen inputs, data/reference messages, schemas, and output ownership."
+    },
+    {
+      "name": "area: database",
+      "color": "006b75",
+      "description": "Transactional database clients and provider-specific mechanisms."
+    },
+    {
+      "name": "area: cache",
+      "color": "006b75",
+      "description": "Redis/cache clients, shared state, and technical coordination."
+    },
+    {
+      "name": "area: broker",
+      "color": "006b75",
+      "description": "Kafka and message transport, exact records, and retention."
+    },
+    {
+      "name": "area: object-store",
+      "color": "006b75",
+      "description": "Object storage, immutable bundles, archives, and bounded object I/O."
+    },
+    {
+      "name": "area: sql-engine",
+      "color": "006b75",
+      "description": "Analytical engines, lakehouse access, and provider transactions."
+    },
+    {
+      "name": "area: httpclient",
+      "color": "006b75",
+      "description": "HTTP/browser providers, profiles, sessions, and transport boundaries."
+    },
+    {
+      "name": "area: domain-sdk",
+      "color": "006b75",
+      "description": "Domain-facing SDK integration, external accounts, and credentials."
+    },
+    {
+      "name": "area: observability",
+      "color": "0366d6",
+      "description": "Logs, metrics, traces, health, execution summaries, and metadata projections."
+    },
+    {
+      "name": "area: reporting",
+      "color": "0366d6",
+      "description": "Report models, rendering, notification channels, and delivery."
+    },
+    {
+      "name": "area: ci",
+      "color": "0366d6",
+      "description": "GitHub Actions, repository checks, and automation permissions."
+    },
+    {
+      "name": "area: release",
+      "color": "0366d6",
+      "description": "Build identity, release artifacts, deployment, and supported versions."
+    },
+    {
+      "name": "area: agents",
+      "color": "0366d6",
+      "description": "AGENTS instructions, skills, provenance, and cross-session context."
+    },
+    {
+      "name": "concern: compatibility",
+      "color": "f9d0c4",
+      "description": "API, schema, configuration, or historical-reader compatibility."
+    },
+    {
+      "name": "concern: breaking-change",
+      "color": "b60205",
+      "description": "Intentional incompatible change requiring an explicit migration."
+    },
+    {
+      "name": "concern: determinism",
+      "color": "f9d0c4",
+      "description": "Temporal command/history or deterministic execution behavior."
+    },
+    {
+      "name": "concern: concurrency",
+      "color": "f9d0c4",
+      "description": "Races, shared limits, coordination, or concurrent ownership."
+    },
+    {
+      "name": "concern: lifecycle",
+      "color": "f9d0c4",
+      "description": "Initialization, cancellation, shutdown, cleanup, and resource leaks."
+    },
+    {
+      "name": "concern: data-integrity",
+      "color": "f9d0c4",
+      "description": "Effect evidence, transactions, idempotency, ordering, and loss prevention."
+    },
+    {
+      "name": "concern: performance",
+      "color": "f9d0c4",
+      "description": "Measured throughput, latency, memory, allocations, and capacity."
+    },
+    {
+      "name": "concern: security",
+      "color": "f9d0c4",
+      "description": "Permissions, credential isolation, privacy, and trust boundaries."
+    },
+    {
+      "name": "concern: developer-experience",
+      "color": "f9d0c4",
+      "description": "API clarity, diagnostics, workflow authoring, and setup usability."
+    },
+    {
+      "name": "resolution: duplicate",
+      "color": "cfd3d7",
+      "description": "Covered by another linked issue."
+    },
+    {
+      "name": "resolution: invalid",
+      "color": "cfd3d7",
+      "description": "The reported premise or requested behavior is not applicable."
+    },
+    {
+      "name": "resolution: not-planned",
+      "color": "ffffff",
+      "description": "Intentionally declined or deferred outside the supported scope."
+    }
+  ],
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ]
+}

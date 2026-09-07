@@ -1,0 +1,81 @@
+{
+  "schema": "fathomry.github-policy/v1",
+  "copyright": "Copyright (C) 2026 Frost Leo",
+  "license": "GPL-3.0-or-later",
+  "repository": "frost-leo/fathomry",
+  "visibility": "public",
+  "default_branch": "develop",
+  "release_branch": "main",
+  "release_default_branch": "main",
+  "bootstrap": "signed-empty-root-on-develop",
+  "main_creation": "empty-root-at-first-approved-release",
+  "require_checks_on_branch_creation": false,
+  "integration_branch": "develop",
+  "pull_request_creation_policy": "collaborators_only",
+  "maintainers": [
+    "frost-leo"
+  ],
+  "required_status_checks": [
+    "Repository checks",
+    "Go checks"
+  ],
+  "required_approving_reviews": 0,
+  "require_signed_commits": true,
+  "require_conversation_resolution": true,
+  "require_up_to_date_branch": true,
+  "enforce_admins": true,
+  "allow_force_pushes": false,
+  "allow_branch_deletion": false,
+  "allow_merge_commit": true,
+  "allow_squash_merge": true,
+  "allow_rebase_merge": false,
+  "allow_auto_merge": false,
+  "delete_branch_on_merge": true,
+  "actions_default_permissions": "read",
+  "actions_can_approve_reviews": false,
+  "actions_full_sha_pinning": true,
+  "actions_log_retention_days": 30,
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "protection_mechanism": "repository-rulesets",
+  "rulesets": {
+    "Integration and release branches": [
+      "refs/heads/main",
+      "refs/heads/develop"
+    ],
+    "Signed contributions": [
+      "~ALL"
+    ]
+  },
+  "commit_message_policy": {
+    "subject": "gh-N Title",
+    "body": [
+      "summary",
+      "detail bullets",
+      "Refs #N"
+    ],
+    "enforcement": "maintainer-review"
+  },
+  "actions_allowed": "github-owned-and-local",
+  "private_vulnerability_reporting": true,
+  "vulnerability_alerts": true,
+  "secret_scanning": true,
+  "secret_scanning_push_protection": true,
+  "dependency_update_pull_requests": false
+}
