@@ -1,0 +1,51 @@
+# fathomry
+# Copyright (C) 2026  Frost Leo
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+name: Dependency or toolchain change
+description: Evaluate an exact SDK, Go toolchain, skill, or automation version change.
+title: "dependency: "
+labels: ["type: dependency", "concern: compatibility", "status: triage"]
+body:
+  - type: input
+    id: dependency
+    attributes:
+      label: Dependency and exact current/target versions
+    validations:
+      required: true
+  - type: textarea
+    id: reason
+    attributes:
+      label: Motivation and authoritative release/source evidence
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Behavioral and license/provenance changes
+      description: Review retries, timeouts, pooling, parsing, lifecycle, security, and public contracts as relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Compatibility, replay, performance, and rollback verification
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and rollout constraints

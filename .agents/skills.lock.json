@@ -1,0 +1,111 @@
+{
+  "schema": "fathomry.skills-lock/v1",
+  "copyright": "Copyright (C) 2026 Frost Leo",
+  "license": "GPL-3.0-or-later",
+  "skills": [
+    {
+      "name": "mc",
+      "repository": "minio/skills",
+      "commit": "22961d30013f4aadc863c41d14b28e58cb64c063",
+      "source_path": "mc",
+      "license": "Apache-2.0",
+      "local_adjustments": [
+        "Include upstream repository LICENSE in the redistributed skill directory.",
+        "Move SKILL.md compatibility to metadata.compatibility for the installed Codex validator."
+      ],
+      "files": 9,
+      "tree_sha256": "c95a4bfd2cff57291abc1ec83770dca82e40cf8fcfc5fec3b7670d9934060dfa"
+    },
+    {
+      "name": "redis-clustering",
+      "repository": "redis/agent-skills",
+      "commit": "172fb9effa139cd7432ac29a9ee81c45943e5a28",
+      "source_path": "plugins/redis-development/skills/redis-clustering",
+      "license": "MIT",
+      "files": 4,
+      "tree_sha256": "357e81c1c5bc63357318993973ed337498c967f340f1f5538d3bae847385af04",
+      "local_adjustments": [
+        "Include upstream repository LICENSE in the redistributed skill directory."
+      ]
+    },
+    {
+      "name": "redis-connections",
+      "repository": "redis/agent-skills",
+      "commit": "172fb9effa139cd7432ac29a9ee81c45943e5a28",
+      "source_path": "plugins/redis-development/skills/redis-connections",
+      "license": "MIT",
+      "files": 7,
+      "tree_sha256": "21ecca98d4d2200705c61331db0d307dbb73b3ed4e60aff309892d5714921d56",
+      "local_adjustments": [
+        "Include upstream repository LICENSE in the redistributed skill directory."
+      ]
+    },
+    {
+      "name": "redis-core",
+      "repository": "redis/agent-skills",
+      "commit": "172fb9effa139cd7432ac29a9ee81c45943e5a28",
+      "source_path": "plugins/redis-development/skills/redis-core",
+      "license": "MIT",
+      "files": 4,
+      "tree_sha256": "2bd221242d3770e0b5eac2df0ea9785ba3c8139e56e8880c913a0c4429338a93",
+      "local_adjustments": [
+        "Include upstream repository LICENSE in the redistributed skill directory."
+      ]
+    },
+    {
+      "name": "redis-observability",
+      "repository": "redis/agent-skills",
+      "commit": "172fb9effa139cd7432ac29a9ee81c45943e5a28",
+      "source_path": "plugins/redis-development/skills/redis-observability",
+      "license": "MIT",
+      "files": 4,
+      "tree_sha256": "b80044ca227ca53b41a6fb9e4aba902a3ce97dca887088d84f40a44a715b3f74",
+      "local_adjustments": [
+        "Include upstream repository LICENSE in the redistributed skill directory."
+      ]
+    },
+    {
+      "name": "redis-security",
+      "repository": "redis/agent-skills",
+      "commit": "172fb9effa139cd7432ac29a9ee81c45943e5a28",
+      "source_path": "plugins/redis-development/skills/redis-security",
+      "license": "MIT",
+      "files": 5,
+      "tree_sha256": "090e8c4b2ed67aea0812b2e8d9d9921f4ee00d714d73165db8f3259c6dcc7636",
+      "local_adjustments": [
+        "Include upstream repository LICENSE in the redistributed skill directory."
+      ]
+    },
+    {
+      "name": "temporal-developer",
+      "repository": "temporalio/skill-temporal-developer",
+      "commit": "2d7fda32ffbf71106c65c98478ee1031aca1b65b",
+      "source_path": ".",
+      "license": "MIT",
+      "files": 110,
+      "tree_sha256": "f05d8e50dc36db8035628b766289ce49f7fa435fc48c03e6260320bfe4fb4850",
+      "local_adjustments": [
+        "Move SKILL.md version to metadata.version for Codex validation."
+      ]
+    }
+  ],
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "tree_hash_format": "sha256(sorted(relative-posix-path + NUL + file-bytes + NUL))"
+}
