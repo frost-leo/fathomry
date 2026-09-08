@@ -62,20 +62,22 @@ policy as part of the release. Do not create `main` at an unreleased content com
 | --- | --- | --- |
 | `main` | Releases only; absent before the first release | Receives approved release PRs from `develop`, or a release-scoped urgent hotfix |
 | `develop` | Active integration | Receives ordinary topic PRs and synchronization from `main` |
-| `feat/<slug>` | New behavior | `develop` |
-| `fix/<slug>` | Bug correction | `develop` |
-| `refactor/<slug>` | Structural change without intended behavior changes | `develop` |
-| `docs/<slug>` | Documentation | `develop` |
-| `test/<slug>` | Tests and verification | `develop` |
-| `perf/<slug>` | Measured performance improvement | `develop` |
-| `chore/<slug>` or `ci/<slug>` | Maintenance and automation | `develop` |
-| `hotfix/<slug>` | Urgent stable-line fix | Branch from `main`; PR to `main`, then synchronize into `develop` |
+| `gh-<issue>/feat/<description>` | New behavior | `develop` |
+| `gh-<issue>/fix/<description>` | Bug correction | `develop` |
+| `gh-<issue>/refactor/<description>` | Structural change without intended behavior changes | `develop` |
+| `gh-<issue>/docs/<description>` | Documentation | `develop` |
+| `gh-<issue>/test/<description>` | Tests and verification | `develop` |
+| `gh-<issue>/perf/<description>` | Measured performance improvement | `develop` |
+| `gh-<issue>/chore/<description>` or `gh-<issue>/ci/<description>` | Maintenance and automation | `develop` |
+| `gh-<issue>/hotfix/<description>` | Urgent stable-line fix | Branch from `main`; PR to `main`, then synchronize into `develop` |
 
-Use lowercase, hyphenated slugs; include an issue number when useful, for
-example `feat/42-client-lifecycle`. These are naming prefixes, not permanent
-branches to create in advance. Autonomous dependency-update PRs are not enabled.
+Every topic branch uses `gh-<issue>/<type>/<description>`, with the actual related
+GitHub issue number and a lowercase, hyphenated description; for example,
+`gh-3/docs/internal-sdk-integration`. Create and switch to the topic branch before
+changing product files. These types are not permanent branches to create in
+advance. Autonomous dependency-update PRs are not enabled.
 
-1. Branch from the appropriate up-to-date base.
+1. Create and switch to the topic branch from the appropriate up-to-date base.
 2. Open a draft PR early for substantial work and use the PR template.
 3. Include verification evidence and resolve review conversations.
 4. **Squash-merge short-lived topic branches into `develop`.**
