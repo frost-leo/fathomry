@@ -62,7 +62,11 @@ approved scope and sanitized evidence to identify missing handoff material.
 
 Use the repository's `fathomry-development` skill to continue one confirmed issue,
 then prepare one next issue with the owner. `docs/` is reserved for established
-APIs and accepted architecture; no such product documentation is published yet.
+APIs and accepted architecture. The
+[internal architecture and SDK integration standard](docs/architecture/internal-sdk-integration.md)
+defines the technical foundation, responsibility boundaries, and integration
+acceptance requirements. It does not claim that the runtime or SDK integrations
+are implemented.
 
 ## License
 
