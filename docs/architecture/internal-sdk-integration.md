@@ -23,9 +23,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 Scope: [Fathomry Issue #3](https://github.com/frost-leo/fathomry/issues/3).
 
 The [named-source foundation](../api/named-sources.md) implements the Issue #4
-configuration and resource-ownership boundary. Other runtime mechanisms and
-concrete SDK integrations remain unimplemented. The historical source observations
-below are not evidence of service support.
+configuration and resource-ownership boundary. The
+[controlled-call foundation](../api/controlled-calls.md) implements Issue #5's
+process-local admission, completion and technical-evidence handoff. Concrete SDK
+integrations, durable evidence reception and business orchestration remain
+unimplemented. The historical source observations below are not service-support
+evidence; shared-mechanism fixtures do not establish SDK/service compatibility.
 
 Internal must be a reusable, constrained, and verifiable technical foundation,
 not a collection of unrelated SDK wrappers and not a universal client that hides
@@ -582,7 +585,7 @@ decision becomes necessary. They are not permission to drop the approved guarant
 | Exact public assembly/source-selection APIs and whether configuration selects compiled constructors | Composition/capability maintainers, before configuration/resource implementation is accepted |
 | Configuration precedence details, list/null/deletion/unknown-key behavior, source-revision identity, reload and credential rotation handoff | Configuration and credential owners, before those behaviors are exposed or claimed supported |
 | Synchronous shutdown versus bounded waiting with continued owned cleanup | Composition and lifecycle owners, before a shutdown guarantee is published; keep actual completion and unknown cleanup distinct |
-| Required evidence reception/acknowledgement, reliable storage, crash/duplicate/late-result handling, and handled-error disposition | Framework/public contract owners with Adapter evidence, before controlled-call correctness is claimed; no persistence protocol or terminal algorithm is selected |
+| Durable evidence acknowledgement, reliable storage, crash/duplicate/late-result handling, and handled-error disposition | Framework/public contract owners with Adapter evidence, before end-to-end business advancement/recovery is claimed; Issue #5 supplies bounded in-process receipt ownership, not a persistence protocol or terminal algorithm |
 | Native advanced access, borrowing and zero-copy lifetimes | Relevant public capability and Provider owners, before such an escape hatch is exposed |
 | Policy for untested/unknown build/service combinations and historical formats | Compatibility/deployment and format owners, before startup or historical-read policy is relied on |
 | Initial supported modes, real service combinations, workload/SLOs, and demonstrable resource limits | Explicit product constraints and each implementation issue, before support/performance claims; this source comparison selects no integration order |

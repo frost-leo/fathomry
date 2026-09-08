@@ -77,7 +77,45 @@ type Attribution struct {
 	Provider  string
 	Assembly  string
 	Source    string
+	Execution Execution
 }
+
+// Execution associates one logical call with its caller-owned execution. Call and
+// Parent are logical call IDs, not SDK attempt IDs; Parent cannot equal Call.
+// Run and Item are optional;
+// Item requires Run. Attempt is the execution attempt (zero means unspecified).
+// Owner is an optional opaque effect-ownership scope, not authorization or quota.
+// IDs contain 1–128 ASCII letters, digits, dots, underscores or hyphens when set.
+// Their uniqueness and non-sensitive meaning belong to the calling boundary.
+type Execution struct {
+	Call    string
+	Parent  string
+	Run     string
+	Item    string
+	Owner   string
+	Attempt uint32
+}
+
+// Valid checks representation and the Item/Run relationship, not authenticity,
+// existence, global uniqueness, or business permission. Empty execution is valid
+// for errors outside a call; controlled operations additionally require Call.
+func (execution Execution) Valid() bool {
+	for _, value := range []string{execution.Call, execution.Parent, execution.Run, execution.Item, execution.Owner} {
+		if len(value) > 128 {
+			return false
+		}
+		for _, char := range value {
+			if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '.' || char == '_' || char == '-') {
+				return false
+			}
+		}
+	}
+	return (execution.Item == "" || execution.Run != "") &&
+		(execution.Parent == "" || execution.Parent != execution.Call)
+}
+
+// Valid checks bounded, explicitly supplied attribution without performing I/O.
+func (attribution Attribution) Valid() bool { return validAttribution(attribution) }
 
 // Diagnostic is a bounded process-local root projection, not a persisted or wire
 // contract. It deliberately excludes causes, native text, and arbitrary arguments.
@@ -187,7 +225,7 @@ func validAttribution(value Attribution) bool {
 			return false
 		}
 	}
-	return true
+	return value.Execution.Valid()
 }
 
 func label(value string, limit int) bool {

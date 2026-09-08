@@ -19,7 +19,8 @@
 
 // Package source prepares explicitly supplied configuration and manages named
 // resource instances at the composition boundary. It imports no SDKs and performs
-// no environment/file discovery, per-call orchestration, or business disposition.
+// no environment/file discovery or business disposition. Controlled resource use
+// shares these records; operation supplies typed completion and evidence handoff.
 package source
 
 import (
