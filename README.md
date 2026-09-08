@@ -27,9 +27,10 @@ Fathomry focuses on explicit contracts, cohesive infrastructure clients,
 predictable resource ownership, and durable workflow execution. Reliability,
 observability, bounded resource use, and measured performance guide development.
 
-The project is in early development. Repository automation and contribution
-guidelines are available; application APIs will be introduced through reviewed
-designs and independently verified changes.
+The project is in early development. The [named-source foundation](docs/api/named-sources.md)
+provides typed configuration preparation, explicit resource ownership, and a shared
+public error kernel. Concrete SDK integrations and workflow orchestration are not
+implemented. Repository automation and contribution guidelines are available.
 
 ## Participate
 
@@ -66,7 +67,8 @@ APIs and accepted architecture. The
 [internal architecture and SDK integration standard](docs/architecture/internal-sdk-integration.md)
 defines the technical foundation, responsibility boundaries, and integration
 acceptance requirements. It does not claim that the runtime or SDK integrations
-are implemented.
+are implemented. The [named-source API](docs/api/named-sources.md) records the
+implemented configuration/lifecycle boundary and its remaining integration obligations.
 
 ## License
 

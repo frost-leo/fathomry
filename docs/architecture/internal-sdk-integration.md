@@ -19,8 +19,13 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Internal Architecture and SDK Integration Standard
 
-**Status: architecture and integration standard; runtime not implemented.**
+**Status: accepted architecture and integration standard.**
 Scope: [Fathomry Issue #3](https://github.com/frost-leo/fathomry/issues/3).
+
+The [named-source foundation](../api/named-sources.md) implements the Issue #4
+configuration and resource-ownership boundary. Other runtime mechanisms and
+concrete SDK integrations remain unimplemented. The historical source observations
+below are not evidence of service support.
 
 Internal must be a reusable, constrained, and verifiable technical foundation,
 not a collection of unrelated SDK wrappers and not a universal client that hides
