@@ -160,3 +160,32 @@ func TestConcurrentIndependentOccurrences(t *testing.T) {
 	}
 	group.Wait()
 }
+
+func TestExecutionAttributionIsBoundedAndSeparateFromSource(t *testing.T) {
+	identity := definition()
+	execution := failure.Execution{Call: "Call-1", Parent: "Call-0", Run: "Run-A", Item: "Item-1", Owner: "account-A", Attempt: 3}
+	location := failure.Attribution{Operation: "write", Assembly: "worker", Provider: "local", Source: "orders", Execution: execution}
+	if !location.Valid() {
+		t.Fatal("valid execution rejected")
+	}
+	err := identity.New(location, context.Canceled)
+	execution.Item, location.Execution.Item = "changed", "changed"
+	if err.Diagnostic().Attribution.Execution.Item != "Item-1" || !errors.Is(err, context.Canceled) {
+		t.Fatal("execution aliased or cause lost")
+	}
+	for _, value := range []failure.Execution{
+		{Item: "orphan"}, {Call: "raw/url"}, {Call: strings.Repeat("a", 129)}, {Call: "line\nbreak"},
+		{Call: "same", Parent: "same"},
+	} {
+		if value.Valid() {
+			t.Fatal("invalid execution accepted")
+		}
+		invalid := identity.New(failure.Attribution{Execution: value}, context.Canceled)
+		if invalid.Diagnostic().Definition.Code != "fathomry.failure.invalid" || !errors.Is(invalid, context.Canceled) {
+			t.Fatal("invalid attribution leaked or lost cause")
+		}
+	}
+	if !(failure.Execution{Call: "background-refresh"}).Valid() || !(failure.Execution{}).Valid() {
+		t.Fatal("background work requires fabricated business identity")
+	}
+}

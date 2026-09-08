@@ -42,6 +42,7 @@ import (
 	"errors"
 	"testing"
 	"github.com/frost-leo/fathomry/failure"
+	"github.com/frost-leo/fathomry/operation"
 	"github.com/frost-leo/fathomry/source"
 )
 type config struct{}
@@ -52,15 +53,32 @@ func TestPublicComposition(t *testing.T) {
 		Identity:source.Identity{Provider:"example.local", Name:"one"}, Format:1,
 	})
 	if err != nil { t.Fatal(err) }
-	selected := source.Select(settings, func(context.Context, config) (source.Resource[func() string], error) {
+	selected := source.WithLimits(source.Select(settings, func(context.Context, config) (source.Resource[func() string], error) {
 		return source.Resource[func() string]{Acquired:true, Capability:func() string { return "one" },
 			Release:func(context.Context) source.ReleaseResult { return source.ReleaseResult{Released:true, Quiescent:true} },
 		}, nil
-	})
+	}), source.Limits{Active:1, Bytes:128, MaxLeases:2})
 	assembly, err := source.Assemble(context.Background(), context.Background(), "consumer", selected)
 	if err != nil { t.Fatal(err) }
 	value, _, err := source.Bind(assembly, selected)
 	if err != nil || value() != "one" { t.Fatal("public binding") }
+	access, err := source.AccessFor(assembly, selected)
+	if err != nil { t.Fatal(err) }
+	inbox, err := operation.NewInbox[string](1, 128)
+	if err != nil { t.Fatal(err) }
+	ctx := context.Background()
+	call, err := operation.Begin(ctx, access, operation.Request{Name:"read", Shape:operation.Finite,
+		Execution:failure.Execution{Call:"external-call"}, Bytes:128, EvidenceBytes:128,
+		Admission:operation.Budget{Limit:1000000000}}, inbox, nil)
+	if err != nil { t.Fatal(err) }
+	if err := call.Execute(ctx, operation.Budget{Limit:1000000000}, func(context.Context, operation.Scope) operation.Outcome[string] {
+		return operation.Outcome[string]{Value:value(), Present:true}
+	}); err != nil { t.Fatal(err) }
+	result, err := call.Receipt().WaitReleased(ctx)
+	if err != nil || !result.Final || result.Outcome.Value != "one" { t.Fatal("public result") }
+	delivery, err := inbox.Next(ctx)
+	if err != nil { t.Fatal(err) }
+	if err := delivery.Release(); err != nil { t.Fatal(err) }
 	if err := assembly.Close(context.Background()); err != nil { t.Fatal(err) }
 }
 `

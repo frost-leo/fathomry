@@ -144,6 +144,7 @@ type specification struct {
 	construct   func(context.Context) (constructed, error)
 	from        *Assembly
 	original    *specification
+	limits      *Limits
 }
 
 type constructed struct {
@@ -185,6 +186,8 @@ type Status struct {
 	Pending       bool
 	CanContinue   bool
 	CleanupErrors []error
+	Usage         Usage
+	Limits        Limits
 }
 
 // Report separates primary initialization failure from cleanup evidence/errors.
@@ -216,6 +219,7 @@ type entry struct {
 	record *record
 	lease  bool
 	check  func(context.Context) error
+	uses   int
 }
 
 type record struct {
@@ -229,6 +233,7 @@ type record struct {
 	released      bool
 	next          ReleaseFunc
 	cleanupErrors []error
+	admission     admission
 }
 
 // Assemble preflights the entire selected set before acquiring any resources.
@@ -251,7 +256,8 @@ func Assemble(ctx, cleanupCtx context.Context, scope string, selected ...Spec) (
 		spec := selected.specification()
 		if spec == nil || !validID(spec.name) || names[spec.name] ||
 			!validID(spec.description.Identity.Provider) || spec.description.Revision == "" ||
-			spec.mode == Owned && spec.construct == nil {
+			spec.mode == Owned && spec.construct == nil ||
+			spec.limits != nil && (spec.mode != Owned || !spec.limits.valid()) {
 			return nil, ErrSelection.New(failure.Attribution{Operation: "preflight", Assembly: scope})
 		}
 		if spec.mode != Owned {
@@ -290,6 +296,10 @@ func Assemble(ctx, cleanupCtx context.Context, scope string, selected ...Spec) (
 		resource := &record{info: Info{Scope: scope, Configuration: spec.description},
 			capability: value.capability, owner: assembly, admitting: true,
 			quiescent: !acquired, released: !acquired, next: value.release}
+		resource.admission.changed = make(chan struct{})
+		if spec.limits != nil {
+			resource.admission.limits = *spec.limits
+		}
 		assembly.entries = append(assembly.entries, &entry{spec: spec, record: resource, check: value.check})
 		if err != nil {
 			return fail(ErrInitialization.New(attribution(scope, spec.description, "construct"), err))
@@ -345,7 +355,7 @@ func existing(spec *specification, receiver *Assembly, acquire bool) (*record, e
 			(entry.spec.mode != Borrowed && resource.owner != spec.from) {
 			return fail()
 		}
-		if spec.mode == Delegated && (resource.owner != spec.from || resource.borrowers != 0) {
+		if spec.mode == Delegated && (resource.owner != spec.from || resource.borrowers != 0 || resource.admission.queue.Len() != 0) {
 			return fail()
 		}
 		if acquire {
@@ -376,7 +386,8 @@ func nilValue(value any) bool {
 // Only the exact selected token is accepted; there is no name fallback or cast
 // across capability types. Pass its non-owning facade, not Assembly/Resource, to
 // business code. The caller must stop using it before ending its owning/borrowing
-// scope. Per-operation admission and completion tracking are not implemented here.
+// scope. Controlled integrations also bind AccessFor and do not expose this
+// underlying capability as an unconstrained public operation path.
 func Bind[C any](assembly *Assembly, selected Selection[C]) (C, Info, error) {
 	var zero C
 	fail := func() (C, Info, error) { return zero, Info{}, ErrSelection.New(failure.Attribution{Operation: "bind"}) }
@@ -425,9 +436,11 @@ func (assembly *Assembly) Snapshot() Report {
 		resource := entry.record
 		resource.mu.Lock()
 		status := Status{Name: entry.spec.name, Info: Info{Scope: resource.info.Scope, Configuration: copyDescription(resource.info.Configuration)},
-			Ownership: entry.spec.mode, OwnerScope: resource.owner.scope, Borrowers: resource.borrowers,
+			Ownership: entry.spec.mode, OwnerScope: resource.owner.scope, Borrowers: resource.borrowers - resource.admission.active,
 			Quiescent: resource.quiescent, Released: resource.released,
 			CanContinue: resource.next != nil, CleanupErrors: append([]error(nil), resource.cleanupErrors...)}
+		status.Usage = resource.admission.usage()
+		status.Limits = resource.admission.limits
 		switch {
 		case entry.spec.mode == Borrowed:
 			status.Returned = !entry.lease
@@ -462,6 +475,7 @@ func (assembly *Assembly) Close(ctx context.Context) error {
 		if entry.record.owner == assembly {
 			entry.record.admitting = false
 		}
+		entry.record.admission.signal()
 		entry.record.mu.Unlock()
 	}
 	assembly.mu.Unlock()
@@ -469,7 +483,7 @@ func (assembly *Assembly) Close(ctx context.Context) error {
 	case assembly.gate <- struct{}{}:
 		defer func() { <-assembly.gate }()
 	case <-ctx.Done():
-		return assembly.closeError(ctx.Err())
+		return assembly.closeError(errors.Join(ctx.Err(), context.Cause(ctx)))
 	}
 	var interrupted error
 	for index := len(assembly.entries) - 1; index >= 0; index-- {
@@ -477,6 +491,14 @@ func (assembly *Assembly) Close(ctx context.Context) error {
 		resource := entry.record
 		assembly.mu.Lock()
 		resource.mu.Lock()
+		if entry.uses != 0 {
+			if err := ctx.Err(); err != nil {
+				interrupted = errors.Join(err, context.Cause(ctx))
+			}
+			resource.mu.Unlock()
+			assembly.mu.Unlock()
+			break
+		}
 		if entry.spec.mode == Borrowed {
 			if entry.lease {
 				resource.borrowers--
@@ -492,7 +514,7 @@ func (assembly *Assembly) Close(ctx context.Context) error {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
-			interrupted = err
+			interrupted = errors.Join(err, context.Cause(ctx))
 			resource.mu.Unlock()
 			break
 		}

@@ -169,9 +169,12 @@ not future SDK compliance.
 Mode, account/session, and capability-specific constraints belong to the typed
 Provider/capability contract and outer authorized selection. This manager does not
 infer them from an endpoint or offer unrestricted business-time lookup. It does
-not place mutable per-call attribution on a shared client. Per-operation admission,
-stream/receipt completion, execution correlation, quotas, and retry policy belong
-to the separately scoped controlled-call implementation.
+not place mutable per-call attribution on a shared client. The
+[controlled-call implementation](controlled-calls.md) adds scoped admission through
+`WithLimits`/`AccessFor`, borrowing-tree completion and typed execution/evidence
+handoff. Limits are shared across aliases, not reset by another binding. `Bind`
+alone does not automatically wrap capability methods or enforce their constraints.
+Retry policy and distributed quotas remain separately scoped.
 
 ### One authoritative resource record
 
@@ -191,6 +194,15 @@ but cannot release a record with outstanding borrowers. Existing borrowing scope
 remain responsible for their use and may finish independently. Returning one
 borrowing scope does not stop another. The owner retries shutdown explicitly after
 leases end; there is no hidden background reaper.
+
+Controlled root calls borrow this same record. Their active use prevents returning
+their scope's borrowing lease and protects earlier ordered dependencies. Nested
+borrowing nodes share one root admission and byte reservation; they are not another
+physical resource owner. `Status.Borrowers` counts borrowing assembly scopes;
+`Status.Usage` reports controlled root calls and queues separately. Existing borrowed
+scopes retain their admission after owner shutdown, until their own scope closes.
+Applied call limits are separately inspectable and are not part of the prepared
+Provider configuration revision.
 
 Delegation is deliberately conservative: the donor must have exactly one entry,
 with its entire owned dependency set contained within that record, and no borrowers.

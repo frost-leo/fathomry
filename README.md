@@ -29,7 +29,9 @@ observability, bounded resource use, and measured performance guide development.
 
 The project is in early development. The [named-source foundation](docs/api/named-sources.md)
 provides typed configuration preparation, explicit resource ownership, and a shared
-public error kernel. Concrete SDK integrations and workflow orchestration are not
+public error kernel. The [controlled-call foundation](docs/api/controlled-calls.md)
+adds process-local admission, completion tracking and independent technical-evidence
+handoff. Concrete SDK integrations and workflow orchestration are not
 implemented. Repository automation and contribution guidelines are available.
 
 ## Participate
@@ -69,6 +71,8 @@ defines the technical foundation, responsibility boundaries, and integration
 acceptance requirements. It does not claim that the runtime or SDK integrations
 are implemented. The [named-source API](docs/api/named-sources.md) records the
 implemented configuration/lifecycle boundary and its remaining integration obligations.
+The [controlled-call API](docs/api/controlled-calls.md) documents the call/result
+contracts and their local-only, non-durable limits.
 
 ## License
 
