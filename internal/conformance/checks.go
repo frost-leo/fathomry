@@ -182,7 +182,10 @@ func Accounting(t testing.TB, use source.Usage, limits source.Limits, evidence o
 }
 
 // Facade checks a method-only capability's dynamic and addressable-copy method
-// surfaces against an exact allowlist, and rejects exported state/callback fields.
+// surfaces against an exact allowlist, and rejects exported state/callback fields
+// in reflect.VisibleFields, including promotion through private embeddings. Field
+// hiding/ambiguity follows reflection independently of methods: a method cannot
+// excuse exposed structural state. Nil embeddings are inspected by type, not used.
 // This catches a narrow interface hiding an owning client. Invoke it also
 // for returned dynamic handles/callback values with their own allowed methods.
 // It cannot audit arbitrary closure captures or establish an untrusted-code sandbox.
@@ -227,24 +230,28 @@ func Facade(t testing.TB, value any, methods ...string) {
 		kind = kind.Elem()
 	}
 	if kind.Kind() == reflect.Struct {
-		for index := range kind.NumField() {
-			if kind.Field(index).IsExported() {
+		for _, field := range reflect.VisibleFields(kind) {
+			if field.IsExported() {
 				t.Errorf("conformance: method-only facade exposes public state or callbacks")
 			}
 		}
 	}
 }
 
-// Private checks fmt and structured logging against injected secret canaries.
+// Private checks fmt and text/JSON slog against injected secret canaries and probes
+// their selected diagnostic hooks for panics. Hooks must be synchronous, bounded
+// and repeatable: fmt/marshal probes run in addition to native output checks.
+// Supplied values retain their actual method sets; also pass pointers when used.
 // It intentionally never echoes the offending value/canary. Capability tests must
 // inject secrets into real options, native errors and payload paths, not just pass
-// an already-redacted string. Successful checks are not a general secret detector.
+// an already-redacted string. It cannot identify failures already suppressed inside
+// a hook or previously resolved slog.Value. This is not a general secret detector.
 func Private(t testing.TB, value any, forbidden ...string) {
 	t.Helper()
 	check := func(output string) {
 		t.Helper()
-		if len(output) > 1<<20 || strings.Contains(output, "PANIC") {
-			t.Errorf("conformance: diagnostic projection panicked or exceeded the test bound")
+		if len(output) > diagnosticLimit {
+			t.Errorf("conformance: diagnostic projection exceeded the test bound")
 		}
 		for _, secret := range forbidden {
 			if secret == "" || strings.Contains(output, secret) {
@@ -253,26 +260,40 @@ func Private(t testing.TB, value any, forbidden ...string) {
 		}
 	}
 	for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q"} {
-		check(fmt.Sprintf(format, value))
+		if probeFormat(t, format, value) {
+			project(t, func() { check(fmt.Sprintf(format, value)) })
+		}
 	}
 	for _, jsonOutput := range []bool{false, true} {
+		remaining := diagnosticLimit
+		resolved, ok := probeLog(t, slog.AnyValue(value), jsonOutput, 0, &remaining)
+		if !ok {
+			continue
+		}
 		var output bytes.Buffer
 		var handler slog.Handler = slog.NewTextHandler(&output, nil)
 		if jsonOutput {
 			handler = slog.NewJSONHandler(&output, nil)
 		}
-		slog.New(handler).Info("conformance", "value", value)
-		check(output.String())
+		project(t, func() {
+			slog.New(handler).Info("conformance", slog.Any("value", resolved))
+			check(output.String())
+		})
 	}
 }
 
 // Runtime additionally checks JSON refusal in both directions. target must be an
 // independently owned non-nil pointer to a zero value of the runtime type, not a
-// live handle. It is used only for the reconstruction-rejection test.
+// live handle. It is used only for the reconstruction-rejection test. A callback
+// panic fails acceptance; it does not count as an intentional JSON refusal.
 func Runtime(t testing.TB, value, target any, forbidden ...string) {
 	t.Helper()
 	Private(t, value, forbidden...)
-	data, err := json.Marshal(value)
+	var data []byte
+	var err error
+	if !project(t, func() { data, err = json.Marshal(value) }) {
+		return
+	}
 	if err == nil {
 		t.Errorf("conformance: runtime value accepted unversioned JSON encoding")
 	} else {
@@ -289,7 +310,9 @@ func Runtime(t testing.TB, value, target any, forbidden ...string) {
 		t.Errorf("conformance: invalid reconstruction test target")
 		return
 	}
-	if err := json.Unmarshal([]byte("{}"), target); err == nil {
-		t.Errorf("conformance: runtime value accepted JSON reconstruction")
-	}
+	project(t, func() {
+		if err := json.Unmarshal([]byte("{}"), target); err == nil {
+			t.Errorf("conformance: runtime value accepted JSON reconstruction")
+		}
+	})
 }
