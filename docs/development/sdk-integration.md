@@ -20,6 +20,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 # SDK integration acceptance and upgrade guide
 
 Status: executable acceptance foundation for [Issue #6](https://github.com/frost-leo/fathomry/issues/6),
+with helper regressions for [Issue #13](https://github.com/frost-leo/fathomry/issues/13),
 not acceptance of a production Provider. Follow S01-S11 of the
 [accepted standard](../architecture/internal-sdk-integration.md); the original
 accepted revision is `0c3f9d82947229a861a30fbf9d1730fa02ca44ea`.
@@ -51,15 +52,59 @@ from sharing the current acceptance suite.
 | `Cause[T]` | Original native `errors.As` type/pointer/evidence without formatting it |
 | `Receive` | Deadline-bounded independent evidence reception, matched by Call ID rather than arrival order; duplicates/missing evidence; explicit idempotent release only after local subtree completion |
 | `Accounting` | Separate active/queued counts and byte reservations and outstanding receipt count/bytes at synchronized checkpoints |
-| `Facade` | Method-only facade's exact dynamic/addressable-copy method allowlist, no exported state/callback fields, and no nil facade |
-| `Private` | Injected secret canaries through fmt and text/JSON slog, including panic/bound failures, without echoing secrets on failure |
-| `Runtime` | The privacy checks plus refused JSON encoding and reconstruction of runtime types |
+| `Facade` | Method-only facade's exact dynamic/addressable-copy method allowlist, no direct or promoted exported fields under `reflect.VisibleFields`, and no nil facade |
+| `Private` | Injected secret canaries through fmt and text/JSON slog, with selected-hook panic probes and output/traversal bounds, without echoing secrets on failure |
+| `Runtime` | The privacy checks plus refused JSON encoding and reconstruction of runtime types; panicking JSON callbacks fail without printing their payload |
 
 `Value` must derive expected data/effect facts from an independent input/native
 oracle, not copy the integration's output. Present data without an oracle is a
 test failure. Check each returned dynamic handle/callback surface under its own
 allowlist: a stream may legitimately close itself, not the shared client.
 Reflection cannot audit arbitrary closures or provide a Go security sandbox.
+
+### Field and diagnostic probe boundaries
+
+`Facade` inspects struct field **types**, including anonymous private value/pointer
+embeddings. It does not dereference nil embedded pointers or invoke allowed methods.
+`reflect.VisibleFields` handles multi-level promotion, field hiding, equal-depth
+field ambiguity and recursive types. Its field visibility is independent of the
+method allowlist, not a complete Go selector/capability analysis. In particular,
+field/method collisions are conservatively rejected even when the ordinary selector
+is ambiguous. An outer method hiding a promoted callback is not sufficient:
+ordinary external conversion to a new defined type can remove that method.
+The [separate-package selector tests](../../internal/conformance/checks_test.go)
+execute this conversion and the exposed callbacks without reflection or `unsafe`.
+Rejection of a layout alone does not demonstrate a production ownership escape.
+
+`Private` probes the hooks selected by `%v`, `%+v`, `%#v`, `%s` and `%q`, preserving
+fmt's Formatter/GoStringer/error/Stringer precedence and ordinary container descent.
+Private fields and contents hidden by an outer formatter are not independently
+invoked. Supply each actually used value/pointer form; this check does not invent
+pointer methods on an unaddressable value. Text marshaling, JSON encoding and
+returned encoding-error formatting also have panic probes. An ordinary marshaling
+error remains permitted, notably the intentional runtime JSON refusal.
+Text logging follows native `TextMarshaler` → byte slice → fmt dispatch. Byte
+slices, including named slice/byte-element types, bypass fmt hooks; arrays and
+pointers do not enter that branch. Native fmt, text and JSON output controls in
+`TestPrivateNativeByteLoggingDispatch` check this distinction independently.
+
+For slog, guarded `LogValuer` calls use native `Value.Resolve`, separately for the
+text and JSON handlers, and recursively resolve groups without modifying the
+caller's attribute slices. Go 1.26 rejects a chain reaching its 100th `LogValue`
+call, even when that call returns a terminal value; the helper rejects it too.
+Detection does not search for panic words or fallback strings: ordinary text,
+including a literal formatter failure example, remains valid.
+
+Diagnostic hooks must be synchronous, bounded and repeatable. fmt/marshal probes
+are additional invocations before native output checks, not transparent runtime
+instrumentation. These helpers do not infer failure from an already-resolved slog
+error or from a hook that internally suppresses its own failure. Such paths need
+the integration's independent native oracle. Canary matching checks literal
+rendered bytes, not arbitrary encodings or secret transformations. Outputs are
+limited to 1 MiB; each structural probe allows at most 1,048,576 visited values
+and depth 100 (root depth zero). Bounds reject the fixture; they cannot cap a
+hook's internal allocation, interrupt blocked code or prevent every recursive
+formatter. Keep fault fixtures in owned, deadline-bounded subprocesses.
 
 Use a separate caller-owned cleanup budget and native stop/join path. `Receive`
 requires a deadline and at most 1,024 expectations; timeout is a test failure,
@@ -88,6 +133,15 @@ identity, and conflating missing/empty output each cause actual testing failures
 Owning callback fields and pointer-only shutdown methods reachable through a
 copied value are also rejected. The parent fails if any of the eight mutations
 unexpectedly passes or discloses the canary.
+The [helper contract regressions](../../internal/conformance/checks_test.go) and
+[diagnostic regressions](../../internal/conformance/privacy_test.go) use the same
+parent/child direction with valid controls. Each invalid child must return from
+the helper, exit 1 with the expected conformance failure, and disclose no canary;
+an unexpectedly accepted fixture, crash or timeout fails its parent. They cover
+promotion/hiding/method sets, safe literal diagnostics, fmt and text/JSON hooks,
+nil receivers, nested groups/containers, resolution/traversal limits and runtime
+JSON refusal/panic boundaries. Text-only and JSON-only log faults independently
+exercise both handlers. These are helper acceptance facts, not SDK support.
 The actual consumer SDK-upgrade experiment separately proves that compilation
 can pass while the previously accepted retry contract fails.
 
@@ -207,6 +261,7 @@ Run from the repository with its selected dependencies available:
 
 ```sh
 go mod tidy -diff
+go mod verify
 test -z "$(gofmt -l .)"
 go vet ./...
 go test -race -count=1 -timeout=10m ./...
@@ -228,8 +283,10 @@ public version-diagnostic serialization contract.
 Record the exact tested commit/worktree, actual toolchain/platform, commands and
 outputs, each real-service combination or explicit absence, limits, failed
 experiments and outstanding acceptance gates on the PR/reference handoff. Local
-verification here uses Go 1.26.4/linux/amd64; the module minimum/CI selection remains
-Go 1.26.0. No new SDK, infrastructure, benchmark platform, publishing automation
+helper verification covers Go 1.26.0 and Go 1.26.4/linux/amd64; the module minimum/CI
+selection remains Go 1.26.0. Put the selected toolchain's `bin` directory first in
+`PATH` and set `GOTOOLCHAIN=local` so child Go commands use that same toolchain.
+No new SDK, infrastructure, benchmark platform, publishing automation
 or complete business Framework/Adapter was introduced.
 
 An SDK-specific issue still requires its own owner-approved scope, native source

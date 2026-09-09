@@ -348,6 +348,13 @@ as wrapper methods. Ordinary public capabilities must not leak uncontrolled clie
 ownership through these paths. Advanced native borrowing requires a separately
 approved contract; this standard neither exposes all SDKs nor bans all native use.
 
+The internal acceptance helpers check promoted public fields as well as dynamic
+method sets, and probe diagnostic hooks without inferring panic from ordinary
+text. A failed helper is not by itself evidence of a production ownership escape
+or secret disclosure. See the [SDK acceptance guide](../development/sdk-integration.md#field-and-diagnostic-probe-boundaries)
+for the executable field, formatting, logging and runtime JSON boundaries and
+their limits; they are testing aids, not a security sandbox or SDK certification.
+
 Diagnostic failure must not recursively depend on the failing exporter or silently
 block required cleanup. Run/Item identifiers, source names, and custom metadata
 require explicit privacy and cardinality rules; being useful in a trace does not
