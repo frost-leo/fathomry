@@ -175,8 +175,8 @@ accurately scoped guarantee and tests of its restrictions, not invented coverage
 | Decision | Meaning |
 | --- | --- |
 | `Tested` | An exact sufficiently known combination has executed coverage for every requested layer/behavior |
-| `Untested` | Known combination differences or missing successful execution/coverage; no support is inferred |
-| `Unknown` | A necessary fact/equivalence is unavailable, development, redacted or merely declared |
+| `Untested` | The actual combination is sufficiently known, but lacks an exact record with successful required execution/coverage; no support is inferred |
+| `Unknown` | A necessary fact about the actual combination is unavailable, development, redacted or merely declared |
 | `Incompatible` | An exact matching record establishes a relevant failed guarantee; it takes precedence over passing records |
 
 `Decisions` retain matched record IDs and per-baseline difference axes. The
@@ -185,6 +185,18 @@ compatibility boolean flattening their differences. Exact matching is conservati
 replacement shape, main/dependency role, applicable VCS, module sums, Go/platform,
 Provider implementation, configuration, limits and profile changes need evidence.
 It is not an algorithm proving equivalence between different build arrangements.
+
+For multi-baseline aggregation, uncertainty in a historical record remains an
+`Unknown` **difference**, not an unknown fact about a sufficiently known `Actual`.
+Adding an unrelated or insufficient record cannot change a known `Untested`
+decision to `Unknown` and thereby bypass a policy that disallows untested use.
+This also applies to a partially known baseline with no known mismatch: without
+an exact match it cannot establish support or relabel known current facts.
+A sufficient exact passing record establishes `Tested`; an exact relevant failure
+always takes precedence. Record order does not change status or policy outcome;
+matched IDs and diagnostic differences remain in input order. See the
+[multi-baseline regressions](../../compatibility/assessment_regression_test.go)
+for [Issue #11](https://github.com/frost-leo/fathomry/issues/11).
 
 `Policy{}` requires tested evidence for every requested guarantee.
 `AllowUnknown` and `AllowUntested` explicitly permit use despite those statuses,
