@@ -317,6 +317,11 @@ not SDK throughput; sustained mixed-shape tests check declared resource/evidence
 high-water limits. Detailed evidence belongs to the implementation PR/reference
 handoff and identifies the exact tested revision.
 
+The [SDK integration guide](../development/sdk-integration.md) provides shared
+internal standard-testing assertions and bounded reception helpers, contrasting integrations
+and deliberate contract-breaking cases. They reuse these completion/ownership
+rules; they do not add a new resource owner or durable acknowledgement path.
+
 Fixtures, standard-library pipes and source comparisons do not establish Kafka,
 Redis, database, HTTP service, object-store or Temporal support. Concrete Providers
 still must prove native completion, shutdown progress, attempt interception,

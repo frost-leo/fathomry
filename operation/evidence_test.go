@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/frost-leo/fathomry/failure"
+	"github.com/frost-leo/fathomry/internal/conformance"
 	"github.com/frost-leo/fathomry/operation"
 	"github.com/frost-leo/fathomry/source"
 )
@@ -352,11 +353,7 @@ func TestRuntimeResultsAndHandlesStayOutOfLogsAndJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, value := range []any{outcome, result, call, *call, call.Receipt(), *call.Receipt(), call.Scope(), guard, *guard, evidence, delivery} {
-		for _, format := range []string{"%v", "%+v", "%#v", "%s"} {
-			if formatted := fmt.Sprintf(format, value); strings.Contains(formatted, "private") || strings.Contains(formatted, "PANIC") {
-				t.Fatal("runtime value exposed its payload or handles")
-			}
-		}
+		conformance.Private(t, value, "private")
 		if _, err := json.Marshal(value); err == nil {
 			t.Fatal("runtime serialized as unversioned protocol")
 		}

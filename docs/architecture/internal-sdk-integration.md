@@ -30,6 +30,11 @@ integrations, durable evidence reception and business orchestration remain
 unimplemented. The historical source observations below are not service-support
 evidence; shared-mechanism fixtures do not establish SDK/service compatibility.
 
+Issue #6 adds [consuming-build and compatibility diagnostics](../api/version-accountability.md)
+and [internal standard-testing acceptance support](../development/sdk-integration.md).
+Records distinguish executed doubles, fixed dependencies and missing service
+evidence; they do not implement deployment authenticity or Workflow code consistency.
+
 Internal must be a reusable, constrained, and verifiable technical foundation,
 not a collection of unrelated SDK wrappers and not a universal client that hides
 incompatible SDK behavior. This standard establishes the responsibilities,

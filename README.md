@@ -31,7 +31,11 @@ The project is in early development. The [named-source foundation](docs/api/name
 provides typed configuration preparation, explicit resource ownership, and a shared
 public error kernel. The [controlled-call foundation](docs/api/controlled-calls.md)
 adds process-local admission, completion tracking and independent technical-evidence
-handoff. Concrete SDK integrations and workflow orchestration are not
+handoff. [Version accountability](docs/api/version-accountability.md) separates
+actual consuming builds from tested evidence; the
+[integration guide](docs/development/sdk-integration.md) provides reusable
+internal standard-testing support for framework/Provider maintainers. Concrete
+SDK integrations and workflow orchestration are not
 implemented. Repository automation and contribution guidelines are available.
 
 ## Participate
@@ -73,6 +77,9 @@ are implemented. The [named-source API](docs/api/named-sources.md) records the
 implemented configuration/lifecycle boundary and its remaining integration obligations.
 The [controlled-call API](docs/api/controlled-calls.md) documents the call/result
 contracts and their local-only, non-durable limits.
+The [version API](docs/api/version-accountability.md) and
+[SDK acceptance guide](docs/development/sdk-integration.md) record build/profile
+diagnostics, executable contract checks and the evidence still needed for support.
 
 ## License
 
