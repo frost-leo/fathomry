@@ -246,6 +246,19 @@ Keep that returned assembly until responsibility is discharged or explicitly
 handed off to an accountable owner. Do not discard it merely because construction
 returned an error.
 
+Framework-owned cancellation checks before construction, before readiness checks,
+and after readiness preserve both `ctx.Err()` (`context.Canceled` or
+`context.DeadlineExceeded`) and `context.Cause(ctx)`. Both the returned error and
+`Report.Primary` retain deliberate `errors.Is/As` inspection, including causes
+propagated from a parent context; ordinary diagnostics do not print cause text.
+If a constructor or readiness callback returns its own error, that observed error
+remains primary: coincident context cancellation neither replaces it nor adds an
+inferred cause. Cleanup still uses the caller's separate budget, retains its own
+errors and leaves unconfirmed resource/dependency responsibility pending.
+Cancellation is not release, rollback or permission to retry cleanup. See the
+[cancellation regressions](../../source/resources_cancellation_test.go) for
+[Issue #11](https://github.com/frost-leo/fathomry/issues/11).
+
 Dependencies, including callback captures, must precede consumers. Shutdown is
 reverse-order and conservative: an incomplete resource retains all earlier
 entries, including borrowing leases. This intentionally does not promise precise

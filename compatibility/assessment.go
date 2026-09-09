@@ -193,6 +193,8 @@ type Report struct {
 // selection and evidence review. No SDK, exporter, user callback or I/O runs here.
 // Unknown/untested combinations are reported, not silently approved or rejected;
 // use Report.Require with an explicit deployment policy before relying on them.
+// Unknown actual facts determine Unknown decisions. Incomplete baselines retain
+// Unknown differences but cannot relabel a known Untested combination.
 func Assess(build Build, access *source.Access, profile Profile, requirements []Requirement, records []Record) (Report, error) {
 	info := access.Info()
 	actual := Combination{Provider: info.Configuration.Identity.Provider, Build: build, Format: info.Configuration.Format,
@@ -230,11 +232,6 @@ func Assess(build Build, access *source.Access, profile Profile, requirements []
 			}
 			decision.Differences = append(decision.Differences, differences...)
 			if len(differences) != 0 {
-				for _, difference := range differences {
-					if difference.Status == Unknown && decision.Status == Untested {
-						decision.Status = Unknown
-					}
-				}
 				continue
 			}
 			decision.Matched = append(decision.Matched, record.ID)

@@ -242,6 +242,8 @@ type record struct {
 // On failure, the returned non-nil Assembly retains any incomplete responsibility;
 // Bind always refuses a failed assembly. cleanupCtx is caller-owned and separate
 // from ctx; neither is stored after this call. There is no implicit rollback.
+// Framework-owned cancellation exits retain ctx.Err() and context.Cause(ctx);
+// constructor/readiness errors remain primary when those callbacks return errors.
 func Assemble(ctx, cleanupCtx context.Context, scope string, selected ...Spec) (*Assembly, error) {
 	if ctx == nil || cleanupCtx == nil || !validID(scope) {
 		return nil, ErrSelection.New(failure.Attribution{Operation: "assemble"})
@@ -281,7 +283,7 @@ func Assemble(ctx, cleanupCtx context.Context, scope string, selected ...Spec) (
 	}
 	for _, spec := range specs {
 		if err := ctx.Err(); err != nil {
-			return fail(ErrInitialization.New(attribution(scope, spec.description, "construct"), err))
+			return fail(ErrInitialization.New(attribution(scope, spec.description, "construct"), err, context.Cause(ctx)))
 		}
 		if spec.mode != Owned {
 			shared, err := existing(spec, assembly, true)
@@ -311,7 +313,7 @@ func Assemble(ctx, cleanupCtx context.Context, scope string, selected ...Spec) (
 	}
 	for _, entry := range assembly.entries {
 		if err := ctx.Err(); err != nil {
-			return fail(ErrInitialization.New(attribution(scope, entry.spec.description, "check"), err))
+			return fail(ErrInitialization.New(attribution(scope, entry.spec.description, "check"), err, context.Cause(ctx)))
 		}
 		if entry.check != nil {
 			if err := entry.check(ctx); err != nil {
@@ -320,7 +322,7 @@ func Assemble(ctx, cleanupCtx context.Context, scope string, selected ...Spec) (
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return fail(ErrInitialization.New(failure.Attribution{Operation: "assemble", Assembly: scope}, err))
+		return fail(ErrInitialization.New(failure.Attribution{Operation: "assemble", Assembly: scope}, err, context.Cause(ctx)))
 	}
 	assembly.ready = true
 	return assembly, nil
