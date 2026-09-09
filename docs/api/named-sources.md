@@ -204,6 +204,11 @@ scopes retain their admission after owner shutdown, until their own scope closes
 Applied call limits are separately inspectable and are not part of the prepared
 Provider configuration revision.
 
+The [version-accountability API](version-accountability.md) associates original
+source identity, format, preparation revision and applied limits with an explicit
+effective Provider profile and consuming-binary facts. It does not equate random
+preparation revisions with content equality or claim to inspect native settings.
+
 Delegation is deliberately conservative: the donor must have exactly one entry,
 with its entire owned dependency set contained within that record, and no borrowers.
 Moving one record out of an ordered dependency set would lose lifetime protection,

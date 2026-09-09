@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/frost-leo/fathomry/failure"
+	"github.com/frost-leo/fathomry/internal/conformance"
 	"github.com/frost-leo/fathomry/source"
 )
 
@@ -116,11 +117,7 @@ func TestMultipleProvidersBindingReuseAndConsumerOwnership(t *testing.T) {
 		if _, ownsClient := capability.(io.Closer); ownsClient {
 			t.Fatal("consumer acquired client ownership")
 		}
-		for _, forbidden := range []string{"Close", "Stop", "Shutdown", "Client"} {
-			if _, exists := reflect.TypeOf(capability).MethodByName(forbidden); exists {
-				t.Fatal("raw lifecycle escape")
-			}
-		}
+		conformance.Facade(t, capability, "Read")
 		for index := 0; index < 3; index++ {
 			result, err := capability.Read(context.Background(), request{Tag: fmt.Sprint(index)})
 			if err != nil || result.Value != info.Configuration.Identity.Name || result.Tag != fmt.Sprint(index) {
