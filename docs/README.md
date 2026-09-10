@@ -31,7 +31,9 @@ contracts; development guides explain tasks. Choose a reading path below.
 
 Configuration preparation, resource ownership/admission, controlled calls and
 evidence handoff, technical errors, build/compatibility assessment and maintainer
-testing support are implemented. All five packages are internal.
+testing support are implemented as internal foundations. A bounded Viper v1
+integration is implemented under `internal/configsource/viper/v1`, with separately
+versioned `OptionsV1` bootstrap settings and a raw-input preparation proof.
 
 There is no public Go package, project generator, application configuration loader,
 production service Provider or complete Temporal execution runtime yet. The intended
@@ -87,6 +89,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/fault`](reference/internal/fault/interface.md) | [Diagnostics and inspection boundaries](reference/internal/fault/diagnostics.md) |
 | [`internal/compatibility`](reference/internal/compatibility/interface.md) | [Build facts](reference/internal/compatibility/build-info.md), [assessment and policy](reference/internal/compatibility/assessment.md) |
 | [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md) |
+| [`internal/configsource/viper/v1`](reference/internal/configsource/viper/v1/interface.md) | Native local profile, OptionsV1, raw handoff, ownership, bounds and version evidence |
 
 Exact declarations and symbol comments live with the Go source. Each entry links
 implementation/tests; use `go doc -all ./internal/<package>` from the repository root.

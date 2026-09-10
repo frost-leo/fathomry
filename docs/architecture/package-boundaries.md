@@ -133,6 +133,19 @@ invariants. Adjacent tests should follow the same functional organization.
 Compactness does not justify giant mixed-purpose files, duplicated mechanisms,
 or merging unrelated Providers. No fixed tree or numerical file/line limit is set.
 
+The current configuration integration uses `internal/configsource/viper/v1`: capability,
+SDK, then SDK major. Grouping directories do not require forwarding Go packages or
+a universal Provider interface. Its `OptionsV1` option type in `options.go`
+versions a different contract from the SDK major. Exact SDK versions remain build
+facts, not per-patch directory names. See the [package contract](../reference/internal/configsource/viper/v1/interface.md).
+
+Provider-specific settings stay in `options.go`, not a central data-structure
+directory. Operation-specific input/output types stay with their operation.
+`errors.go` owns this implementation's error identity and shared-fault adaptation;
+core function groups pair with focused tests, and `integration_test.go` proves
+their actual composition. These are responsibility conventions, not a requirement
+to generate empty files or implement identical resource lifecycles for every SDK.
+
 A package/file review must answer:
 
 - Can a reader infer its actual purpose and find one behavior without hopping

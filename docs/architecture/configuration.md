@@ -120,7 +120,10 @@ Run input, public diagnostics, or configuration-revision material.
 
 The [named-source contract](../reference/internal/resource/interface.md) establishes the implemented
 list/null/empty/duplicate/unknown-key rules, revision identity and freezing behavior.
-File/environment-key loading and reload/rotation handoff are not implemented and
+The [Viper v1 technical integration](../reference/internal/configsource/viper/v1/interface.md)
+implements a bounded local acquisition profile with explicitly bound live environment
+queries. It is not an assembled business-resource Provider or frozen preparation.
+The full framework loader and reload/rotation handoff remain unimplemented and
 need their own explicit contracts before support is claimed. A replacement or reload
 must not retroactively relabel settings
 already used by in-flight work or weaken its execution constraints.

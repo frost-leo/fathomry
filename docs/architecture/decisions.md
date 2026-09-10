@@ -68,7 +68,9 @@ decision becomes necessary. They are not permission to drop the approved guarant
 
 These open choices limit implementation claims. This standard establishes
 obligations and evidence requirements; package references describe the implemented
-subset. Concrete SDK integrations and the full runtime remain absent. A document
+subset. The [local Viper integration](../reference/internal/configsource/viper/v1/interface.md)
+is a bounded technical capability; production service Providers and the full runtime
+remain absent. A document
 or closed issue is not evidence that a service guarantee has passed acceptance.
 
 
