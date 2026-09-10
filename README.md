@@ -27,16 +27,23 @@ Fathomry focuses on explicit contracts, cohesive infrastructure clients,
 predictable resource ownership, and durable workflow execution. Reliability,
 observability, bounded resource use, and measured performance guide development.
 
-The project is in early development. The [named-source foundation](docs/api/named-sources.md)
-provides typed configuration preparation, explicit resource ownership, and a shared
-public error kernel. The [controlled-call foundation](docs/api/controlled-calls.md)
-adds process-local admission, completion tracking and independent technical-evidence
-handoff. [Version accountability](docs/api/version-accountability.md) separates
-actual consuming builds from tested evidence; the
-[integration guide](docs/development/sdk-integration.md) provides reusable
-internal standard-testing support for framework/Provider maintainers. Concrete
-SDK integrations and workflow orchestration are not
-implemented. Repository automation and contribution guidelines are available.
+The project is in early development. Configuration preparation, resource ownership,
+controlled calls, technical errors, compatibility assessment and testing support
+are implemented as private foundations. There is no public Go API, production
+service Provider, CLI/project generator, application loader or complete runtime yet.
+The intended `fathomry new <project>` path remains future framework work, not
+business-owned assembly boilerplate.
+
+## Documentation
+
+Start with the [documentation map](docs/README.md) for current status and reading paths:
+
+- [Architecture by topic](docs/README.md#architecture-by-topic): responsibilities,
+  design rationale and cross-package guarantees.
+- [Internal package reference](docs/README.md#internal-package-reference): each
+  package's `interface.md` contract and detailed topics.
+- [Development guides](docs/README.md#development-guides): SDK integration, testing
+  and the canonical documentation-writing policy.
 
 ## Participate
 
@@ -68,18 +75,13 @@ Git clone; the product build must not depend on them. Public Issues retain enoug
 approved scope and sanitized evidence to identify missing handoff material.
 
 Use the repository's `fathomry-development` skill to continue one confirmed issue,
-then prepare one next issue with the owner. `docs/` is reserved for established
-APIs and accepted architecture. The
-[internal architecture and SDK integration standard](docs/architecture/internal-sdk-integration.md)
-defines the technical foundation, responsibility boundaries, and integration
-acceptance requirements. It does not claim that the runtime or SDK integrations
-are implemented. The [named-source API](docs/api/named-sources.md) records the
-implemented configuration/lifecycle boundary and its remaining integration obligations.
-The [controlled-call API](docs/api/controlled-calls.md) documents the call/result
-contracts and their local-only, non-durable limits.
-The [version API](docs/api/version-accountability.md) and
-[SDK acceptance guide](docs/development/sdk-integration.md) record build/profile
-diagnostics, executable contract checks and the evidence still needed for support.
+then prepare one next issue with the owner. Product `docs/` holds established
+contracts, accepted architecture and maintainer guides; its `reference/` section
+is not the sibling working-literature workspace. Follow
+[Writing documentation](docs/development/documentation.md) for placement, interface
+contracts, truthful status and validation. The
+[integration-standard index](docs/architecture/internal-sdk-integration.md) retains
+accepted section identifiers and links to their topic pages.
 
 ## License
 

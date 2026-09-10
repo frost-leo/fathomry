@@ -36,9 +36,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frost-leo/fathomry/failure"
-	"github.com/frost-leo/fathomry/operation"
-	"github.com/frost-leo/fathomry/source"
+	"github.com/frost-leo/fathomry/internal/fault"
+	"github.com/frost-leo/fathomry/internal/invocation"
+	"github.com/frost-leo/fathomry/internal/resource"
 )
 
 // Expected is an independently established operation contract at a synchronized
@@ -47,25 +47,25 @@ import (
 // Primary/Cleanup require nil or errors.Is identity separately. For additional
 // native type inspection use Cause. No raw data/errors are printed by this package.
 type Expected[T any] struct {
-	Attribution failure.Attribution
-	Source      source.Info
-	Limits      source.Limits
-	Shape       operation.Shape
-	Nested      bool
-	Present     bool
-	Final       bool
-	Released    bool
-	Primary     error
-	Cleanup     error
-	Attempts    operation.Attempts
-	Value       func(testing.TB, T)
+	Context  fault.Context
+	Source   resource.Info
+	Limits   resource.Limits
+	Shape    invocation.Shape
+	Nested   bool
+	Present  bool
+	Final    bool
+	Released bool
+	Primary  error
+	Cleanup  error
+	Attempts invocation.Attempts
+	Value    func(testing.TB, T)
 }
 
 // Result checks metadata, completion, error identity and typed evidence separately.
 // Final technical reporting does not imply release or any external effect.
-func Result[T any](t testing.TB, got operation.Result[T], want Expected[T]) {
+func Result[T any](t testing.TB, got invocation.Result[T], want Expected[T]) {
 	t.Helper()
-	if got.Attribution != want.Attribution || !reflect.DeepEqual(got.Source, want.Source) || got.Limits != want.Limits {
+	if got.Context != want.Context || !reflect.DeepEqual(got.Source, want.Source) || got.Limits != want.Limits {
 		t.Errorf("conformance: source, execution attribution or effective limits changed")
 	}
 	if got.Shape != want.Shape || got.Nested != want.Nested {
@@ -119,7 +119,7 @@ func Cause[T error](t testing.TB, err error, match func(T) bool) {
 // not fabricate completion. All expectations must require final released results.
 // This is testing support, NOT reliable recording or durable acknowledgement.
 // Context must have a deadline; fixtures own any native stop/join cleanup.
-func Receive[T any](t testing.TB, ctx context.Context, inbox *operation.Inbox[T], expected []Expected[T]) {
+func Receive[T any](t testing.TB, ctx context.Context, inbox *invocation.Inbox[T], expected []Expected[T]) {
 	t.Helper()
 	if ctx == nil || len(expected) == 0 || len(expected) > 1024 {
 		t.Errorf("conformance: reception requires a bounded batch and context")
@@ -131,7 +131,7 @@ func Receive[T any](t testing.TB, ctx context.Context, inbox *operation.Inbox[T]
 	}
 	wants := make(map[string]Expected[T], len(expected))
 	for _, want := range expected {
-		id := want.Attribution.Execution.Call
+		id := want.Context.Correlation.Call
 		if _, duplicate := wants[id]; duplicate || id == "" || !want.Final || !want.Released {
 			t.Errorf("conformance: invalid or duplicate reception expectation")
 			return
@@ -149,7 +149,7 @@ func Receive[T any](t testing.TB, ctx context.Context, inbox *operation.Inbox[T]
 			t.Errorf("conformance: evidence remains locally owned at the reception deadline")
 			return
 		}
-		id := got.Attribution.Execution.Call
+		id := got.Context.Correlation.Call
 		want, ok := wants[id]
 		if !ok {
 			t.Errorf("conformance: duplicate or unexpected evidence attribution")
@@ -172,7 +172,7 @@ func Receive[T any](t testing.TB, ctx context.Context, inbox *operation.Inbox[T]
 // Accounting checks all declared process-local dimensions at a synchronized
 // checkpoint. It does not measure heap/RSS/native allocations, prefetch or SDK
 // workers; those require separate native instrumentation and capability tests.
-func Accounting(t testing.TB, use source.Usage, limits source.Limits, evidence operation.InboxUsage, count int, bytes int64) {
+func Accounting(t testing.TB, use resource.Usage, limits resource.Limits, evidence invocation.InboxUsage, count int, bytes int64) {
 	t.Helper()
 	if use.Active < 0 || use.Active > limits.Active || use.Queued < 0 || use.Queued > limits.Queued ||
 		use.ActiveBytes < 0 || use.ActiveBytes > limits.Bytes || use.QueuedBytes < 0 || use.QueuedBytes > limits.QueuedBytes ||

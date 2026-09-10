@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/frost-leo/fathomry/compatibility"
+	"github.com/frost-leo/fathomry/internal/compatibility"
 	"github.com/frost-leo/fathomry/internal/conformance"
-	"github.com/frost-leo/fathomry/operation"
+	"github.com/frost-leo/fathomry/internal/invocation"
 )
 
 func TestTraceableFixtureRecordNeverClaimsServiceSupport(t *testing.T) {
@@ -52,20 +52,20 @@ func TestTraceableFixtureRecordNeverClaimsServiceSupport(t *testing.T) {
 	if !t.Run("recorded-finite-combination", func(t *testing.T) {
 		canceled, cancel := context.WithCancel(context.Background())
 		cancel()
-		if call, err := operation.Begin(canceled, f.access, request("canceled", operation.Finite, 4096), f.inbox, nil); call != nil || !errors.Is(err, context.Canceled) {
+		if call, err := invocation.Begin(canceled, f.access, request("canceled", invocation.Finite, 4096), f.inbox, nil); call != nil || !errors.Is(err, context.Canceled) {
 			t.Error("canceled work crossed the recorded entry boundary")
 		}
-		input := request("recorded", operation.Finite, 4096)
+		input := request("recorded", invocation.Finite, 4096)
 		call := f.begin(t, input)
 		payload := bytes.Repeat([]byte("x"), 4096)
 		value := transfer{Bytes: len(payload), Unknown: 1, Digest: sha256.Sum256(payload)}
-		if err := call.Execute(context.Background(), operation.Budget{Limit: time.Second}, func(context.Context, operation.Scope) operation.Outcome[transfer] {
+		if err := call.Execute(context.Background(), invocation.Budget{Limit: time.Second}, func(context.Context, invocation.Scope) invocation.Outcome[transfer] {
 			done := f.counts.enter(int64(len(payload)))
 			defer done()
 			if _, err := call.Attempt(); err != nil {
 				t.Error(err)
 			}
-			return operation.Outcome[transfer]{Present: true, Value: value, Primary: io.ErrUnexpectedEOF}
+			return invocation.Outcome[transfer]{Present: true, Value: value, Primary: io.ErrUnexpectedEOF}
 		}); err != nil {
 			t.Fatal(err)
 		}

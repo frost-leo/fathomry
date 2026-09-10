@@ -17,135 +17,39 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 
-# SDK integration acceptance and upgrade guide
+# Develop and verify an SDK integration
 
-Status: executable acceptance foundation for [Issue #6](https://github.com/frost-leo/fathomry/issues/6),
-with helper regressions for [Issue #13](https://github.com/frost-leo/fathomry/issues/13),
-not acceptance of a production Provider. Follow S01-S11 of the
-[accepted standard](../architecture/internal-sdk-integration.md); the original
-accepted revision is `0c3f9d82947229a861a30fbf9d1730fa02ca44ea`.
-Later integrations record the exact applicable revision/sections, not just a link
-to a moving branch. This guide does not authorize the next integration or service use.
+[Documentation](../README.md) / Development
 
-## Reusable standard-testing support
+**Audience:** maintainers of an approved integration issue.
+**Status:** maintainer workflow, not Provider certification.
 
-Fathomry mechanism and Provider tests import
-`github.com/frost-leo/fathomry/internal/conformance`. This is internal maintainer
-tooling, not a public Provider-extension SDK or a production dependency. It is
-shared across `source`, `operation` and `failure` contracts rather than owned by
-one runtime package. Putting it under `operation/operationtest` would still expose
-an unnecessary public API and misstate that scope.
+Use this procedure to establish actual capability and evidence, not merely to
+make a client compile. It does not authorize selecting a new SDK or using a service.
+Follow the [integration architecture](../architecture/sdk-integration.md) and record
+the exact standard revision/sections, not only a moving-branch link.
 
-Independent business projects use the public capability/diagnostic contracts and
-standard `testing` assertions; they do not import this internal tool. The
-[consumer boundary test](../../source/boundary_test.go) proves public composition
-and compatibility diagnostics work, an external internal-tool import is rejected
-by Go, and production foundations do not import the test helper or `testing`.
-Supporting externally implemented Providers with a public conformance SDK would
-need its own approved extension contract; it is not inferred from selectable
-first-party Provider imports. This does not prevent internal Provider packages
-from sharing the current acceptance suite.
+## Prerequisites
 
-| Helper | Executable obligation |
-| --- | --- |
-| `Expected[T]` / `Result` | Actual source/configuration/limits and execution attribution; shape/nesting; present versus missing; technical finality versus local release; primary/cleanup identities; attempt evidence and independent typed-value oracle |
-| `Cause[T]` | Original native `errors.As` type/pointer/evidence without formatting it |
-| `Receive` | Deadline-bounded independent evidence reception, matched by Call ID rather than arrival order; duplicates/missing evidence; explicit idempotent release only after local subtree completion |
-| `Accounting` | Separate active/queued counts and byte reservations and outstanding receipt count/bytes at synchronized checkpoints |
-| `Facade` | Method-only facade's exact dynamic/addressable-copy method allowlist, no direct or promoted exported fields under `reflect.VisibleFields`, and no nil facade |
-| `Private` | Injected secret canaries through fmt and text/JSON slog, with selected-hook panic probes and output/traversal bounds, without echoing secrets on failure |
-| `Runtime` | The privacy checks plus refused JSON encoding and reconstruction of runtime types; panicking JSON callbacks fail without printing their payload |
+- An owner-approved scope, required guarantees, modes and non-goals.
+- Relevant pinned SDK source and actual dependency/build information.
+- Explicit resource, callback, evidence and cleanup owners.
+- Separate authorization for isolated-service work; no production credentials.
 
-`Value` must derive expected data/effect facts from an independent input/native
-oracle, not copy the integration's output. Present data without an oracle is a
-test failure. Check each returned dynamic handle/callback surface under its own
-allowlist: a stream may legitimately close itself, not the shared client.
-Reflection cannot audit arbitrary closures or provide a Go security sandbox.
+## 1. Establish the integration boundary
 
-### Field and diagnostic probe boundaries
+The [#15 contract map and migration](../architecture/package-boundaries.md) separate ordinary
+business use from maintainer integration. Configuration preparation and ownership
+live in `internal/resource`; the complete call/result/evidence/observation protocol
+lives in `internal/invocation`; build/compatibility mechanisms remain private too.
+Their errors use `internal/fault`, never public framework attribution. Examples
+importing them are in-module maintainer fixtures.
+Business authors declare allowed configuration/capabilities and write business
+logic. Future loaders (including configuration-center SDKs), resource assembly,
+admission and evidence loops remain framework responsibilities. The CLI,
+`fathomry new`, loader and full execution entry are not implemented here.
 
-`Facade` inspects struct field **types**, including anonymous private value/pointer
-embeddings. It does not dereference nil embedded pointers or invoke allowed methods.
-`reflect.VisibleFields` handles multi-level promotion, field hiding, equal-depth
-field ambiguity and recursive types. Its field visibility is independent of the
-method allowlist, not a complete Go selector/capability analysis. In particular,
-field/method collisions are conservatively rejected even when the ordinary selector
-is ambiguous. An outer method hiding a promoted callback is not sufficient:
-ordinary external conversion to a new defined type can remove that method.
-The [separate-package selector tests](../../internal/conformance/checks_test.go)
-execute this conversion and the exposed callbacks without reflection or `unsafe`.
-Rejection of a layout alone does not demonstrate a production ownership escape.
-
-`Private` probes the hooks selected by `%v`, `%+v`, `%#v`, `%s` and `%q`, preserving
-fmt's Formatter/GoStringer/error/Stringer precedence and ordinary container descent.
-Private fields and contents hidden by an outer formatter are not independently
-invoked. Supply each actually used value/pointer form; this check does not invent
-pointer methods on an unaddressable value. Text marshaling, JSON encoding and
-returned encoding-error formatting also have panic probes. An ordinary marshaling
-error remains permitted, notably the intentional runtime JSON refusal.
-Text logging follows native `TextMarshaler` → byte slice → fmt dispatch. Byte
-slices, including named slice/byte-element types, bypass fmt hooks; arrays and
-pointers do not enter that branch. Native fmt, text and JSON output controls in
-`TestPrivateNativeByteLoggingDispatch` check this distinction independently.
-
-For slog, guarded `LogValuer` calls use native `Value.Resolve`, separately for the
-text and JSON handlers, and recursively resolve groups without modifying the
-caller's attribute slices. Go 1.26 rejects a chain reaching its 100th `LogValue`
-call, even when that call returns a terminal value; the helper rejects it too.
-Detection does not search for panic words or fallback strings: ordinary text,
-including a literal formatter failure example, remains valid.
-
-Diagnostic hooks must be synchronous, bounded and repeatable. fmt/marshal probes
-are additional invocations before native output checks, not transparent runtime
-instrumentation. These helpers do not infer failure from an already-resolved slog
-error or from a hook that internally suppresses its own failure. Such paths need
-the integration's independent native oracle. Canary matching checks literal
-rendered bytes, not arbitrary encodings or secret transformations. Outputs are
-limited to 1 MiB; each structural probe allows at most 1,048,576 visited values
-and depth 100 (root depth zero). Bounds reject the fixture; they cannot cap a
-hook's internal allocation, interrupt blocked code or prevent every recursive
-formatter. Keep fault fixtures in owned, deadline-bounded subprocesses.
-
-Use a separate caller-owned cleanup budget and native stop/join path. `Receive`
-requires a deadline and at most 1,024 expectations; timeout is a test failure,
-not permission to discard unfinished ownership. Its local release is not durable
-recording. Returned payloads/errors retain their capability-owned immutable,
-bounded inspection contract; these helpers do not generically deep-copy them.
-
-The existing source facade and operation privacy tests now use the shared checks.
-The [contrasting test integrations](../../internal/conformance/integration_test.go) provide
-copyable usage patterns, not a universal capability interface:
-
-- Pull-style consumption returns a non-owning stream facade, reports partial data
-  and uncertainty, and retains ownership through stream close.
-- Asynchronous delivery occurs before the submit stack returns. A pre-reserved
-  guard protects that stack; duplicate completion does not erase the first result.
-- A background session has independent establishment/lifetime/message budgets,
-  a bounded message channel, incrementally drained child evidence, and separate
-  stop, final cleanup report, join and local-release events.
-- Finite calls vary payload bytes and concurrency, expire queued work, and retain
-  completed-but-unreceived evidence. No callback reacquires its own source permit.
-
-`TestBrokenIntegrationsFailRealContractTests` runs faulty integrations in bounded
-Go test subprocesses. Exposing owner shutdown, omitting the submit guard,
-promoting unknown output, exposing private causes/payloads, replacing native
-identity, and conflating missing/empty output each cause actual testing failures.
-Owning callback fields and pointer-only shutdown methods reachable through a
-copied value are also rejected. The parent fails if any of the eight mutations
-unexpectedly passes or discloses the canary.
-The [helper contract regressions](../../internal/conformance/checks_test.go) and
-[diagnostic regressions](../../internal/conformance/privacy_test.go) use the same
-parent/child direction with valid controls. Each invalid child must return from
-the helper, exit 1 with the expected conformance failure, and disclose no canary;
-an unexpectedly accepted fixture, crash or timeout fails its parent. They cover
-promotion/hiding/method sets, safe literal diagnostics, fmt and text/JSON hooks,
-nil receivers, nested groups/containers, resolution/traversal limits and runtime
-JSON refusal/panic boundaries. Text-only and JSON-only log faults independently
-exercise both handlers. These are helper acceptance facts, not SDK support.
-The actual consumer SDK-upgrade experiment separately proves that compilation
-can pass while the previously accepted retry contract fails.
-
-## Before granting a public capability
+## 2. Implement and test the guarantees
 
 - Identify its independently selectable implementation, actual consumers,
   execution shapes, native dependencies and non-goals. Do not expose an umbrella
@@ -160,7 +64,7 @@ can pass while the previously accepted retry contract fails.
   mode and critical options separately. Apply explicit unknown/untested policy.
 - Prove original resource identity across aliases, shared allowance, no owning
   client escape, partial initialization cleanup and unchanged delegation semantics.
-- Exercise the real public operation path; merely calling `source.Bind` does not
+- Exercise the real public operation path; merely calling `resource.Bind` does not
   install admission or evidence wrapping.
 - Bound logical calls, SDK attempts/retries, queues, unresolved receipts, record/
   batch size, bytes, SDK buffers/prefetch/decompression, sessions, background work,
@@ -168,6 +72,13 @@ can pass while the previously accepted retry contract fails.
   overload behavior and termination path for each. Reservations are not RSS.
 - Independently verify partial/unknown/empty results and per-owner attribution.
   Never expand aggregate ACKs into per-Item commit/visibility/transaction claims.
+- Freeze framework Run/Item/attempt attribution at the boundary before native
+  submission. Preserve it with required evidence through early wait returns and
+  late callbacks; do not insert framework semantics into technical correlation.
+  Preserve the native multi-cause tree through standard Go `error`. The
+  [boundary tests](../../internal/conformance/boundary_test.go) use local sentinels
+  and ordinary wrapping plus a test-owned attribution envelope, not a replacement
+  public error API, production Adapter or unbounded lookup table.
 - Keep required evidence independent of business error handling and diagnostics.
   Recording/export failure cannot replace the primary result or invent durability.
 - Test shutdown at saturation. Drive necessary native drain/stop through existing
@@ -187,7 +98,20 @@ known. `Execute` owns callback completion, and its shortcut requires callback
 return to establish its own use has ended or already-retained later responsibility.
 Borrowing scopes already admitted before owner shutdown may finish independently.
 
-## Upgrade comparison
+## 3. Record the exercised combination
+
+Use the [conformance interface](../reference/internal/conformance/interface.md)
+and [fixture examples](../reference/internal/conformance/fixtures.md) for independent
+data/lifetime oracles. Read [diagnostic probe limits](../reference/internal/conformance/diagnostics.md)
+before interpreting a helper failure or declaring a facade safe.
+
+Derive the Profile from the exact constructed settings and capture the
+[actual build](../reference/internal/compatibility/build-info.md). Record which
+mechanism/capability/SDK/service layers actually executed. Apply
+[assessment rules](../reference/internal/compatibility/assessment.md) without turning
+missing, skipped or synthetic evidence into supported-service claims.
+
+## 4. Compare an SDK upgrade
 
 Capture old and candidate combinations with the actual consuming executable.
 Run the same correctness workload/oracles and hold data size, concurrency,
@@ -199,7 +123,7 @@ possible; record contradictory results, not just successful compilation/throughp
 | Defaults/configuration | Omitted/zero/null/overridden settings, parser options and hidden environment/file defaults; same effective profile cannot name different behavior |
 | Retry | Actual attempts, limits, authentication refresh/background traffic, amplification, uncertain prior effect and attribution |
 | Cancellation/completion | Expired queued work, caller wait versus native use, async callback ordering, retained handles, cleanup/stop/join and independent budgets |
-| Error identity | Public semantic revision, intended `errors.Is/As`, unchanged causes and separate cleanup failures; no retry decision from error text |
+| Error identity | Technical kinds, intended `errors.Is/As`, unchanged causes and separate cleanup failures; review any actual future public semantic contract separately, with no retry decision from error text |
 | Results | Partial/unknown/empty/missing, accepted/committed/visible meaning, per-owner granularity, late/duplicate output and record-size bounds |
 | Resources | Count/bytes/queue/receipts plus actual native/prefetch/worker limits; overload and unfinished work; no new acquisition behind a held permit |
 | Durable/Temporal contracts, if changed | Owner/version, old reader interpretation, migration or refusal, relevant replay and conversion evidence |
@@ -209,86 +133,14 @@ applicable behavioral gate. Missing or skipped service evidence stays missing.
 Record measured allocations/latency tails/throughput only when actually measured;
 state unmeasured native/RSS/disk dimensions and unsupported modes explicitly.
 
-## Current traceable integration record
+## 5. Verify and hand off
 
-The [executable record example](../../internal/conformance/record_test.go)
-`TestTraceableFixtureRecordNeverClaimsServiceSupport` links:
+Run the [testing workflow](testing.md), including relevant focused faults, negative
+controls and full checks. Identify the exact commit/worktree, actual toolchain,
+command and observed output. Record each service combination or its absence,
+limits, contradictory results and outstanding acceptance gates.
 
-- Standard revision `0c3f9d82947229a861a30fbf9d1730fa02ca44ea`,
-  particularly S03-S08 and S10-S11.
-- Implementation ID `gh-6-reviewed-worktree`, resolved to the #6 PR's reviewed
-  commit/content manifest; before approval this denotes an uncommitted worktree,
-  not a released module or attested artifact.
-- Executed pull, async, background and bounded-workload subtests. Passed/failed
-  evidence comes from actual `testing.T.Run` results.
-- The available actual Go/Framework/YAML facts in the test executable and the
-  source format/revision/limits used by its recorded finite-handoff subtest, with
-  payload size, evidence capacities and execution budget in the effective profile.
-  The contrasting-shape tests have their own documented combinations; they are
-  not silently combined into that single baseline.
-- Explicit missing transfer-SDK and skipped/not-authorized service evidence.
-  The test asserts that adding a service requirement cannot become supported.
-
-Incomplete development/test-binary provenance stays unknown even when the fixture
-tests pass. No startup code is allowed to manufacture a passing baseline from its
-current metadata.
-
-| Evidence class | Current evidence and limits |
-| --- | --- |
-| Common mechanism | Existing source/operation/failure suites plus shared assertions, mutation subprocesses and public consumer test; in-process only |
-| Capability contract | Local transfer vocabulary and independent lifetime/output oracles across pull, async, session and finite shapes; no real transaction/delivery guarantee |
-| Fixed native dependency | YAML v3.0.5, checksum `h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=`; source configuration suite plus [the native YAML boundary test](../../source/yaml_test.go). Upstream decoder option differences are executed, not equated with Fathomry semantics |
-| Synthetic module execution | `TestIndependentConsumerBuildSelectionAndBehavior` builds an independent application with file-proxy SDK/provider fixtures. MVS, retry-default changes, versioned/local replacement, local modification and workspace cases execute without network |
-| Real service | None selected/authorized/run. The record's skipped service entry does not represent a passing service test |
-| Temporal/replay | Not applicable: no Temporal runtime dependency, Workflow command, converter or serialized history/payload format changed |
-
-The fixed YAML library is configuration evidence, **not** an async/stream service
-SDK or transfer Provider. Its decoder source was inspected at upstream commit
-`e16c7af9361b241fa02d91582fb59ce4954d8afc`.
-[Upstream v3.0.5 decoder](https://github.com/yaml/go-yaml/blob/v3.0.5/yaml.go).
-No candidate from the sibling SDK inventory was promoted into runtime dependencies.
-
-The bounded fixture envelope varies 0, 1, 4,096 and 65,536 payload bytes with
-concurrency 1 and 4. The largest simultaneous tracked fixture payload is 262,144
-bytes; independent evidence reservations are 128 bytes per call, at most 5 slots
-including a queued caller. Background tests own one 4,096-byte payload buffer and
-a channel of one message, and drain 32 child results. These are tracked fixture
-payloads/declarations, not heap/RSS/native-library hard caps or throughput claims.
-
-## Reproduce and hand off
-
-Run from the repository with its selected dependencies available:
-
-```sh
-go mod tidy -diff
-go mod verify
-test -z "$(gofmt -l .)"
-go vet ./...
-go test -race -count=1 -timeout=10m ./...
-go build ./...
-go test -race -count=20 -timeout=2m ./source ./operation ./failure ./internal/conformance
-go test -race -count=3 -timeout=3m ./compatibility
-go test ./compatibility -run '^$' -fuzz '^FuzzBuildMetadataPrivacy$' -fuzztime=10s -parallel=2
-go test ./source -run '^$' -fuzz '^FuzzPrepare$' -fuzztime=10s -parallel=2
-git diff --check
-bash .agents/skills/fathomry-development/scripts/new-issue_test.sh
-```
-
-The independent build test seeds an isolated local module proxy with synthetic
-fixtures and the repository's already-cached selected YAML zip; it disables
-network/sumdb access and owns a writable temporary module cache for cleanup.
-The probes' explicitly selected JSON output is private test transport, not a
-public version-diagnostic serialization contract.
-
-Record the exact tested commit/worktree, actual toolchain/platform, commands and
-outputs, each real-service combination or explicit absence, limits, failed
-experiments and outstanding acceptance gates on the PR/reference handoff. Local
-helper verification covers Go 1.26.0 and Go 1.26.4/linux/amd64; the module minimum/CI
-selection remains Go 1.26.0. Put the selected toolchain's `bin` directory first in
-`PATH` and set `GOTOOLCHAIN=local` so child Go commands use that same toolchain.
-No new SDK, infrastructure, benchmark platform, publishing automation
-or complete business Framework/Adapter was introduced.
-
-An SDK-specific issue still requires its own owner-approved scope, native source
-review, supported guarantee contract and authorized service verification. Do not
-start it or manufacture a backlog from this guide.
+Keep raw logs/research in local issue literature; publish established contracts
+and accepted architecture here. Follow [contribution policy](../../.github/CONTRIBUTING.md)
+for signed publication/review/merge. This guide does not create another integration
+issue or authorize a follow-on backlog.

@@ -34,10 +34,10 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/frost-leo/fathomry/failure"
 	"github.com/frost-leo/fathomry/internal/conformance"
-	"github.com/frost-leo/fathomry/operation"
-	"github.com/frost-leo/fathomry/source"
+	"github.com/frost-leo/fathomry/internal/fault"
+	"github.com/frost-leo/fathomry/internal/invocation"
+	"github.com/frost-leo/fathomry/internal/resource"
 )
 
 // These integrations are test doubles, not SDK or real-service support.
@@ -68,11 +68,11 @@ func (counts *counters) enter(bytes int64) func() {
 }
 
 type fixture struct {
-	owner    *source.Assembly
-	access   *source.Access
-	inbox    *operation.Inbox[transfer]
+	owner    *resource.Assembly
+	access   *resource.Access
+	inbox    *invocation.Inbox[transfer]
 	counts   *counters
-	limits   source.Limits
+	limits   resource.Limits
 	capacity int
 }
 
@@ -82,34 +82,34 @@ func newFixture(t testing.TB, active int, bytes int64, count int) fixture {
 		Secret string `json:"secret"`
 		Limit  int64  `json:"limit"`
 	}
-	prepared, err := source.Prepare(source.Schema[config]{Format: 1, Defaults: config{Secret: "secret-canary-config", Limit: bytes}},
-		source.Input{Identity: source.Identity{Provider: "fixture.transfer", Name: "data"}, Format: 1})
+	prepared, err := resource.Prepare(resource.Schema[config]{Format: 1, Defaults: config{Secret: "secret-canary-config", Limit: bytes}},
+		resource.Input{Identity: resource.Identity{Provider: "fixture.transfer", Name: "data"}, Format: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	counts := new(counters)
-	limits := source.Limits{Active: active, Queued: active, Bytes: bytes, QueuedBytes: bytes, MaxLeases: 4}
-	selected := source.WithLimits(source.Select(prepared, func(_ context.Context, config config) (source.Resource[struct{}], error) {
+	limits := resource.Limits{Active: active, Queued: active, Bytes: bytes, QueuedBytes: bytes, MaxLeases: 4}
+	selected := resource.WithLimits(resource.Select(prepared, func(_ context.Context, config config) (resource.Resource[struct{}], error) {
 		if config.Limit != bytes || config.Secret != "secret-canary-config" {
 			t.Error("effective defaults changed")
 		}
-		return source.Resource[struct{}]{Acquired: true, Capability: struct{}{}, Release: func(context.Context) source.ReleaseResult {
+		return resource.Resource[struct{}]{Acquired: true, Capability: struct{}{}, Release: func(context.Context) resource.ReleaseResult {
 			counts.releases.Add(1)
 			if counts.users.Load() != 0 {
 				t.Error("conformance: owner cleanup ran while native users remained")
 			}
-			return source.ReleaseResult{Quiescent: true, Released: true}
+			return resource.ReleaseResult{Quiescent: true, Released: true}
 		}}, nil
 	}), limits)
-	owner, err := source.Assemble(context.Background(), context.Background(), "integration", selected)
+	owner, err := resource.Assemble(context.Background(), context.Background(), "integration", selected)
 	if err != nil {
 		t.Fatal(err)
 	}
-	access, err := source.AccessFor(owner, selected)
+	access, err := resource.AccessFor(owner, selected)
 	if err != nil {
 		t.Fatal(err)
 	}
-	inbox, err := operation.NewInbox[transfer](count, int64(count)*128)
+	inbox, err := invocation.NewInbox[transfer](count, int64(count)*128)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,33 +120,33 @@ func newFixture(t testing.TB, active int, bytes int64, count int) fixture {
 		if counts.users.Load() != 0 || counts.bytes.Load() != 0 {
 			t.Error("native fixture leaked use")
 		}
-		if inbox.Usage() != (operation.InboxUsage{}) {
+		if inbox.Usage() != (invocation.InboxUsage{}) {
 			t.Error("fixture leaked evidence")
 		}
 	})
 	return fixture{owner: owner, access: access, inbox: inbox, counts: counts, limits: limits, capacity: count}
 }
 
-func request(id string, shape operation.Shape, bytes int64) operation.Request {
-	return operation.Request{Name: "transfer", Execution: failure.Execution{Call: id, Run: "run", Item: id, Owner: "account"},
-		Shape: shape, Bytes: bytes, EvidenceBytes: 128, Admission: operation.Budget{Limit: time.Second},
+func request(id string, shape invocation.Shape, bytes int64) invocation.Request {
+	return invocation.Request{Name: "transfer", Correlation: fault.Correlation{Call: id, Owner: "account"},
+		Shape: shape, Bytes: bytes, EvidenceBytes: 128, Admission: invocation.Budget{Limit: time.Second},
 		AttemptsKnown: true, MaxAttempts: 1}
 }
 
-func (fixture fixture) begin(t testing.TB, input operation.Request) *operation.Call[transfer] {
+func (fixture fixture) begin(t testing.TB, input invocation.Request) *invocation.Call[transfer] {
 	t.Helper()
-	call, err := operation.Begin(context.Background(), fixture.access, input, fixture.inbox, nil)
+	call, err := invocation.Begin(context.Background(), fixture.access, input, fixture.inbox, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return call
 }
 
-func (fixture fixture) expected(input operation.Request, value transfer) conformance.Expected[transfer] {
+func (fixture fixture) expected(input invocation.Request, value transfer) conformance.Expected[transfer] {
 	return conformance.Expected[transfer]{
-		Attribution: failure.Attribution{Operation: "transfer", Provider: "fixture.transfer", Source: "data", Assembly: "integration", Execution: input.Execution},
-		Source:      fixture.access.Info(), Limits: fixture.limits, Shape: input.Shape,
-		Present: true, Final: true, Released: true, Attempts: operation.Attempts{Exact: true, Observed: 1},
+		Context: fault.Context{Operation: "transfer", Provider: "fixture.transfer", Source: "data", Scope: "integration", Correlation: input.Correlation},
+		Source:  fixture.access.Info(), Limits: fixture.limits, Shape: input.Shape,
+		Present: true, Final: true, Released: true, Attempts: invocation.Attempts{Exact: true, Observed: 1},
 		Value: func(t testing.TB, got transfer) {
 			t.Helper()
 			if got != value {
@@ -187,7 +187,7 @@ func (*pointerOwner) Shutdown() {}
 // openPull is a small integration: data consumption and local stream close belong
 // to the caller, while source ownership and independent evidence do not. This
 // fixture's Read/Close methods are single-goroutine only, not concurrently safe.
-func openPull(t testing.TB, fixture fixture, input operation.Request, payload []byte, fault string) (io.ReadCloser, *operation.Receipt[transfer]) {
+func openPull(t testing.TB, fixture fixture, input invocation.Request, payload []byte, fault string) (io.ReadCloser, *invocation.Receipt[transfer]) {
 	t.Helper()
 	call := fixture.begin(t, input)
 	done := fixture.counts.enter(int64(len(payload)))
@@ -197,12 +197,12 @@ func openPull(t testing.TB, fixture fixture, input operation.Request, payload []
 	reader := bytes.NewReader(payload)
 	var consumed int
 	var resolved, closed bool
-	outcome := func() operation.Outcome[transfer] {
+	outcome := func() invocation.Outcome[transfer] {
 		value := transfer{Bytes: consumed, Unknown: 1, Digest: sha256.Sum256(payload[:consumed]), Private: "secret-canary-payload"}
 		if fault == "result" {
 			value.Unknown = 0
 		}
-		return operation.Outcome[transfer]{Present: fault != "empty", Value: value, Primary: io.ErrUnexpectedEOF}
+		return invocation.Outcome[transfer]{Present: fault != "empty", Value: value, Primary: io.ErrUnexpectedEOF}
 	}
 	stream := &pullFacade{read: func(buffer []byte) (int, error) {
 		if closed {
@@ -246,9 +246,11 @@ func runPull(t *testing.T, fault string) {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
 			f := newFixture(t, 1, int64(max(size, 1)), 1)
 			payload := bytes.Repeat([]byte("x"), size)
-			input := request("pull", operation.Stream, int64(size))
+			input := request("pull", invocation.Stream, int64(size))
 			stream, receipt := openPull(t, f, input, payload, fault)
 			conformance.Facade(t, stream, "Read", "Close")
+			conformance.Facade(t, receipt, "Result", "Wait", "WaitFinal", "WaitReleased",
+				"Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 			buffer := make([]byte, 31)
 			read := 0
 			for {
@@ -271,8 +273,8 @@ func runPull(t *testing.T, fault string) {
 				t.Fatal("partial output missing")
 			}
 			conformance.Result(t, early, expected)
-			conformance.Runtime(t, early, new(operation.Result[transfer]), "secret-canary")
-			if !errors.Is(f.owner.Close(context.Background()), source.ErrIncomplete) || f.counts.releases.Load() != 0 {
+			conformance.Runtime(t, early, new(invocation.Result[transfer]), "secret-canary")
+			if !errors.Is(f.owner.Close(context.Background()), resource.ErrIncomplete) || f.counts.releases.Load() != 0 {
 				t.Error("conformance: pull result released its source before stream close")
 			}
 			if err := stream.Close(); err != nil {
@@ -292,7 +294,7 @@ func TestPullIntegration(t *testing.T) { runPull(t, "") }
 func runAsync(t *testing.T, fault string) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newFixture(t, 1, 32, 1)
-		input := request("async", operation.Async, 32)
+		input := request("async", invocation.Async, 32)
 		call := f.begin(t, input)
 		if _, err := call.Attempt(); err != nil {
 			t.Fatal(err)
@@ -302,7 +304,7 @@ func runAsync(t *testing.T, fault string) {
 		callbackRan, leaveSubmit, submitted := make(chan struct{}), make(chan struct{}), make(chan struct{})
 		go func() {
 			defer close(submitted)
-			var guard *operation.Guard
+			var guard *invocation.Guard
 			if fault != "completion" {
 				var err error
 				guard, err = call.Scope().Hold()
@@ -312,7 +314,7 @@ func runAsync(t *testing.T, fault string) {
 				}
 			}
 			done := f.counts.enter(32)
-			outcome := operation.Outcome[transfer]{Present: true, Value: value, Primary: native}
+			outcome := invocation.Outcome[transfer]{Present: true, Value: value, Primary: native}
 			if fault == "identity" {
 				outcome.Primary = errors.New("different-identity")
 			}
@@ -334,7 +336,7 @@ func runAsync(t *testing.T, fault string) {
 		if f.counts.users.Load() != 1 {
 			t.Fatal("native submit oracle is not active")
 		}
-		if !errors.Is(f.owner.Close(context.Background()), source.ErrIncomplete) {
+		if !errors.Is(f.owner.Close(context.Background()), resource.ErrIncomplete) {
 			t.Error("conformance: callback return was mistaken for submission return")
 		}
 		var diagnostic any = result
@@ -345,7 +347,7 @@ func runAsync(t *testing.T, fault string) {
 			}{native, value.Private}
 		}
 		conformance.Private(t, diagnostic, "secret-canary")
-		if call.Complete(operation.Outcome[transfer]{Present: true}) {
+		if call.Complete(invocation.Outcome[transfer]{Present: true}) {
 			t.Error("duplicate completion overwrote evidence")
 		}
 		close(leaveSubmit)
@@ -360,7 +362,7 @@ func TestAsyncIntegration(t *testing.T) { runAsync(t, "") }
 func TestBackgroundSessionRequiresStopAndJoin(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newFixture(t, 1, 4096, 2)
-		input := request("session", operation.Session, 4096)
+		input := request("session", invocation.Session, 4096)
 		parent := f.begin(t, input)
 		if _, err := parent.Attempt(); err != nil {
 			t.Fatal(err)
@@ -369,13 +371,13 @@ func TestBackgroundSessionRequiresStopAndJoin(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		establish, finishEstablish, err := (operation.Budget{Limit: time.Second}).Context(context.Background(), operation.Establish)
+		establish, finishEstablish, err := (invocation.Budget{Limit: time.Second}).Context(context.Background(), invocation.Establish)
 		if err != nil || establish.Err() != nil {
 			t.Fatal("establish budget")
 		}
 		owner, stopOwner := context.WithCancel(context.Background())
 		defer stopOwner()
-		lifetime, finishLifetime, err := (operation.Budget{}).Context(owner, operation.Lifetime)
+		lifetime, finishLifetime, err := (invocation.Budget{}).Context(owner, invocation.Lifetime)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -401,16 +403,16 @@ func TestBackgroundSessionRequiresStopAndJoin(t *testing.T) {
 			if <-message != int('x') {
 				t.Fatal("background buffer content changed")
 			}
-			nested := request(fmt.Sprintf("message-%d", count), operation.Finite, 0)
-			nested.Execution.Parent = "session"
-			child, err := operation.BeginNested(lifetime, parent.Scope(), nested, f.inbox, nil)
+			nested := request(fmt.Sprintf("message-%d", count), invocation.Finite, 0)
+			nested.Correlation.Parent = "session"
+			child, err := invocation.BeginNested(lifetime, parent.Scope(), nested, f.inbox, nil)
 			if err != nil {
 				t.Fatal("nested work competed for its held permit", err)
 			}
 			value := transfer{Bytes: count, Unknown: 1}
-			if err := child.Execute(lifetime, operation.Budget{Limit: time.Second}, func(context.Context, operation.Scope) operation.Outcome[transfer] {
+			if err := child.Execute(lifetime, invocation.Budget{Limit: time.Second}, func(context.Context, invocation.Scope) invocation.Outcome[transfer] {
 				_, _ = child.Attempt()
-				return operation.Outcome[transfer]{Present: true, Value: value}
+				return invocation.Outcome[transfer]{Present: true, Value: value}
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -431,16 +433,16 @@ func TestBackgroundSessionRequiresStopAndJoin(t *testing.T) {
 		<-stopped
 		cleanup := errors.New("native-stop-did-not-yet-join")
 		value := transfer{Unknown: 1}
-		parent.Resolve(operation.Outcome[transfer]{Present: true, Value: value, Primary: context.Canceled})
+		parent.Resolve(invocation.Outcome[transfer]{Present: true, Value: value, Primary: context.Canceled})
 		parent.Finish(cleanup)
 		expected := f.expected(input, value)
 		expected.Primary, expected.Cleanup, expected.Released = context.Canceled, cleanup, false
 		result, _ := parent.Receipt().Result()
 		conformance.Result(t, result, expected)
-		if !errors.Is(delivery.Release(), operation.ErrPending) || f.counts.users.Load() != 1 {
+		if !errors.Is(delivery.Release(), invocation.ErrPending) || f.counts.users.Load() != 1 {
 			t.Fatal("stop request or final cleanup report released a live worker")
 		}
-		if !errors.Is(f.owner.Close(context.Background()), source.ErrIncomplete) {
+		if !errors.Is(f.owner.Close(context.Background()), resource.ErrIncomplete) {
 			t.Fatal("live session did not pin owner")
 		}
 		close(proceed)
@@ -469,19 +471,19 @@ func TestBoundedPayloadConcurrencyQueueAndOutstandingEvidence(t *testing.T) {
 				unblock, entered := make(chan struct{}), make(chan struct{}, concurrency)
 				var workers sync.WaitGroup
 				for index := range concurrency {
-					input := request(fmt.Sprintf("work-%d", index), operation.Finite, int64(size))
+					input := request(fmt.Sprintf("work-%d", index), invocation.Finite, int64(size))
 					call := f.begin(t, input)
 					value := transfer{Bytes: size, Digest: sha256.Sum256(bytes.Repeat([]byte("x"), size))}
 					expected = append(expected, f.expected(input, value))
 					workers.Go(func() {
-						if err := call.Execute(context.Background(), operation.Budget{Limit: 10 * time.Second}, func(context.Context, operation.Scope) operation.Outcome[transfer] {
+						if err := call.Execute(context.Background(), invocation.Budget{Limit: 10 * time.Second}, func(context.Context, invocation.Scope) invocation.Outcome[transfer] {
 							done := f.counts.enter(int64(size))
 							defer done()
 							payload := bytes.Repeat([]byte("x"), size)
 							_, _ = call.Attempt()
 							entered <- struct{}{}
 							<-unblock
-							return operation.Outcome[transfer]{Present: true, Value: transfer{Bytes: len(payload), Digest: sha256.Sum256(payload)}}
+							return invocation.Outcome[transfer]{Present: true, Value: transfer{Bytes: len(payload), Digest: sha256.Sum256(payload)}}
 						}); err != nil {
 							t.Error(err)
 						}
@@ -492,9 +494,9 @@ func TestBoundedPayloadConcurrencyQueueAndOutstandingEvidence(t *testing.T) {
 				}
 				queued := make(chan error, 1)
 				go func() {
-					call, err := operation.Begin(context.Background(), f.access, request("expired", operation.Finite, int64(size)), f.inbox, nil)
+					call, err := invocation.Begin(context.Background(), f.access, request("expired", invocation.Finite, int64(size)), f.inbox, nil)
 					if call != nil {
-						call.Complete(operation.Outcome[transfer]{})
+						call.Complete(invocation.Outcome[transfer]{})
 						t.Error("conformance: expired queued call entered native work")
 					}
 					queued <- err
@@ -514,7 +516,7 @@ func TestBoundedPayloadConcurrencyQueueAndOutstandingEvidence(t *testing.T) {
 					t.Fatal("native fixture allocation/use bounds differ from oracle")
 				}
 				receive(t, f, expected...)
-				if f.owner.Snapshot().Sources[0].Usage != (source.Usage{}) || f.inbox.Usage() != (operation.InboxUsage{}) {
+				if f.owner.Snapshot().Sources[0].Usage != (resource.Usage{}) || f.inbox.Usage() != (invocation.InboxUsage{}) {
 					t.Fatal("workload retained responsibility")
 				}
 			}
