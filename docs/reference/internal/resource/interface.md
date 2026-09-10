@@ -85,12 +85,17 @@ not a completed signal. An invalid `Access` cannot admit work.
 `Prepared` settings and returned provenance use independent storage. Native causes,
 capabilities and callbacks are not generically deep-copied. Do not mutate inputs
 concurrently with preparation or infer physical isolation from distinct names.
+`Prepared` and `Selection` preserve exact type identity even across tag-only
+anonymous struct conversions; see [configuration](configuration.md).
 
 ## Results and failure boundaries
 
 `Quiescent`, `Released` and Err in `ReleaseResult` are separate facts. Both positive
 facts are required for completion; use explicit `Continue` rather than retrying
 the original callback. `Close` is synchronous/cooperative, not forced cancellation.
+Framework composition owns aggregate continuation-attempt and retained-native-error
+budgets across calls and resources, not just each call's context. Completion does
+not erase cleanup history; see [shutdown](shutdown.md).
 [Technical errors](../fault/interface.md) retain primary and cleanup inspection,
 without interpreting a timeout as no remote effect.
 

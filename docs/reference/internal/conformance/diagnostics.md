@@ -30,7 +30,15 @@ actual native/dynamic controls; they are not a runtime security sandbox.
 
 ## Field and diagnostic probe boundaries
 
-`Facade` inspects struct field **types**, including anonymous private value/pointer
+`Facade` accepts only structs and non-nil single pointers to structs. Maps, slices,
+arrays, functions, channels, scalars and other pointer shapes are unsupported:
+built-in indexing, calls or channel operations are not constrained by a method
+allowlist. The separate-package tests invoke the exposed owner callbacks using
+ordinary assertions and built-in operations. This helper-specific restriction
+does not prohibit function-valued `Resource` capabilities; those require their
+own independent capability/ownership tests.
+
+For supported shapes, `Facade` inspects struct field **types**, including anonymous private value/pointer
 embeddings. It does not dereference nil embedded pointers or invoke allowed methods.
 `reflect.VisibleFields` handles multi-level promotion, field hiding, equal-depth
 field ambiguity and recursive types. Its field visibility is independent of the
@@ -41,6 +49,35 @@ ordinary external conversion to a new defined type can remove that method.
 The [separate-package selector tests](../../../../internal/conformance/checks_test.go)
 execute this conversion and the exposed callbacks without reflection or `unsafe`.
 Rejection of a layout alone does not demonstrate a production ownership escape.
+
+## Runtime JSON refusal
+
+`Runtime` requires the actual supplied value to implement `json.Marshaler` or
+`encoding.TextMarshaler`, following native JSON encoding precedence, and the
+independent zero-value target to implement `json.Unmarshaler`. It does not
+invent pointer methods for an unaddressable value. A non-nil pointer to the right
+zero-value type is mandatory; live handles and incorrectly typed targets fail.
+
+Encoding must return a refusal. Reconstruction probes reset the target before
+each document and test objects, arrays, strings, numbers, both booleans and `null`,
+including empty/nonempty forms. Syntax, type-mismatch, invalid-target, unsupported
+type/value and stream EOF/UnexpectedEOF codec errors (also when wrapped) are not
+evidence of a guard. Panics fail through the guarded diagnostic path; returned errors receive privacy checks
+without printing their payloads. The tests independently demonstrate native string
+reconstruction without a guard, partial guards accepting individual JSON shapes,
+and the existing runtime types' refusal behavior.
+
+`null` must be refused when decoding into the non-nil runtime target itself. Native
+JSON can still encode a nil pointer as `null` or leave an absent pointer nil when
+decoding `null` into its pointer slot; these absence semantics are not the non-nil
+runtime contract and are independently protected by tests. No production runtime
+guard or durable format is changed by this helper.
+
+These finite probes cannot prove refusal for every possible JSON document or
+audit a callback's internal suppression of errors. Integration tests still own
+type-specific reconstruction, side-effect and lifetime oracles.
+
+## Private diagnostic projections
 
 `Private` probes the hooks selected by `%v`, `%+v`, `%#v`, `%s` and `%q`, preserving
 fmt's Formatter/GoStringer/error/Stringer precedence and ordinary container descent.
@@ -77,3 +114,7 @@ requires a deadline and at most 1,024 expectations; timeout is a test failure,
 not permission to discard unfinished ownership. Its local release is not durable
 recording. Returned payloads/errors retain their capability-owned immutable,
 bounded inspection contract; these helpers do not generically deep-copy them.
+
+[Runtime controls](../../../../internal/conformance/runtime_test.go) and
+[facade controls](../../../../internal/conformance/checks_test.go) exercise the
+[Issue #17](https://github.com/frost-leo/fathomry/issues/17) acceptance repair.

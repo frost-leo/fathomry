@@ -156,3 +156,17 @@ type MethodFieldCollision struct {
 }
 
 func (MethodFieldCollision) Send() {}
+
+type Map map[string]func()
+type Slice []func()
+type Array [1]func()
+type Function func()
+type Channel chan func()
+type Scalar string
+
+func (Map) Send()      {}
+func (Slice) Send()    {}
+func (Array) Send()    {}
+func (Function) Send() {}
+func (Channel) Send()  {}
+func (Scalar) Send()   {}

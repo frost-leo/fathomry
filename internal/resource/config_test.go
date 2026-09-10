@@ -266,7 +266,9 @@ func TestPreparationConcurrentReuse(t *testing.T) {
 }
 
 func FuzzPrepare(f *testing.F) {
-	for _, seed := range []string{"{}", "enabled: null", "connection: {host: x}", "headers: {a: b, a: c}", "items: &a [*a]"} {
+	for _, seed := range []string{"{}", "enabled: null", "connection: {host: x}", "headers: {a: b, a: c}", "items: &a [*a]",
+		"enabled: ! true", "! {enabled: true}", "! enabled: true", "items: ! [value]",
+		"connection: {host: 'é😀'}, items: [! value]", "headers: {'! key': '! value'}", "items: ['! value']"} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, content string) {
@@ -274,6 +276,9 @@ func FuzzPrepare(f *testing.F) {
 		if err == nil {
 			if _, err := prepared.settings(); err != nil || prepared.Description().Revision == "" {
 				t.Fatal("invalid success")
+			}
+			if _, err := Prepare(testSchema(), testInput("! "+content)); !errors.Is(err, ErrConfiguration) {
+				t.Fatal("explicitly tagged document accepted")
 			}
 		} else if prepared.state != nil || !errors.Is(err, ErrConfiguration) {
 			t.Fatal("invalid failure")

@@ -41,6 +41,10 @@ recreate private assembly machinery as startup boilerplate.
 
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
+The [configuration contract](reference/internal/resource/configuration.md),
+[acceptance probes](reference/internal/conformance/diagnostics.md) and
+[cleanup-history budgets](reference/internal/resource/shutdown.md) describe the
+current internal safeguards and their limits.
 
 ## Choose a reading path
 

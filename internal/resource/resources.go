@@ -41,6 +41,8 @@ type ReleaseFunc func(context.Context) ReleaseResult
 // Continue explicitly supplies the next cleanup/reconciliation action, if any.
 // The original callback is NEVER automatically retried after an incomplete result.
 // A continuation must report actual evidence, not equate a later no-op nil with release.
+// Composition must budget aggregate continuation attempts and retained native error
+// size; an individual context deadline is not a total cleanup-history bound.
 type ReleaseResult struct {
 	Quiescent bool
 	Released  bool
@@ -73,9 +75,10 @@ type Spec interface{ specification() *specification }
 
 // Selection binds a capability's static type to an explicitly selected source.
 // Its zero value is invalid. A selection can be reused in independent assemblies.
+// Ordinary conversions cannot change its capability type, including struct tags.
 type Selection[C any] struct {
 	spec *specification
-	_    [0]func() C
+	_    typeIdentity[C]
 }
 
 func (selection Selection[C]) specification() *specification { return selection.spec }
@@ -415,6 +418,8 @@ func (assembly *Assembly) Snapshot() Report {
 // Calls serialize; waiting for another Close honors ctx, but arbitrary callbacks
 // cannot be forcibly canceled. Historical cleanup errors remain visible even after
 // confirmed completion; incomplete cleanup always returns ErrIncomplete.
+// Composition owns the aggregate attempt/error-size budget across explicit Close
+// calls. History is neither capped nor erased on completion; snapshots copy it.
 func (assembly *Assembly) Close(ctx context.Context) error {
 	if assembly == nil || assembly.gate == nil || ctx == nil {
 		return ErrSelection.New(fault.Context{Operation: "close"})

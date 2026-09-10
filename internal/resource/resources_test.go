@@ -324,6 +324,64 @@ func TestIncompleteCloseNeverRetriesOriginalCallback(t *testing.T) {
 	}
 }
 
+type cleanupCause struct{ attempt int }
+
+func (*cleanupCause) Error() string { return "cleanup-native-canary" }
+
+func TestCleanupHistorySurvivesExplicitContinuationAndCompletion(t *testing.T) {
+	const failedAttempts = 4
+	causes := make([]*cleanupCause, failedAttempts)
+	for index := range causes {
+		causes[index] = &cleanupCause{attempt: index}
+	}
+	originalCalls, continuedCalls := 0, 0
+	var continueCleanup resource.ReleaseFunc
+	continueCleanup = func(context.Context) resource.ReleaseResult {
+		continuedCalls++
+		if continuedCalls == failedAttempts {
+			return resource.ReleaseResult{Quiescent: true, Released: true}
+		}
+		return resource.ReleaseResult{Err: causes[continuedCalls], Continue: continueCleanup}
+	}
+	selected := selection(t, "history", func(context.Context) resource.ReleaseResult {
+		originalCalls++
+		return resource.ReleaseResult{Err: causes[0], Continue: continueCleanup}
+	})
+	assembly := assemble(t, "history", selected)
+	var snapshots []resource.Report
+	for attempt := range failedAttempts + 2 {
+		err := assembly.Close(context.Background())
+		pending := attempt < failedAttempts
+		if errors.Is(err, resource.ErrIncomplete) != pending || originalCalls != 1 || continuedCalls != min(attempt, failedAttempts) {
+			t.Fatal("cleanup retried implicitly or lost its completion evidence")
+		}
+		report := assembly.Snapshot()
+		status := report.Sources[0]
+		count := min(attempt+1, failedAttempts)
+		if status.Pending != pending || status.CanContinue != pending || len(status.CleanupErrors) != count ||
+			status.Quiescent == pending || status.Released == pending {
+			t.Fatal("cleanup history or positive shutdown facts changed")
+		}
+		for index, cause := range causes[:count] {
+			var original *cleanupCause
+			if !errors.Is(err, cause) || !errors.As(status.CleanupErrors[index], &original) || original != cause {
+				t.Fatal("native cleanup cause identity lost")
+			}
+		}
+		conformance.Private(t, err, "cleanup-native-canary")
+		snapshots = append(snapshots, report)
+	}
+	for index, report := range snapshots {
+		if len(report.Sources[0].CleanupErrors) != min(index+1, failedAttempts) {
+			t.Fatal("later continuation mutated a prior snapshot")
+		}
+		report.Sources[0].CleanupErrors[0] = nil
+	}
+	if !errors.Is(assembly.Snapshot().Sources[0].CleanupErrors[0], causes[0]) {
+		t.Fatal("snapshot mutation erased retained native history")
+	}
+}
+
 func TestBorrowersDoNotStopOwnersAndPreventPrematureRelease(t *testing.T) {
 	var releases atomic.Int32
 	selected := selection(t, "original", func(context.Context) resource.ReleaseResult { releases.Add(1); return complete(context.Background()) })

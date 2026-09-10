@@ -84,6 +84,30 @@ a continuation, responsibility remains visible but cannot be completed by this
 manager alone. A later nil/no-op result cannot supply missing positive evidence.
 Historical cleanup errors remain inspectable even after confirmed completion.
 
+### Who bounds accumulated cleanup history?
+
+Framework composition, as the caller of `Close`, owns the **aggregate** continuation
+attempt and retained-native-error budget across calls and resources. Each callback
+owns the size/lifetime of the native errors and object graphs it returns. A fresh
+deadline on every call limits neither the total number of calls nor the bytes
+retained by those causes. Business consumers are not expected to implement this
+internal composition policy themselves.
+
+Every explicit action returning a non-nil `Err` adds its attributed error to history.
+After N such actions, one record retains O(N) error references plus their native causes; each
+`Close`/`Snapshot` copies the current history, so repeated calls can incur O(N²)
+cumulative copying. Retaining those returned snapshots/errors has an additional
+caller-owned cost. Budget action count, native cause size and retained reports
+together, not merely formatted diagnostic length. `errors.Is/As` still reaches
+the original causes after eventual completion and later no-op closes.
+
+The manager neither retries automatically nor silently truncates/deduplicates
+causes. Exhausting an outer budget does not confirm release or authorize discarding
+the assembly: retain unresolved responsibility or explicitly hand it to an
+accountable owner. This contract adds no lifecycle controller or retry policy.
+
+### Cooperative execution and snapshots
+
 `Close` is synchronous and serialized. Waiting for another Close observes the
 caller's context; invoking an arbitrary callback cannot provide a hard deadline
 or forcible cancellation. No goroutine is spawned to hide unfinished work.
@@ -97,4 +121,7 @@ The lifetime of native errors themselves remains their authors' responsibility.
 
 ## Executable evidence
 
-[Resource tests](../../../../internal/resource/resources_test.go) and [cancellation regressions](../../../../internal/resource/resources_cancellation_test.go) cover this contract.
+[Resource tests](../../../../internal/resource/resources_test.go), including
+`TestCleanupHistorySurvivesExplicitContinuationAndCompletion`, and
+[cancellation regressions](../../../../internal/resource/resources_cancellation_test.go)
+cover this contract. Aggregate-budget clarification: [Issue #17](https://github.com/frost-leo/fathomry/issues/17).
