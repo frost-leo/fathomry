@@ -27,6 +27,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,7 @@ import (
 	"io"
 	"reflect"
 	"sort"
+	"unicode/utf16"
 	"unicode/utf8"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -68,10 +70,15 @@ type Schema[T any] struct {
 
 // Prepared owns frozen resolved configuration. Only Description is diagnostic.
 // It is safe for concurrent reuse; construction gets a fresh settings copy.
+// Ordinary conversions cannot change its settings type, including struct tags.
 type Prepared[T any] struct {
 	state *preparedState
-	_     [0]func() T
+	_     typeIdentity[T]
 }
+
+// A defined generic type preserves argument identity even in conversions that
+// ignore tags within anonymous structs. A bare function/array marker does not.
+type typeIdentity[T any] [0]func() T
 
 type preparedState struct {
 	data        []byte
@@ -116,8 +123,9 @@ func (prepared Prepared[T]) settings() (T, error) {
 // arrays replace; empty strings/arrays override; null clears only pointers/maps/slices. Absent fields retain
 // inherited settings (or Go zero values when an object is newly introduced).
 // Documents and resolved JSON are limited to 1 MiB, nesting to 64 levels.
-// Anchors, aliases, custom tags, merge keys, duplicate/unknown fields, deletion,
-// multiple documents, SDK objects, and implicit reload are unsupported. Numbers
+// Anchors, aliases, explicit/custom tags (including bare !), merge keys,
+// duplicate/unknown fields, deletion, multiple documents, SDK objects, and
+// implicit reload are unsupported. Numbers
 // must use JSON numeric syntax; integer fields reject fractions and exponents.
 func Prepare[T any](schema Schema[T], input Input) (Prepared[T], error) {
 	location := fault.Context{Operation: "prepare"}
@@ -378,7 +386,7 @@ func parseMapping(data []byte) (map[string]any, error) {
 	if len(document.Content) != 1 {
 		return nil, errors.New("source: mapping required")
 	}
-	value, err := nodeValue(document.Content[0], 0)
+	value, err := nodeValue(document.Content[0], 0, newYAMLSource(data))
 	if err != nil {
 		return nil, err
 	}
@@ -389,9 +397,9 @@ func parseMapping(data []byte) (map[string]any, error) {
 	return object, nil
 }
 
-func nodeValue(node *yaml.Node, depth int) (any, error) {
+func nodeValue(node *yaml.Node, depth int, source yamlSource) (any, error) {
 	invalid := errors.New("source: unsupported or ambiguous configuration syntax")
-	if depth > 64 || node.Anchor != "" || node.Alias != nil || node.Style&yaml.TaggedStyle != 0 {
+	if depth > 64 || node.Anchor != "" || node.Alias != nil || source.tagged(node) {
 		return nil, invalid
 	}
 	switch node.Kind {
@@ -399,13 +407,13 @@ func nodeValue(node *yaml.Node, depth int) (any, error) {
 		object := make(map[string]any, len(node.Content)/2)
 		for index := 0; index < len(node.Content); index += 2 {
 			key := node.Content[index]
-			if key.Kind != yaml.ScalarNode || key.Tag != "!!str" || key.Anchor != "" || key.Style&yaml.TaggedStyle != 0 {
+			if key.Kind != yaml.ScalarNode || key.Tag != "!!str" || key.Anchor != "" || source.tagged(key) {
 				return nil, invalid
 			}
 			if _, duplicate := object[key.Value]; duplicate {
 				return nil, invalid
 			}
-			value, err := nodeValue(node.Content[index+1], depth+1)
+			value, err := nodeValue(node.Content[index+1], depth+1, source)
 			if err != nil {
 				return nil, err
 			}
@@ -415,7 +423,7 @@ func nodeValue(node *yaml.Node, depth int) (any, error) {
 	case yaml.SequenceNode:
 		items := make([]any, len(node.Content))
 		for index, child := range node.Content {
-			value, err := nodeValue(child, depth+1)
+			value, err := nodeValue(child, depth+1, source)
 			if err != nil {
 				return nil, err
 			}
@@ -442,4 +450,57 @@ func nodeValue(node *yaml.Node, depth int) (any, error) {
 		}
 	}
 	return nil, invalid
+}
+
+type yamlSource struct {
+	text  []rune
+	lines []int
+}
+
+// YAML v3.0.5 drops TaggedStyle for non-specific ! but keeps the tag's start
+// position. Index the already parsed source in its native character coordinates,
+// not bytes, without interpreting scalar contents or implementing another lexer.
+func newYAMLSource(data []byte) yamlSource {
+	if bytes.IndexByte(data, '!') < 0 {
+		return yamlSource{}
+	}
+	var text []rune
+	if bytes.HasPrefix(data, []byte{0xff, 0xfe}) || bytes.HasPrefix(data, []byte{0xfe, 0xff}) {
+		var order binary.ByteOrder = binary.LittleEndian
+		if data[0] == 0xfe {
+			order = binary.BigEndian
+		}
+		units := make([]uint16, 0, (len(data)-2)/2)
+		for index := 2; index+1 < len(data); index += 2 {
+			units = append(units, order.Uint16(data[index:]))
+		}
+		text = utf16.Decode(units)
+	} else {
+		text = []rune(string(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})))
+	}
+	lines := []int{0}
+	for index := 0; index < len(text); index++ {
+		switch text[index] {
+		case '\r':
+			if index+1 < len(text) && text[index+1] == '\n' {
+				index++
+			}
+		case '\n', '\u0085', '\u2028', '\u2029':
+		default:
+			continue
+		}
+		lines = append(lines, index+1)
+	}
+	return yamlSource{text: text, lines: lines}
+}
+
+func (source yamlSource) tagged(node *yaml.Node) bool {
+	if node.Style&yaml.TaggedStyle != 0 {
+		return true
+	}
+	if node.Line < 1 || node.Line > len(source.lines) || node.Column < 1 {
+		return false
+	}
+	index := source.lines[node.Line-1] + node.Column - 1
+	return index < len(source.text) && source.text[index] == '!'
 }

@@ -68,6 +68,13 @@ the lifetime of all of these resources. Detached cleanup is not permission for
 unowned or unbounded goroutines. Shared resource accounting must not count each
 statement in a held transaction as another independent owned connection.
 
+Cleanup budgets also cover aggregate explicit continuation attempts and retained
+native errors across resources, not only each callback's deadline. Framework
+composition owns this total budget and any accountable handoff when it is exhausted;
+business consumers do not manage internal cleanup loops. Successful release does
+not erase earlier causes. The implemented [shutdown contract](../reference/internal/resource/shutdown.md)
+states history/snapshot costs without automatic retry or silent cause truncation.
+
 Specify whether a deadline bounds waiting, actual work, or both. Do not promise
 hard cancellation of arbitrary Go callbacks, readers, native code, or remote
 effects. A shutdown timeout does not prove that dependencies are no longer used.

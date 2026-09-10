@@ -54,14 +54,16 @@ from sharing the current acceptance suite.
 | `Cause[T]` | Original native `errors.As` type/pointer/evidence without formatting it |
 | `Receive` | Deadline-bounded independent evidence reception, matched by `Call` ID rather than arrival order; duplicates/missing evidence; explicit idempotent release only after local subtree completion |
 | `Accounting` | Separate active/queued counts and byte reservations and outstanding receipt count/bytes at synchronized checkpoints |
-| `Facade` | Method-only facade's exact dynamic/addressable-copy method allowlist, no direct or promoted exported fields under `reflect.VisibleFields`, and no nil facade |
+| `Facade` | Struct/non-nil pointer-to-struct only; exact dynamic/addressable-copy method allowlist, no direct or promoted exported fields under `reflect.VisibleFields`, and no nil facade |
 | `Private` | Injected secret canaries through fmt and text/JSON slog, with selected-hook panic probes and output/traversal bounds, without echoing secrets on failure |
-| `Runtime` | The privacy checks plus refused JSON encoding and reconstruction of runtime types; panicking JSON callbacks fail without printing their payload |
+| `Runtime` | Privacy plus actual JSON guard method sets and refused encoding/reconstruction across valid JSON shapes; codec errors and panics are not refusal evidence |
 
 `Value` must derive expected data/effect facts from an independent input/native
 oracle, not copy the integration's output. Present data without an oracle is a
 test failure. Check each returned dynamic handle/callback surface under its own
-allowlist: a stream may legitimately close itself, not the shared client.
+allowlist when it is method-only: a stream may legitimately close itself, not the
+shared client. Function-valued `Resource` capabilities remain supported but need
+independent callback/returned-value oracles, not `Facade` certification.
 Reflection cannot audit arbitrary closures or provide a Go security sandbox.
 
 ## Caller obligations
@@ -76,7 +78,12 @@ unfinished evidence owned; fixtures must retain their native cleanup path.
 and repeatable. `Runtime` additionally checks real JSON guards using an independently
 owned non-nil pointer to a zero value of the same runtime type (after one pointer
 dereference of the supplied value when applicable), never a live handle. Ordinary
-standard error wrappers have no such JSON-refusal contract. Local evidence
+JSON marshaling must find `json.Marshaler` or its native `encoding.TextMarshaler`
+fallback on the supplied value itself; the target must implement `json.Unmarshaler`.
+The target is reset before each valid-shape
+probe, including `null`. Nil-pointer absence is a separate native JSON behavior,
+not reconstruction of a non-nil runtime handle. See [probe details](diagnostics.md).
+Ordinary standard error wrappers have no such JSON-refusal contract. Local evidence
 release is not durable acknowledgement.
 
 ## Details and executable evidence
@@ -91,3 +98,4 @@ SDK or production capability is supplied by these helpers.
 
 Foundation provenance: [Issue #6](https://github.com/frost-leo/fathomry/issues/6).
 Facade and diagnostic hardening: [Issue #13](https://github.com/frost-leo/fathomry/issues/13).
+Type/shape acceptance repair: [Issue #17](https://github.com/frost-leo/fathomry/issues/17).

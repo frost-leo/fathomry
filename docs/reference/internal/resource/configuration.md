@@ -59,13 +59,18 @@ This is a restricted YAML input contract, not a promise to accept all YAML featu
 | Empty values | Empty string, false, numeric zero, and empty slice explicitly override |
 | Null | Clears pointers, maps, and slices; rejected for non-nullable fields; not a deletion operator |
 | Numbers | JSON numeric syntax, with target-type range checks; integer fields reject fractions and exponent notation without a float64 intermediate |
-| Rejected syntax | Duplicate keys, non-string keys, anchors, aliases, merge keys, explicit/custom tags, implicit timestamps, multiple documents |
+| Rejected syntax | Duplicate keys, non-string keys, anchors, aliases, merge keys, explicit/custom tags (including bare `!` on keys, values and collections), implicit timestamps, multiple documents |
 | Bounds | Each input document and resolved JSON at most 1 MiB; normalized input nesting at most 64 levels |
 | Reload | No implicit reload, environment reread, file watcher, credential rotation, or live settings mutation |
 
 The pinned YAML parser is `go.yaml.in/yaml/v3 v3.0.5`. The restricted contract and
 tests, not upstream defaults or a candidate SDK inventory, determine Fathomry
 behavior. A parser change requires its own compatibility evidence.
+Bare `!` loses `TaggedStyle` in this parser, so preparation also checks the original
+character at each node's retained start position. This is not a character blacklist:
+quoted/block scalars and comments may contain literal `!`. Source indexing follows
+the parser's character coordinates, line breaks and BOM-selected UTF-8/UTF-16
+decoding; it does not reinterpret or normalize scalar text.
 [Upstream version policy](https://github.com/yaml/go-yaml#version-intentions),
 [pinned release](https://github.com/yaml/go-yaml/releases/tag/v3.0.5).
 
@@ -93,6 +98,12 @@ selection is assembled concurrently in different scopes. Mutations by one factor
 cannot change another instance's settings. The generic type boundary cannot be
 reinterpreted as another configuration or capability type through an ordinary Go
 conversion. Unsafe code is outside this boundary.
+Private, defined generic identity markers seal both `Prepared[T]` and `Selection[C]`,
+including anonymous struct types differing only in JSON tags. Such cross-type
+value/pointer casts fail compilation; aliases of the identical type remain valid.
+Converting plain settings before a new `Prepare` remains ordinary Go use and must
+pass that preparation's own validation. No type registry or shared settings copy
+is introduced.
 
 Callers must not mutate input bytes/defaults concurrently with preparation.
 Validation/factory closures and injected dependencies have their own explicit
@@ -116,4 +127,7 @@ JSON serialization is refused.
 
 ## Executable evidence
 
-[Preparation tests](../../../../internal/resource/config_test.go) and [native YAML checks](../../../../internal/resource/yaml_test.go) exercise the rules. See [testing](../../../development/testing.md) for parser fuzzing.
+[Preparation tests](../../../../internal/resource/config_test.go), [type/negative-compilation controls](../../../../internal/resource/types_test.go)
+and [native YAML checks](../../../../internal/resource/yaml_test.go) exercise the rules.
+Boundary repair: [Issue #17](https://github.com/frost-leo/fathomry/issues/17).
+See [testing](../../../development/testing.md) for parser fuzzing.

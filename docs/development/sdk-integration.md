@@ -84,6 +84,9 @@ admission and evidence loops remain framework responsibilities. The CLI,
 - Test shutdown at saturation. Drive necessary native drain/stop through existing
   responsibility or an explicitly owned control path; do not put the only
   progress action behind a final resource release waiting for those same calls.
+  Budget total explicit cleanup continuations, native cause size and retained
+  reports at framework composition; test historical `errors.Is/As` after eventual
+  completion. A per-call deadline is not the [aggregate history budget](../reference/internal/resource/shutdown.md).
 - Audit raw native errors, formatters/log hooks, callbacks and returned handles
   with injected privacy canaries. Preserve original inspectable causes and runtime
   JSON guards. Local release cannot acknowledge durable receipt storage.
@@ -104,6 +107,11 @@ Use the [conformance interface](../reference/internal/conformance/interface.md)
 and [fixture examples](../reference/internal/conformance/fixtures.md) for independent
 data/lifetime oracles. Read [diagnostic probe limits](../reference/internal/conformance/diagnostics.md)
 before interpreting a helper failure or declaring a facade safe.
+Use `Facade` only for struct/pointer method-only surfaces; directly exercise
+indexing/calls/returned values for other capability shapes. For `Runtime`, use the
+actual value/pointer method set and an independent zero-value target. Include
+deliberately broken controls that fail for the intended conformance diagnostic,
+not merely a type mismatch, compile error, timeout or panic.
 
 Derive the Profile from the exact constructed settings and capture the
 [actual build](../reference/internal/compatibility/build-info.md). Record which

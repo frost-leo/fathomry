@@ -28,9 +28,11 @@ package conformance
 import (
 	"bytes"
 	"context"
+	"encoding"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"reflect"
 	"strings"
@@ -181,13 +183,16 @@ func Accounting(t testing.TB, use resource.Usage, limits resource.Limits, eviden
 	}
 }
 
-// Facade checks a method-only capability's dynamic and addressable-copy method
+// Facade accepts only a struct or non-nil pointer to a struct and checks its
+// method-only capability's dynamic and addressable-copy method
 // surfaces against an exact allowlist, and rejects exported state/callback fields
 // in reflect.VisibleFields, including promotion through private embeddings. Field
 // hiding/ambiguity follows reflection independently of methods: a method cannot
 // excuse exposed structural state. Nil embeddings are inspected by type, not used.
 // This catches a narrow interface hiding an owning client. Invoke it also
-// for returned dynamic handles/callback values with their own allowed methods.
+// for returned dynamic method-only handles with their own allowed methods.
+// Other shapes have unsupported non-method surfaces; function-valued Resource
+// capabilities remain valid but need their own independent boundary tests.
 // It cannot audit arbitrary closure captures or establish an untrusted-code sandbox.
 func Facade(t testing.TB, value any, methods ...string) {
 	t.Helper()
@@ -203,6 +208,14 @@ func Facade(t testing.TB, value any, methods ...string) {
 			t.Errorf("conformance: nil public facade")
 			return
 		}
+	}
+	structure := kind
+	if structure.Kind() == reflect.Pointer {
+		structure = structure.Elem()
+	}
+	if structure.Kind() != reflect.Struct {
+		t.Errorf("conformance: unsupported facade shape; require a struct or pointer to struct")
+		return
 	}
 	allowed := make(map[string]bool, len(methods))
 	for _, method := range methods {
@@ -226,14 +239,9 @@ func Facade(t testing.TB, value any, methods ...string) {
 			}
 		}
 	}
-	if kind.Kind() == reflect.Pointer {
-		kind = kind.Elem()
-	}
-	if kind.Kind() == reflect.Struct {
-		for _, field := range reflect.VisibleFields(kind) {
-			if field.IsExported() {
-				t.Errorf("conformance: method-only facade exposes public state or callbacks")
-			}
+	for _, field := range reflect.VisibleFields(structure) {
+		if field.IsExported() {
+			t.Errorf("conformance: method-only facade exposes public state or callbacks")
 		}
 	}
 }
@@ -282,23 +290,29 @@ func Private(t testing.TB, value any, forbidden ...string) {
 	}
 }
 
-// Runtime additionally checks JSON refusal in both directions. target must be an
-// independently owned non-nil pointer to a zero value of the runtime type, not a
-// live handle. It is used only for the reconstruction-rejection test. A callback
-// panic fails acceptance; it does not count as an intentional JSON refusal.
+// Runtime additionally requires actual JSON guards and probes refusal in both
+// directions using valid JSON shapes, including null on a non-nil target.
+// target must be an independently owned non-nil pointer to a zero value of the
+// runtime type, not a live handle. It is reset before each reconstruction probe.
+// Encoding guards may use json.Marshaler or encoding.TextMarshaler, following
+// native JSON dispatch. Hooks must be bounded, synchronous and repeatable. A panic,
+// type mismatch, invalid target, malformed JSON or stream EOF fails acceptance,
+// not an intentional refusal. Probes are not exhaustive;
+// nil pointers representing absence are outside this non-nil runtime check.
 func Runtime(t testing.TB, value, target any, forbidden ...string) {
 	t.Helper()
 	Private(t, value, forbidden...)
+	_, jsonGuard := value.(json.Marshaler)
+	_, textGuard := value.(encoding.TextMarshaler)
+	if !jsonGuard && !textGuard {
+		t.Errorf("conformance: runtime value lacks a JSON encoding guard")
+	}
 	var data []byte
 	var err error
 	if !project(t, func() { data, err = json.Marshal(value) }) {
 		return
 	}
-	if err == nil {
-		t.Errorf("conformance: runtime value accepted unversioned JSON encoding")
-	} else {
-		Private(t, err, forbidden...)
-	}
+	project(t, func() { checkJSONRefusal(t, err, "encoding", forbidden) })
 	for _, secret := range forbidden {
 		if secret != "" && bytes.Contains(data, []byte(secret)) {
 			t.Errorf("conformance: JSON projection disclosed a forbidden value")
@@ -310,9 +324,33 @@ func Runtime(t testing.TB, value, target any, forbidden ...string) {
 		t.Errorf("conformance: invalid reconstruction test target")
 		return
 	}
-	project(t, func() {
-		if err := json.Unmarshal([]byte("{}"), target); err == nil {
-			t.Errorf("conformance: runtime value accepted JSON reconstruction")
-		}
-	})
+	if _, guarded := target.(json.Unmarshaler); !guarded {
+		t.Errorf("conformance: runtime target lacks a JSON reconstruction guard")
+		return
+	}
+	for _, document := range []string{`{}`, `{"value":"reconstructed"}`, `[]`, `[null]`, `""`, `"reconstructed"`, `0`, `1`, `-1`, `1.5`, `true`, `false`, `null`} {
+		kind.Elem().SetZero()
+		project(t, func() {
+			checkJSONRefusal(t, json.Unmarshal([]byte(document), target), "reconstruction", forbidden)
+		})
+	}
+}
+
+func checkJSONRefusal(t testing.TB, err error, direction string, forbidden []string) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("conformance: runtime value accepted JSON %s", direction)
+		return
+	}
+	var syntax *json.SyntaxError
+	var mismatch *json.UnmarshalTypeError
+	var target *json.InvalidUnmarshalError
+	var unsupportedType *json.UnsupportedTypeError
+	var unsupportedValue *json.UnsupportedValueError
+	if errors.As(err, &syntax) || errors.As(err, &mismatch) || errors.As(err, &target) ||
+		errors.As(err, &unsupportedType) || errors.As(err, &unsupportedValue) ||
+		errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("conformance: codec failure is not a JSON %s refusal", direction)
+	}
+	Private(t, err, forbidden...)
 }

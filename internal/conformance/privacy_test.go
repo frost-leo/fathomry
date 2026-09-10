@@ -389,7 +389,7 @@ type runtimeDecodePanic struct{ runtimeRefusal }
 func (*runtimeDecodePanic) UnmarshalJSON([]byte) error { panic(diagnosticCanary) }
 
 func runtimeCases() []checkCase {
-	return []checkCase{
+	cases := []checkCase{
 		{"valid", "", func(t *testing.T) { conformance.Runtime(t, runtimeRefusal{}, new(runtimeRefusal), diagnosticCanary) }},
 		{"valid-pointer", "", func(t *testing.T) { conformance.Runtime(t, &runtimeRefusal{}, new(runtimeRefusal), diagnosticCanary) }},
 		{"encoding-accepted", "JSON encoding", func(t *testing.T) { conformance.Runtime(t, struct{}{}, new(struct{}), diagnosticCanary) }},
@@ -412,6 +412,7 @@ func runtimeCases() []checkCase {
 			conformance.Runtime(t, runtimeDecodePanic{}, new(runtimeDecodePanic), diagnosticCanary)
 		}},
 	}
+	return append(cases, runtimeShapeCases()...)
 }
 
 func TestRuntimeContracts(t *testing.T) { runCheckCases(t, "runtime", runtimeCases()) }

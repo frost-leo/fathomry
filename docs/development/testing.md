@@ -66,6 +66,20 @@ These are local fixtures, not a public framework tutorial. The
 [conformance reference](../reference/internal/conformance/fixtures.md) separates
 mechanism, native parser, synthetic SDK/module and missing service evidence.
 
+Configuration/type and conformance acceptance regressions have explicit controls:
+
+```sh
+go test -count=1 ./internal/resource -run 'Test(Generic|PreparedAnonymous|YAMLExplicit|YAMLTag|CleanupHistory)'
+go test -count=1 ./internal/conformance -run 'Test(Runtime|Facade)'
+```
+
+`TestGenericConversionsCompileBoundary` first compiles valid aliases/settings,
+then requires the compiler's intended cross-type conversion diagnostic in isolated
+fixtures. Keep illegal casts out of ordinary compiled test files. Runtime/Facade
+negative controls execute in deadline-bounded child processes and require the
+matching conformance failure, successful return from the helper and no canary
+disclosure. A PASS from a historical false-certification witness is not acceptance.
+
 ## Standard repository checks
 
 The authoritative CI commands are in [checks.yml](../../.github/workflows/checks.yml).

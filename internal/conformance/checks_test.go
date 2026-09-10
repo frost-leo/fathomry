@@ -80,6 +80,20 @@ func facadeCases() []checkCase {
 		{"duplicate-method", facades.Safe{}, []string{"Send", "Send"}, "invalid facade method allowlist"},
 		{"unlisted-method", facades.Safe{}, nil, "method surface"},
 		{"extra-method", facades.Safe{}, []string{"Send", "Read"}, "method surface"},
+		{"map", facades.Map{}, []string{"Send"}, "unsupported facade shape"},
+		{"map-pointer", new(facades.Map), []string{"Send"}, "unsupported facade shape"},
+		{"slice", facades.Slice{}, []string{"Send"}, "unsupported facade shape"},
+		{"slice-pointer", new(facades.Slice), []string{"Send"}, "unsupported facade shape"},
+		{"array", facades.Array{}, []string{"Send"}, "unsupported facade shape"},
+		{"array-pointer", new(facades.Array), []string{"Send"}, "unsupported facade shape"},
+		{"function", facades.Function(func() {}), []string{"Send"}, "unsupported facade shape"},
+		{"function-pointer", new(facades.Function), []string{"Send"}, "unsupported facade shape"},
+		{"channel", make(facades.Channel), []string{"Send"}, "unsupported facade shape"},
+		{"channel-pointer", new(facades.Channel), []string{"Send"}, "unsupported facade shape"},
+		{"scalar", facades.Scalar("state"), []string{"Send"}, "unsupported facade shape"},
+		{"scalar-pointer", new(facades.Scalar), []string{"Send"}, "unsupported facade shape"},
+		{"pointer-chain", new(*facades.Safe), nil, "unsupported facade shape"},
+		{"interface-pointer", new(interface{ Send() }), nil, "unsupported facade shape"},
 	} {
 		cases = append(cases, checkCase{fixture.name, fixture.reject, func(t *testing.T) {
 			conformance.Facade(t, fixture.value, fixture.methods...)
@@ -120,6 +134,27 @@ func TestFacadeExternalSelectors(t *testing.T) {
 }
 
 func TestFacadeContracts(t *testing.T) { runCheckCases(t, "facade", facadeCases()) }
+
+func TestFacadeExternalNonMethodSurfaces(t *testing.T) {
+	called := 0
+	owner := func() { called++ }
+	var capability interface{ Send() } = facades.Map{"owner": owner}
+	capability.(facades.Map)["owner"]()
+	capability = facades.Slice{owner}
+	capability.(facades.Slice)[0]()
+	capability = facades.Array{owner}
+	capability.(facades.Array)[0]()
+	capability = facades.Function(owner)
+	capability.(facades.Function)()
+	channel := make(facades.Channel, 1)
+	channel <- owner
+	capability = channel
+	(<-capability.(facades.Channel))()
+	close(channel)
+	if called != 5 {
+		t.Fatal("ordinary external access did not invoke every non-method callback")
+	}
+}
 
 func runCheckCases(t *testing.T, suite string, cases []checkCase) {
 	t.Helper()
