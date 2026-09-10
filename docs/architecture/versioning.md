@@ -43,6 +43,7 @@ for current availability and package contracts.
 | Configuration schema | Format and capability maintainers; define supported formats, field meanings, defaults, and handling of unknown or incompatible input |
 | Effective source-configuration revision | Composition; identify the settings used by that source without confusing them with the schema version or exposing secrets |
 | Actual SDK and Go build | Build evidence plus Provider requirements; distinguish dependency declarations and reference/test versions from what the consuming binary actually contains |
+| Integration bootstrap contract | Integration maintainers; the Viper `OptionsV1` Go type is independent of its SDK-major import path and of application configuration formats; runtime readers are separate, and no persisted bootstrap format or migration protocol is implied |
 | Service, protocol, and SDK mode | Provider evidence and deployment selection; record observed values, enabled features, critical options, and what was or was not verified |
 | Public/persisted results, messages, objects, and error formats | Respective contract/format owner; specify historical interpretation, missing/zero/unknown values, compatibility, and migration or rejection |
 | Workflow and mode versions | Framework and workflow owners; compatibility and frozen execution selection are not inferred from an SDK upgrade |

@@ -82,6 +82,29 @@ disclosure. A PASS from a historical false-certification witness is not acceptan
 
 ## Standard repository checks
 
+For the internal Viper v1 integration, exercise the real consumer, raw preparation
+handoff and rejecting controls before broadening to full checks:
+
+```sh
+go test -race -count=1 -timeout=3m ./internal/configsource/viper/v1
+go test ./internal/configsource/viper/v1 -run '^$' -fuzz '^FuzzLoad$' -fuzztime=10s -parallel=2
+go test ./internal/configsource/viper/v1 -run '^$' -fuzz '^FuzzQuery$' -fuzztime=10s -parallel=2
+GOMAXPROCS=4 go test ./internal/configsource/viper/v1 -run '^$' -bench '^BenchmarkLoading$' -benchmem -benchtime=10x -count=5
+go run ./internal/configsource/viper/v1/testdata/consumer
+```
+
+The benchmark compares equal useful results and input/I/O conditions, not an
+unbounded native reader with a bounded integration. Report the additional
+SDK/preflight parsing and raw-copy costs for preparation separately from native
+query costs. Percentiles are bounded in-process samples (up to 128 per run), not
+production tail-latency guarantees. See the [native profile and bounds](../reference/internal/configsource/viper/v1/interface.md).
+
+Load/query tests own the corresponding core behavior. Integration tests exercise
+real files, strict preparation and the consuming executable; platform-specific
+and benchmark files remain separate where their execution conditions differ.
+Coverage reports help locate missing paths, not certify all inputs. Do not replace
+the real SDK merely to force an unreachable defensive branch to reach 100 percent.
+
 The authoritative CI commands are in [checks.yml](../../.github/workflows/checks.yml).
 For a normal implementation change:
 

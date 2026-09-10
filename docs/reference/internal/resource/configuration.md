@@ -76,8 +76,10 @@ decoding; it does not reinterpret or normalize scalar text.
 
 ## Loader integration constraints
 
-Viper is not a managed resource or forbidden dependency. A future framework-supplied
-configuration loader may use an isolated Viper instance where its semantics fit. The resource
+Viper is not a managed resource or forbidden dependency. The
+[internal Viper v1 integration](../configsource/viper/v1/interface.md) provides isolated
+native reads and a separate raw-input preparation proof, not a public framework
+loader. The resource
 foundation does not pass Viper objects to Providers. A Viper v1.21.0 comparison
 confirmed that configuration lookup can fall back from explicit null to a default,
 case-fold mapping keys, and modify a map supplied to `MergeConfigMap`; its

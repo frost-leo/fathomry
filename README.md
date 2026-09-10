@@ -29,7 +29,9 @@ observability, bounded resource use, and measured performance guide development.
 
 The project is in early development. Configuration preparation, resource ownership,
 controlled calls, technical errors, compatibility assessment and testing support
-are implemented as private foundations. There is no public Go API, production
+are implemented as private foundations. A bounded internal Viper v1 integration
+supports explicit local acquisition and a separate preparation proof, not an
+application-wide loading path. There is no public Go API, production
 service Provider, CLI/project generator, application loader or complete runtime yet.
 The intended `fathomry new <project>` path remains future framework work, not
 business-owned assembly boilerplate.
