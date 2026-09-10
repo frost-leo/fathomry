@@ -167,6 +167,10 @@ do not maintain competing copies of those instructions here. Draft material stay
 in the sibling `reference` workspace. Publish established API and accepted
 architecture documentation in `docs/`, with truthful implementation status.
 
+For documentation changes, follow [Writing documentation](../docs/development/documentation.md)
+and update the [documentation map](../docs/README.md). That guide is the canonical
+policy for topic organization, package `interface.md` contracts and verification.
+
 ## Labels
 
 The canonical label catalog is [`labels.json`](labels.json).
