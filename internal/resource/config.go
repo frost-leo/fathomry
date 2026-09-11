@@ -17,10 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package resource prepares explicitly supplied configuration and manages named
-// resource instances at the framework composition boundary. It imports no service SDKs and performs
-// no environment/file discovery or business disposition. Controlled resource use
-// shares these records; invocation supplies typed completion and evidence handoff.
 package resource
 
 import (

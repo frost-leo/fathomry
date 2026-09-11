@@ -17,12 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package conformance supplies internal standard-testing assertions and bounded
-// evidence reception for Fathomry's mechanism and Provider integration tests. It
-// is not an external Provider-extension SDK or a production dependency. It creates
-// no SDK, test service, worker or resource owner.
-// Callers supply independent native-effect/lifetime oracles; these checks alone
-// cannot prove real-service semantics, durability or native-memory limits.
 package conformance
 
 import (

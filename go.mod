@@ -20,11 +20,21 @@ module github.com/frost-leo/fathomry
 go 1.26.0
 
 require (
+	// TODO(gh-21): Recheck this pin and lifecycle compatibility before Nacos upgrades
+	// or framework releases. An official stable SDK must fix BOTH registry shutdown
+	// races and saturated-listener shutdown. Retire only workarounds made unnecessary
+	// by passing the native counterexamples, race/isolation/privacy and real-service
+	// read/listen/reconnect/close gates; preserve Fathomry's contracts. Track evidence:
+	// https://github.com/frost-leo/fathomry/issues/21
+	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
 	github.com/spf13/viper v1.21.0
 	go.yaml.in/yaml/v3 v3.0.5
+	google.golang.org/grpc v1.83.2
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
@@ -34,6 +44,12 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+	go.uber.org/zap v1.21.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 )

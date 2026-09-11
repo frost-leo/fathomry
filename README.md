@@ -36,6 +36,11 @@ service Provider, CLI/project generator, application loader or complete runtime 
 The intended `fathomry new <project>` path remains future framework work, not
 business-owned assembly boilerplate.
 
+An internal Nacos v2 configuration integration supplies raw reads, bounded
+invalidation subscriptions and owned protocol sessions. Its explicit compatibility
+profile has local and isolated single-server verification, not production or
+multi-node certification. See the [Nacos contract](docs/reference/internal/configsource/nacos/v2/interface.md).
+
 ## Documentation
 
 Start with the [documentation map](docs/README.md) for current status and reading paths:

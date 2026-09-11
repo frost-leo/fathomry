@@ -17,10 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package compatibility reports available consuming-binary facts and assesses
-// explicitly supplied, exact-combination test evidence. It owns no SDK selection,
-// service probe, resource, global registry, deployment identity or retry policy.
-// Build metadata is neither an integrity attestation nor a compatibility test.
 package compatibility
 
 import (
