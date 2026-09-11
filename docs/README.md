@@ -34,6 +34,11 @@ evidence handoff, technical errors, build/compatibility assessment and maintaine
 testing support are implemented as internal foundations. A bounded Viper v1
 integration is implemented under `internal/configsource/viper/v1`, with separately
 versioned `OptionsV1` bootstrap settings and a raw-input preparation proof.
+The Nacos v2 integration adds explicit native gRPC sessions, raw configuration
+reads and bounded invalidations with a separate preparation proof. Its
+[contract](reference/internal/configsource/nacos/v2/interface.md) distinguishes
+the implemented compatibility profile and single-server checks from production
+TLS or multi-node support.
 
 There is no public Go package, project generator, application configuration loader,
 production service Provider or complete Temporal execution runtime yet. The intended
@@ -90,6 +95,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/compatibility`](reference/internal/compatibility/interface.md) | [Build facts](reference/internal/compatibility/build-info.md), [assessment and policy](reference/internal/compatibility/assessment.md) |
 | [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md) |
 | [`internal/configsource/viper/v1`](reference/internal/configsource/viper/v1/interface.md) | Native local profile, OptionsV1, raw handoff, ownership, bounds and version evidence |
+| [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
 
 Exact declarations and symbol comments live with the Go source. Each entry links
 implementation/tests; use `go doc -all ./internal/<package>` from the repository root.

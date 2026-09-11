@@ -106,6 +106,42 @@ Coverage reports help locate missing paths, not certify all inputs. Do not repla
 the real SDK merely to force an unreachable defensive branch to reach 100 percent.
 
 The authoritative CI commands are in [checks.yml](../../.github/workflows/checks.yml).
+
+For the Nacos v2 integration, use the selected toolchain's `bin` first in PATH:
+
+```sh
+go test -race -count=3 -timeout=3m ./internal/configsource/nacos/v2
+go run ./internal/configsource/nacos/v2/testdata/consumer
+go test ./internal/configsource/nacos/v2 -run '^$' -fuzz '^FuzzOptions$' -fuzztime=10s -parallel=2
+go test ./internal/configsource/nacos/v2 -run '^$' -fuzz '^FuzzProtocol$' -fuzztime=10s -parallel=2
+GOMAXPROCS=4 go test ./internal/configsource/nacos/v2 -run '^$' -bench '^BenchmarkRead$' -benchmem -benchtime=10x -count=3
+```
+
+The benchmark compares equal owned native-session lifetimes and raw results,
+not a warm SDK cache against a cold connection. The consumer reports the actual
+SDK in its own binary; its loopback service is not deployment acceptance.
+
+The opt-in service gate **writes and deletes generated test keys**. Run it only
+with explicitly authorized isolated resources and credentials:
+
+```sh
+FATHOMRY_NACOS_TEST_CONFIG=/path/to/private-nacos-fixture.json \
+  go test -tags=nacos_service -race -count=1 -timeout=4m \
+  ./internal/configsource/nacos/v2 -run '^TestNacosServiceReadWriteWatchAndCleanup$'
+```
+
+The bounded mode-0600 JSON fixture contains `http_url`, `grpc_address`, `namespace`,
+`username`, `password`, `admin_username`, `admin_password`, optional `root_ca_pem`,
+`allow_insecure` and explicit `allow_writes`. Use a read-only reader and a separately
+authorized fixture publisher. The gate verifies generated-key absence before
+writes, deletes those keys and checks absence during cleanup. It does not alter
+roles, deploy services, raise platform limits or restart remote nodes. Its
+connection-interruption test drops only this client's connection. Periodic
+reconciliation is set beyond the bounded push wait to avoid false push acceptance.
+Compiling with `-run '^$'` runs no real-service test. See the
+[Nacos profile](../reference/internal/configsource/nacos/v2/interface.md) for current
+version, native limitations, upstream-upgrade TODO and unexecuted service modes.
+
 For a normal implementation change:
 
 ```sh

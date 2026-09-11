@@ -67,7 +67,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatalf("independent module smoke compilation failed: %v\n%s", err, output)
 	}
 	t.Logf("independent module smoke compilation (no public API):\n%s", output)
-	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1"} {
+	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1", "configsource/nacos/v2"} {
 		t.Run("reject-internal-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/internal/" + name
 			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
