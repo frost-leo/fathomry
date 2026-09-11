@@ -31,6 +31,9 @@ import (
 	"time"
 )
 
+// dial owns resolution and serial address attempts under the native allowance.
+// Success registers the socket before returning it to HTTP or gRPC; timeout does
+// not turn an outstanding resolver into completed cleanup.
 func (client *Client) dial(ctx context.Context, address string) (net.Conn, error) {
 	work, done, err := client.native(ctx)
 	if err != nil {
@@ -84,6 +87,9 @@ func (client *Client) dial(ctx context.Context, address string) (net.Conn, error
 	return nil, fail(ErrUnavailable, "dial", append(causes, work.Err(), context.Cause(work))...)
 }
 
+// handshake retains the complete TLS operation, including selected HTTP trace
+// hooks, and verifies the requested authority. Failure closes the supplied socket;
+// success transfers the verified connection back to its transport owner.
 func (client *Client) handshake(ctx context.Context, authority string, socket net.Conn, protocol string) (net.Conn, credentials.AuthInfo, error) {
 	work, done, err := client.native(ctx)
 	if err != nil {
@@ -126,6 +132,9 @@ func (client *Client) handshake(ctx context.Context, authority string, socket ne
 	}
 	return secure, credentials.TLSInfo{State: state, CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.PrivacyAndIntegrity}}, nil
 }
+
+// newHTTPTransport is used only for password login. Its instance-local HTTP/1
+// pool has no environment proxy or transparent decompression path.
 func (client *Client) newHTTPTransport() *http.Transport {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
@@ -153,6 +162,8 @@ func (client *Client) newHTTPTransport() *http.Transport {
 		}}
 }
 
+// sessionCredentials adapts synchronous, owned TLS to gRPC. Clones share the same
+// epoch owner; neither transport redial nor certificate failure can bypass it.
 type sessionCredentials struct{ session *session }
 
 func (value *sessionCredentials) ClientHandshake(ctx context.Context, authority string, socket net.Conn) (net.Conn, credentials.AuthInfo, error) {

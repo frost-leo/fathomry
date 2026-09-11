@@ -17,10 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package invocation implements process-local controlled calls and technical
-// evidence handoff for framework integrations. It reuses resource's authoritative
-// borrowing records and fault's technical context. It imports no SDK, exporter,
-// orchestration or business-terminal policy. It is not Temporal Workflow code.
 package invocation
 
 import (

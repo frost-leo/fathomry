@@ -17,9 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package nacos integrates the official Nacos SDK's generated gRPC clients and
-// native configuration messages with explicit resource and session ownership.
-// It does not start the SDK's global configuration client, cache or RPC engine.
 package nacos
 
 import (
@@ -37,13 +34,15 @@ import (
 // Open's context owns the whole lifetime. Open performs no readiness request.
 type Client struct {
 	private
-	settings      settings
-	trust         *tls.Config
-	lifetime      context.Context
-	cancel        context.CancelCauseFunc
-	assembly      *resource.Assembly
-	access        *resource.Access
-	http          *http.Client
+	settings settings
+	trust    *tls.Config
+	lifetime context.Context
+	cancel   context.CancelCauseFunc
+	assembly *resource.Assembly
+	access   *resource.Access
+	http     *http.Client
+	// mu protects admission/lifetime accounting, registered sessions/sockets,
+	// token entries and cleanup errors; native I/O must run after releasing it.
 	mu            sync.Mutex
 	closing       bool
 	active        int
@@ -52,11 +51,13 @@ type Client struct {
 	sessions      map[*session]struct{}
 	sockets       map[*ownedSocket]struct{}
 	closeErrors   []error
-	nativeSlots   chan struct{}
-	authGate      chan struct{}
-	tokens        []token
-	sequence      atomic.Uint64
-	preferred     atomic.Uint64
+	// Native acquisition can outlive an RPC wait, so it has a separate allowance.
+	nativeSlots chan struct{}
+	// authGate serializes network logins; token invalidation uses mu, not this gate.
+	authGate  chan struct{}
+	tokens    []token
+	sequence  atomic.Uint64
+	preferred atomic.Uint64
 }
 
 // Open validates and freezes bootstrap before acquiring local transport ownership.
@@ -118,6 +119,10 @@ func (client *Client) Info() resource.Info {
 	}
 	return client.access.Info()
 }
+
+// enter retains local lifetime responsibility, not a logical request permit.
+// The returned end function must run once, after the admitted local user exits;
+// cancellation requests do not decrement that ownership count.
 func (client *Client) enter(ctx context.Context) (context.Context, func(), error) {
 	if client == nil || client.cancel == nil || ctx == nil {
 		return nil, nil, fail(ErrInput, "enter")
@@ -146,6 +151,9 @@ func (client *Client) enter(ctx context.Context) (context.Context, func(), error
 		}
 	}, nil
 }
+
+// native separately bounds dial/TLS work, including work whose initiating RPC
+// already stopped waiting. It retains the same client's cleanup responsibility.
 func (client *Client) native(ctx context.Context) (context.Context, func(), error) {
 	work, done, err := client.enter(ctx)
 	if err != nil {
@@ -165,6 +173,9 @@ func (client *Client) native(ctx context.Context) (context.Context, func(), erro
 		return nil, nil, err
 	}
 }
+
+// closingCause preserves the authoritative owner reason when socket closure wins
+// the race against asynchronous propagation of lifetime cancellation.
 func (client *Client) closingCause(err error) error {
 	if err != nil && client.lifetime.Err() != nil {
 		return fail(ErrRead, "lifetime", err, ErrClosed, client.lifetime.Err(), context.Cause(client.lifetime))
@@ -195,6 +206,8 @@ func (client *Client) Close(ctx context.Context) error {
 		sockets = append(sockets, current)
 	}
 	client.mu.Unlock()
+	// Stop native progress before joining users; placing this behind final resource
+	// release would wait on calls whose only termination action had not run yet.
 	for _, current := range sessions {
 		current.cancel(ErrClosed)
 	}
@@ -210,6 +223,8 @@ func (client *Client) Close(ctx context.Context) error {
 	}
 }
 
+// ownedSocket transfers a successful native dial into the client's registered
+// socket set. Close is idempotent across transport and owner shutdown paths.
 type ownedSocket struct {
 	net.Conn
 	client *Client
@@ -229,6 +244,9 @@ func (socket *ownedSocket) Close() error {
 	})
 	return socket.err
 }
+
+// own atomically registers a socket or closes it if shutdown already won. A late
+// successful dial must not hand an untracked connection back to the transport.
 func (client *Client) own(socket net.Conn) (net.Conn, error) {
 	owned := &ownedSocket{Conn: socket, client: client}
 	client.mu.Lock()

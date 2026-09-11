@@ -56,13 +56,17 @@ func (change Change) Err() error { return change.err }
 // only that wait. Close or client lifetime cancellation stops the subscription.
 type Subscription struct {
 	private
-	cancel   context.CancelFunc
-	done     chan struct{}
-	mu       sync.Mutex
+	cancel context.CancelFunc
+	done   chan struct{}
+	mu     sync.Mutex
+	// queue owns only bounded invalidation metadata; resync preserves overflow
+	// information after the discarded event is no longer retained.
 	queue    []Change
 	capacity int
 	resync   bool
-	changed  chan struct{}
+	// changed is replaced under mu after broadcasting, so multiple Next waiters
+	// cannot strand already queued events behind one consumed wakeup token.
+	changed chan struct{}
 }
 
 // Watch starts bounded technical observation of the complete selected key set.
@@ -130,6 +134,9 @@ func (client *Client) Watch(ctx context.Context) (*Subscription, error) {
 	}()
 	return subscription, nil
 }
+
+// observe keeps hash/presence history only within one registered epoch. A new
+// epoch starts without that baseline and reports a full-set resynchronization.
 func (subscription *Subscription) observe(current *session, wake <-chan struct{}) error {
 	first := true
 	known := make(map[key]string)
@@ -159,6 +166,10 @@ func (subscription *Subscription) observe(current *session, wake <-chan struct{}
 	}
 	return current.failure("observe", current.ctx.Err())
 }
+
+// reconcile compares prior observations as well as the native listen result.
+// Sending only freshly queried hashes would silently absorb a missed push.
+// Empty hash denotes missing; a present empty document has a nonempty MD5.
 func (subscription *Subscription) reconcile(ctx context.Context, current *session, known map[key]string) error {
 	listen := request.NewConfigBatchListenRequest(len(current.owner.settings.Keys))
 	listen.RequestId = strconv.FormatUint(current.owner.sequence.Add(1), 10)
@@ -191,6 +202,7 @@ func (subscription *Subscription) reconcile(ctx context.Context, current *sessio
 		}
 		seen[selected] = true
 	}
+	// Commit the baseline only after every returned identity has been validated.
 	for selected, hash := range observed {
 		if previous, exists := known[selected]; exists && previous != hash {
 			seen[selected] = true
@@ -212,6 +224,9 @@ func pause(ctx context.Context, delay time.Duration) bool {
 		return false
 	}
 }
+
+// publish never waits for consumer processing or stores document payloads. Queue
+// overflow keeps a sticky full-set gap instead of pretending complete history.
 func (subscription *Subscription) publish(change Change) {
 	subscription.mu.Lock()
 	defer subscription.mu.Unlock()

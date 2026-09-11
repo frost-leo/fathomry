@@ -17,9 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package fault preserves technical error kinds, bounded context and original
-// causes for the internal foundation. It has no framework attribution, public
-// error dependency, retry policy, registry, localization or wire protocol.
 package fault
 
 import (

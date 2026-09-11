@@ -37,6 +37,9 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
+// envelope adds the native configuration headers to a fresh request object.
+// Nacos headers belong in Payload.Metadata, not gRPC HTTP metadata. The SDK's
+// timestamp MD5 with the default empty AppKey is not password authentication.
 func (client *Client) envelope(value request.IRequest, accessToken string) *wire.Payload {
 	stamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	digest := md5.Sum([]byte(stamp))
@@ -47,10 +50,16 @@ func (client *Client) envelope(value request.IRequest, accessToken string) *wire
 	}
 	return &wire.Payload{Metadata: &wire.Metadata{Type: value.GetRequestType(), Headers: value.GetHeaders()}, Body: &anypb.Any{Value: []byte(value.GetBody(value))}}
 }
+
+// acknowledgement marshals the concrete native response; using an embedded base
+// response's GetBody method would discard any concrete response fields.
 func acknowledgement(value response.IResponse) *wire.Payload {
 	raw, _ := json.Marshal(value)
 	return &wire.Payload{Metadata: &wire.Metadata{Type: value.GetResponseType()}, Body: &anypb.Any{Value: raw}}
 }
+
+// payloadBody validates the bounded envelope/JSON boundary without interpreting
+// application content. Returned bytes borrow the payload until the caller decodes.
 func payloadBody(value *wire.Payload) ([]byte, error) {
 	if value == nil || value.Metadata == nil || value.Body == nil || value.Body.TypeUrl != "" || len(value.Metadata.Type) > 128 || len(value.Metadata.Headers) > 32 {
 		return nil, fail(ErrDecode, "payload")
@@ -67,6 +76,10 @@ func payloadBody(value *wire.Payload) ([]byte, error) {
 	}
 	return value.Body.Value, nil
 }
+
+// decodeResponse selects explicit native response constructors, not the SDK's
+// mutable global registry. It preserves optional-success decoding while refusing
+// missing, encrypted or inconsistent content rather than inventing usable data.
 func decodeResponse(payload *wire.Payload, expected string) (response.IResponse, error) {
 	raw, err := payloadBody(payload)
 	if err != nil {
@@ -137,6 +150,9 @@ func decodeResponse(payload *wire.Payload, expected string) (response.IResponse,
 	}
 	return value, nil
 }
+
+// validateJSON rejects duplicate protocol keys and excessive structure before
+// native decoding. Embedded configuration content remains an opaque string.
 func validateJSON(raw []byte) error {
 	if len(raw) > MaxWireBytes || !utf8.Valid(raw) {
 		return errors.New("invalid bounded JSON")

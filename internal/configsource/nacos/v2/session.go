@@ -40,20 +40,28 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// session owns one Nacos registration epoch on one gRPC connection. The single
+// receive loop owns control ACK sends after setup; notify is an internal bounded
+// queue handoff, never a caller-supplied application callback.
 type session struct {
-	owner    *Client
-	index    int
-	ctx      context.Context
-	cancel   context.CancelCauseFunc
-	conn     *grpc.ClientConn
-	unary    wire.RequestClient
-	stream   wire.BiRequestStream_RequestBiStreamClient
+	owner  *Client
+	index  int
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+	conn   *grpc.ClientConn
+	unary  wire.RequestClient
+	stream wire.BiRequestStream_RequestBiStreamClient
+	// received is nil until the receiver starts, then closes after its actual exit.
 	received chan struct{}
 	notify   func(key)
 	once     sync.Once
-	dialed   atomic.Bool
+	// A second transport dial would lose Nacos registration and must retire this epoch.
+	dialed atomic.Bool
 }
 
+// newSession uses the already-admitted caller's lifetime and one setup budget.
+// It validates ServerCheck, opens the stream, sends setup, then requires a native
+// HealthCheck response; sending setup alone is not registration evidence.
 func (client *Client) newSession(ctx context.Context, index int, notify func(key)) (*session, error) {
 	work, cancel := context.WithCancelCause(ctx)
 	current := &session{owner: client, index: index, ctx: work, cancel: cancel, notify: notify}
@@ -152,6 +160,10 @@ func (current *session) failure(operation string, err error) error {
 	}
 	return fail(identity, operation, err, current.ctx.Err(), context.Cause(current.ctx))
 }
+
+// call keeps native response decoding inside the caller's allowance and budget.
+// Only code 301 (registration not ready) is retried here; it is not configuration
+// absence, and retry exhaustion must retain the last native failure.
 func (current *session) call(ctx context.Context, value request.IRequest, expected string, authenticated bool) (response.IResponse, error) {
 	work, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
@@ -202,6 +214,10 @@ func (current *session) call(ctx context.Context, value request.IRequest, expect
 	}
 	return nil, fail(ErrUnavailable, "registration", lastError)
 }
+
+// send is serialized by its owner: setup runs before receive starts, and receive
+// owns later ACKs. A per-message timeout cancels the whole stream because gRPC
+// Send has no independent operation context; no timed-out sender is detached.
 func (current *session) send(ctx context.Context, payload *wire.Payload) error {
 	stop := context.AfterFunc(ctx, func() { current.cancel(context.Cause(ctx)) })
 	defer stop()
@@ -213,6 +229,9 @@ func (current *session) send(ctx context.Context, payload *wire.Payload) error {
 	}
 	return nil
 }
+
+// receive validates routing before handing off invalidations and ACKs the exact
+// native request ID. Loss, malformed scope or a reset ends this registration epoch.
 func (current *session) receive() {
 	defer close(current.received)
 	for {
@@ -240,6 +259,7 @@ func (current *session) receive() {
 		case "ClientDetectionRequest":
 			reply = &response.ClientDetectionResponse{Response: base}
 		case "ConnectResetRequest":
+			// A reset is acknowledged, not authority to follow its suggested address.
 			reply = &response.ConnectResetResponse{Response: base}
 			reset = true
 		case "ConfigChangeNotifyRequest":
@@ -252,6 +272,8 @@ func (current *session) receive() {
 				current.cancel(fail(ErrDecode, "push-scope"))
 				return
 			}
+			// Default-namespace subscriptions can receive a null/omitted tenant from
+			// the native server. The same form must never match a named namespace.
 			tenant := ""
 			if fields.Tenant != nil {
 				tenant = *fields.Tenant
@@ -286,6 +308,9 @@ func (current *session) receive() {
 		}
 	}
 }
+
+// close cancels native I/O before joining the receiver and unregistering the
+// epoch. Outstanding native acquisitions remain accounted for by Client.native.
 func (current *session) close() {
 	current.once.Do(func() {
 		current.cancel(ErrClosed)

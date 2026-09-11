@@ -29,17 +29,34 @@ import (
 
 // ProviderID qualifies this technical integration, not a user source or data key.
 const ProviderID = "configsource.nacos.v2"
+
+// These are technical boundary identities, not a retry policy. Shared resource
+// admission errors retain their resource kind instead of being relabeled here.
 const (
-	ErrInput       fault.Kind = "fathomry." + ProviderID + ".input"
-	ErrLimit       fault.Kind = "fathomry." + ProviderID + ".limit"
-	ErrRead        fault.Kind = "fathomry." + ProviderID + ".read"
-	ErrDecode      fault.Kind = "fathomry." + ProviderID + ".decode"
-	ErrDenied      fault.Kind = "fathomry." + ProviderID + ".denied"
-	ErrMissing     fault.Kind = "fathomry." + ProviderID + ".missing"
-	ErrEmpty       fault.Kind = "fathomry." + ProviderID + ".empty"
-	ErrClosed      fault.Kind = "fathomry." + ProviderID + ".closed"
-	ErrState       fault.Kind = "fathomry." + ProviderID + ".state"
+	// ErrInput marks invalid bootstrap, an unselected key or invalid call arguments.
+	ErrInput fault.Kind = "fathomry." + ProviderID + ".input"
+	// ErrLimit marks an enforced boundary limit or native gRPC capacity refusal.
+	ErrLimit fault.Kind = "fathomry." + ProviderID + ".limit"
+	// ErrRead marks failed acquisition or its cooperative budget/lifetime handling.
+	// Inspect the cause chain for more specific transport and cancellation evidence.
+	ErrRead fault.Kind = "fathomry." + ProviderID + ".read"
+	// ErrDecode marks malformed, inconsistent or unexpected protocol data.
+	ErrDecode fault.Kind = "fathomry." + ProviderID + ".decode"
+	// ErrDenied marks an observed authentication or authorization refusal.
+	ErrDenied fault.Kind = "fathomry." + ProviderID + ".denied"
+	// ErrMissing preserves native configuration-query code 300; it is not empty data.
+	ErrMissing fault.Kind = "fathomry." + ProviderID + ".missing"
+	// ErrEmpty refuses successfully acquired empty/whitespace required content.
+	ErrEmpty fault.Kind = "fathomry." + ProviderID + ".empty"
+	// ErrClosed marks use rejected by a closed or canceled owning/use context.
+	// It does not confirm that all native cleanup has completed.
+	ErrClosed fault.Kind = "fathomry." + ProviderID + ".closed"
+	// ErrState marks a cleanup wait that ended without confirming local completion.
+	ErrState fault.Kind = "fathomry." + ProviderID + ".state"
+	// ErrUnavailable marks connection, registration or remote-operation failure;
+	// the retained native/context cause determines what was actually observed.
 	ErrUnavailable fault.Kind = "fathomry." + ProviderID + ".unavailable"
+	// ErrUnsupported refuses a mode or protocol feature outside the selected profile.
 	ErrUnsupported fault.Kind = "fathomry." + ProviderID + ".unsupported"
 )
 
@@ -55,6 +72,7 @@ type RemoteError struct {
 	message               string
 }
 
+// Error returns a safe summary; Message is the separate, sensitive inspection path.
 func (value *RemoteError) Error() string { return "nacos remote request failed" }
 
 // ResultCode returns the native response result; zero is not positive evidence.
@@ -84,8 +102,11 @@ func (value *RemoteError) Message() string {
 // HTTPStatus retains response status without credentials, URL or response body.
 type HTTPStatus int
 
+// Error formats only the observed status, never an HTTP request or response body.
 func (value HTTPStatus) Error() string { return fmt.Sprintf("nacos HTTP status %d", int(value)) }
 
+// private supplies value redaction and JSON guards. Outer pointer formatters below
+// also handle typed nils without dereferencing promoted method receivers.
 type private struct{}
 
 func (private) String() string   { return "nacos[restricted]" }

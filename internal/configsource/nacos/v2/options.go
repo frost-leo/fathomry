@@ -33,11 +33,17 @@ import (
 )
 
 const (
-	MaxKeys          = 16
-	MaxServers       = 8
+	// MaxKeys bounds the distinct configuration identities selected by one client.
+	MaxKeys = 16
+	// MaxServers bounds the explicitly authorized members of one cluster.
+	MaxServers = 8
+	// MaxDocumentBytes bounds one decoded UTF-8 configuration document in bytes.
 	MaxDocumentBytes = 1 << 20
-	MaxTotalBytes    = 4 << 20
-	MaxWireBytes     = 8 << 20
+	// MaxTotalBytes bounds the sum of raw content returned by one ReadAll call.
+	MaxTotalBytes = 4 << 20
+	// MaxWireBytes bounds an incoming gRPC message and its protocol JSON body.
+	MaxWireBytes = 8 << 20
+	// A session may hold a unary response and one incoming stream message together.
 	reservationBytes = 2 * MaxWireBytes
 )
 
@@ -45,7 +51,11 @@ const (
 // the server context path (usually /nacos); GRPCAddress is an explicit host:port.
 type ServerV1 struct {
 	private
-	HTTPURL     string
+	// HTTPURL is the authentication origin plus root or /nacos context path,
+	// at most 2048 bytes. Userinfo, queries, fragments and redirects are refused.
+	HTTPURL string
+	// GRPCAddress is an explicit host:port, at most 512 bytes with port 1–65535.
+	// No gRPC port offset or security mode is inferred from HTTPURL.
 	GRPCAddress string
 }
 
@@ -53,7 +63,10 @@ type ServerV1 struct {
 // An omitted group means DEFAULT_GROUP. Names are not diagnostic labels.
 type KeyV1 struct {
 	private
-	Group  string
+	// Group defaults to DEFAULT_GROUP. Present values use at most 128 UTF-8
+	// bytes, without leading/trailing whitespace or control characters.
+	Group string
+	// DataID is required and uses the same 128-byte identifier bounds as Group.
 	DataID string
 }
 
@@ -64,22 +77,55 @@ type KeyV1 struct {
 // verified TLS otherwise. Username and Password must both be present or absent.
 type OptionsV1 struct {
 	private
-	Name               string
-	Namespace          string
-	AppName            string
-	Servers            []ServerV1
-	Keys               []KeyV1
-	Username           string
-	Password           string
-	RootCAPEM          string
-	AllowInsecure      bool
-	RequestTimeout     time.Duration
-	RetryDelay         time.Duration
-	ReconcileInterval  time.Duration
+	// Name is a required 1–64 character lowercase ASCII source/scope label.
+	// Composition owns its uniqueness and must exclude sensitive data.
+	Name string
+	// Namespace selects the native namespace form, at most 128 UTF-8 bytes.
+	// Empty requests the default; nonempty IDs are not rewritten by this package.
+	Namespace string
+	// AppName is the bounded native application label; empty becomes fathomry.
+	// It is not a business Run or Item identifier and is limited to 128 bytes.
+	AppName string
+	// Servers contains 1–MaxServers members of one cluster in initial failover
+	// order. Open copies the slice and retained strings; it does not discover peers.
+	Servers []ServerV1
+	// Keys selects 1–MaxKeys distinct identities in this Namespace. ReadAll uses
+	// this order and Watch observes this fixed set; Open copies retained storage.
+	Keys []KeyV1
+	// Username and Password select password-token authentication together.
+	// Both empty select no login; Username is limited to 256 UTF-8 bytes.
+	Username string
+	// Password is limited to 4096 UTF-8 bytes and is never read from the environment.
+	Password string
+	// RootCAPEM supplies at most 64 KiB of trust roots for both transports.
+	// Empty uses system trust; nonempty roots replace, rather than extend, that set.
+	RootCAPEM string
+	// AllowInsecure explicitly selects plaintext gRPC and permits HTTP for isolated
+	// tests. False requires independently certificate-verified HTTPS and gRPC TLS.
+	AllowInsecure bool
+	// RequestTimeout is a cooperative phase budget including admission and native
+	// request/setup/decoding work. Zero defaults to 10 s; valid values are 1 ms–1 min.
+	// It does not force a blocked resolver or caller callback to terminate.
+	RequestTimeout time.Duration
+	// RetryDelay is the minimum registration/recovery pause, not a business retry
+	// policy. Zero defaults to 100 ms; valid values are 1 ms–1 min.
+	RetryDelay time.Duration
+	// ReconcileInterval schedules native hash/presence comparisons when no push
+	// wakes the observer. Zero defaults to 30 s; valid values are 1 s–5 min.
+	ReconcileInterval time.Duration
+	// ConcurrentRequests bounds admitted reads/batches and persistent subscriptions.
+	// Zero defaults to 4; valid values are 2–16. The same count separately bounds
+	// concurrent native dial/TLS phases; neither reservation is a process RSS limit.
 	ConcurrentRequests int
-	QueuedRequests     int
-	Subscriptions      int
-	QueueCapacity      int
+	// QueuedRequests bounds FIFO admission waits, from 0–64. Zero refuses overload
+	// instead of waiting; queued byte reservations are separate from active ones.
+	QueuedRequests int
+	// Subscriptions bounds live observers. Zero defaults to 1; the effective count
+	// must be positive and less than ConcurrentRequests to leave read capacity.
+	Subscriptions int
+	// QueueCapacity bounds invalidations per subscription. Zero defaults to 16;
+	// valid values are 1–64. Overflow drops the oldest event and requires resync.
+	QueueCapacity int
 }
 
 type endpoint struct {
@@ -90,6 +136,9 @@ type key struct {
 	Group  string `json:"group"`
 	DataID string `json:"data_id"`
 }
+
+// settings is the private plain-data preparation input, separate from the guarded
+// public bootstrap types. It records effective defaults, not live transports.
 type settings struct {
 	Name          string        `json:"name"`
 	Namespace     string        `json:"namespace"`
@@ -109,6 +158,8 @@ type settings struct {
 	Queue         int           `json:"queue"`
 }
 
+// prepareOptions validates the complete selection before construction and clones
+// retained caller data. Preparing TLS trust does not establish server identity.
 func prepareOptions(input OptionsV1) (settings, *tls.Config, error) {
 	if len(input.Name) > 64 || len(input.Namespace) > 128 || len(input.AppName) > 128 ||
 		len(input.Username) > 256 || len(input.Password) > 4096 || len(input.RootCAPEM) > 64<<10 ||

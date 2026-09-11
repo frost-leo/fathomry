@@ -114,9 +114,13 @@ Use a concise structure rather than empty template sections:
 ## Details and executable evidence
 ```
 
-Exact signatures and symbol-level behavior stay with the Go declarations. Package
-comments introduce the package once; Markdown connects the package-wide contract
-and the specialized topics. Do not hand-maintain a second complete signature list.
+Exact signatures and symbol-level behavior stay with the Go declarations. Keep
+each library package's overview in `doc.go`, covering responsibilities, the main
+call sequence, ownership and important limits. Do not repeat that package comment
+in implementation files. Exported contract comments should explain relevant
+defaults, units, zero/nil meanings and failure boundaries, not merely restate names.
+Markdown connects the package-wide contract and the specialized topics; do not
+hand-maintain a second complete signature list.
 When behavior changes, update the affected comments, tests and documentation in
 the same change; disagreements are defects, not independent interpretations.
 

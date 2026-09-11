@@ -17,10 +17,6 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package viper integrates the Viper v1 SDK with bounded, isolated reads and live
-// queries. It does not assign application layers or prepare business settings.
-// Callers select static inputs explicitly; no discovery, merge, watcher, writeback,
-// SDK handle, managed resource, or process-global configuration is exposed.
 package viper
 
 import (

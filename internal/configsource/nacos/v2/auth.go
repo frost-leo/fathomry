@@ -29,11 +29,16 @@ import (
 	"time"
 )
 
+// token is an instance-local credential snapshot. refresh is the conservative
+// local refresh point, not proof that the server still grants access.
 type token struct {
 	value   string
 	refresh time.Time
 }
 
+// token returns the selected endpoint's cached token or performs one bounded
+// password login. The network gate coalesces concurrent refreshes, while short
+// cache access uses client.mu so another endpoint's login cannot hide revocation.
 func (client *Client) token(ctx context.Context, index int) (string, error) {
 	if client.settings.Username == "" {
 		return "", nil
@@ -94,13 +99,17 @@ func (client *Client) token(ctx context.Context, index int) (string, error) {
 		return "", fail(ErrRead, "authenticate", ctx.Err(), context.Cause(ctx))
 	}
 	lifetime := time.Duration(body.TokenTTL) * time.Second
+	// Refresh before the advertised TTL expires; do not turn cache lifetime into
+	// an authorization guarantee or start an unowned background refresh worker.
 	client.mu.Lock()
 	client.tokens[index] = token{strings.Clone(body.AccessToken), time.Now().Add(lifetime - lifetime/10)}
 	client.mu.Unlock()
 	return body.AccessToken, nil
 }
+
+// forgetToken clears only the credential used by the rejected request. A late
+// denial for an older token must not invalidate a concurrently refreshed token.
 func (client *Client) forgetToken(index int, rejected string) {
-	// A denial never converts an earlier token into proof of current access.
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	if client.tokens[index].value == rejected {

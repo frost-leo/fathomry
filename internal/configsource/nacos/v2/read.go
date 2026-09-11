@@ -93,6 +93,8 @@ func (document *Document) LastModifiedMillis() int64 {
 
 // Read acquires fresh remote bytes for one preselected key, never cache/backup data.
 // Every finite read opens and closes an explicit Nacos connection session.
+// A new query does not prove that a prior publication is already visible in the
+// server's cache. Returned bytes still require application preparation/validation.
 func (client *Client) Read(ctx context.Context, selected KeyV1) (*Document, error) {
 	if client == nil || client.cancel == nil || !slices.Contains(client.settings.Keys, normalizeKey(selected)) {
 		return nil, fail(ErrInput, "read")
@@ -112,6 +114,10 @@ func (client *Client) ReadAll(ctx context.Context) ([]*Document, error) {
 	}
 	return client.read(ctx, client.settings.Keys)
 }
+
+// read retains one logical allowance through session setup, every required query,
+// decoding and local session close. Failed failover attempts discard their whole
+// document prefix; the next authorized member uses the remaining original budget.
 func (client *Client) read(ctx context.Context, keys []key) (documents []*Document, result error) {
 	work, end, err := client.enter(ctx)
 	if err != nil {
@@ -158,6 +164,9 @@ func (client *Client) read(ctx context.Context, keys []key) (documents []*Docume
 	}
 	return nil, fail(ErrRead, "read", append(causes, budget.Err(), context.Cause(budget))...)
 }
+
+// query explicitly disables implicit native listening. Watch owns registration
+// separately, even when it uses this query to obtain a reconciliation hash.
 func (current *session) query(ctx context.Context, selected key) (*response.ConfigQueryResponse, error) {
 	query := request.NewConfigQueryRequest(selected.Group, selected.DataID, current.owner.settings.Namespace)
 	query.RequestId = strconv.FormatUint(current.owner.sequence.Add(1), 10)
@@ -168,6 +177,9 @@ func (current *session) query(ctx context.Context, selected key) (*response.Conf
 	}
 	return value.(*response.ConfigQueryResponse), nil
 }
+
+// readDocuments publishes no prefix on failure and clones retained native strings.
+// Empty content is a required-document refusal, not a missing-configuration code.
 func (current *session) readDocuments(ctx context.Context, keys []key) ([]*Document, error) {
 	documents := make([]*Document, 0, len(keys))
 	total := 0
