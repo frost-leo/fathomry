@@ -211,9 +211,14 @@ FATHOMRY_MYSQL_TLS_TEST_CONFIG=/path/to/private-mysql-tls-fixture.json \
 Each mode-0600, at-most-128-KiB JSON fixture contains `network`, `address`, `port`,
 `database`, `user`, `password`, `plaintext`, `root_ca_pem`, `server_name`, alternative
 `server_certificate_sha256`, `expected_version` and `allow_create_test_database`.
-The write gate requires that last flag explicitly true. It protects preexisting
+The write gate requires that last flag explicitly true. It can use verified TLS
+over an authorized Unix socket without changing accounts or grants; TCP TLS writes
+require their own authorized fixture profile. It protects preexisting
 resources, independently reads committed/rolled-back effects, observes server
 entry/eventual exit for cancellation, and verifies cleanup with fresh connections.
+Acknowledged ownership is registered before evidence assertions, independently of
+later cleanup errors. Failure-path tests close retained statements/transactions;
+concurrency checks observe actual overlapping server work on two owned connections.
 Only an acknowledged newly created fixture is eligible for deletion; an unknown
 CREATE result must be reconciled by its owner, not adopted or dropped automatically.
 It does not modify accounts/grants or server configuration. The TLS gate is

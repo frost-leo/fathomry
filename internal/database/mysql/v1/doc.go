@@ -38,6 +38,8 @@
 // with native preparation for parameters; Prepare retains a reusable statement.
 // All native statements run once under a pinned connection's Raw lock, without
 // database/sql's statement retry loops. No raw handle escapes. Results are frozen.
+// Parameter validation precedes dispatch; a partial native long-data encoding
+// failure retires the connection rather than carrying parameters into reuse.
 // Setup errors have no receipt. Accepted failures/partial data are retained in the
 // receipt and independent inbox; receivers must inspect and release deliveries.
 // Copies deliberately expose SQL data; ordinary diagnostics are restricted.
@@ -48,6 +50,7 @@
 // Finalization requires no additional admission or evidence slot. Statement
 // errors retain native semantics: an owned Ping checks server transaction status
 // before allowing continued work, rather than inventing PostgreSQL-style abortion.
+// Successful transaction-ending SQL also ends the retained transaction's authority.
 // Lost commit replies remain unknown and mutations are never replayed by this API.
 //
 // SQL is structurally bounded, not filtered by keywords or a SQL sandbox.

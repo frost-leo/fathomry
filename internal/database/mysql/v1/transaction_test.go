@@ -22,6 +22,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"testing"
 	"time"
@@ -159,4 +160,67 @@ func TestQueryCancellationAndConcurrentTransactionRefusal(t *testing.T) {
 		t.Fatal("dead-connection rollback falsely acknowledged")
 	}
 	drain(t, f.inbox, 2)
+}
+
+func TestSuccessfulSQLTransactionEndRefusesFurtherWork(t *testing.T) {
+	peer := newPeer(t, false, false)
+	f := bindFixture(t, peer.options(), 2)
+	tx := beginTx(t, f, context.Background())
+	receipt, err := tx.Exec(context.Background(), correlation("sql-commit"), "COMMIT")
+	if result := observe(t, receipt, err); result.Err() != nil {
+		t.Fatal(result.Err())
+	}
+	if tx.owned.wire.inTransaction || !tx.ended {
+		t.Fatal("successful transaction end was not observed")
+	}
+	if _, err = tx.Exec(context.Background(), correlation("after-commit"), "UPDATE fixture SET value=?", "outside"); !errors.Is(err, ErrState) {
+		t.Fatal("ended transaction admitted another mutation")
+	}
+	if _, _, err = tx.Prepare(context.Background(), correlation("after-commit-prepare"), "SELECT ?"); !errors.Is(err, ErrState) {
+		t.Fatal("ended transaction admitted preparation")
+	}
+	if _, err = tx.Commit(context.Background()); !errors.Is(err, ErrState) {
+		t.Fatal("ended transaction was committed again")
+	}
+	receipt, err = tx.Rollback(context.Background())
+	_ = observe(t, receipt, err)
+	drain(t, f.inbox, 2)
+	if peer.commits.Load() != 1 {
+		t.Fatal("transaction-ending SQL was replayed")
+	}
+}
+
+type cancelAfterStatementClose struct {
+	driver.Stmt
+	cancel context.CancelCauseFunc
+	cause  error
+}
+
+func (stmt *cancelAfterStatementClose) Close() error {
+	err := stmt.Stmt.Close()
+	stmt.cancel(stmt.cause)
+	return err
+}
+
+func TestFinalizerEarlyCancellationKeepsCallerCause(t *testing.T) {
+	peer := newPeer(t, false, false)
+	f := bindFixture(t, peer.options(), 2, ErrCleanup)
+	tx := beginTx(t, f, context.Background())
+	statement, _, err := tx.Prepare(context.Background(), correlation("prepare-finalizer"), "SELECT ?")
+	if err != nil || statement == nil {
+		t.Fatal("prepare failed", err)
+	}
+	cause := errors.New("review-finalizer-caller-cause")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	statement.native = &cancelAfterStatementClose{Stmt: statement.native, cancel: cancel, cause: cause}
+	receipt, err := tx.Commit(ctx)
+	final := observe(t, receipt, err)
+	drain(t, f.inbox, 2)
+	if !errors.Is(final.Err(), context.Canceled) {
+		t.Fatal("control did not cancel native finalizer")
+	}
+	if !errors.Is(final.Err(), cause) {
+		t.Fatalf("explicit finalizer cancellation lost original cause; outcome=%s", final.Outcome.Value.TransactionOutcome())
+	}
 }

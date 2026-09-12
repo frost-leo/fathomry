@@ -182,6 +182,9 @@ func validStatement(query string, args []any) error {
 			}
 			size += len(v) + 16
 		case time.Time:
+			if !v.IsZero() && (v.UTC().Year() < 1 || v.UTC().Year() > 9999) {
+				return failure(ErrInput, "argument-time")
+			}
 			size += 64
 		default:
 			return failure(ErrUnsupported, "argument")
@@ -287,19 +290,13 @@ func (db *Database) statement(ctx context.Context, id fault.Correlation, query s
 		operationErr := executeNative(work, c, call, query, args, keep, stmt, data)
 		data.rowsRead = max(data.rowsRead, c.wire.rowCount)
 		primary = operationError(work, operationErr, c)
-		if parent != nil && operationErr != nil {
-			// Ping observes actual server transaction state without starting another
-			// transaction. A statement-only error must not invent transaction abortion.
-			if !c.wire.closed.Load() && work.Err() == nil {
-				_, _ = call.Attempt()
-				pingErr := c.Conn.(driver.Pinger).Ping(nativeContext{work})
-				c.record(pingErr)
-				parent.ended = pingErr != nil || !c.wire.inTransaction
-			} else {
-				parent.ended = true
-			}
+		if parent != nil {
+			parent.observeState(work, c, call, operationErr)
 		}
 		stop()
+		if parent != nil && c.wire.closed.Load() {
+			parent.ended = true
+		}
 		cleanup = c.cleanup()
 		return operationErr
 	})
@@ -398,6 +395,9 @@ func executeNative(ctx context.Context, c *managedConn, call *invocation.Call[Re
 			result, err = prepared.(driver.StmtExecContext).ExecContext(nativeContext{ctx}, values)
 		}
 		if err != nil {
+			if c.wire.longDataPending {
+				_ = c.wire.fail(failure(ErrState, "incomplete-parameters", err))
+			}
 			return err
 		}
 	}

@@ -40,30 +40,31 @@ import (
 // packet header reach the SDK's size-based allocation. Calls serialize protocol
 // use; Close and deadline cancellation may run concurrently.
 type wire struct {
-	raw           net.Conn
-	transport     net.Conn
-	settings      settings
-	ctx           context.Context
-	pending       []byte
-	phase         byte
-	command       byte
-	authOffset    byte
-	firstAuth     bool
-	columns       int
-	remaining     int
-	rowCount      int
-	inTransaction bool
-	responseBytes int
-	fields        []byte
-	version       string
-	tlsState      tls.ConnectionState
-	secured       func(*tls.Config)
-	closed        atomic.Bool
-	once          sync.Once
-	mu            sync.Mutex
-	deadline      time.Time
-	primary       error
-	closeError    error
+	raw             net.Conn
+	transport       net.Conn
+	settings        settings
+	ctx             context.Context
+	pending         []byte
+	phase           byte
+	command         byte
+	authOffset      byte
+	firstAuth       bool
+	longDataPending bool
+	columns         int
+	remaining       int
+	rowCount        int
+	inTransaction   bool
+	responseBytes   int
+	fields          []byte
+	version         string
+	tlsState        tls.ConnectionState
+	secured         func(*tls.Config)
+	closed          atomic.Bool
+	once            sync.Once
+	mu              sync.Mutex
+	deadline        time.Time
+	primary         error
+	closeError      error
 }
 
 const (
@@ -211,7 +212,8 @@ func (w *wire) readFrame() ([]byte, error) {
 	return frame, nil
 }
 func (w *wire) Write(frame []byte) (int, error) {
-	if len(frame) < 5 || len(frame)-4 != int(frame[0])|int(frame[1])<<8|int(frame[2])<<16 {
+	if len(frame) < 4 || len(frame)-4 != int(frame[0])|int(frame[1])<<8|int(frame[2])<<16 ||
+		len(frame) == 4 && (w.phase != phaseAuth || w.firstAuth) {
 		return 0, w.fail(failure(ErrProtocol, "write-frame"))
 	}
 	if w.firstAuth {
@@ -277,6 +279,14 @@ func (w *wire) Write(frame []byte) (int, error) {
 	}
 	if err != nil {
 		return count, w.fail(err)
+	}
+	if w.phase != phaseAuth {
+		switch w.command {
+		case 0x18:
+			w.longDataPending = true
+		case 0x17:
+			w.longDataPending = false
+		}
 	}
 	return count, nil
 }

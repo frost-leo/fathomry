@@ -24,6 +24,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/frost-leo/fathomry/internal/conformance"
 	"github.com/frost-leo/fathomry/internal/resource"
@@ -112,4 +113,17 @@ func FuzzStatement(f *testing.F) {
 			t.Fatal("malformed SQL accepted")
 		}
 	})
+}
+
+func TestArgumentDatesFailBeforeNativeParameterDispatch(t *testing.T) {
+	for _, value := range []time.Time{time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(1, 1, 1, 0, 0, 0, 0, time.FixedZone("positive", 3600))} {
+		if err := validStatement("SELECT ?, ?", []any{make([]byte, 800<<10), value}); !errors.Is(err, ErrInput) {
+			t.Fatal("native-rejected UTC date reached partial parameter dispatch")
+		}
+	}
+	for _, value := range []time.Time{{}, time.Date(1, 1, 1, 0, 0, 0, 1, time.UTC), time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)} {
+		if err := validStatement("SELECT ?", []any{value}); err != nil {
+			t.Fatal("supported native date rejected", err)
+		}
+	}
 }

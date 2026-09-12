@@ -121,9 +121,16 @@ func (db *Database) prepare(ctx context.Context, id fault.Correlation, query str
 		_, _ = call.Attempt()
 		var err error
 		native, err = c.Conn.(driver.ConnPrepareContext).PrepareContext(nativeContext{work}, query)
+		primary := operationError(work, err, c)
+		if parent != nil {
+			parent.observeState(work, c, call, err)
+		}
 		stop()
+		if parent != nil && c.wire.closed.Load() {
+			parent.ended = true
+		}
 		cleanup = c.cleanup()
-		return operationError(work, err, c)
+		return primary
 	})
 	if err != nil {
 		if parent == nil {
@@ -134,7 +141,7 @@ func (db *Database) prepare(ctx context.Context, id fault.Correlation, query str
 	}
 	stmt := &Statement{statementState: &statementState{mu: mutex, db: db, parent: parent, conn: conn, owned: owned, native: native, query: query, call: call}}
 	if parent != nil {
-		parent.statements[stmt] = struct{}{}
+		parent.statements[stmt.statementState] = stmt
 	}
 	call.Resolve(invocation.Outcome[Result]{Present: true, Value: Result{data: &resultData{complete: true, serverVersion: owned.wire.version}}})
 	return stmt, receipt, nil
@@ -207,7 +214,7 @@ func (stmt *Statement) closeLocked(ctx context.Context) error {
 	if stmt.parent == nil {
 		cleanup = joined(ErrCleanup, "statement-close", cleanup, give(stmt.conn, stmt.owned, cleanup != nil || stmt.owned.wire.closed.Load() || stmt.owned.wire.inTransaction))
 	} else {
-		delete(stmt.parent.statements, stmt)
+		delete(stmt.parent.statements, stmt.statementState)
 	}
 	stmt.conn = nil
 	stmt.owned = nil
