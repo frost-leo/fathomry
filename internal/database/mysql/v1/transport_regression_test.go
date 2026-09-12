@@ -213,3 +213,18 @@ func TestUnselectedAuthenticationSwitchIsRefused(t *testing.T) {
 	}
 	drain(t, fixture.inbox, 1)
 }
+
+func TestEmptyPasswordAuthenticationSwitch(t *testing.T) {
+	for _, secure := range []bool{false, true} {
+		peer := newPeer(t, secure, false)
+		peer.nativeAuth, peer.emptyPassword = true, true
+		options := peer.options()
+		options.Password, options.Authentication = "", "mysql_native_password"
+		fixture := bindFixture(t, options, 1)
+		receipt, err := fixture.db.Ping(context.Background(), correlation("empty-auth"))
+		if result := observe(t, receipt, err); result.Err() != nil {
+			t.Fatal("valid empty native authentication response refused", result.Err())
+		}
+		drain(t, fixture.inbox, 1)
+	}
+}

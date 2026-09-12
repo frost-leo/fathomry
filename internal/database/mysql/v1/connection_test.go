@@ -458,3 +458,48 @@ func TestFailedTLSInitializationRetainsIndependentSocketCleanup(t *testing.T) {
 		}
 	}
 }
+
+type readEntered struct {
+	net.Conn
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (conn *readEntered) Read(dst []byte) (int, error) {
+	conn.once.Do(func() { close(conn.entered) })
+	return conn.Conn.Read(dst)
+}
+
+func TestHandshakeCancellationKeepsCallerCause(t *testing.T) {
+	peer := newPeer(t, false, false)
+	f := bindFixture(t, peer.options(), 1)
+	client, server := net.Pipe()
+	defer server.Close()
+	waiting := &readEntered{Conn: client, entered: make(chan struct{})}
+	f.db.owner.dial = func(context.Context, string, string) (net.Conn, error) { return waiting, nil }
+	cause := errors.New("review-handshake-caller-cause")
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	done := make(chan *invocation.Receipt[Result], 1)
+	go func() {
+		receipt, err := f.db.Ping(ctx, correlation("cancel-handshake"))
+		if err != nil {
+			t.Error(err)
+		}
+		done <- receipt
+	}()
+	select {
+	case <-waiting.entered:
+	case <-time.After(time.Second):
+		t.Fatal("native handshake did not enter")
+	}
+	cancel(cause)
+	result := observe(t, <-done, nil)
+	drain(t, f.inbox, 1)
+	if !errors.Is(result.Err(), context.Canceled) {
+		t.Fatal("control did not cancel handshake")
+	}
+	if !errors.Is(result.Err(), cause) {
+		t.Fatal("connectionOutcome discarded original caller cancellation cause")
+	}
+}

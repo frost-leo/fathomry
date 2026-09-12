@@ -24,12 +24,15 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"net"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/frost-leo/fathomry/internal/conformance"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/resource"
+	sdk "github.com/go-sql-driver/mysql"
 )
 
 func TestReusablePreparationPinsOnlyItsConnection(t *testing.T) {
@@ -191,4 +194,111 @@ func TestStandardSQLTransactionStatementRetryCounterexample(t *testing.T) {
 		t.Fatal("standard-library retry counterexample changed")
 	}
 	t.Log("Scripted stdlib control: a transaction's sql.Stmt.Exec made three driver calls. Controlled native statement execution makes one and retains the original cause.")
+}
+
+func TestCopiedStatementReleasesTransactionSlot(t *testing.T) {
+	peer := newPeer(t, false, false)
+	f := bindFixture(t, peer.options(), 2)
+	tx := beginTx(t, f, context.Background())
+	root, err := f.inbox.Next(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range MaxPreparedStatements + 1 {
+		stmt, _, err := tx.Prepare(context.Background(), correlation("prepare-copy"), "SELECT ?")
+		if err != nil || stmt == nil {
+			receipt, finishErr := tx.Rollback(context.Background())
+			observe(t, receipt, finishErr)
+			_ = root.Release()
+			t.Fatalf("prepare %d refused after all prior statements closed: %v; tracked=%d", index+1, err, len(tx.statements))
+		}
+		copyOfStatement := *stmt
+		receipt, closeErr := copyOfStatement.Close(context.Background())
+		if result := observe(t, receipt, closeErr); result.Err() != nil {
+			t.Fatal(result.Err())
+		}
+		drain(t, f.inbox, 1)
+	}
+	receipt, err := tx.Rollback(context.Background())
+	observe(t, receipt, err)
+	if err := root.Release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type failedStatusProbe struct {
+	net.Conn
+	cause error
+}
+
+func (conn *failedStatusProbe) Write(frame []byte) (int, error) {
+	if len(frame) >= 5 && frame[4] == 14 {
+		return 0, conn.cause
+	}
+	return conn.Conn.Write(frame)
+}
+
+func TestStatusProbeFailureRetainsSeparateTransportEvidence(t *testing.T) {
+	for _, mode := range []string{"prepare", "query"} {
+		t.Run(mode, func(t *testing.T) {
+			peer := newPeer(t, false, false)
+			f := bindFixture(t, peer.options(), 2)
+			tx := beginTx(t, f, context.Background())
+			cause := errors.New("review-independent-status-probe-transport")
+			tx.owned.wire.transport = &failedStatusProbe{Conn: tx.owned.wire.transport, cause: cause}
+			var receipt *invocation.Receipt[Result]
+			var err error
+			if mode == "prepare" {
+				_, receipt, err = tx.Prepare(context.Background(), correlation("prepare-error"), "SELECT prepare_error")
+			} else {
+				receipt, err = tx.Query(context.Background(), correlation("query-error"), "SELECT duplicate")
+			}
+			result := observe(t, receipt, err)
+			var native *sdk.MySQLError
+			if !errors.As(result.Outcome.Primary, &native) {
+				t.Fatal("native-error negative control did not execute")
+			}
+			if !tx.ended || !tx.owned.wire.closed.Load() {
+				t.Fatal("status-probe transport failure was not reached")
+			}
+			receipt, err = tx.Rollback(context.Background())
+			observe(t, receipt, err)
+			drain(t, f.inbox, 2)
+			if errors.Is(result.Outcome.Primary, cause) {
+				t.Error("independent status-probe failure contaminated native operation primary")
+			}
+			if !errors.Is(result.Outcome.Cleanup, cause) {
+				t.Error("independent status-probe cleanup lost original transport cause")
+			}
+		})
+	}
+}
+
+type invalidDateEncoder struct{ driver.Stmt }
+
+func (stmt *invalidDateEncoder) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
+	args[1].Value = time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)
+	return stmt.Stmt.(driver.StmtQueryContext).QueryContext(ctx, args)
+}
+func TestIncompleteNativeParameterDispatchRetiresConnection(t *testing.T) {
+	peer := newPeer(t, false, false)
+	fixture := bindFixture(t, peer.options(), 2)
+	statement, _, err := fixture.db.Prepare(context.Background(), correlation("partial-prepare"), "SELECT ?, ?")
+	if err != nil || statement == nil {
+		t.Fatal("preparation failed", err)
+	}
+	statement.native = &invalidDateEncoder{Stmt: statement.native}
+	receipt, err := statement.Query(context.Background(), correlation("partial-parameters"), make([]byte, 800<<10), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	result := observe(t, receipt, err)
+	select {
+	case <-peer.entered:
+	case <-time.After(time.Second):
+		t.Fatal("native long-data dispatch did not occur")
+	}
+	if !errors.Is(result.Err(), ErrState) || !statement.owned.wire.longDataPending || !statement.owned.wire.closed.Load() {
+		t.Fatal("incomplete native parameter state remained reusable")
+	}
+	receipt, err = statement.Close(context.Background())
+	_ = observe(t, receipt, err)
+	drain(t, fixture.inbox, 2)
 }

@@ -49,7 +49,7 @@ MySQL under `internal/database/mysql/v1` uses native `database/sql` pooling,
 controlled queries/prepared statements and transactions. Its incoming framing and
 LOCAL INFILE boundaries apply before SDK dispatch, including above verified TLS.
 The [contract](reference/internal/database/mysql/v1/interface.md) distinguishes
-isolated MySQL 8.4.11/InnoDB write acceptance from separate TLS read acceptance.
+isolated MySQL 8.4.11/InnoDB TLS writes over Unix sockets from separate TCP TLS reads.
 
 There is no public Go package, project generator, application configuration loader,
 production service Provider or complete Temporal execution runtime yet. The intended

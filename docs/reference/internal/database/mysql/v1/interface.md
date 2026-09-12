@@ -23,7 +23,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 **Audience:** in-module composition and future framework adapters.
 **Status:** implemented bounded MySQL 8 profile; isolated MySQL 8.4.11/InnoDB
-acceptance and separate verified-TLS reads, not production/HA/vendor-wide support.
+verified-TLS acceptance, not production/HA/vendor-wide support.
 **Package:** `github.com/frost-leo/fathomry/internal/database/mysql/v1`.
 
 ## Responsibilities and native boundary
@@ -163,6 +163,11 @@ UTC time conversion and encodes time.Time as RFC3339Nano (zero dates become the 
 zero time). Floats follow native textual conversion, not arbitrary decimal coercion.
 Parameters accept basic scalar Go types, time.Time, byte slices and json.RawMessage
 (including typed nil), not driver.Valuer, arbitrary structs/pointers or callbacks.
+Nonzero time.Time parameters must have a UTC year in 1–9999, matching the native
+encoder. This is checked before admission: native long-data packets for an earlier
+argument must not be sent before discovering a later unsupported date. Any native
+encoding failure after partial long-data dispatch retires the connection; it cannot
+leave staged parameters available to the next use of a retained statement.
 
 Exec's RowsAffected and LastInsertID expose native **int64** values with explicit
 presence; ClientFoundRows changes matched/changed-row semantics. They do not
@@ -187,7 +192,11 @@ native-call lower bounds, not exact wire packet/retry/constructor counts.
 
 All four MySQL isolation levels plus LevelDefault and ReadOnly are supported.
 Statement failure does not universally abort an InnoDB transaction: after an
-error, a bounded native Ping reads actual transaction status. A live transaction
+error, including an explicit preparation error, a bounded native Ping reads actual
+transaction status. Its independent failure belongs to cleanup evidence, not the
+original statement's primary failure. Successful responses also reconcile status:
+explicit or implicit transaction-ending SQL revokes further statement/commit use.
+This cannot undo an implicit commit or certify reversal of earlier effects. A live transaction
 may continue after statement-only errors; a terminated/unknown transaction cannot
 accept more work or commit. Deadlocks, lock timeouts, implicit commits and triggers
 retain MySQL semantics, not a copied PostgreSQL fail-stop policy.
@@ -237,12 +246,23 @@ SDK/transitive modules; it explicitly does not claim a server query.
 
 Isolated service evidence covers MySQL 8.4.11 (Ubuntu), InnoDB, autocommit=1,
 REPEATABLE-READ default, UTC, strict sql_mode and rollback_on_timeout=0. Authorized
-write/transaction/cleanup tests used a fresh random database over a Unix socket
-with auth_socket. A separate read-only TCP profile verified TLS 1.3
+write/transaction/cleanup tests use a fresh random database over a Unix socket
+with auth_socket, including actual TLS 1.3 / TLS_AES_128_GCM_SHA256 writes and
+transactions with verified chain plus leaf pin. A separate read-only TCP profile verified TLS 1.3
 TLS_AES_128_GCM_SHA256 and native caching_sha2 full authentication using explicit
 chain plus certificate pin (the server certificate has no SAN). This is not
-TLS-write, MariaDB, proxy/HA, replication or production acceptance. No server
+TCP-TLS-write, MariaDB, proxy/HA, replication or production acceptance. No server
 configuration, account or business database was changed.
+
+Service gates exercise repeated prepared Query/Exec, large-parameter reuse after
+invalid input, generated insert IDs, ParseTime/TIME/empty/NULL values, metadata,
+read-only write refusal and read-committed/repeatable-read snapshot behavior.
+Same-pool concurrency uses an independent server-overlap witness; native statistics,
+saturation and idle/lifetime replacement are checked separately. Other isolation
+modes have native option/read checks, not an exhaustive engine isolation proof.
+Failure-path controls finalize live test handles before process exit. Acknowledged
+fixture ownership is registered before independent evidence assertions, and a new
+connection verifies database absence after cleanup.
 
 The framing and TLS upgrade depend on the pinned SDK's handshake/write sequence.
 An owned BeforeConnect hook updates only that connection's native TLS state after

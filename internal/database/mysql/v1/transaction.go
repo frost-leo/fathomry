@@ -22,6 +22,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"sync"
 
@@ -67,7 +68,7 @@ type transactionState struct {
 	cancel      context.CancelFunc
 	closed      bool
 	ended       bool
-	statements  map[*Statement]struct{}
+	statements  map[*statementState]*Statement
 }
 
 func (db *Database) Begin(ctx context.Context, id fault.Correlation, options TxOptionsV1) (*Transaction, *invocation.Receipt[Result], error) {
@@ -98,7 +99,7 @@ func (db *Database) Begin(ctx context.Context, id fault.Correlation, options TxO
 		call.Complete(invocation.Outcome[Result]{Primary: operationError(lifetime, err, owned), Cleanup: give(conn, owned, true)})
 		return nil, receipt, nil
 	}
-	tx := &Transaction{transactionState: &transactionState{db: db, conn: conn, owned: owned, native: native, finalizer: owned.transaction, call: call, correlation: id, lifetime: lifetime, cancel: cancel, statements: make(map[*Statement]struct{})}}
+	tx := &Transaction{transactionState: &transactionState{db: db, conn: conn, owned: owned, native: native, finalizer: owned.transaction, call: call, correlation: id, lifetime: lifetime, cancel: cancel, statements: make(map[*statementState]*Statement)}}
 	guard, err := call.Scope().Hold()
 	if err != nil {
 		cancel()
@@ -133,6 +134,24 @@ func (tx *Transaction) lock() error {
 		return failure(ErrState, "transaction", sql.ErrTxDone)
 	}
 	return nil
+}
+func (tx *Transaction) observeState(ctx context.Context, conn *managedConn, call *invocation.Call[Result], operationErr error) {
+	if operationErr != nil {
+		// Error packets carry no status. Ping distinguishes a statement-only
+		// failure from actual transaction termination without starting a new one.
+		if conn.wire.closed.Load() || ctx.Err() != nil {
+			tx.ended = true
+			return
+		}
+		_, _ = call.Attempt()
+		pingErr := conn.Conn.(driver.Pinger).Ping(nativeContext{ctx})
+		conn.record(operationError(ctx, pingErr, conn))
+		if pingErr != nil {
+			tx.ended = true
+			return
+		}
+	}
+	tx.ended = conn.wire.closed.Load() || !conn.wire.inTransaction
 }
 func (tx *Transaction) Query(ctx context.Context, id fault.Correlation, query string, args ...any) (*invocation.Receipt[Result], error) {
 	if err := tx.lock(); err != nil {
@@ -179,7 +198,7 @@ func (tx *Transaction) finish(ctx context.Context, commit bool) (*invocation.Rec
 }
 func (tx *Transaction) finishLocked(ctx context.Context, commit, automatic bool) {
 	var statementCleanup []error
-	for statement := range tx.statements {
+	for _, statement := range tx.statements {
 		statementCleanup = append(statementCleanup, statement.closeLocked(ctx))
 	}
 	tx.finalizer.setContext(ctx)

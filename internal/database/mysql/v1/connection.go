@@ -235,6 +235,10 @@ func (p *pool) take(ctx context.Context) (*sql.Conn, *managedConn, error) {
 		if failure, ok := err.(*acquisitionError); ok {
 			err = failure.cause
 		}
+		var failed *connectFailure
+		if errors.As(err, &failed) {
+			err = &connectFailure{primary: joined(ErrConnect, "acquire", failed.primary, contextCause(ctx, err)), cleanup: failed.cleanup}
+		}
 		return nil, nil, joined(ErrConnect, "acquire", err, contextCause(ctx, err))
 	}
 	var owned *managedConn
@@ -413,7 +417,7 @@ func (tx *nativeTransaction) finish(commit bool) error {
 	defer stop()
 	if ctx.Err() != nil {
 		_ = tx.owner.wire.Close()
-		tx.err = ctx.Err()
+		tx.err = failure(ErrQuery, "finalize", ctx.Err(), context.Cause(ctx))
 		return tx.err
 	}
 	tx.committed = commit

@@ -47,24 +47,25 @@ import (
 
 // A bounded native-protocol peer, not MySQL or an InnoDB/durability oracle.
 type protocolPeer struct {
-	listener   net.Listener
-	trust      string
-	tls        *tls.Config
-	key        *rsa.PrivateKey
-	fullAuth   bool
-	nativeAuth bool
-	mu         sync.Mutex
-	sockets    map[net.Conn]struct{}
-	workers    sync.WaitGroup
-	stopped    bool
-	entered    chan struct{}
-	queries    atomic.Int64
-	commits    atomic.Int64
-	rollbacks  atomic.Int64
-	secure     atomic.Int64
-	fileCalls  atomic.Int64
-	upload     string
-	dropCommit atomic.Bool
+	listener      net.Listener
+	trust         string
+	tls           *tls.Config
+	key           *rsa.PrivateKey
+	fullAuth      bool
+	nativeAuth    bool
+	emptyPassword bool
+	mu            sync.Mutex
+	sockets       map[net.Conn]struct{}
+	workers       sync.WaitGroup
+	stopped       bool
+	entered       chan struct{}
+	queries       atomic.Int64
+	commits       atomic.Int64
+	rollbacks     atomic.Int64
+	secure        atomic.Int64
+	fileCalls     atomic.Int64
+	upload        string
+	dropCommit    atomic.Bool
 }
 
 func packetRead(conn net.Conn) ([]byte, byte, error) {
@@ -210,7 +211,11 @@ func (p *protocolPeer) authenticate(conn net.Conn) (net.Conn, bool) {
 			return conn, false
 		}
 		response, next, err := packetRead(conn)
-		if err != nil || next != seq+2 || len(response) != sha1.Size {
+		size := sha1.Size
+		if p.emptyPassword {
+			size = 0
+		}
+		if err != nil || next != seq+2 || len(response) != size {
 			return conn, false
 		}
 		seq = next
@@ -335,6 +340,12 @@ func (p *protocolPeer) serve(socket net.Conn) {
 			}
 		case 0x16:
 			query := string(body[1:])
+			if query == "SELECT prepare_error" {
+				if packetSend(conn, 1, append([]byte{255, 0x28, 4, '#', '4', '2', '0', '0', '0'}, []byte("native-prepare-error")...)) != nil {
+					return
+				}
+				continue
+			}
 			id++
 			params := strings.Count(query, "?")
 			statements[id] = preparedQuery{query, params}
@@ -379,6 +390,8 @@ func (p *protocolPeer) serve(socket net.Conn) {
 				return
 			}
 			delete(statements, binary.LittleEndian.Uint32(body[1:]))
+		case 0x18:
+			p.entered <- struct{}{}
 		case 0x17:
 			if len(body) < 10 {
 				return
@@ -604,7 +617,7 @@ type boundFixture struct {
 	inbox    *invocation.Inbox[Result]
 }
 
-func bindFixture(t testing.TB, options OptionsV1, count int) boundFixture {
+func bindFixture(t testing.TB, options OptionsV1, count int, expectedCleanup ...error) boundFixture {
 	t.Helper()
 	selected, err := Select(options)
 	if err != nil {
@@ -627,7 +640,11 @@ func bindFixture(t testing.TB, options OptionsV1, count int) boundFixture {
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 		defer cancel()
 		if err := assembly.Close(ctx); err != nil {
-			t.Error("fixture pool cleanup failed", err)
+			if len(expectedCleanup) != 1 || !errors.Is(err, expectedCleanup[0]) || errors.Is(err, resource.ErrIncomplete) {
+				t.Error("fixture pool cleanup failed", err)
+			}
+		} else if len(expectedCleanup) != 0 {
+			t.Error("expected fixture cleanup evidence was lost")
 		}
 		if inbox.Usage().Outstanding != 0 {
 			t.Error("fixture evidence abandoned")
