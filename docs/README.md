@@ -41,7 +41,8 @@ the implemented compatibility profile and single-server checks from production
 TLS or multi-node support.
 
 The internal PostgreSQL profile under `internal/database/pgx/v5` adds explicit
-pool ownership, bounded parameterized results and single-connection transactions.
+pool ownership/statistics/expiration, bounded ordinary SQL and parameterized
+results, reusable preparation, single-connection transactions and savepoints.
 Its [contract](reference/internal/database/pgx/v5/interface.md) separates local
 protocol verification and isolated PostgreSQL 18.6 acceptance from production support.
 
@@ -107,7 +108,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md) |
 | [`internal/configsource/viper/v1`](reference/internal/configsource/viper/v1/interface.md) | Native local profile, OptionsV1, raw handoff, ownership, bounds and version evidence |
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
-| [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Explicit native configuration, pool/call ownership, bounded results, transactions and independent evidence |
+| [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Native pool lifecycle/statistics, ordinary SQL, reusable preparation, bounded results, transactions/savepoints and independent evidence |
 | [`internal/database/mysql/v1`](reference/internal/database/mysql/v1/interface.md) | Native sql.DB pooling, framed/TLS transport, controlled SQL/preparation, transactions and independent evidence |
 
 Exact declarations and symbol comments live with the Go source. Each entry links

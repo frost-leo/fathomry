@@ -142,13 +142,15 @@ Compiling with `-run '^$'` runs no real-service test. See the
 [Nacos profile](../reference/internal/configsource/nacos/v2/interface.md) for current
 version, native limitations, upstream-upgrade TODO and unexecuted service modes.
 
-For PostgreSQL #23, first run the native protocol and ownership suite:
+For PostgreSQL #23/#28, first run the native protocol and ownership suite:
 
 ```sh
 go test -race -count=3 -timeout=3m ./internal/database/pgx/v5
 go test ./internal/database/pgx/v5 -run '^$' -fuzz '^FuzzOptionsV1$' -fuzztime=10s -parallel=2
 go test ./internal/database/pgx/v5 -run '^$' -fuzz '^FuzzStatement$' -fuzztime=10s -parallel=2
+go test ./internal/database/pgx/v5 -run '^$' -fuzz '^FuzzProtocolFence$' -fuzztime=10s -parallel=2
 GOMAXPROCS=4 go test ./internal/database/pgx/v5 -run '^$' -bench '^BenchmarkBoundedQuery$' -benchmem -benchtime=20x -count=3
+GOMAXPROCS=4 go test ./internal/database/pgx/v5 -run '^$' -bench '^BenchmarkTransactionalPreparation$' -benchmem -benchtime=100ms -count=3
 go run ./internal/database/pgx/v5/testdata/consumer
 ```
 
@@ -177,6 +179,15 @@ effect oracle, and fresh maintenance connections reconcile fixture cleanup. Only
 the proxy's loopback client leg is plaintext. Never put a
 private fixture, packet capture or connection diagnostic in the repository.
 Compiling the tagged test with `-run '^$'` is not real-service acceptance.
+
+The extended #28 gate also exercises ordinary SQL/DDL/MERGE, repeated native
+preparation, ordinary/prepared text equivalence, savepoint recovery and actual
+server-scope removal, same-session default restoration, chained transaction
+termination, explicit Ping, independently observed pool overlap and unattended
+expiry. Reserved fixtures use the gh28_ prefix. Both ordinary and lost-CREATE
+paths must retain reconciliation for an uncertain creation without adopting a
+preexisting resource. Savepoint failure cleanup can finalize its owning parent;
+test-owned asynchronous queries must cancel/join before database teardown.
 
 For MySQL #25, run the native component/ownership and actual consumer checks:
 

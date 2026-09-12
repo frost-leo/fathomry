@@ -23,7 +23,9 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
+	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/resource"
 	"github.com/jackc/puddle/v2"
@@ -43,6 +45,9 @@ type pool struct {
 	closed      chan struct{}
 	mu          sync.Mutex
 	closeErrors []error
+	sealed      bool
+	stop        context.CancelFunc
+	maintained  chan struct{}
 }
 
 // Select prepares version-1 settings and their optional raw overlays before any
@@ -59,7 +64,7 @@ func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Sou
 		if err != nil {
 			return resource.Resource[Source]{}, err
 		}
-		owner := &pool{settings: value, acquire: make(chan struct{}, 1), closed: make(chan struct{})}
+		owner := &pool{settings: value, acquire: make(chan struct{}, 1), closed: make(chan struct{}), maintained: make(chan struct{})}
 		owner.native, err = puddle.NewPool(&puddle.Config[*connection]{MaxSize: int32(value.MaxConnections),
 			Constructor: func(ctx context.Context) (*connection, error) { return connect(ctx, config, value.RootCAPEM) },
 			Destructor: func(connection *connection) {
@@ -73,6 +78,13 @@ func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Sou
 			}})
 		if err != nil {
 			return resource.Resource[Source]{}, failure(ErrConnect, "pool", err)
+		}
+		if value.MaxIdleTime > 0 || value.MaxLifetime > 0 {
+			var maintenance context.Context
+			maintenance, owner.stop = context.WithCancel(context.Background())
+			go owner.expire(maintenance)
+		} else {
+			close(owner.maintained)
 		}
 		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: owner}, Release: owner.close}, nil
 	})
@@ -117,7 +129,15 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 }
 
 func (owner *pool) close(ctx context.Context) resource.ReleaseResult {
-	owner.closeOnce.Do(func() { go func() { owner.native.Close(); close(owner.closed) }() })
+	owner.closeOnce.Do(func() {
+		owner.mu.Lock()
+		owner.sealed = true
+		owner.mu.Unlock()
+		if owner.stop != nil {
+			owner.stop()
+		}
+		go func() { <-owner.maintained; owner.native.Close(); close(owner.closed) }()
+	})
 	select {
 	case <-owner.closed:
 		owner.mu.Lock()
@@ -142,7 +162,31 @@ func (owner *pool) take(ctx context.Context) (*puddle.Resource[*connection], err
 	if ctx.Err() != nil {
 		return nil, failure(ErrConnect, "acquire", ctx.Err(), context.Cause(ctx))
 	}
+	owner.mu.Lock()
+	if owner.sealed {
+		err := failure(ErrState, "pool", owner.closeErrors...)
+		owner.mu.Unlock()
+		return nil, err
+	}
+	owner.mu.Unlock()
 	idle := owner.native.AcquireAllIdle()
+	var usable []*puddle.Resource[*connection]
+	var cleanup []error
+	for _, handle := range idle {
+		if owner.expired(handle, true) {
+			cleanup = append(cleanup, owner.retire(handle))
+		} else {
+			usable = append(usable, handle)
+		}
+	}
+	idle = usable
+	if err := errors.Join(cleanup...); err != nil {
+		for _, handle := range idle {
+			handle.ReleaseUnused()
+		}
+		owner.backgroundFailure(err)
+		return nil, err
+	}
 	if len(idle) == 0 {
 		if err := owner.native.CreateResource(ctx); err != nil {
 			return nil, nativeFailure(ErrConnect, "acquire", ctx, err)
@@ -163,13 +207,108 @@ func (owner *pool) take(ctx context.Context) (*puddle.Resource[*connection], err
 // already-closed native resource synchronously, avoiding a second destructor.
 func (owner *pool) give(handle *puddle.Resource[*connection]) error {
 	connection := handle.Value()
-	if !connection.native.IsClosed() && !connection.native.PgConn().IsBusy() && connection.native.PgConn().TxStatus() == 'I' {
-		handle.Release()
-		return nil
+	owner.mu.Lock()
+	sealed := owner.sealed
+	owner.mu.Unlock()
+	if !sealed && !owner.expired(handle, false) && !connection.native.IsClosed() && !connection.native.PgConn().IsBusy() && connection.native.PgConn().TxStatus() == 'I' {
+		ctx, cancel := context.WithTimeout(context.Background(), owner.settings.CloseTimeout)
+		_, primary, cleanup := consume(ctx, connection.native, owner.settings, "DISCARD ALL", nil, false)
+		cancel()
+		if primary == nil && cleanup == nil && !connection.native.IsClosed() && connection.native.PgConn().TxStatus() == 'I' {
+			handle.Release()
+			return nil
+		}
+		return failureOrNil(ErrCleanup, "session-reset", primary, cleanup, owner.retire(handle))
 	}
+	return owner.retire(handle)
+}
+func (owner *pool) retire(handle *puddle.Resource[*connection]) error {
 	cleanup, cancel := context.WithTimeout(context.Background(), owner.settings.CloseTimeout)
 	defer cancel()
-	err := connection.close(cleanup)
+	err := handle.Value().close(cleanup)
 	handle.Hijack()
 	return err
+}
+func (owner *pool) expired(handle *puddle.Resource[*connection], idle bool) bool {
+	return owner.settings.MaxLifetime > 0 && time.Since(handle.CreationTime()) >= owner.settings.MaxLifetime ||
+		idle && owner.settings.MaxIdleTime > 0 && handle.IdleDuration() >= owner.settings.MaxIdleTime
+}
+func (owner *pool) backgroundFailure(err error) {
+	if err == nil {
+		return
+	}
+	owner.mu.Lock()
+	owner.sealed = true
+	owner.closeErrors = append(owner.closeErrors, err)
+	owner.mu.Unlock()
+}
+func (owner *pool) expire(ctx context.Context) {
+	defer close(owner.maintained)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		select {
+		case owner.acquire <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
+		if ctx.Err() != nil {
+			<-owner.acquire
+			return
+		}
+		var failures []error
+		for _, handle := range owner.native.AcquireAllIdle() {
+			if owner.expired(handle, true) {
+				failures = append(failures, owner.retire(handle))
+			} else {
+				handle.ReleaseUnused()
+			}
+		}
+		err := errors.Join(failures...)
+		owner.backgroundFailure(err)
+		<-owner.acquire
+		if err != nil {
+			return
+		}
+	}
+}
+
+// Stats copies native pool counters. Maintenance can acquire resources, and the
+// synchronous AcquireAllIdle path does not increment native AcquireCount metrics.
+func (database *Database) Stats() *puddle.Stat {
+	if database == nil || database.owner == nil {
+		return &puddle.Stat{}
+	}
+	return database.owner.native.Stat()
+}
+
+// Ping explicitly checks the native connection and retains independent evidence.
+// Pool construction and expiration do not perform hidden readiness queries.
+func (database *Database) Ping(ctx context.Context, id fault.Correlation) (*invocation.Receipt[Result], error) {
+	call, err := database.beginCall(ctx, id, "ping", invocation.Finite, nil)
+	if err != nil {
+		return nil, err
+	}
+	receipt := call.Receipt()
+	work, cancel, err := (invocation.Budget{Limit: database.owner.settings.Timeout}).Context(ctx, invocation.Execute)
+	if err != nil {
+		call.Complete(invocation.Outcome[Result]{Primary: err})
+		return receipt, nil
+	}
+	defer cancel()
+	handle, err := database.owner.take(work)
+	if err != nil {
+		call.Complete(invocation.Outcome[Result]{Primary: err})
+		return receipt, nil
+	}
+	_, _ = call.Attempt()
+	err = handle.Value().native.Ping(nativeContext{work})
+	data := &resultData{complete: err == nil, serverVersion: handle.Value().native.PgConn().ParameterStatus("server_version")}
+	call.Complete(invocation.Outcome[Result]{Present: true, Value: Result{data: data}, Primary: nativeFailure(ErrQuery, "ping", work, err), Cleanup: database.owner.give(handle)})
+	return receipt, nil
 }

@@ -129,8 +129,17 @@ func (scope *wireScope) close() error {
 }
 
 type connection struct {
-	native *sdk.Conn
-	wire   *wireScope
+	native   *sdk.Conn
+	wire     *wireScope
+	sequence uint64
+}
+
+func (connection *connection) nextName(prefix string) (string, error) {
+	if connection.sequence == ^uint64(0) {
+		return "", failure(ErrLimit, "name-sequence")
+	}
+	connection.sequence++
+	return prefix + strconv.FormatUint(connection.sequence, 10), nil
 }
 
 func isolatedTLS(config *tls.Config, rootCAPEM string) (*tls.Config, error) {
