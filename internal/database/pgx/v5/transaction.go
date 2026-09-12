@@ -31,8 +31,8 @@ import (
 )
 
 // TxOptionsV1 requires an explicit native isolation and access mode. Deferrable
-// is supported only for serializable/read-only. No custom BEGIN/COMMIT SQL,
-// savepoint or transaction retry is accepted.
+// is supported only for serializable/read-only. No custom BEGIN/COMMIT strings
+// or automatic retry policy is accepted; Savepoint owns bounded nested scopes.
 type TxOptionsV1 struct {
 	Isolation  sdk.TxIsoLevel
 	Access     sdk.TxAccessMode
@@ -60,13 +60,17 @@ type Transaction struct {
 }
 
 type transactionState struct {
-	mu          sync.Mutex
-	database    *Database
-	handle      *puddle.Resource[*connection]
-	native      sdk.Tx
-	call        *invocation.Call[Result]
-	correlation fault.Correlation
-	closed      bool
+	mu           sync.Mutex
+	database     *Database
+	handle       *puddle.Resource[*connection]
+	native       sdk.Tx
+	call         *invocation.Call[Result]
+	correlation  fault.Correlation
+	closed       bool
+	ended        bool
+	rollbackOnly bool
+	statements   map[*statementState]*Statement
+	savepoints   []*savepointState
 }
 
 func transactionOptions(options TxOptionsV1) (sdk.TxOptions, error) {
@@ -120,7 +124,7 @@ func (database *Database) Begin(ctx context.Context, correlation fault.Correlati
 		call.Complete(invocation.Outcome[Result]{Primary: nativeFailure(ErrQuery, "begin", work, err), Cleanup: database.owner.give(handle)})
 		return nil, receipt, nil
 	}
-	return &Transaction{transactionState: &transactionState{database: database, handle: handle, native: native, call: call, correlation: correlation}}, receipt, nil
+	return &Transaction{transactionState: &transactionState{database: database, handle: handle, native: native, call: call, correlation: correlation, statements: make(map[*statementState]*Statement)}}, receipt, nil
 }
 func (transaction *Transaction) lock() error {
 	if transaction == nil || transaction.transactionState == nil || transaction.call == nil {
@@ -140,14 +144,32 @@ func (transaction *Transaction) Query(ctx context.Context, correlation fault.Cor
 		return nil, err
 	}
 	defer transaction.mu.Unlock()
-	return transaction.database.statement(ctx, correlation, sql, args, true, transaction)
+	if transaction.ended || transaction.rollbackOnly {
+		return nil, failure(ErrState, "transaction-ended")
+	}
+	return transaction.database.statement(ctx, correlation, sql, args, true, transaction, nil)
 }
 func (transaction *Transaction) Exec(ctx context.Context, correlation fault.Correlation, sql string, args ...any) (*invocation.Receipt[Result], error) {
 	if err := transaction.lock(); err != nil {
 		return nil, err
 	}
 	defer transaction.mu.Unlock()
-	return transaction.database.statement(ctx, correlation, sql, args, false, transaction)
+	if transaction.ended || transaction.rollbackOnly {
+		return nil, failure(ErrState, "transaction-ended")
+	}
+	return transaction.database.statement(ctx, correlation, sql, args, false, transaction, nil)
+}
+func (transaction *Transaction) observeState(result Result) {
+	connection := transaction.handle.Value().native
+	if connection.IsClosed() || connection.PgConn().TxStatus() == 'I' {
+		transaction.ended = true
+	}
+	switch result.CommandTag() {
+	case "COMMIT", "ROLLBACK", "PREPARE TRANSACTION":
+		transaction.ended = true
+	case "SAVEPOINT", "RELEASE":
+		transaction.rollbackOnly = true
+	}
 }
 
 // Commit uses the existing root evidence slot and connection, even at saturation.
@@ -167,16 +189,27 @@ func (transaction *Transaction) finish(ctx context.Context, commit bool) (*invoc
 		return nil, err
 	}
 	defer transaction.mu.Unlock()
+	if commit && (transaction.ended || transaction.rollbackOnly) {
+		return nil, failure(ErrState, "transaction-ended")
+	}
 	work, cancel, err := (invocation.Budget{Limit: transaction.database.owner.settings.Timeout}).Context(ctx, invocation.Cleanup)
 	if err != nil {
 		return nil, err
 	}
 	defer cancel()
-	_, _ = transaction.call.Attempt()
+	var statementCleanup []error
+	for _, statement := range transaction.statements {
+		statementCleanup = append(statementCleanup, statement.closeLocked(work))
+	}
 	data := &resultData{transaction: FinalizationUnknown, serverVersion: transaction.handle.Value().native.PgConn().ParameterStatus("server_version")}
 	operation := "rollback"
 	if commit {
 		operation = "commit"
+	}
+	if commit && transaction.rollbackOnly {
+		err = failure(ErrState, "transaction-cleanup")
+	} else if commit {
+		_, _ = transaction.call.Attempt()
 		err = transaction.native.Commit(nativeContext{work})
 		if err == nil {
 			data.transaction = CommitAcknowledged
@@ -185,15 +218,21 @@ func (transaction *Transaction) finish(ctx context.Context, commit bool) (*invoc
 			data.transaction = CommitRolledBack
 		}
 	} else {
+		_, _ = transaction.call.Attempt()
 		err = transaction.native.Rollback(nativeContext{work})
 		if err == nil {
 			data.transaction = RollbackAcknowledged
 		}
 	}
 	transaction.closed = true
+	transaction.settleSavepoints()
 	data.complete = err == nil
 	primary := nativeFailure(ErrQuery, operation, work, err)
-	cleanup := transaction.database.owner.give(transaction.handle)
+	if transaction.ended {
+		data.transaction, data.complete = FinalizationUnknown, false
+		primary = failure(ErrState, "transaction-ended", primary)
+	}
+	cleanup := failureOrNil(ErrCleanup, "transaction-cleanup", errors.Join(statementCleanup...), transaction.database.owner.give(transaction.handle))
 	transaction.handle = nil
 	transaction.native = nil
 	transaction.call.Complete(invocation.Outcome[Result]{Present: true, Value: Result{data: data}, Primary: primary, Cleanup: cleanup})

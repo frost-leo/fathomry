@@ -76,7 +76,7 @@ func TestComposedSourceProfileAndIndependentReception(t *testing.T) {
 			}
 		},
 	}})
-	conformance.Facade(t, fixture.database, "Query", "Exec", "Begin", "Profile", "Format", "LogValue", "String", "GoString", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, fixture.database, "Query", "Exec", "Prepare", "Begin", "Ping", "Stats", "Profile", "Format", "LogValue", "String", "GoString", "MarshalJSON", "UnmarshalJSON")
 	conformance.Runtime(t, fixture.database, new(Database), "credential-canary")
 }
 func resultContext(info resource.Info, operation string, correlation fault.Correlation) fault.Context {
@@ -218,8 +218,8 @@ func TestNativeArgumentEscapePathsAreRejectedBeforeAdmission(t *testing.T) {
 		t.Fatal("native argument callback ran")
 	}
 	for _, sql := range []string{"BEGIN", "COMMIT", "ROLLBACK", "COPY fixture TO STDOUT", "LISTEN fixture", "SET ROLE fixture", "/* comment */ SELECT 1"} {
-		if err := validStatement(sql, nil); !errors.Is(err, ErrUnsupported) {
-			t.Fatal("unselected statement entry admitted")
+		if err := validStatement(sql, nil); err != nil {
+			t.Fatal("structurally valid SQL was filtered by its keyword")
 		}
 	}
 }

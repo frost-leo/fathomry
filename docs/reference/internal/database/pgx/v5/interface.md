@@ -29,8 +29,9 @@ HA or general proxy certification.
 
 ## Responsibility and selected native profile
 
-This package provides PostgreSQL connections, parameterized statements, bounded
-raw text results and explicit single-connection transactions. It does not define
+This package provides PostgreSQL pooling/Ping/statistics/expiration, ordinary and
+parameterized SQL, reusable preparation, bounded raw text results, explicit
+single-connection transactions and controlled savepoints. It does not define
 workflow/control schemas, public capabilities, CLI commands, migrations, an ORM,
 a registry, business outcomes, distributed transactions or MySQL support.
 
@@ -47,11 +48,20 @@ and surplus idle resources are returned unchanged. Active resource admission is
 never larger than the native pool ceiling. This avoids detached Acquire
 construction and retains the actual constructor error on the requesting stack.
 
-There is no periodic warmup/refill, ping, idle/lifetime expiry, native hook API,
-statement/description cache or query retry. Connections remain pooled until
-unusable or the owner closes. The tradeoff is serialized cold connection setup
-and no proactive stale-connection detection; a failed statement is **not** replayed
-on another connection.
+Explicit Ping and native statistics are available; construction and expiration
+perform no hidden readiness query. Optional idle/lifetime expiration uses one
+source-owned worker, coordinated through the acquisition gate and joined before
+native pool close. It inspects once per second, never interrupts held resources,
+preserves untouched idle age and closes/joins before removing native capacity.
+Fresh connections get their first use even when handshake duration exceeds TTL;
+expired held resources retire on return. Failed background retirement seals new
+acquisition and retains bounded original cleanup history from the existing pool.
+
+Stats returns independent native puddle snapshots. Maintenance can count as
+acquired resources; AcquireAllIdle does not increment native acquire/wait metrics,
+so those are not Fathomry call/admission counters. Zero resources is not proof that
+cleanup callbacks completed. No periodic warmup/refill, implicit statement cache,
+native hook surface, retry or transparent reprepare is supplied.
 
 ## Composition and call sequence
 
@@ -66,7 +76,8 @@ on another connection.
 4. Create a separate `invocation.Inbox[Result]` and call `Bind`. Bind checks that
    active permits cannot exceed native connections and that the required byte
    envelope and child lease capacity fit. An insufficient inbox rejects calls.
-5. Execute explicitly authorized `Query`/`Exec`, or `Begin` a transaction.
+5. Execute explicit `Ping`, authorized `Query`/`Exec`, retain `Prepare`, or `Begin`
+   a transaction and optionally establish controlled `Savepoint` scopes.
    A readiness query is separate, explicit work, not implicit schema provisioning.
 6. Inspect direct receipts and independently receive/handle/release their inbox
    deliveries. Close the assembly after all transactions and calls finish;
@@ -98,6 +109,7 @@ overlay's zero is explicit and does not reapply those defaults.
 | Plaintext | False by default; explicit isolated-test plaintext requires empty TLS inputs |
 | ParserHome | Explicit authorized home metadata-probe base, matching the process home; empty only when home is unavailable |
 | MaxConnections | Default 4; 1–32 native connections; cold construction is serialized |
+| MaxIdleTime / MaxLifetime | Default zero disables expiration; positive 1 ms–24 h; one-second idle inspection, no interruption of held resources |
 | QueuedCalls | Default 0; 0–64; used by the recommended LimitsV1 policy, not an override of resource's actual policy |
 | Timeout | Default 10 s; 1 ms–1 min; separate admission and execution budgets, with acquisition and consumption inside execution |
 | CloseTimeout | Default 5 s; 1 ms–30 s; native graceful-close budget, not a hard bound on all native cleanup |
@@ -135,13 +147,22 @@ CertPool.Clone alone would share mutable parsed certificates exposed by x509 err
 
 ## Statement and result boundaries
 
-Accepted SQL starts with SELECT, INSERT, UPDATE, DELETE or WITH after ASCII
-whitespace. Leading comments and other entries are refused. This is a narrow
-entry contract, **not a SQL parser or authorization sandbox**. The native extended
-protocol rejects multiple statements. SQL remains trusted, authorized application
-input: session-changing functions, session locks/cursors, external-effect functions,
-COPY, notifications, transaction-control SQL and persistent session state are
-outside this profile. Roles and outer composition own permissions.
+Structurally valid ordinary SQL is accepted without a keyword allowlist, including
+leading comments, VALUES/TABLE/MERGE/EXPLAIN and authorized DDL. The native extended
+protocol rejects multiple statements; this is **not a SQL authorization sandbox**.
+Roles and composition own SQL/external-effect permission. COPY stream responses
+are refused by a code-owned frontend reader above the selected TLS stream before
+native ordinary-result handling can discard them and certify empty success.
+Server-file/program COPY and arbitrary external-effect functions are not sandboxed
+by that transport fence and remain explicitly outside the selected permission profile.
+
+Separate Database calls have no retained session affinity. Transactions and
+standalone preparations own their necessary connection scope; no raw session facade
+is exposed. After all child preparations finish and native status is idle/outside
+a transaction, root return executes bounded DISCARD ALL before reuse. This removes
+temporary tables, prepared state, session locks, cursors and notifications and
+restores startup session defaults. Reset failure is independent cleanup evidence
+and retires the connection. There is no reset between retained nested calls.
 
 SQL is at most 64 KiB. At most 128 arguments are admitted with a 1 MiB aggregate
 encoding reservation (bytea accounts for hexadecimal expansion). Conservative
@@ -153,7 +174,9 @@ driver.Valuer and callbacks are refused before admission. Input slices are
 borrowed until the synchronous call returns; do not mutate them concurrently.
 
 QueryExecModeExec is fixed, including zero-argument statements, with both caches
-disabled. Results use native PostgreSQL **text format**, not arbitrary decoded
+disabled for ordinary execution. Explicit preparations use native text encoding
+without described-OID parameter coercion, and explicitly request text results.
+Results use native PostgreSQL **text format**, not arbitrary decoded
 values. There is no native Rows, Conn, TypeMap, RowScanner or custom-codec escape.
 
 - Query consumes and freezes bounded rows before returning. Rows can coexist with
@@ -186,11 +209,37 @@ heap/RSS or a total network-byte limit. Native frontend buffers, TLS, decoding,
 server metadata, caller-retained copies and arbitrary caller causes add costs.
 Composition bounds client population, inbox capacities and retained results.
 
+## Reusable preparation
+
+Database.Prepare retains a native connection/root allowance; Transaction.Prepare
+borrows its parent and mutex. Preparation context cancellation does not end the
+retained lifetime. Query/Exec reuse that exact native statement; Close is required,
+idempotent and finalizes the original preparation evidence without new admission.
+Copies share state and the original slot. Concurrent calls on one retained owner
+are refused. A transaction has at most eight live preparations across its scope.
+
+The package owns PgConn.Prepare/Deallocate descriptions directly, avoiding
+Conn.Prepare's private name map and deferred failed-Describe cleanup. Native
+ExtendedQueryBuilder uses the existing text-argument contract, ExecStatement
+requests text results and RowsFromResultReader reuses bounded consumption.
+For example, a non-UTC time.Time retains the ordinary UTC text representation
+rather than switching to prepared-OID-directed timestamp wall-clock encoding.
+Local argument encoding completes before execution is sent. Invalid arguments
+or native statement errors do not silently reprepare/replay a mutation.
+
+Failed preparation distinguishes ParseComplete cleanup responsibility. Any native
+deallocation error closes and joins the connection: pgconn can return its error
+before ReadyForQuery, and a subsequent finalizer must not consume that stale
+message as its own successful acknowledgement. Primary preparation and independent
+deallocation/retirement errors remain separate. Root byte reservations include
+all eight retained descriptions, bounded native metadata and SQL text; recommended
+lease capacity also covers eight savepoints and one finite child.
+
 ## Transactions and cleanup
 
 TxOptionsV1 requires read-committed, repeatable-read or serializable isolation
 and read-only/read-write access. Deferrable requires serializable/read-only.
-There are no custom BEGIN/COMMIT strings, savepoints or automatic retries.
+There are no custom BEGIN/COMMIT strings or automatic retries.
 
 A Transaction owns one connection and one root invocation. Statements are nested
 calls and need a child lease/evidence slot, not another root/native acquisition.
@@ -199,6 +248,24 @@ existing slot, even when the inbox is full. Concurrent/reentrant transaction
 operations are refused rather than racing or silently queueing raw SDK use.
 Copies of the facade share the same transaction lock and finalization authority;
 copying a Go value cannot create an independent owner of the native connection.
+
+Transaction.Savepoint creates a code-named bounded LIFO scope. Queries/preparation
+remain on Transaction and execute inside the current server savepoint stack.
+Release retains changes within the outer transaction; terminal Rollback performs
+ROLLBACK TO followed by RELEASE so repeated use does not accumulate server scopes.
+At most eight points are live. Copies share authority; out-of-order finalization
+is refused. Release failure after acknowledged rollback remains distinguishable.
+Failed scope cleanup makes the root rollback-only. Parent finalization settles
+remaining points without inventing individual savepoint acknowledgements; use
+Result.SavepointOutcome, not TransactionOutcome, for these observations.
+
+Native failed status E remains recoverable through a controlled savepoint. Idle
+status I/closed connection ends the retained transaction. Successful ordinary
+COMMIT/ROLLBACK, including AND CHAIN, also revokes original authority even if a
+new server transaction reports T. Raw SAVEPOINT/RELEASE conservatively makes the
+root rollback-only; raw ROLLBACK TO is treated as terminal raw control. Use the
+owned Savepoint API when recovery/continued use is required. No-op/chained cleanup
+does not become an acknowledgement of the original transaction's outcome.
 
 Canceling BEGIN's context never finalizes the transaction. A finalization budget
 refused before native entry leaves it live for a later explicit cleanup.
@@ -255,6 +322,10 @@ compatibility record cannot certify support.
 - [Native pool/TLS/cleanup evidence](../../../../../../internal/database/pgx/v5/pool_test.go).
 - [Result and cancellation tests](../../../../../../internal/database/pgx/v5/query_test.go).
 - [Transaction and saturation tests](../../../../../../internal/database/pgx/v5/transaction_test.go).
+- [Preparation and deallocation regressions](../../../../../../internal/database/pgx/v5/statement_test.go).
+- [Savepoint recovery/removal](../../../../../../internal/database/pgx/v5/savepoint_test.go).
+- [Native idle/lifetime and cleanup continuation](../../../../../../internal/database/pgx/v5/pool_lifecycle_test.go).
+- [COPY stream refusal and session reset](../../../../../../internal/database/pgx/v5/protocol_test.go).
 - [Composition, independent reception and rejecting controls](../../../../../../internal/database/pgx/v5/integration_test.go).
 - [Consuming executable](../../../../../../internal/database/pgx/v5/testdata/consumer/main.go):
   executes configuration/ownership, explicitly not a server-query certificate.
@@ -262,6 +333,10 @@ compatibility record cannot certify support.
   both paths use the same validation, admission, budgets, immutable results, cleanup
   and independent evidence. It measures useful-call cost and small dispatch overhead,
   not an independent native-driver/pooling comparison or production throughput.
+- [Preparation reuse benchmark](../../../../../../internal/database/pgx/v5/query_prepared_bench_test.go):
+  both modes share the same retained transaction, text values, copies, bounds,
+  independent evidence and cleanup. Large-payload ranges may overlap; no universal
+  latency/memory benefit or real-service throughput claim follows.
 - [Opt-in real-service gate](../../../../../../internal/database/pgx/v5/service_test.go):
   creates/drops only its random dedicated test database after explicit authorization;
   independent reads and bounded real-server COMMIT/CREATE-response drops are separate
@@ -273,6 +348,9 @@ compatibility record cannot certify support.
 
 Applicable architecture: [S01–S12](../../../../../architecture/internal-sdk-integration.md).
 Scope and outstanding acceptance: [Issue #23](https://github.com/frost-leo/fathomry/issues/23).
+
+Core completion and mechanism-specific counterexamples:
+[Issue #28](https://github.com/frost-leo/fathomry/issues/28).
 
 Native behavior references: [pgx v5.11.0](https://github.com/jackc/pgx/tree/5e583fa7aabfa88b796292f849fc9d7d75ac159d),
 [puddle v2.2.2](https://github.com/jackc/puddle/blob/v2.2.2/pool.go),

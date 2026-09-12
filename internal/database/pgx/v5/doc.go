@@ -29,22 +29,31 @@
 // options. Borrowed selections share the original pool, identity and allowance.
 //
 // Construction opens no connections and proves no server readiness. A subsequent
-// explicitly authorized Query can check the service. Pool growth uses synchronous
+// explicitly authorized Ping or Query can check the service. Stats returns native
+// pool snapshots, not call/admission metrics. Pool growth uses synchronous
 // native CreateResource under a context-aware gate, rather than pgxpool's detached
 // acquisition and error-discarding destructor. Warm connections execute concurrently;
-// there is no periodic refill, ping, expiry, statement cache or background janitor.
+// optional idle/lifetime expiry has one source-owned, joined maintenance worker.
+// Held resources are never interrupted, and retirement joins before releasing
+// native capacity. No periodic refill, automatic Ping or implicit statement cache
+// is supplied. Failed background retirement seals new acquisition and retains errors.
 //
 // Query and Exec consume results before returning receipts. Their setup errors
 // mean no call was accepted; accepted failures and partial data are in the receipt
 // and independently in Inbox. Receivers must inspect and release every delivery.
 // Raw text cells are immutable internally; copying getters expose deliberate
 // sensitive data, never native Rows, Conn, TypeMap, scanners or rewriters.
+// Prepare pins a bounded native preparation with the same text argument/result
+// semantics. Close uses protocol deallocation; any deallocation error retires the
+// stream before another command can mistake unread state for its acknowledgement.
 //
 // Begin retains one connection/root allowance. Statements use bounded nested calls;
 // Commit and Rollback use the existing root evidence slot even at saturation.
 // A transaction needs explicit finalization: canceling BEGIN does not roll it back.
 // Concurrent transaction operations are refused. There is no automatic transaction
-// retry, no savepoint API and no inference that a lost COMMIT response means failure.
+// retry or inference that a lost COMMIT response means failure. Bounded LIFO
+// Savepoint scopes explicitly release after rollback; they never acknowledge an
+// outer commit. Parent finalization settles remaining child evidence at saturation.
 //
 // # Supported inputs and shutdown limits
 //
@@ -54,11 +63,14 @@
 // ParserHome explicitly acknowledges native metadata probes, not file contents.
 // Environment must remain static during preparation/construction; it is never rewritten.
 //
-// Only SELECT/INSERT/UPDATE/DELETE/WITH entries and a bounded set of plain argument
-// types are accepted. Extended protocol enforces a single statement. Authorized SQL
-// remains trusted application input, not a permission sandbox: session-changing
-// functions, external-effect functions and persisted session state are outside
-// this profile. Business authorization belongs to database roles/composition.
+// Structurally valid ordinary SQL and bounded plain arguments are accepted without
+// a keyword allowlist. Extended protocol enforces one statement. A frontend reader
+// fence refuses COPY streams rather than silently losing data. SQL authorization
+// and external-effect restrictions belong to roles/composition, not a SQL sandbox.
+// Root return runs bounded DISCARD ALL before idle reuse, never between nested
+// operations. Retained scopes provide affinity; separate Database calls do not.
+// Raw transaction-control outcomes revoke retained authority, including AND CHAIN;
+// use controlled Savepoint methods for recoverable savepoint operations.
 //
 // Statement budgets bound cooperative native execution, not all cleanup time.
 // Dead connections are joined through pgconn.CleanupDone while still owned;

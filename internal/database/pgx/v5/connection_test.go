@@ -49,21 +49,24 @@ import (
 // protocolPeer executes client protocol paths only. It is NOT PostgreSQL and
 // cannot establish database atomicity, server authorization or durability.
 type protocolPeer struct {
-	listener     net.Listener
-	tls          *tls.Config
-	roots        string
-	mu           sync.Mutex
-	sockets      map[net.Conn]struct{}
-	cancel       map[uint32]context.CancelFunc
-	workers      sync.WaitGroup
-	stop         chan struct{}
-	entered      chan struct{}
-	queries      atomic.Int64
-	connects     atomic.Int64
-	commits      atomic.Int64
-	rollbacks    atomic.Int64
-	dropCommit   atomic.Bool
-	blockStartup atomic.Bool
+	listener       net.Listener
+	tls            *tls.Config
+	roots          string
+	mu             sync.Mutex
+	sockets        map[net.Conn]struct{}
+	cancel         map[uint32]context.CancelFunc
+	workers        sync.WaitGroup
+	stop           chan struct{}
+	entered        chan struct{}
+	queries        atomic.Int64
+	connects       atomic.Int64
+	commits        atomic.Int64
+	rollbacks      atomic.Int64
+	dropCommit     atomic.Bool
+	blockStartup   atomic.Bool
+	failReset      atomic.Bool
+	failDeallocate atomic.Bool
+	dropRollback   atomic.Bool
 }
 
 func newProtocolPeer(t testing.TB, secure bool) *protocolPeer {
@@ -265,7 +268,14 @@ func (peer *protocolPeer) serve(socket net.Conn) {
 	}
 	var sql string
 	var parameters [][]byte
+	statements := make(map[string]string)
+	var savepoints []string
 	fields := func() {
+		if sql == "DISCARD ALL" || sql == "-- ping" || strings.HasPrefix(sql, "COPY ") ||
+			strings.HasPrefix(sql, "SAVEPOINT ") || strings.HasPrefix(sql, "RELEASE SAVEPOINT ") || strings.HasPrefix(sql, "ROLLBACK TO SAVEPOINT ") {
+			backend.Send(&pgproto3.NoData{})
+			return
+		}
 		count := 1
 		if sql == "SELECT cells" {
 			count = 3
@@ -287,8 +297,61 @@ func (peer *protocolPeer) serve(socket net.Conn) {
 		backend.Send(&pgproto3.RowDescription{Fields: values})
 	}
 	execute := func() {
+		if strings.HasPrefix(sql, "SAVEPOINT ") || strings.HasPrefix(sql, "RELEASE SAVEPOINT ") || strings.HasPrefix(sql, "ROLLBACK TO SAVEPOINT ") {
+			tag := "SAVEPOINT"
+			parts := strings.Fields(sql)
+			name := parts[len(parts)-1]
+			if strings.HasPrefix(sql, "SAVEPOINT ") {
+				savepoints = append(savepoints, name)
+			} else {
+				index := -1
+				for offset := len(savepoints) - 1; offset >= 0; offset-- {
+					if savepoints[offset] == name {
+						index = offset
+						break
+					}
+				}
+				if index < 0 {
+					backend.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: "3B001", Message: "savepoint-not-found"})
+					status = 'E'
+					return
+				}
+				if strings.HasPrefix(sql, "RELEASE") {
+					savepoints = savepoints[:index]
+				} else {
+					savepoints = savepoints[:index+1]
+				}
+			}
+			if strings.HasPrefix(sql, "RELEASE") {
+				tag = "RELEASE"
+			}
+			if strings.HasPrefix(sql, "ROLLBACK") {
+				tag = "ROLLBACK"
+				status = 'T'
+			}
+			backend.Send(&pgproto3.CommandComplete{CommandTag: []byte(tag)})
+			return
+		}
+		if sql == "DISCARD ALL" {
+			if peer.failReset.Load() {
+				backend.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: "42501", Message: "reset-cause-canary"})
+				return
+			}
+			backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("DISCARD ALL")})
+			return
+		}
+		if sql == "-- ping" {
+			backend.Send(&pgproto3.EmptyQueryResponse{})
+			return
+		}
 		peer.queries.Add(1)
 		switch sql {
+		case "COPY fixture TO STDOUT":
+			backend.Send(&pgproto3.CopyOutResponse{ColumnFormatCodes: []uint16{0}})
+			backend.Send(&pgproto3.CopyData{Data: []byte("copy-canary\n")})
+			backend.Send(&pgproto3.CopyDone{})
+			backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("COPY 1")})
+			return
 		case "SELECT wide_nulls":
 			for range 8192 {
 				backend.Send(&pgproto3.DataRow{Values: make([][]byte, 64)})
@@ -363,8 +426,10 @@ func (peer *protocolPeer) serve(socket net.Conn) {
 			return
 		case *pgproto3.Parse:
 			sql = message.Query
+			statements[message.Name] = sql
 			backend.Send(&pgproto3.ParseComplete{})
 		case *pgproto3.Bind:
+			sql = statements[message.PreparedStatement]
 			parameters = make([][]byte, len(message.Parameters))
 			for index, value := range message.Parameters {
 				if value != nil {
@@ -373,7 +438,22 @@ func (peer *protocolPeer) serve(socket net.Conn) {
 			}
 			backend.Send(&pgproto3.BindComplete{})
 		case *pgproto3.Describe:
+			if message.ObjectType == 'S' {
+				sql = statements[message.Name]
+				count := strings.Count(sql, "$")
+				backend.Send(&pgproto3.ParameterDescription{ParameterOIDs: make([]uint32, count)})
+			}
 			fields()
+		case *pgproto3.Close:
+			if peer.failDeallocate.Load() {
+				backend.Send(&pgproto3.ErrorResponse{Severity: "ERROR", Code: "57014", Message: "deallocate-canary"})
+				if status == 'T' {
+					status = 'E'
+				}
+			} else {
+				delete(statements, message.Name)
+				backend.Send(&pgproto3.CloseComplete{})
+			}
 		case *pgproto3.Execute:
 			execute()
 		case *pgproto3.Sync:
@@ -394,10 +474,15 @@ func (peer *protocolPeer) serve(socket net.Conn) {
 					tag = "ROLLBACK"
 				}
 				status = 'I'
+				savepoints = nil
 				backend.Send(&pgproto3.CommandComplete{CommandTag: []byte(tag)})
 			case sql == "rollback":
 				peer.rollbacks.Add(1)
+				if peer.dropRollback.Load() {
+					return
+				}
 				status = 'I'
+				savepoints = nil
 				backend.Send(&pgproto3.CommandComplete{CommandTag: []byte("ROLLBACK")})
 			default:
 				fields()

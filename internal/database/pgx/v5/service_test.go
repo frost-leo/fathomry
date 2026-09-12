@@ -32,6 +32,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ import (
 	"time"
 
 	"github.com/frost-leo/fathomry/internal/invocation"
+	"github.com/frost-leo/fathomry/internal/resource"
 	sdk "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
@@ -110,26 +112,22 @@ func TestPostgreSQLService(t *testing.T) {
 	if err != nil || version != fixture.ExpectedVersionNumber || !create || superuser || recovery || !encrypted {
 		t.Fatal("actual service version, TLS or isolated-database permission differs from authorized fixture")
 	}
+	var vendor, isolation, synchronous, zone, dateStyle, encoding, tlsVersion, cipher string
+	err = admin.native.QueryRow(ctx, "SELECT version(),current_setting('default_transaction_isolation'),current_setting('synchronous_commit'),current_setting('TimeZone'),current_setting('DateStyle'),current_setting('client_encoding'),version,cipher FROM pg_stat_ssl WHERE pid=pg_backend_pid()").Scan(&vendor, &isolation, &synchronous, &zone, &dateStyle, &encoding, &tlsVersion, &cipher)
+	if err != nil || tlsVersion == "" || cipher == "" {
+		t.Fatal("actual PostgreSQL session metadata unavailable")
+	}
+	t.Logf("Observed PostgreSQL=%s isolation=%s synchronous_commit=%s TimeZone=%s DateStyle=%s encoding=%s TLS=%s cipher=%s; non-superuser CREATEDB/SCRAM verified", vendor, isolation, synchronous, zone, dateStyle, encoding, tlsVersion, cipher)
 	var nonce [12]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal("test database identity unavailable")
 	}
-	name := "gh23_" + hex.EncodeToString(nonce[:])
-	var exists bool
-	if err := admin.native.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", name).Scan(&exists); err != nil || exists {
-		t.Fatal("exclusive test database absence was not established")
-	}
-	t.Cleanup(func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if err := cleanupTestDatabase(cleanup, maintenanceOptions, options.RootCAPEM, name); err != nil {
-			t.Error("owned test database cleanup failed; no business database was targeted")
-			return
-		}
-		t.Log("Owned isolated database dropped; independent absence check passed.")
-	})
-	if _, err := admin.native.Exec(ctx, "CREATE DATABASE "+sdk.Identifier{name}.Sanitize()); err != nil {
+	name := "gh28_" + hex.EncodeToString(nonce[:])
+	if err := provisionTestDatabase(t, ctx, admin, maintenanceOptions, options.RootCAPEM, name); err != nil {
 		t.Fatal("authorized isolated database creation failed")
+	}
+	if err := provisionTestDatabase(t, ctx, admin, maintenanceOptions, options.RootCAPEM, name); !errors.Is(err, ErrState) {
+		t.Fatal("preexisting fixture was adopted")
 	}
 	options.Database = name
 	nativeOptions, err = nativeConfig(defaults(options))
@@ -235,6 +233,7 @@ func TestPostgreSQLService(t *testing.T) {
 		t.Fatal("independent real-server oracle did not prove the acknowledged-but-lost commit effect")
 	}
 	drain(t, proxied.inbox, 2)
+	verifyServiceCoreCapabilities(t, ctx, options, reader)
 	verifyServiceCreateResponseLoss(t, ctx, fixture, maintenanceOptions)
 	t.Logf("PostgreSQL version-number=%d; verified TLS and required SCRAM; parameterized I/O, NULL, commit, rollback, partial error, cancellation and lost-COMMIT read-back executed.", version)
 }
@@ -344,6 +343,12 @@ func newCommandDropProxy(t *testing.T, options settings, command string) *comman
 }
 
 func cleanupTestDatabase(ctx context.Context, config *sdk.ConnConfig, rootCAPEM, name string) error {
+	if len(name) != 29 || !strings.HasPrefix(name, "gh28_") {
+		return failure(ErrInput, "fixture-name")
+	}
+	if _, err := hex.DecodeString(name[5:]); err != nil {
+		return failure(ErrInput, "fixture-name")
+	}
 	for attempt := 0; attempt < 20; attempt++ {
 		maintenance, err := connect(ctx, config, rootCAPEM)
 		if err != nil {
@@ -380,6 +385,70 @@ func cleanupTestDatabase(ctx context.Context, config *sdk.ConnConfig, rootCAPEM,
 		// Reconnect for independent absence confirmation, including a lost DROP reply.
 	}
 	return failure(ErrCleanup, "fixture-drop-unconfirmed")
+}
+
+func provisionTestDatabase(t *testing.T, ctx context.Context, creator *connection, maintenance *sdk.ConnConfig, roots, name string) error {
+	t.Helper()
+	if len(name) != 29 || !strings.HasPrefix(name, "gh28_") {
+		return failure(ErrInput, "fixture-name")
+	}
+	if _, err := hex.DecodeString(name[5:]); err != nil {
+		return failure(ErrInput, "fixture-name")
+	}
+	var exists bool
+	if err := creator.native.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", name).Scan(&exists); err != nil || exists {
+		return failure(ErrState, "fixture-preexisting", err)
+	}
+	responsible := false
+	t.Cleanup(func() {
+		if !responsible {
+			return
+		}
+		cleanup, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := cleanupTestDatabase(cleanup, maintenance, roots, name); err != nil {
+			t.Error("owned test database cleanup failed", err)
+			return
+		}
+		t.Log("Owned isolated database reconciled; independent absence check passed.")
+	})
+	tag, err := creator.native.Exec(ctx, "CREATE DATABASE "+sdk.Identifier{name}.Sanitize())
+	responsible = fixtureCreationMayExist(tag, err)
+	return err
+}
+func fixtureCreationMayExist(tag pgconn.CommandTag, err error) bool {
+	if tag.String() == "CREATE DATABASE" || err == nil {
+		return true
+	}
+	var native *pgconn.PgError
+	if errors.As(err, &native) {
+		severity := native.SeverityUnlocalized
+		if severity == "" {
+			severity = native.Severity
+		}
+		if severity == "ERROR" && !strings.HasPrefix(native.Code, "08") {
+			return false
+		}
+	}
+	return !pgconn.SafeToRetry(err)
+}
+
+func TestFixtureCreationResponsibility(t *testing.T) {
+	for _, test := range []struct {
+		tag  string
+		err  error
+		want bool
+	}{
+		{"CREATE DATABASE", nil, true},
+		{"CREATE DATABASE", &pgconn.PgError{SeverityUnlocalized: "FATAL", Code: "57P01"}, true},
+		{"", &pgconn.PgError{SeverityUnlocalized: "FATAL", Code: "57P01"}, true},
+		{"", &pgconn.PgError{SeverityUnlocalized: "ERROR", Code: "42P04"}, false},
+		{"", io.EOF, true},
+	} {
+		if fixtureCreationMayExist(pgconn.NewCommandTag(test.tag), test.err) != test.want {
+			t.Fatal("CREATE effect and failure classification were conflated")
+		}
+	}
 }
 func verifyServiceAbortedCommit(t *testing.T, ctx context.Context, bound boundFixture, reader *connection) {
 	t.Helper()
@@ -536,11 +605,36 @@ func verifyServiceCancellation(t *testing.T, ctx context.Context, bound boundFix
 		err     error
 	}
 	done := make(chan response, 1)
-	go func() {
+	var worker sync.WaitGroup
+	worker.Go(func() {
 		receipt, err := bound.database.Query(work, correlation("cancel"), "SELECT pg_sleep(30)")
 		done <- response{receipt, err}
+	})
+	var outcome response
+	received, drained := false, false
+	defer func() {
+		cancel(nil)
+		worker.Wait()
+		if !received {
+			outcome = <-done
+		}
+		if outcome.receipt != nil && !drained {
+			cleanup, stop := context.WithTimeout(context.Background(), 20*time.Second)
+			defer stop()
+			record, err := bound.inbox.Next(cleanup)
+			if err != nil {
+				t.Error("cancellation evidence cleanup failed", err)
+				return
+			}
+			if _, err = record.Receipt().WaitReleased(cleanup); err != nil {
+				t.Error("cancellation remained owned", err)
+				return
+			}
+			if err = record.Release(); err != nil {
+				t.Error(err)
+			}
+		}
 	}()
-	defer cancel(nil)
 	deadline := time.Now().Add(3 * time.Second)
 	entered := false
 	for time.Now().Before(deadline) {
@@ -553,9 +647,9 @@ func verifyServiceCancellation(t *testing.T, ctx context.Context, bound boundFix
 		time.Sleep(5 * time.Millisecond)
 	}
 	cancel(cause)
-	var outcome response
 	select {
 	case outcome = <-done:
+		received = true
 	case <-time.After(20 * time.Second):
 		t.Fatal("real cancellation did not return and clean up")
 	}
@@ -564,6 +658,7 @@ func verifyServiceCancellation(t *testing.T, ctx context.Context, bound boundFix
 		t.Fatal("real cancellation lacked entry or original cause")
 	}
 	drain(t, bound.inbox, 1)
+	drained = true
 	deadline = time.Now().Add(3 * time.Second)
 	exited := false
 	for time.Now().Before(deadline) {
@@ -605,19 +700,8 @@ func verifyServiceCreateResponseLoss(t *testing.T, ctx context.Context, fixture 
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal(err)
 	}
-	name := "gh23_" + hex.EncodeToString(nonce[:])
-	var exists bool
-	if err := creator.native.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", name).Scan(&exists); err != nil || exists {
-		t.Fatal("creation fault target absence was not established")
-	}
-	t.Cleanup(func() {
-		cleanup, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		if err := cleanupTestDatabase(cleanup, maintenanceOptions, fixture.RootCAPEM, name); err != nil {
-			t.Error("creation-fault database cleanup remained unresolved")
-		}
-	})
-	if _, err := creator.native.Exec(ctx, "CREATE DATABASE "+sdk.Identifier{name}.Sanitize()); err == nil || !creator.native.IsClosed() {
+	name := "gh28_" + hex.EncodeToString(nonce[:])
+	if err := provisionTestDatabase(t, ctx, creator, maintenanceOptions, fixture.RootCAPEM, name); err == nil || !creator.native.IsClosed() {
 		t.Fatal("creation response was not lost on a retired connection")
 	}
 	select {
@@ -629,6 +713,7 @@ func verifyServiceCreateResponseLoss(t *testing.T, ctx context.Context, fixture 
 	if err != nil {
 		t.Fatal("independent creation observer failed", err)
 	}
+	var exists bool
 	err = observer.native.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)", name).Scan(&exists)
 	closeErr := observer.close(ctx)
 	if err != nil || closeErr != nil || !exists {
@@ -638,4 +723,470 @@ func verifyServiceCreateResponseLoss(t *testing.T, ctx context.Context, fixture 
 		t.Fatal("fresh-connection cleanup could not reconcile lost creation acknowledgement")
 	}
 	t.Log("Lost real CREATE response was independently confirmed and cleaned through fresh maintenance connections.")
+}
+
+func serviceOwnedCall(t *testing.T, inbox *invocation.Inbox[Result], receipt *invocation.Receipt[Result], finish func(context.Context) (*invocation.Receipt[Result], error)) *invocation.DeliveryRecord[Result] {
+	t.Helper()
+	var record *invocation.DeliveryRecord[Result]
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, err := finish(ctx)
+		if err != nil && !errors.Is(err, sdk.ErrTxClosed) {
+			t.Error("owned service scope cleanup failed", err)
+		}
+		result, err := receipt.WaitReleased(ctx)
+		if err != nil {
+			t.Error("owned service scope remained", err)
+			return
+		}
+		if result.Outcome.Cleanup != nil {
+			t.Error("independent service cleanup failed", result.Outcome.Cleanup)
+		}
+		if record != nil {
+			if err = record.Release(); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	var err error
+	record, err = inbox.Next(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+func servicePointCleanup(point *Savepoint) func(context.Context) (*invocation.Receipt[Result], error) {
+	return func(ctx context.Context) (*invocation.Receipt[Result], error) {
+		receipt, err := point.Rollback(ctx)
+		if err == nil {
+			return receipt, nil
+		}
+		_, parentErr := point.parent.Rollback(ctx)
+		if errors.Is(parentErr, sdk.ErrTxClosed) {
+			parentErr = nil
+		}
+		return point.call.Receipt(), parentErr
+	}
+}
+func serviceRead(t *testing.T, fixture boundFixture, sql string, args ...any) Result {
+	t.Helper()
+	result := queryResult(t, fixture.database, "service-read", sql, args...)
+	drain(t, fixture.inbox, 1)
+	if result.Err() != nil {
+		t.Fatal("real bounded read failed", result.Err())
+	}
+	return result.Outcome.Value
+}
+func serviceExec(t *testing.T, fixture boundFixture, sql string, args ...any) Result {
+	t.Helper()
+	receipt, err := fixture.database.Exec(context.Background(), correlation("service-exec"), sql, args...)
+	result := operationResult(t, receipt, err)
+	drain(t, fixture.inbox, 1)
+	if result.Err() != nil {
+		t.Fatal("real bounded execution failed", result.Err())
+	}
+	return result.Outcome.Value
+}
+func serviceFirst(t *testing.T, result Result) [][]byte {
+	t.Helper()
+	row, err := result.First()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return row.ValuesCopy()
+}
+func verifyServiceCoreCapabilities(t *testing.T, ctx context.Context, options OptionsV1, reader *connection) {
+	t.Helper()
+	options.Name, options.MaxConnections = "core", 1
+	fixture := bindFixture(t, options, 3)
+	receipt, err := fixture.database.Ping(ctx, correlation("native-ping"))
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal("real Ping failed", result.Err())
+	}
+	drain(t, fixture.inbox, 1)
+	serviceExec(t, fixture, "/* ordinary DDL */ CREATE TABLE core_items(id integer PRIMARY KEY, note text)")
+	merged := serviceExec(t, fixture, "MERGE INTO core_items AS target USING (VALUES(1,'merged')) AS source(id,note) ON target.id=source.id WHEN NOT MATCHED THEN INSERT(id,note) VALUES(source.id,source.note)")
+	if merged.RowsAffected() != 1 || merged.CommandTag() != "MERGE 1" {
+		t.Fatal("native MERGE evidence changed")
+	}
+	var note string
+	if err := reader.native.QueryRow(ctx, "SELECT note FROM core_items WHERE id=1").Scan(&note); err != nil || note != "merged" {
+		t.Fatal("independent MERGE readback failed")
+	}
+	if string(serviceFirst(t, serviceRead(t, fixture, "/* leading comment */ VALUES (42::int4)"))[0]) != "42" {
+		t.Fatal("ordinary VALUES failed")
+	}
+	if len(serviceRead(t, fixture, "EXPLAIN SELECT * FROM core_items").RowsCopy()) == 0 {
+		t.Fatal("bounded EXPLAIN returned no plan")
+	}
+	if len(serviceRead(t, fixture, "TABLE core_items").RowsCopy()) != 1 {
+		t.Fatal("ordinary TABLE failed")
+	}
+
+	query := "SELECT $1::timestamp,$2::text,$3::bytea,$4::numeric(30,5),$5::bytea"
+	stamp := time.Date(2026, 9, 13, 14, 0, 0, 123456000, time.FixedZone("offset", 2*3600))
+	args := []any{stamp, true, []byte{}, "12345678901234567890.00100", []byte(nil)}
+	ordinary := serviceRead(t, fixture, query, args...)
+	values := serviceFirst(t, ordinary)
+	if string(values[0]) != "2026-09-13 12:00:00.123456" || string(values[1]) != "t" || string(values[2]) != "\\x" || string(values[3]) != "12345678901234567890.00100" || values[4] != nil {
+		t.Fatal("native text parameter contract changed")
+	}
+	statement, prepared, err := fixture.database.Prepare(ctx, correlation("prepared"), query)
+	if err != nil || statement == nil {
+		t.Fatal("real preparation failed", err)
+	}
+	root := serviceOwnedCall(t, fixture.inbox, prepared, statement.Close)
+	for range 3 {
+		receipt, err := statement.Query(ctx, correlation("prepared-read"), args...)
+		result := operationResult(t, receipt, err)
+		drain(t, fixture.inbox, 1)
+		if result.Err() != nil || !reflect.DeepEqual(serviceFirst(t, result.Outcome.Value), values) || !reflect.DeepEqual(result.Outcome.Value.ColumnsCopy(), ordinary.ColumnsCopy()) {
+			t.Fatal("prepared and ordinary text contracts diverged", result.Err())
+		}
+	}
+	if _, err = statement.Query(ctx, correlation("invalid-argument"), struct{}{}); !errors.Is(err, ErrUnsupported) {
+		t.Fatal("unsupported prepared argument reached native work")
+	}
+	receipt, err = statement.Query(ctx, correlation("after-invalid"), args...)
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal("input refusal invalidated preparation", result.Err())
+	}
+	drain(t, fixture.inbox, 1)
+	receipt, err = statement.Close(ctx)
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal(result.Err())
+	}
+	if err = root.Release(); err != nil {
+		t.Fatal(err)
+	}
+
+	insert, prepared, err := fixture.database.Prepare(ctx, correlation("prepared-insert"), "INSERT INTO core_items VALUES($1,$2)")
+	if err != nil || insert == nil {
+		t.Fatal(err)
+	}
+	root = serviceOwnedCall(t, fixture.inbox, prepared, insert.Close)
+	for id := 2; id <= 3; id++ {
+		receipt, err := insert.Exec(ctx, correlation("insert-reuse"), int32(id), "prepared")
+		result := operationResult(t, receipt, err)
+		drain(t, fixture.inbox, 1)
+		if result.Err() != nil || result.Outcome.Value.RowsAffected() != 1 {
+			t.Fatal("real prepared Exec reuse failed", result.Err())
+		}
+	}
+	receipt, err = insert.Close(ctx)
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal(result.Err())
+	}
+	if err = root.Release(); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := reader.native.QueryRow(ctx, "SELECT count(*) FROM core_items").Scan(&count); err != nil || count != 3 {
+		t.Fatal("prepared writes lost independent effects")
+	}
+	verifyServicePreparedFailures(t, ctx, fixture)
+	verifyServiceSavepoints(t, ctx, fixture, reader)
+	verifyServiceSessionAndTermination(t, ctx, fixture)
+	verifyServicePoolLifecycle(t, ctx, options, reader)
+	t.Log("Real ordinary SQL, repeated native preparation/text semantics, savepoints, session reset, chain termination and pool lifecycle passed.")
+}
+func verifyServicePreparedFailures(t *testing.T, ctx context.Context, fixture boundFixture) {
+	t.Helper()
+	statement, prepared, err := fixture.database.Prepare(ctx, correlation("native-error-prepare"), "SELECT $1::integer")
+	if err != nil || statement == nil {
+		t.Fatal(err)
+	}
+	root := serviceOwnedCall(t, fixture.inbox, prepared, statement.Close)
+	receipt, err := statement.Query(ctx, correlation("native-error"), "not-an-integer")
+	failed := operationResult(t, receipt, err)
+	drain(t, fixture.inbox, 1)
+	var native *pgconn.PgError
+	if !errors.As(failed.Err(), &native) || native.Code != "22P02" {
+		t.Fatal("native execution-error control did not fail")
+	}
+	receipt, err = statement.Query(ctx, correlation("reuse-after-error"), "42")
+	result := operationResult(t, receipt, err)
+	drain(t, fixture.inbox, 1)
+	if result.Err() != nil || string(serviceFirst(t, result.Outcome.Value)[0]) != "42" {
+		t.Fatal("native statement error prevented valid reuse", result.Err())
+	}
+	receipt, err = statement.Close(ctx)
+	_ = operationResult(t, receipt, err)
+	if err = root.Release(); err != nil {
+		t.Fatal(err)
+	}
+
+	invalidating, prepared, err := fixture.database.Prepare(ctx, correlation("invalidation-prepare"), "DEALLOCATE ALL")
+	if err != nil || invalidating == nil {
+		t.Fatal(err)
+	}
+	root = serviceOwnedCall(t, fixture.inbox, prepared, invalidating.Close)
+	receipt, err = invalidating.Exec(ctx, correlation("invalidate"))
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal("native invalidation failed", result.Err())
+	}
+	drain(t, fixture.inbox, 1)
+	receipt, err = invalidating.Exec(ctx, correlation("no-reprepare"))
+	failed = operationResult(t, receipt, err)
+	drain(t, fixture.inbox, 1)
+	if !errors.As(failed.Err(), &native) || native.Code != "26000" {
+		t.Fatal("invalidated statement was transparently re-prepared")
+	}
+	receipt, err = invalidating.Close(ctx)
+	_ = operationResult(t, receipt, err)
+	if err = root.Release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func verifyServiceSavepoints(t *testing.T, ctx context.Context, fixture boundFixture, reader *connection) {
+	t.Helper()
+	tx, receipt, err := fixture.database.Begin(ctx, correlation("savepoint-root"), TxOptionsV1{Isolation: sdk.ReadCommitted, Access: sdk.ReadWrite})
+	if err != nil || tx == nil {
+		t.Fatal(err)
+	}
+	root := serviceOwnedCall(t, fixture.inbox, receipt, tx.Rollback)
+	point, receipt, err := tx.Savepoint(ctx, correlation("savepoint"))
+	if err != nil || point == nil {
+		t.Fatal(err)
+	}
+	child := serviceOwnedCall(t, fixture.inbox, receipt, servicePointCleanup(point))
+	receipt, err = tx.Exec(ctx, correlation("point-write"), "UPDATE core_items SET note=$1 WHERE id=1", "discard")
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal(result.Err())
+	}
+	drain(t, fixture.inbox, 1)
+	receipt, err = tx.Exec(ctx, correlation("point-error"), "INSERT INTO core_items VALUES(1,'duplicate')")
+	failed := operationResult(t, receipt, err)
+	drain(t, fixture.inbox, 1)
+	var native *pgconn.PgError
+	if !errors.As(failed.Err(), &native) || native.Code != "23505" {
+		t.Fatal("savepoint error control did not fail")
+	}
+	receipt, err = point.Rollback(ctx)
+	if result := operationResult(t, receipt, err); result.Err() != nil || result.Outcome.Value.SavepointOutcome() != SavepointRolledBack {
+		t.Fatal("real savepoint rollback/release failed", result.Err())
+	}
+	if err = child.Release(); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err = tx.Exec(ctx, correlation("recovered-write"), "UPDATE core_items SET note=$1 WHERE id=1", "recovered")
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal("recovered transaction remained aborted", result.Err())
+	}
+	drain(t, fixture.inbox, 1)
+	receipt, err = tx.Commit(ctx)
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal(result.Err())
+	}
+	if err = root.Release(); err != nil {
+		t.Fatal(err)
+	}
+	var note string
+	if err = reader.native.QueryRow(ctx, "SELECT note FROM core_items WHERE id=1").Scan(&note); err != nil || note != "recovered" {
+		t.Fatal("savepoint recovery failed independent commit readback")
+	}
+
+	tx, receipt, err = fixture.database.Begin(ctx, correlation("removed-point-root"), TxOptionsV1{Isolation: sdk.ReadCommitted, Access: sdk.ReadWrite})
+	if err != nil || tx == nil {
+		t.Fatal(err)
+	}
+	root = serviceOwnedCall(t, fixture.inbox, receipt, tx.Rollback)
+	point, receipt, err = tx.Savepoint(ctx, correlation("removed-point"))
+	if err != nil || point == nil {
+		t.Fatal(err)
+	}
+	child = serviceOwnedCall(t, fixture.inbox, receipt, servicePointCleanup(point))
+	name := point.name
+	receipt, err = point.Rollback(ctx)
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal(result.Err())
+	}
+	if err = child.Release(); err != nil {
+		t.Fatal(err)
+	}
+	receipt, err = tx.Exec(ctx, correlation("missing-point"), "ROLLBACK TO SAVEPOINT "+name)
+	failed = operationResult(t, receipt, err)
+	drain(t, fixture.inbox, 1)
+	if !errors.As(failed.Err(), &native) || native.Code != "3B001" {
+		t.Fatal("native server savepoint was not released")
+	}
+	receipt, err = tx.Rollback(ctx)
+	_ = operationResult(t, receipt, err)
+	if err = root.Release(); err != nil {
+		t.Fatal(err)
+	}
+}
+func verifyServiceSessionAndTermination(t *testing.T, ctx context.Context, fixture boundFixture) {
+	t.Helper()
+	before := serviceFirst(t, serviceRead(t, fixture, "SELECT pg_backend_pid(),current_setting('application_name'),current_setting('TimeZone'),current_setting('DateStyle'),current_setting('client_encoding')"))
+	tx, receipt, err := fixture.database.Begin(ctx, correlation("session-root"), TxOptionsV1{Isolation: sdk.ReadCommitted, Access: sdk.ReadWrite})
+	if err != nil || tx == nil {
+		t.Fatal(err)
+	}
+	root := serviceOwnedCall(t, fixture.inbox, receipt, tx.Rollback)
+	for _, sql := range []string{"SET application_name='changed-fixture'", "SET TimeZone='UTC+2'", "SET DateStyle='SQL, DMY'", "SET client_encoding='LATIN1'", "CREATE TEMP TABLE reset_fixture(value integer)"} {
+		receipt, err := tx.Exec(ctx, correlation("session-change"), sql)
+		if result := operationResult(t, receipt, err); result.Err() != nil {
+			t.Fatal(result.Err())
+		}
+		drain(t, fixture.inbox, 1)
+	}
+	receipt, err = tx.Query(ctx, correlation("same-session"), "SELECT current_setting('application_name'),current_setting('TimeZone'),current_setting('DateStyle'),current_setting('client_encoding')")
+	inside := operationResult(t, receipt, err)
+	drain(t, fixture.inbox, 1)
+	if inside.Err() != nil {
+		t.Fatal(inside.Err())
+	}
+	changed := serviceFirst(t, inside.Outcome.Value)
+	if string(changed[0]) != "changed-fixture" || string(changed[1]) != "UTC+2" || string(changed[2]) != "SQL, DMY" || string(changed[3]) != "LATIN1" {
+		t.Fatal("retained session affinity was lost")
+	}
+	receipt, err = tx.Commit(ctx)
+	if result := operationResult(t, receipt, err); result.Err() != nil {
+		t.Fatal(result.Err())
+	}
+	if err = root.Release(); err != nil {
+		t.Fatal(err)
+	}
+	after := serviceFirst(t, serviceRead(t, fixture, "SELECT pg_backend_pid(),current_setting('application_name'),current_setting('TimeZone'),current_setting('DateStyle'),current_setting('client_encoding')"))
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("pooled session was replaced or defaults were not restored")
+	}
+	if string(serviceFirst(t, serviceRead(t, fixture, "SELECT to_regclass('pg_temp.reset_fixture') IS NULL"))[0]) != "t" {
+		t.Fatal("temporary session object leaked through pooling")
+	}
+	for _, sql := range []string{"/* end */ COMMIT AND CHAIN", "/* end */ ROLLBACK AND CHAIN"} {
+		tx, receipt, err := fixture.database.Begin(ctx, correlation("chain-root"), TxOptionsV1{Isolation: sdk.ReadCommitted, Access: sdk.ReadWrite})
+		if err != nil || tx == nil {
+			t.Fatal(err)
+		}
+		root := serviceOwnedCall(t, fixture.inbox, receipt, tx.Rollback)
+		receipt, err = tx.Exec(ctx, correlation("chain"), sql)
+		if result := operationResult(t, receipt, err); result.Err() != nil {
+			t.Fatal(result.Err())
+		}
+		drain(t, fixture.inbox, 1)
+		if _, err = tx.Exec(ctx, correlation("after-chain"), "UPDATE core_items SET note='unowned'"); !errors.Is(err, ErrState) {
+			t.Fatal("chained transaction inherited original scope authority")
+		}
+		if _, err = tx.Commit(ctx); !errors.Is(err, ErrState) {
+			t.Fatal("chained transaction became original commit acknowledgement")
+		}
+		receipt, err = tx.Rollback(ctx)
+		if result := operationResult(t, receipt, err); result.Outcome.Value.TransactionOutcome() != FinalizationUnknown {
+			t.Fatal("cleanup certified original chained outcome")
+		}
+		if err = root.Release(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	copyResult := queryResult(t, fixture.database, "copy-refusal", "COPY (SELECT 1) TO STDOUT")
+	if !errors.Is(copyResult.Err(), ErrUnsupported) || copyResult.Outcome.Value.Complete() {
+		t.Fatal("real COPY stream became empty successful query")
+	}
+	drain(t, fixture.inbox, 1)
+}
+func verifyServicePoolLifecycle(t *testing.T, ctx context.Context, options OptionsV1, reader *connection) {
+	t.Helper()
+	options.Name, options.MaxConnections = "parallel-pool", 2
+	fixture := bindFixture(t, options, 4)
+	var roots []*invocation.DeliveryRecord[Result]
+	var transactions []*Transaction
+	var ids []int
+	for index := range 2 {
+		tx, receipt, err := fixture.database.Begin(ctx, correlation("parallel-root-"+strconv.Itoa(index)), TxOptionsV1{Isolation: sdk.ReadCommitted, Access: sdk.ReadOnly})
+		if err != nil || tx == nil {
+			t.Fatal(err)
+		}
+		roots = append(roots, serviceOwnedCall(t, fixture.inbox, receipt, tx.Rollback))
+		transactions = append(transactions, tx)
+		receipt, err = tx.Query(ctx, correlation("pid"), "SELECT pg_backend_pid()")
+		result := operationResult(t, receipt, err)
+		drain(t, fixture.inbox, 1)
+		if result.Err() != nil {
+			t.Fatal(result.Err())
+		}
+		id, err := strconv.Atoi(string(serviceFirst(t, result.Outcome.Value)[0]))
+		if err != nil {
+			t.Fatal("invalid fixture backend ID")
+		}
+		ids = append(ids, id)
+	}
+	if ids[0] == ids[1] || fixture.database.Stats().AcquiredResources() != 2 || fixture.database.Stats().MaxResources() != 2 {
+		t.Fatal("native pool statistics or connection isolation changed")
+	}
+	if _, err := fixture.database.Ping(ctx, correlation("full")); !errors.Is(err, resource.ErrCapacity) {
+		t.Fatal("pool admitted excess root work")
+	}
+	work, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	t.Cleanup(func() { cancel(); workers.Wait() })
+	done := make(chan *invocation.Receipt[Result], 2)
+	for index, tx := range transactions {
+		workers.Go(func() {
+			receipt, err := tx.Query(work, correlation("parallel-"+strconv.Itoa(index)), "SELECT pg_sleep(0.2)")
+			if err != nil {
+				t.Error("parallel query setup failed", err)
+			}
+			done <- receipt
+		})
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var count int
+		err := reader.native.QueryRow(ctx, "SELECT count(*) FROM pg_stat_activity WHERE (pid=$1 OR pid=$2) AND state='active' AND wait_event='PgSleep'", ids[0], ids[1]).Scan(&count)
+		if err != nil {
+			t.Fatal("independent overlap observation failed")
+		}
+		if count == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no actual server overlap was observed")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	for range 2 {
+		if result := operationResult(t, <-done, nil); result.Err() != nil {
+			t.Fatal(result.Err())
+		}
+	}
+	workers.Wait()
+	drain(t, fixture.inbox, 2)
+	for index, tx := range transactions {
+		receipt, err := tx.Rollback(ctx)
+		if result := operationResult(t, receipt, err); result.Err() != nil {
+			t.Fatal(result.Err())
+		}
+		if err := roots[index].Release(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, idle := range []bool{false, true} {
+		expiring := options
+		expiring.Name, expiring.MaxConnections = "expiry", 1
+		if idle {
+			expiring.MaxIdleTime = 10 * time.Millisecond
+		} else {
+			expiring.MaxLifetime = 100 * time.Millisecond
+		}
+		pool := bindFixture(t, expiring, 1)
+		first := string(serviceFirst(t, serviceRead(t, pool, "SELECT pg_backend_pid()"))[0])
+		if pool.database.Stats().IdleResources() != 1 {
+			t.Fatal("expiry oracle did not establish an idle resource")
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for pool.database.Stats().TotalResources() != 0 {
+			if time.Now().After(deadline) {
+				t.Fatal("unattended real pool expiry did not occur")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		second := string(serviceFirst(t, serviceRead(t, pool, "SELECT pg_backend_pid()"))[0])
+		if first == second {
+			t.Fatal("expired connection was reused")
+		}
+	}
 }

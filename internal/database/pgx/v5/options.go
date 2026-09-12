@@ -68,6 +68,10 @@ type OptionsV1 struct {
 	// MaxConnections defaults to 4, range 1–32. Connection establishment is
 	// serialized; already-open connections execute concurrently.
 	MaxConnections int
+	// Idle/lifetime expiration defaults off. Positive values are 1 ms–24 h;
+	// idle maintenance runs once per second and never interrupts held resources.
+	MaxIdleTime time.Duration
+	MaxLifetime time.Duration
 	// QueuedCalls defaults to 0 (reject overload), range 0–64.
 	QueuedCalls int
 	// Timeout applies separately to admission and execution. Execution includes
@@ -96,6 +100,8 @@ type settings struct {
 	Plaintext       bool          `json:"plaintext"`
 	ParserHome      string        `json:"parser_home"`
 	MaxConnections  int           `json:"max_connections"`
+	MaxIdleTime     time.Duration `json:"max_idle_time_ns"`
+	MaxLifetime     time.Duration `json:"max_lifetime_ns"`
 	QueuedCalls     int           `json:"queued_calls"`
 	Timeout         time.Duration `json:"timeout_ns"`
 	CloseTimeout    time.Duration `json:"close_timeout_ns"`
@@ -107,7 +113,7 @@ type settings struct {
 func defaults(input OptionsV1) settings {
 	value := settings{input.Address, input.Port, input.Database, input.User, input.Password,
 		input.RootCAPEM, input.ServerName, input.Plaintext, input.ParserHome,
-		input.MaxConnections, input.QueuedCalls, input.Timeout, input.CloseTimeout,
+		input.MaxConnections, input.MaxIdleTime, input.MaxLifetime, input.QueuedCalls, input.Timeout, input.CloseTimeout,
 		input.MaxRows, input.MaxResultBytes, input.MaxMessageBytes}
 	if value.MaxConnections == 0 {
 		value.MaxConnections = 4
@@ -146,6 +152,11 @@ func validate(value settings) error {
 		value.MaxRows < 1 || value.MaxRows > 65536 || value.MaxResultBytes < 1024 || value.MaxResultBytes > 16<<20 ||
 		value.MaxMessageBytes < 1024 || value.MaxMessageBytes > 4<<20 {
 		return failure(ErrInput, "options")
+	}
+	for _, duration := range []time.Duration{value.MaxIdleTime, value.MaxLifetime} {
+		if duration < 0 || duration > 24*time.Hour || duration > 0 && duration < time.Millisecond {
+			return failure(ErrInput, "expiration")
+		}
 	}
 	_, err = tlsConfig(value)
 	return err
@@ -215,6 +226,7 @@ func nativeConfig(value settings) (*sdk.ConnConfig, error) {
 	config.RequireAuth = "scram-sha-256"
 	config.ChannelBinding = "prefer"
 	config.MaxProtocolMessageBodyLen = value.MaxMessageBytes
+	config.BuildFrontend = boundedFrontend
 	// A non-nil discard handler prevents pgx's unbounded notification buffer.
 	config.OnNotification = func(*sdkpgconn.PgConn, *sdkpgconn.Notification) {}
 	return config, nil
@@ -224,6 +236,7 @@ func (value settings) reservation() int64 {
 	// Cell arrays plus simultaneous old/new row-list storage during growth.
 	// Fixed overhead covers allocator rounding and bounded metadata, not RSS.
 	return int64(MaxSQLBytes+MaxArgumentBytes+value.MaxMessageBytes+value.MaxResultBytes) +
+		int64(MaxPreparedStatements)*(int64(MaxSQLBytes+value.MaxMessageBytes)+4<<20) +
 		int64(value.MaxRows)*(MaxColumns*24+4*24) + 64<<10
 }
 func (value settings) evidenceReservation() int64 {
@@ -232,7 +245,7 @@ func (value settings) evidenceReservation() int64 {
 }
 func (value settings) limits() resource.Limits {
 	return resource.Limits{Active: value.MaxConnections, Queued: value.QueuedCalls,
-		Bytes: int64(value.MaxConnections) * value.reservation(), QueuedBytes: int64(value.QueuedCalls) * value.reservation(), MaxLeases: 2}
+		Bytes: int64(value.MaxConnections) * value.reservation(), QueuedBytes: int64(value.QueuedCalls) * value.reservation(), MaxLeases: MaxPreparedStatements + MaxSavepoints + 2}
 }
 
 // Profile returns fresh, non-sensitive effective options from the same prepared
@@ -250,6 +263,9 @@ func (database *Database) Profile() compatibility.Profile {
 		{Name: "authentication", Value: "scram-sha-256"}, {Name: "channel-binding", Value: "prefer"},
 		{Name: "plaintext", Value: strconv.FormatBool(value.Plaintext)},
 		{Name: "max-connections", Value: strconv.Itoa(value.MaxConnections)},
+		{Name: "max-idle-time-ns", Value: strconv.FormatInt(int64(value.MaxIdleTime), 10)},
+		{Name: "max-lifetime-ns", Value: strconv.FormatInt(int64(value.MaxLifetime), 10)},
+		{Name: "session-return", Value: "discard-all"},
 		{Name: "queued-calls", Value: strconv.Itoa(value.QueuedCalls)},
 		{Name: "timeout-ns", Value: strconv.FormatInt(int64(value.Timeout), 10)},
 		{Name: "close-timeout-ns", Value: strconv.FormatInt(int64(value.CloseTimeout), 10)},

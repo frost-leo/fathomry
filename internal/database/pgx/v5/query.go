@@ -28,13 +28,16 @@ import (
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	sdk "github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 const (
-	MaxSQLBytes      = 64 << 10
-	MaxArguments     = 128
-	MaxArgumentBytes = 1 << 20
-	MaxColumns       = 64
+	MaxSQLBytes           = 64 << 10
+	MaxArguments          = 128
+	MaxArgumentBytes      = 1 << 20
+	MaxColumns            = 64
+	MaxPreparedStatements = 8
+	MaxSavepoints         = 8
 )
 
 // Column is copied native text-result metadata. Name is deliberate sensitive
@@ -84,6 +87,7 @@ type resultData struct {
 	complete      bool
 	retained      bool
 	transaction   TransactionOutcome
+	savepoint     SavepointOutcome
 	serverVersion string
 }
 
@@ -161,36 +165,32 @@ func (result Result) TransactionOutcome() TransactionOutcome {
 	return result.data.transaction
 }
 
+// SavepointOutcome never certifies an outer transaction commit.
+func (result Result) SavepointOutcome() SavepointOutcome {
+	if result.data == nil {
+		return SavepointUnobserved
+	}
+	return result.data.savepoint
+}
+
 // Query executes one extended-protocol statement and consumes bounded raw rows
 // synchronously. Setup/admission failures return no receipt. Once accepted,
 // errors and partial data are in Receipt.Result().Err(), independently in Inbox.
 // Context values are not forwarded to native transport hooks.
 func (database *Database) Query(ctx context.Context, correlation fault.Correlation, sql string, args ...any) (*invocation.Receipt[Result], error) {
-	return database.statement(ctx, correlation, sql, args, true, nil)
+	return database.statement(ctx, correlation, sql, args, true, nil, nil)
 }
 
 // Exec uses the same bounded consumption path as Query but retains no row data.
 // RETURNING/SELECT rows still count against row/byte limits; it never calls
 // pgx.Exec's unbounded ResultReader.Read convenience path.
 func (database *Database) Exec(ctx context.Context, correlation fault.Correlation, sql string, args ...any) (*invocation.Receipt[Result], error) {
-	return database.statement(ctx, correlation, sql, args, false, nil)
+	return database.statement(ctx, correlation, sql, args, false, nil, nil)
 }
 
 func validStatement(sql string, args []any) error {
 	if len(sql) == 0 || len(sql) > MaxSQLBytes || !validText(sql, MaxSQLBytes, false) || len(args) > MaxArguments {
 		return failure(ErrInput, "statement")
-	}
-	// This is a deliberately narrow statement entry, not a SQL parser/security
-	// sandbox. Extended protocol rejects multiple commands before execution.
-	word := strings.TrimLeft(sql, " \t\r\n")
-	end := 0
-	for end < len(word) && (word[end] >= 'a' && word[end] <= 'z' || word[end] >= 'A' && word[end] <= 'Z') {
-		end++
-	}
-	switch strings.ToUpper(word[:end]) {
-	case "SELECT", "INSERT", "UPDATE", "DELETE", "WITH":
-	default:
-		return failure(ErrUnsupported, "statement")
 	}
 	total := 0
 	for _, value := range args {
@@ -231,7 +231,7 @@ func validStatement(sql string, args []any) error {
 	return nil
 }
 
-func (database *Database) beginCall(ctx context.Context, correlation fault.Correlation, name string, shape invocation.Shape, parent *Transaction) (*invocation.Call[Result], error) {
+func (database *Database) beginCall(ctx context.Context, correlation fault.Correlation, name string, shape invocation.Shape, parent *invocation.Call[Result]) (*invocation.Call[Result], error) {
 	if database == nil || database.owner == nil || ctx == nil {
 		return nil, failure(ErrInput, name)
 	}
@@ -241,13 +241,14 @@ func (database *Database) beginCall(ctx context.Context, correlation fault.Corre
 	if parent != nil {
 		request.Bytes = 0
 		if request.Correlation.Parent == "" {
-			request.Correlation.Parent = parent.correlation.Call
+			metadata, _ := parent.Receipt().Result()
+			request.Correlation.Parent = metadata.Context.Correlation.Call
 		}
-		return invocation.BeginNested(ctx, parent.call.Scope(), request, database.inbox, database.observer)
+		return invocation.BeginNested(ctx, parent.Scope(), request, database.inbox, database.observer)
 	}
 	return invocation.Begin(ctx, database.access, request, database.inbox, database.observer)
 }
-func (database *Database) statement(ctx context.Context, correlation fault.Correlation, sql string, args []any, keep bool, parent *Transaction) (*invocation.Receipt[Result], error) {
+func (database *Database) statement(ctx context.Context, correlation fault.Correlation, sql string, args []any, keep bool, parent *Transaction, prepared *Statement) (*invocation.Receipt[Result], error) {
 	if err := validStatement(sql, args); err != nil {
 		return nil, err
 	}
@@ -255,7 +256,14 @@ func (database *Database) statement(ctx context.Context, correlation fault.Corre
 	if !keep {
 		name = "exec"
 	}
-	call, err := database.beginCall(ctx, correlation, name, invocation.Finite, parent)
+	var parentCall *invocation.Call[Result]
+	if parent != nil {
+		parentCall = parent.call
+	}
+	if prepared != nil {
+		parentCall = prepared.call
+	}
+	call, err := database.beginCall(ctx, correlation, name, invocation.Finite, parentCall)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +277,10 @@ func (database *Database) statement(ctx context.Context, correlation fault.Corre
 	defer cancel()
 	var connection *connection
 	var give func() error
-	if parent != nil {
+	if prepared != nil {
+		connection = prepared.connection
+		give = func() error { return nil }
+	} else if parent != nil {
 		connection = parent.handle.Value()
 		give = func() error { return nil }
 	} else {
@@ -286,16 +297,40 @@ func (database *Database) statement(ctx context.Context, correlation fault.Corre
 		return receipt, nil
 	}
 	_, _ = call.Attempt()
-	result, primary, cleanup := consume(work, connection.native, value, sql, args, keep)
+	var description *pgconn.StatementDescription
+	if prepared != nil {
+		description = prepared.description
+	}
+	result, primary, cleanup := consumeStatement(work, connection.native, value, sql, args, keep, description)
+	if parent != nil {
+		parent.observeState(result)
+	}
 	cleanup = failureOrNil(ErrCleanup, "consume", cleanup, give())
 	call.Complete(invocation.Outcome[Result]{Present: true, Value: result, Primary: primary, Cleanup: cleanup})
 	return receipt, nil
 }
 
 func consume(ctx context.Context, connection *sdk.Conn, limits settings, sql string, args []any, keep bool) (Result, error, error) {
+	return consumeStatement(ctx, connection, limits, sql, args, keep, nil)
+}
+func consumeStatement(ctx context.Context, connection *sdk.Conn, limits settings, sql string, args []any, keep bool, description *pgconn.StatementDescription) (Result, error, error) {
 	data := &resultData{retained: keep, serverVersion: connection.PgConn().ParameterStatus("server_version")}
 	result := Result{data: data}
-	rows, err := connection.Query(nativeContext{ctx}, sql, args...)
+	var rows sdk.Rows
+	var err error
+	if description == nil {
+		rows, err = connection.Query(nativeContext{ctx}, sql, args...)
+	} else {
+		if len(args) != len(description.ParamOIDs) {
+			return result, failure(ErrInput, "argument-count"), nil
+		}
+		var builder sdk.ExtendedQueryBuilder
+		err = builder.Build(connection.TypeMap(), nil, args)
+		if err == nil {
+			reader := connection.PgConn().ExecStatement(nativeContext{ctx}, description, builder.ParamValues, builder.ParamFormats, []int16{sdk.TextFormatCode})
+			rows = sdk.RowsFromResultReader(connection.TypeMap(), reader)
+		}
+	}
 	if err != nil {
 		return result, nativeFailure(ErrQuery, "query", ctx, err), nil
 	}
