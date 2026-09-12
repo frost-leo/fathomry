@@ -409,3 +409,52 @@ func TestIndependentAssembliesDoNotSharePoolsOrAdmission(t *testing.T) {
 		t.Fatal("independent native TLS sessions were not constructed")
 	}
 }
+
+func TestFailedTLSInitializationRetainsIndependentSocketCleanup(t *testing.T) {
+	peer := newPeer(t, true, false)
+	options := peer.options()
+	options.ServerName = "wrong.fixture.invalid"
+	selected, err := Select(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected = resource.WithLimits(selected, LimitsV1(options))
+	assembly, err := resource.Assemble(context.Background(), context.Background(), "failed-tls", selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = assembly.Close(context.Background()) })
+	source, _, err := resource.Bind(assembly, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cause := errors.New("failed-initialization-close-canary")
+	var witness *closeWitness
+	source.owner.dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		witness = &closeWitness{Conn: conn, cause: cause}
+		return witness, nil
+	}
+	inbox, err := invocation.NewInbox[Result](1, defaults(options).evidenceReservation())
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := Bind(assembly, selected, inbox, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := db.Ping(context.Background(), correlation("failed-tls"))
+	result := observe(t, receipt, err)
+	if !errors.Is(result.Outcome.Primary, ErrConnect) || !errors.Is(result.Outcome.Cleanup, cause) || witness == nil || witness.closes.Load() != 1 {
+		t.Fatal("partial native initialization lost independent cleanup evidence")
+	}
+	drain(t, inbox, 1)
+	for range 2 {
+		if err := assembly.Close(context.Background()); !errors.Is(err, cause) || errors.Is(err, resource.ErrIncomplete) {
+			t.Fatal("eventual source close erased partial-initialization cleanup")
+		}
+	}
+}

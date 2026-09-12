@@ -181,8 +181,13 @@ func (p *pool) Connect(ctx context.Context) (connection driver.Conn, resultError
 
 type connectFailure struct{ primary, cleanup error }
 
-func (*connectFailure) Error() string     { return "mysql: connection failed" }
-func (e *connectFailure) Unwrap() []error { return []error{e.primary, e.cleanup} }
+func (*connectFailure) Error() string { return "mysql: connection failed" }
+func (e *connectFailure) Unwrap() []error {
+	if e.cleanup == nil {
+		return []error{e.primary}
+	}
+	return []error{e.primary, e.cleanup}
+}
 
 func contextCause(ctx context.Context, err error) error {
 	if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
