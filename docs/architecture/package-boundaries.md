@@ -139,6 +139,12 @@ a universal Provider interface. Its `OptionsV1` option type in `options.go`
 versions a different contract from the SDK major. Exact SDK versions remain build
 facts, not per-patch directory names. See the [package contract](../reference/internal/configsource/viper/v1/interface.md).
 
+PostgreSQL follows the same capability/SDK/major organization at
+`internal/database/pgx/v5`, without a grouping-level Go package. Its
+[contract](../reference/internal/database/pgx/v5/interface.md) specifies the selected
+native pgx/puddle ownership profile; it is not a common PostgreSQL/MySQL interface
+or a workflow-control schema.
+
 Provider-specific settings stay in `options.go`, not a central data-structure
 directory. Operation-specific input/output types stay with their operation.
 `errors.go` owns this implementation's error identity and shared-fault adaptation;

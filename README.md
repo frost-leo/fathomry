@@ -41,6 +41,11 @@ invalidation subscriptions and owned protocol sessions. Its explicit compatibili
 profile has local and isolated single-server verification, not production or
 multi-node certification. See the [Nacos contract](docs/reference/internal/configsource/nacos/v2/interface.md).
 
+The [internal PostgreSQL profile](docs/reference/internal/database/pgx/v5/interface.md)
+provides bounded parameterized access and explicit transactions. Its real-service
+acceptance gate remains separate from local protocol tests; no MySQL or control
+schema is included.
+
 ## Documentation
 
 Start with the [documentation map](docs/README.md) for current status and reading paths:

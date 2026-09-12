@@ -142,7 +142,43 @@ Compiling with `-run '^$'` runs no real-service test. See the
 [Nacos profile](../reference/internal/configsource/nacos/v2/interface.md) for current
 version, native limitations, upstream-upgrade TODO and unexecuted service modes.
 
-For a normal implementation change:
+For PostgreSQL #23, first run the native protocol and ownership suite:
+
+```sh
+go test -race -count=3 -timeout=3m ./internal/database/pgx/v5
+go test ./internal/database/pgx/v5 -run '^$' -fuzz '^FuzzOptionsV1$' -fuzztime=10s -parallel=2
+go test ./internal/database/pgx/v5 -run '^$' -fuzz '^FuzzStatement$' -fuzztime=10s -parallel=2
+GOMAXPROCS=4 go test ./internal/database/pgx/v5 -run '^$' -bench '^BenchmarkBoundedQuery$' -benchmem -benchtime=20x -count=3
+go run ./internal/database/pgx/v5/testdata/consumer
+```
+
+The consumer executes configuration and local ownership; it explicitly reports
+that no query was run. Protocol peers do not establish PostgreSQL transaction
+atomicity. The [package contract](../reference/internal/database/pgx/v5/interface.md)
+describes the shared-core/facade benchmark and remaining physical-resource limits.
+
+The following service gate **creates and drops a random dedicated test database**.
+It needs explicit authorization, a non-superuser role with the required isolated
+database privileges, and independently trusted TLS roots/server identity:
+
+```sh
+FATHOMRY_POSTGRES_TEST_CONFIG=/path/to/private-postgres-fixture.json \
+  go test -tags=postgres_service -race -count=1 -timeout=3m \
+  ./internal/database/pgx/v5 -run '^TestPostgreSQLService$'
+```
+
+The mode-0600, at-most-128-KiB JSON fixture contains `address`, `port`, `user`,
+`password`, `root_ca_pem`, `server_name`, `expected_version_number`, and explicit
+`allow_create_test_database`. It contacts the maintenance database only for
+metadata and its owned database's lifecycle. Business databases/tables and server
+configuration must not be modified. The loopback fault proxy verifies TLS to the
+real server and drops real COMMIT/CREATE responses; independent read-back supplies the
+effect oracle, and fresh maintenance connections reconcile fixture cleanup. Only
+the proxy's loopback client leg is plaintext. Never put a
+private fixture, packet capture or connection diagnostic in the repository.
+Compiling the tagged test with `-run '^$'` is not real-service acceptance.
+
+For a normal implementation change, run:
 
 ```sh
 go mod tidy -diff

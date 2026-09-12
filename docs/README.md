@@ -40,6 +40,11 @@ reads and bounded invalidations with a separate preparation proof. Its
 the implemented compatibility profile and single-server checks from production
 TLS or multi-node support.
 
+The internal PostgreSQL profile under `internal/database/pgx/v5` adds explicit
+pool ownership, bounded parameterized results and single-connection transactions.
+Its [contract](reference/internal/database/pgx/v5/interface.md) separates local
+protocol verification and isolated PostgreSQL 18.6 acceptance from production support.
+
 There is no public Go package, project generator, application configuration loader,
 production service Provider or complete Temporal execution runtime yet. The intended
 `fathomry new <project>` entry is not runnable. The removed public `failure` contract
@@ -96,6 +101,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md) |
 | [`internal/configsource/viper/v1`](reference/internal/configsource/viper/v1/interface.md) | Native local profile, OptionsV1, raw handoff, ownership, bounds and version evidence |
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
+| [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Explicit native configuration, pool/call ownership, bounded results, transactions and independent evidence |
 
 Exact declarations and symbol comments live with the Go source. Each entry links
 implementation/tests; use `go doc -all ./internal/<package>` from the repository root.
