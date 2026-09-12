@@ -67,7 +67,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatalf("independent module smoke compilation failed: %v\n%s", err, output)
 	}
 	t.Logf("independent module smoke compilation (no public API):\n%s", output)
-	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1", "configsource/nacos/v2", "database/pgx/v5"} {
+	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1", "configsource/nacos/v2", "database/pgx/v5", "database/mysql/v1"} {
 		t.Run("reject-internal-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/internal/" + name
 			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
@@ -103,7 +103,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 	for _, path := range strings.Fields(string(output)) {
 		if path == "testing" || path == "github.com/frost-leo/fathomry/internal/conformance" ||
 			strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/configsource/") || path == "github.com/spf13/viper" ||
-			strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/database/") || strings.HasPrefix(path, "github.com/jackc/pgx/") ||
+			strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/database/") || strings.HasPrefix(path, "github.com/jackc/pgx/") || path == "github.com/go-sql-driver/mysql" ||
 			strings.HasPrefix(path, "github.com/frost-leo/fathomry/") && !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
 			t.Errorf("technical mechanisms depend on framework errors or test support: %s", path)
 		}

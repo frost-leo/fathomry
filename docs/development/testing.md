@@ -178,6 +178,49 @@ the proxy's loopback client leg is plaintext. Never put a
 private fixture, packet capture or connection diagnostic in the repository.
 Compiling the tagged test with `-run '^$'` is not real-service acceptance.
 
+For MySQL #25, run the native component/ownership and actual consumer checks:
+
+```sh
+go test -race -count=10 -timeout=5m ./internal/database/mysql/v1
+go run ./internal/database/mysql/v1/testdata/consumer
+go test ./internal/database/mysql/v1 -run '^$' -fuzz '^FuzzOptionsV1$' -fuzztime=10s -parallel=2
+go test ./internal/database/mysql/v1 -run '^$' -fuzz '^FuzzStatement$' -fuzztime=10s -parallel=2
+go test ./internal/database/mysql/v1 -run '^$' -fuzz '^FuzzWirePacket$' -fuzztime=10s -parallel=2
+GOMAXPROCS=4 go test ./internal/database/mysql/v1 -run '^$' -bench '^BenchmarkPreparationReuse$' -benchmem -benchtime=100ms -count=3
+```
+
+The benchmark changes only native preparation reuse: the transaction, workload,
+incoming/result bounds, copied values and independent evidence remain identical.
+Its local protocol peer and bounded latency samples do not establish real-server
+throughput. The [MySQL contract](../reference/internal/database/mysql/v1/interface.md)
+specifies the source-pinned transport and native cleanup/transaction obligations.
+
+The explicit service gates fail if their private fixtures are missing; they do
+not silently skip. The write gate **creates and drops an exclusive random database**
+and needs authorization for that lifecycle and filtered metadata inspection:
+
+```sh
+FATHOMRY_MYSQL_TEST_CONFIG=/path/to/private-mysql-fixture.json \
+  go test -tags=mysql_service -race -count=1 -timeout=3m \
+  ./internal/database/mysql/v1 -run '^TestMySQLService$'
+FATHOMRY_MYSQL_TLS_TEST_CONFIG=/path/to/private-mysql-tls-fixture.json \
+  go test -tags=mysql_service -race -count=1 -timeout=3m \
+  ./internal/database/mysql/v1 -run '^TestMySQLTLSService$'
+```
+
+Each mode-0600, at-most-128-KiB JSON fixture contains `network`, `address`, `port`,
+`database`, `user`, `password`, `plaintext`, `root_ca_pem`, `server_name`, alternative
+`server_certificate_sha256`, `expected_version` and `allow_create_test_database`.
+The write gate requires that last flag explicitly true. It protects preexisting
+resources, independently reads committed/rolled-back effects, observes server
+entry/eventual exit for cancellation, and verifies cleanup with fresh connections.
+Only an acknowledged newly created fixture is eligible for deletion; an unknown
+CREATE result must be reconciled by its owner, not adopted or dropped automatically.
+It does not modify accounts/grants or server configuration. The TLS gate is
+read-only and requires verified TLS, not plaintext. Record the two actual transport
+and account profiles separately; neither compiling tagged tests nor an unexecuted
+service gate is MySQL acceptance. Never commit fixture credentials or full DSNs.
+
 For a normal implementation change, run:
 
 ```sh
