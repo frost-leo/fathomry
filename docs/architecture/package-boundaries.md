@@ -145,6 +145,12 @@ PostgreSQL follows the same capability/SDK/major organization at
 native pgx/puddle ownership profile; it is not a common PostgreSQL/MySQL interface
 or a workflow-control schema.
 
+MySQL at `internal/database/mysql/v1` independently owns `database/sql.DB` pooling
+and controlled native connections. Its [contract](../reference/internal/database/mysql/v1/interface.md)
+uses MySQL framing, preparation, authentication and transaction-status evidence;
+it does not inherit pgxpool lifecycle or PostgreSQL transaction-abortion semantics.
+Neither integration imports the other or introduces a grouping-level interface.
+
 Provider-specific settings stay in `options.go`, not a central data-structure
 directory. Operation-specific input/output types stay with their operation.
 `errors.go` owns this implementation's error identity and shared-fault adaptation;

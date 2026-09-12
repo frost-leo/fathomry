@@ -20,6 +20,7 @@ module github.com/frost-leo/fathomry
 go 1.26.0
 
 require (
+	github.com/go-sql-driver/mysql v1.10.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jackc/puddle/v2 v2.2.2
 	// TODO(gh-21): Recheck this pin and lifecycle compatibility before Nacos upgrades
@@ -36,6 +37,7 @@ require (
 )
 
 require (
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
