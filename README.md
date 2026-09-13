@@ -61,6 +61,12 @@ context propagation and independent evidence. Separate logging bridges preserve
 existing local sinks. No Collector, Logstash or observability backend is deployed
 or certified by the local protocol and TLS tests.
 
+The [internal Kafka integration](docs/reference/internal/broker/franz/v1/interface.md)
+provides bounded franz-go production, Kafka-only transactions, exact record reads,
+direct consumer cursors and explicit checkpoints, with independent evidence.
+Its [tests and service profile](docs/reference/internal/broker/franz/v1/verification.md)
+do not certify consumer-group rebalances or the complete data/reference protocol.
+
 ## Documentation
 
 Start with the [documentation map](docs/README.md) for current status and reading paths:
