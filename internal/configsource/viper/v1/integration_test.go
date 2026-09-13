@@ -683,7 +683,7 @@ func TestActualConsumerBuildAndBehavior(t *testing.T) {
 	expected := map[string]string{
 		"github.com/spf13/viper": "v1.21.0", "go.yaml.in/yaml/v3": "v3.0.5",
 		"github.com/spf13/afero": "v1.15.0", "github.com/spf13/cast": "v1.10.0",
-		"github.com/go-viper/mapstructure/v2": "v2.4.0",
+		"github.com/go-viper/mapstructure/v2": "v2.5.0",
 	}
 	if len(report.Modules) != len(expected) {
 		t.Fatal("selected implementation build facts missing")

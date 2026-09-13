@@ -156,11 +156,13 @@ runtime JSON guards are diagnostic redaction, not the explicit `JSONCopy` data
 inspection API.
 
 The operation context, including caller values, reaches `RecordWriter`; it is
-not stored in the record or result. A future adapter can inspect authorized trace
+not stored in the record or result. An adapter can inspect authorized trace
 association and all typed attributes without reconstructing a pooled native
 event. That adapter's export, buffering, retries and retained-record budgets remain
-explicit separate responsibilities. No OTel bridge or standard/native
-`slog.Handler` compatibility is claimed.
+explicit separate responsibilities. The implemented
+[OpenTelemetry RecordWriter bridge](../../../telemetry/otel/v1/zerologbridge/interface.md)
+uses this boundary without changing borrowed ownership or local outputs.
+Standard/native `slog.Handler` compatibility is not supplied.
 
 ## Results, failures and ownership
 

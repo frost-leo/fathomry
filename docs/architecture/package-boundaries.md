@@ -158,6 +158,13 @@ core function groups pair with focused tests, and `integration_test.go` proves
 their actual composition. These are responsibility conventions, not a requirement
 to generate empty files or implement identical resource lifecycles for every SDK.
 
+OpenTelemetry lives at `internal/telemetry/otel/v1`, with native capture/aggregation
+and explicit bounded export. Its optional `zapbridge` and `zerologbridge` packages
+own different structured translations and preserve dependency selection:
+core telemetry imports neither logging provider. The main SDK-major path does not
+stabilize the beta Logs modules or version configuration and OTLP together. See
+the [implemented contract](../reference/internal/telemetry/otel/v1/interface.md).
+
 A package/file review must answer:
 
 - Can a reader infer its actual purpose and find one behavior without hopping
