@@ -203,6 +203,11 @@ ownership, privacy and performance oracles, not just compilation or a directory
 rename. A future persisted bootstrap format needs its own explicit reader/version
 and migration-or-refusal contract before support is claimed.
 
+Issue #34's OTLP dependency graph requires mapstructure v2.5.0 through
+grpc-gateway v2.30.0. The existing native/preparation/privacy tests and consuming
+binary check were requalified with that selected version. This adds no Viper
+Unmarshal/DecodeHook surface and does not alter configuration precedence.
+
 Applicable standard sections are S01–S11 at the accepted
 [c0c6bf0 baseline](https://github.com/frost-leo/fathomry/blob/c0c6bf05a46a70470c5686d64ef8865e10f0875c/docs/architecture/internal-sdk-integration.md).
 The integration reuses technical faults; the separate composition reuses

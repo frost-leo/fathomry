@@ -55,6 +55,12 @@ provides bounded synchronous multi-sink JSON logging, structured context associa
 and local-file rotation/gzip. It is independent of Zap and does not implement a
 public logger, production telemetry exporter or durable execution ledger.
 
+The [internal OpenTelemetry integration](docs/reference/internal/telemetry/otel/v1/interface.md)
+provides bounded logs, traces and metrics with explicit OTLP HTTP/protobuf export,
+context propagation and independent evidence. Separate logging bridges preserve
+existing local sinks. No Collector, Logstash or observability backend is deployed
+or certified by the local protocol and TLS tests.
+
 ## Documentation
 
 Start with the [documentation map](docs/README.md) for current status and reading paths:

@@ -63,6 +63,12 @@ file rotation/gzip. Its [contract](reference/internal/logging/zerolog/v1/interfa
 separates per-sink acceptance, cleanup and explicit file recovery from durable
 execution evidence or production telemetry. It neither implements nor imports Zap.
 
+The [OpenTelemetry integration](reference/internal/telemetry/otel/v1/interface.md)
+adds bounded logs, spans and synchronous metrics, explicit context propagation,
+native HTTP/protobuf export and independent evidence. Separate Zap/zerolog bridges
+preserve existing local sinks and ownership. Export is explicitly scheduled;
+local protocol/TLS/mTLS tests do not certify a Collector or production backend.
+
 There is no public Go package, project generator, application configuration loader,
 production service Provider or complete Temporal execution runtime yet. The intended
 `fathomry new <project>` entry is not runnable. The removed public `failure` contract
@@ -123,6 +129,9 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/database/mysql/v1`](reference/internal/database/mysql/v1/interface.md) | Native sql.DB pooling, framed/TLS transport, controlled SQL/preparation, transactions and independent evidence |
 | [`internal/logging/zap/v1`](reference/internal/logging/zap/v1/interface.md) | Typed logging, native multi-sink results, context extensions and [local file ownership/rotation](reference/internal/logging/zap/v1/file-output.md) |
 | [`internal/logging/zerolog/v1`](reference/internal/logging/zerolog/v1/interface.md) | Structured multi-sink logging/context, bounded evidence and [local file output](reference/internal/logging/zerolog/v1/file-output.md) |
+| [`internal/telemetry/otel/v1`](reference/internal/telemetry/otel/v1/interface.md) | Logs, traces, metrics, propagation, explicit bounded export, ownership, options/errors and compatibility |
+| [`internal/telemetry/otel/v1/zapbridge`](reference/internal/telemetry/otel/v1/zapbridge/interface.md) | Borrowed typed Zap structured sink; Sync does not flush telemetry |
+| [`internal/telemetry/otel/v1/zerologbridge`](reference/internal/telemetry/otel/v1/zerologbridge/interface.md) | Borrowed immutable zerolog RecordWriter; independent telemetry lifecycle |
 
 Exact declarations and symbol comments live with the Go source. Each entry links
 implementation/tests; use `go doc -all ./internal/<package>` from the repository root.

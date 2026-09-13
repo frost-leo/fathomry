@@ -189,7 +189,13 @@ was exercised against this actual facade in an isolated recording-provider proof
 It preserved typed fields, scope, caller, original `*fault.Error` and trace/span
 context beside local output. This is not exporter/backend acceptance. That probe
 uses its own OTel build list; none of those bridge/provider dependencies were
-added to the product.
+added to the product by that historical proof.
+
+The implemented [Fathomry OpenTelemetry bridge](../../../telemetry/otel/v1/zapbridge/interface.md)
+now translates this actual StructuredSink contract through bounded telemetry
+admission and independent evidence. It is not the official bridge above; its
+Sync deliberately does not invoke telemetry Flush or take provider ownership.
+Zap remains independent of that optional dependency and retains its local sinks.
 
 ## Versions and executable evidence
 
