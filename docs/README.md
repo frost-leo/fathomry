@@ -52,6 +52,11 @@ LOCAL INFILE boundaries apply before SDK dispatch, including above verified TLS.
 The [contract](reference/internal/database/mysql/v1/interface.md) distinguishes
 isolated MySQL 8.4.11/InnoDB TLS writes over Unix sockets from separate TCP TLS reads.
 
+The [Zap integration](reference/internal/logging/zap/v1/interface.md) adds typed,
+context-aware logging with independent evidence, multiple sinks and bounded Linux
+file rotation/gzip/retention. Its structured extension is composition-owned;
+no exporter/backend or zerolog integration is included.
+
 There is no public Go package, project generator, application configuration loader,
 production service Provider or complete Temporal execution runtime yet. The intended
 `fathomry new <project>` entry is not runnable. The removed public `failure` contract
@@ -110,6 +115,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
 | [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Native pool lifecycle/statistics, ordinary SQL, reusable preparation, bounded results, transactions/savepoints and independent evidence |
 | [`internal/database/mysql/v1`](reference/internal/database/mysql/v1/interface.md) | Native sql.DB pooling, framed/TLS transport, controlled SQL/preparation, transactions and independent evidence |
+| [`internal/logging/zap/v1`](reference/internal/logging/zap/v1/interface.md) | Typed logging, native multi-sink results, context extensions and [local file ownership/rotation](reference/internal/logging/zap/v1/file-output.md) |
 
 Exact declarations and symbol comments live with the Go source. Each entry links
 implementation/tests; use `go doc -all ./internal/<package>` from the repository root.

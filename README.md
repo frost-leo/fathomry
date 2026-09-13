@@ -46,6 +46,10 @@ provides bounded parameterized access and explicit transactions. Its real-servic
 acceptance gate remains separate from local protocol tests; no MySQL or control
 schema is included.
 
+The [internal Zap integration](docs/reference/internal/logging/zap/v1/interface.md)
+provides typed/contextual logging, multi-sink evidence and bounded Linux file
+rotation, gzip and retention. It does not install an observability exporter/backend.
+
 ## Documentation
 
 Start with the [documentation map](docs/README.md) for current status and reading paths:
