@@ -165,6 +165,13 @@ core telemetry imports neither logging provider. The main SDK-major path does no
 stabilize the beta Logs modules or version configuration and OTLP together. See
 the [implemented contract](../reference/internal/telemetry/otel/v1/interface.md).
 
+Kafka follows this organization at `internal/broker/franz/v1`. Its
+[contract](../reference/internal/broker/franz/v1/interface.md) combines controlled
+production, exact reads, direct consumers and explicit checkpoints. Native
+producer shutdown and callback completion remain separate owned obligations;
+metadata and required evidence do not inherit business publication meaning.
+The optional `otelbridge` owns only explicit header/context translation.
+
 A package/file review must answer:
 
 - Can a reader infer its actual purpose and find one behavior without hopping

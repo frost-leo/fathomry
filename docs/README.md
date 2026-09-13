@@ -75,6 +75,13 @@ production service Provider or complete Temporal execution runtime yet. The inte
 is not replaced by a speculative error API. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
 
+The [Kafka integration](reference/internal/broker/franz/v1/interface.md) adds bounded
+franz-go production, Kafka-only atomic batches, exact historical reads, direct
+consumer cursors and explicit standalone checkpoints with independent evidence.
+Its [verification profile](reference/internal/broker/franz/v1/verification.md)
+distinguishes local SDK/fault tests from the owner-authorized Kafka service.
+It is not the framework's complete data/reference or workflow recovery protocol.
+
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
 The [configuration contract](reference/internal/resource/configuration.md),
@@ -127,6 +134,8 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
 | [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Native pool lifecycle/statistics, ordinary SQL, reusable preparation, bounded results, transactions/savepoints and independent evidence |
 | [`internal/database/mysql/v1`](reference/internal/database/mysql/v1/interface.md) | Native sql.DB pooling, framed/TLS transport, controlled SQL/preparation, transactions and independent evidence |
+| [`internal/broker/franz/v1`](reference/internal/broker/franz/v1/interface.md) | [Options/bounds](reference/internal/broker/franz/v1/options.md), producer/direct consumer/checkpoints, [verification](reference/internal/broker/franz/v1/verification.md) |
+| [`internal/broker/franz/v1/otelbridge`](reference/internal/broker/franz/v1/otelbridge/interface.md) | Explicit bounded W3C header translation, without native SDK instrumentation hooks |
 | [`internal/logging/zap/v1`](reference/internal/logging/zap/v1/interface.md) | Typed logging, native multi-sink results, context extensions and [local file ownership/rotation](reference/internal/logging/zap/v1/file-output.md) |
 | [`internal/logging/zerolog/v1`](reference/internal/logging/zerolog/v1/interface.md) | Structured multi-sink logging/context, bounded evidence and [local file output](reference/internal/logging/zerolog/v1/file-output.md) |
 | [`internal/telemetry/otel/v1`](reference/internal/telemetry/otel/v1/interface.md) | Logs, traces, metrics, propagation, explicit bounded export, ownership, options/errors and compatibility |
