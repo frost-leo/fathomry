@@ -50,6 +50,11 @@ The [internal Zap integration](docs/reference/internal/logging/zap/v1/interface.
 provides typed/contextual logging, multi-sink evidence and bounded Linux file
 rotation, gzip and retention. It does not install an observability exporter/backend.
 
+The [internal zerolog integration](docs/reference/internal/logging/zerolog/v1/interface.md)
+provides bounded synchronous multi-sink JSON logging, structured context association
+and local-file rotation/gzip. It is independent of Zap and does not implement a
+public logger, production telemetry exporter or durable execution ledger.
+
 ## Documentation
 
 Start with the [documentation map](docs/README.md) for current status and reading paths:
