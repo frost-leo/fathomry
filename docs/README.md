@@ -55,7 +55,13 @@ isolated MySQL 8.4.11/InnoDB TLS writes over Unix sockets from separate TCP TLS 
 The [Zap integration](reference/internal/logging/zap/v1/interface.md) adds typed,
 context-aware logging with independent evidence, multiple sinks and bounded Linux
 file rotation/gzip/retention. Its structured extension is composition-owned;
-no exporter/backend or zerolog integration is included.
+this integration neither imports zerolog nor installs an exporter/backend.
+
+Zerolog under `internal/logging/zerolog/v1` supplies bounded synchronous multi-sink
+JSON logging, immutable structured records/context association and owned local
+file rotation/gzip. Its [contract](reference/internal/logging/zerolog/v1/interface.md)
+separates per-sink acceptance, cleanup and explicit file recovery from durable
+execution evidence or production telemetry. It neither implements nor imports Zap.
 
 There is no public Go package, project generator, application configuration loader,
 production service Provider or complete Temporal execution runtime yet. The intended
@@ -116,6 +122,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Native pool lifecycle/statistics, ordinary SQL, reusable preparation, bounded results, transactions/savepoints and independent evidence |
 | [`internal/database/mysql/v1`](reference/internal/database/mysql/v1/interface.md) | Native sql.DB pooling, framed/TLS transport, controlled SQL/preparation, transactions and independent evidence |
 | [`internal/logging/zap/v1`](reference/internal/logging/zap/v1/interface.md) | Typed logging, native multi-sink results, context extensions and [local file ownership/rotation](reference/internal/logging/zap/v1/file-output.md) |
+| [`internal/logging/zerolog/v1`](reference/internal/logging/zerolog/v1/interface.md) | Structured multi-sink logging/context, bounded evidence and [local file output](reference/internal/logging/zerolog/v1/file-output.md) |
 
 Exact declarations and symbol comments live with the Go source. Each entry links
 implementation/tests; use `go doc -all ./internal/<package>` from the repository root.
