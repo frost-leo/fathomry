@@ -112,6 +112,14 @@ Its [verification profile](reference/internal/sqlengine/duckdb/v2/verification.m
 separates the product API from independent native Iceberg REST probes; external
 catalogs and Arrow are not exposed by this provider.
 
+The [Doris integration](reference/internal/sqlengine/doris/v1/interface.md) adds
+strict labeled JSON Stream Load, retained-label inspection and bounded single-use
+SQL with independent effect and cleanup evidence. Native-table ingestion and SQL
+DML are qualified on an isolated Doris 4.1.4 profile; the
+[capability classification](reference/internal/sqlengine/doris/v1/capabilities.md)
+preserves external-catalog restrictions without adding backend SDKs or storage
+management. SQL acknowledgement is not a visibility or external-commit certificate.
+
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
 The [configuration contract](reference/internal/resource/configuration.md),
@@ -170,6 +178,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/tableformat/iceberg/v0`](reference/internal/tableformat/iceberg/v0/interface.md) | Batch table access, independent S3 FileIO, evolution/snapshots, bounded rewrites and [verification](reference/internal/tableformat/iceberg/v0/verification.md) |
 | [`internal/sqlengine/trino/v0`](reference/internal/sqlengine/trino/v0/interface.md) | Bounded native SQL batches, direct JSON results, query-specific ownership, native DML and explicit effect/cleanup evidence |
 | [`internal/sqlengine/duckdb/v2`](reference/internal/sqlengine/duckdb/v2/interface.md) | Native SQL, exact bounded scalar results, prepared/Appender batches, local transactions and [qualification limits](reference/internal/sqlengine/duckdb/v2/verification.md) |
+| [`internal/sqlengine/doris/v1`](reference/internal/sqlengine/doris/v1/interface.md) | Bounded native Stream Load and SQL, label/row/visibility evidence, explicit connection ownership and [capability limits](reference/internal/sqlengine/doris/v1/capabilities.md) |
 | [`internal/logging/zap/v1`](reference/internal/logging/zap/v1/interface.md) | Typed logging, native multi-sink results, context extensions and [local file ownership/rotation](reference/internal/logging/zap/v1/file-output.md) |
 | [`internal/logging/zerolog/v1`](reference/internal/logging/zerolog/v1/interface.md) | Structured multi-sink logging/context, bounded evidence and [local file output](reference/internal/logging/zerolog/v1/file-output.md) |
 | [`internal/telemetry/otel/v1`](reference/internal/telemetry/otel/v1/interface.md) | Logs, traces, metrics, propagation, explicit bounded export, ownership, options/errors and compatibility |
