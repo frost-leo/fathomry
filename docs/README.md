@@ -90,6 +90,13 @@ separates local protocol/race qualification from the owner-authorized, isolated
 HTTP/unversioned service profile. It does not implement Run freezing, archives
 or publication protocols.
 
+The [Iceberg integration](reference/internal/tableformat/iceberg/v0/interface.md)
+adds bounded format-2 batch reads/writes, schema/partition evolution, snapshot
+operations and restricted rewrites. It owns an independent S3 FileIO and does not
+import the MinIO integration. Its [verification profile](reference/internal/tableformat/iceberg/v0/verification.md)
+separates native/local checks from isolated Catalog/S3 acceptance and unverified
+cross-engine or large-data behavior.
+
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
 The [configuration contract](reference/internal/resource/configuration.md),
@@ -145,6 +152,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/broker/franz/v1`](reference/internal/broker/franz/v1/interface.md) | [Options/bounds](reference/internal/broker/franz/v1/options.md), producer/direct consumer/checkpoints, [verification](reference/internal/broker/franz/v1/verification.md) |
 | [`internal/broker/franz/v1/otelbridge`](reference/internal/broker/franz/v1/otelbridge/interface.md) | Explicit bounded W3C header translation, without native SDK instrumentation hooks |
 | [`internal/objectstore/minio/v7`](reference/internal/objectstore/minio/v7/interface.md) | Bounded reads/transfers, conditional multipart, copy/versions/listing/removal, independent evidence and [verification](reference/internal/objectstore/minio/v7/verification.md) |
+| [`internal/tableformat/iceberg/v0`](reference/internal/tableformat/iceberg/v0/interface.md) | Batch table access, independent S3 FileIO, evolution/snapshots, bounded rewrites and [verification](reference/internal/tableformat/iceberg/v0/verification.md) |
 | [`internal/logging/zap/v1`](reference/internal/logging/zap/v1/interface.md) | Typed logging, native multi-sink results, context extensions and [local file ownership/rotation](reference/internal/logging/zap/v1/file-output.md) |
 | [`internal/logging/zerolog/v1`](reference/internal/logging/zerolog/v1/interface.md) | Structured multi-sink logging/context, bounded evidence and [local file output](reference/internal/logging/zerolog/v1/file-output.md) |
 | [`internal/telemetry/otel/v1`](reference/internal/telemetry/otel/v1/interface.md) | Logs, traces, metrics, propagation, explicit bounded export, ownership, options/errors and compatibility |
