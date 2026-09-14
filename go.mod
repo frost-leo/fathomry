@@ -37,6 +37,7 @@ require (
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/viper v1.21.0
+	github.com/trinodb/trino-go-client v0.333.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/sys v0.47.0
@@ -95,9 +96,17 @@ require (
 	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/gookit/color v1.6.0 // indirect
+	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
+	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
+	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
+	github.com/jcmturner/gofork v1.7.6 // indirect
+	github.com/jcmturner/goidentity/v6 v6.0.1 // indirect
+	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
+	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
+	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pterm/pterm v0.12.83 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
