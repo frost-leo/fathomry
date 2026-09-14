@@ -23,9 +23,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [DuckDB interface](interface.md)
 
 **Audience:** integration and release maintainers.
-**Status:** locally tested native Linux/amd64 profile; repository-wide acceptance
-is still pending because VCS-stamped consumer builds fail in this worktree's
-current Go environment. No external-service or performance certificate.
+**Status:** bounded native Linux/amd64 profile with explicit qualification limits.
+Full repository checks remain an integration/release gate; no unrestricted
+external-service or performance certificate is supplied.
 
 ## Separate version axes
 
