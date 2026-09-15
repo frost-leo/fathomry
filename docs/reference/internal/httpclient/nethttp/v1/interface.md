@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** framework composition, Adapter and integration maintainers.
-**Status:** implemented internal contract on the #48 topic; not a public HTTP API,
+**Status:** implemented internal contract; not a public HTTP API,
 release, complete workflow runtime or production-site qualification.
 **Package:** `github.com/frost-leo/fathomry/internal/httpclient/nethttp/v1`.
 
