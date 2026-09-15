@@ -19,19 +19,21 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Local tls-client compatibility corrections
 
-**Status:** local compatibility dependency for #49, with a separately reviewable
-Provider integration in internal/httpclient/tlsclient/v1. This is not a
-publication-ready dependency decision. The original SDK-fix commit remains separate.
+**Status:** maintained local replacement for the implemented #49 Provider in
+internal/httpclient/tlsclient/v1. Implementation delivery does not establish
+license compatibility. The original SDK-fix commit remains separately reviewable.
 
-## Publication and license gate
+## License compatibility
 
 The original [LICENSE](LICENSE) is retained byte-for-byte. Its advertising clause
 matches BSD-4-Clause, not BSD-3-Clause or MIT. The
 [GNU GPL FAQ](https://www.gnu.org/licenses/gpl-faq.html.en#OrigBSD) identifies the
 original BSD advertising clause as GPL-incompatible. This project is GPL-3.0-or-later.
-Do not publish or distribute the combined integration until compatible permission
-or another reviewed licensing resolution is established. Keeping LICENSE, using
-replace, or placing sources in this directory does not resolve that gate.
+The maintainer authorized implementation delivery without resolving this question.
+That authorization is not a new upstream license or a GPL linking exception.
+Downstream distribution still requires assessment of applicable permissions and
+obligations. Keeping LICENSE, using replace, or placing sources in this directory
+does not establish compatibility.
 Project-authored additions keep their project notices; they do not relicense the
 upstream material. The embedded upstream notice in connect.go is also preserved.
 
@@ -123,7 +125,10 @@ The root compatibility test uses an independent standard-library TCP/TLS server
 and official quic-go HTTP/3 peer, including both racing legs, replay bytes, winner
 streaming, cancellation, connection reuse and observed connection/socket closure.
 It also invokes the SDK-local private-boundary controls with the consuming Go
-executable. The Linux socket check tracks socket identities, not reusable FD numbers.
+executable and a temporary module file carrying the consuming module's dependency
+selections. The original SDK module files stay unchanged; standalone SDK commands
+remain separate upstream-graph checks and may need their own cached versions.
+The Linux socket check tracks socket identities, not reusable FD numbers.
 Other platforms still run the peer-connection checks without claiming that OS oracle.
 
 The standalone upstream SDK's additional full vet check reports pre-existing
@@ -139,6 +144,6 @@ for request isolation, winner/loser/error cleanup, cancellation and reconnect fi
 Re-run original rejecting controls and the integration's integrity, proxy-isolation,
 native-extension, privacy and build gates. Remove only corrections shown obsolete,
 then repeat those checks on the resulting code. A version tag, release note or PR
-merge alone is not a retirement criterion. Preserve Fathomry's contracts and resolve
-the separate license gate before publication. Track the existing
+merge alone is not a retirement criterion. Preserve Fathomry's contracts and keep
+the separate unresolved licensing obligations explicit. Track the existing
 [issue #49](https://github.com/frost-leo/fathomry/issues/49), not a new backlog item.

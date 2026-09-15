@@ -83,6 +83,6 @@
 // No raw SDK client, setters, arbitrary RoundTripper, httptrace handle, WebSocket,
 // direct owning connection, application retry, credential refresh or Provider
 // rotation API is supplied. Build/Profile distinguish actual build facts from
-// declared choices and missing service evidence. The local upstream-license
-// publication gate remains separate; see third_party/tls-client/FATHOMRY.md.
+// declared choices and missing service evidence. Upstream license compatibility
+// remains unresolved; see third_party/tls-client/FATHOMRY.md.
 package tlsclient

@@ -29,8 +29,8 @@ require (
 	// factories and native-extension regression gates. Preserve Fathomry contracts
 	// and exact upstream/local-patch provenance; do not rely on a tag or
 	// release note alone. Track evidence: https://github.com/frost-leo/fathomry/issues/49
-	// Publication also requires resolution of the upstream BSD-4-Clause / GPL
-	// compatibility gate; preserving LICENSE is not permission to relicense it.
+	// Upstream BSD-4-Clause / GPL compatibility remains unresolved; implementation
+	// delivery and preserving LICENSE do not establish distribution permission.
 	github.com/bogdanfinn/tls-client v1.16.0
 	github.com/duckdb/duckdb-go-bindings v0.10505.0
 	github.com/duckdb/duckdb-go/v2 v2.10505.0

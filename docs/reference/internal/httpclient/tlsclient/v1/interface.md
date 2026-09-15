@@ -22,8 +22,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** internal composition and HTTP capability maintainers.
-**Status:** locally implemented Provider; publication is blocked by the unresolved
-upstream license compatibility gate. No production-site qualification.
+**Status:** implemented internal Provider. Upstream license compatibility remains
+unresolved; delivery does not establish distribution permission or production-site
+qualification.
 **Package:** `github.com/frost-leo/fathomry/internal/httpclient/tlsclient/v1`.
 
 ## Responsibilities and call sequence
@@ -201,7 +202,7 @@ The integration import major, OptionsV1 format, native/request runtime contracts
 SDK v1.16.0 and local compatibility revision v2 are separate axes.
 `Build` reads actual consuming-binary module/replacement facts; `Profile` reports
 non-secret effective choices, never inferred deployment or service support.
-See [local SDK provenance and publication gate](../../../../../../third_party/tls-client/FATHOMRY.md).
+See [local SDK provenance and license compatibility](../../../../../../third_party/tls-client/FATHOMRY.md).
 
 ## Details and executable evidence
 

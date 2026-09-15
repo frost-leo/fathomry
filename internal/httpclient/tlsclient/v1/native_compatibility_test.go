@@ -402,17 +402,39 @@ func TestNativeCompatibilityUnitControls(t *testing.T) {
 	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	cgo, err := exec.CommandContext(ctx, goBinary, "env", "CGO_ENABLED").Output()
+	environment := append(os.Environ(), "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off", "GOWORK=off", "GOFLAGS=")
+	nativeRoot := filepath.Join(root, "third_party/tls-client")
+	moduleFile := filepath.Join(t.TempDir(), "native.mod")
+	// Exercise the consuming dependency selections, not an independently resolved
+	// upstream module that can accidentally depend on a developer's warm cache.
+	for _, extension := range []string{"mod", "sum"} {
+		data, err := os.ReadFile(filepath.Join(root, "go."+extension))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(strings.TrimSuffix(moduleFile, ".mod")+"."+extension, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	edit := exec.CommandContext(ctx, goBinary, "-C", nativeRoot, "mod", "edit", "-modfile="+moduleFile,
+		"-module=github.com/bogdanfinn/tls-client", "-droprequire=github.com/bogdanfinn/tls-client", "-dropreplace=github.com/bogdanfinn/tls-client")
+	edit.Env = environment
+	if output, err := edit.CombinedOutput(); err != nil {
+		t.Fatalf("prepare consuming native module: %v\n%s", err, output)
+	}
+	configuration := exec.CommandContext(ctx, goBinary, "env", "CGO_ENABLED")
+	configuration.Env = environment
+	cgo, err := configuration.Output()
 	if err != nil {
 		t.Fatal(err)
 	}
-	arguments := []string{"-C", filepath.Join(root, "third_party/tls-client"), "test"}
+	arguments := []string{"-C", nativeRoot, "test", "-modfile=" + moduleFile, "-mod=readonly"}
 	if strings.TrimSpace(string(cgo)) == "1" {
 		arguments = append(arguments, "-race")
 	}
 	arguments = append(arguments, "-count=1", "-timeout=30s", "-run=^TestFathomry", "./...")
 	command := exec.CommandContext(ctx, goBinary, arguments...)
-	command.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off", "GOWORK=off")
+	command.Env = environment
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("native compatibility controls failed: %v\n%s", err, output)
