@@ -120,6 +120,16 @@ DML are qualified on an isolated Doris 4.1.4 profile; the
 preserves external-catalog restrictions without adding backend SDKs or storage
 management. SQL acknowledgement is not a visibility or external-commit certificate.
 
+The [net/http v1 integration](reference/internal/httpclient/nethttp/v1/interface.md)
+adds independently configured standard HTTP clients, bounded response streams and
+owned direct connections, with native runtime inputs and independent evidence.
+Explicit runtime proxy choices preserve source identity and isolate native H2
+route/authentication pools; configured routing can be locked against overrides.
+H1/H2, explicit cleartext H2, local CONNECT and TLS/mTLS tests remain separate from
+production-site qualification; business credential and Provider-selection policies
+are not supplied. The integration/configuration versions are distinct from Go's
+standard-library version.
+
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
 The [configuration contract](reference/internal/resource/configuration.md),
