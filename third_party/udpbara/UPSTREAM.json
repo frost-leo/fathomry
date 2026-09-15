@@ -1,0 +1,44 @@
+{
+  "module": "github.com/sardanioss/udpbara",
+  "version": "v1.1.0",
+  "origin_commit": "4c13335a27cb4d7769c34823bd556caac512db13",
+  "module_sum": "h1:fe71FKnCD/c9J27gY7IyjPM1Zt1gbklDsqJBVpW9Usk=",
+  "go_mod_sum": "h1:aNCe+94AMrx1FiSPusvGPQnsJ6TPEc1RaL/8H7BCwl4=",
+  "go_minimum": "1.25.5",
+  "original_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "06dcddbb6908a0c6dd4a9e8ec822eea41d5a460a53089fecccc8a68049e99241"
+    },
+    {
+      "path": "conn.go",
+      "sha256": "0459c57fc27a49e533f0b7abcd217e3b52a332392dbce68bffe8d346ad6e24b1"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "57c52bfac7c84156c08e6316549027cc9e4e46ae207ab2f5f116a725464ee60a"
+    },
+    {
+      "path": "go.sum",
+      "sha256": "d6394c132409d9185fd3b4397b8441eb7ca00d8f74ba75b7aac03119316fdbe0"
+    },
+    {
+      "path": "manager.go",
+      "sha256": "338bd61e1bbe165d7ca5fe168665895e23f6beae155d6934853706fe10d03e90"
+    },
+    {
+      "path": "socks5.go",
+      "sha256": "9d696a272ba8246bf816f2c04b68a6de03c554d6ca9ae6caea00f584e1107bf2"
+    },
+    {
+      "path": "tunnel.go",
+      "sha256": "8cea55a9564fb448229822a80ccc7403f72002d2031858f0f8533aba50f93213"
+    },
+    {
+      "path": "udpbara.go",
+      "sha256": "3a36d54ca8eb2630be6359a41d50a21d6b33eeacdfed5663107d369bcf6f466f"
+    }
+  ],
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "local_compatibility_revision": "v1"
+}

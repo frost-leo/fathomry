@@ -64,6 +64,7 @@ require (
 	github.com/aws/smithy-go v1.25.1
 	github.com/bogdanfinn/fhttp v0.6.9
 	github.com/bogdanfinn/utls v1.7.8-barnius
+	github.com/sardanioss/net v1.2.10
 	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5
 	github.com/twmb/franz-go v1.21.6
 	github.com/twmb/franz-go/pkg/kfake v0.0.0-20260911174156-65d23a567563
@@ -132,9 +133,13 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
+	github.com/miekg/dns v1.1.69 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pterm/pterm v0.12.83 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
+	github.com/sardanioss/http v1.2.0 // indirect
+	github.com/sardanioss/qpack v0.6.3 // indirect
+	github.com/sardanioss/utls v1.10.5 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/substrait-io/substrait v0.87.0 // indirect
@@ -144,8 +149,10 @@ require (
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
+	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
+	golang.org/x/tools v0.48.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
@@ -173,6 +180,16 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
+	// TODO(gh-51): Recheck the HTTPcloak, QUIC, HTTP/2 and UDP relay replacements
+	// before dependency upgrades or framework releases. Retire only fixes made
+	// unnecessary by passing native and Provider framing, input/instance isolation,
+	// replay, callback/cancellation, socket-release and cold-cache regression gates.
+	// Preserve exact source/license provenance and the independent API/configuration
+	// and local compatibility versions. A new tag is not qualification evidence.
+	// Track: https://github.com/frost-leo/fathomry/issues/51
+	github.com/sardanioss/httpcloak v1.7.2
+	github.com/sardanioss/quic-go v1.2.29
+	github.com/sardanioss/udpbara v1.1.0
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
@@ -193,3 +210,11 @@ require (
 )
 
 replace github.com/bogdanfinn/tls-client => ./third_party/tls-client
+
+replace github.com/sardanioss/httpcloak => ./third_party/httpcloak
+
+replace github.com/sardanioss/quic-go => ./third_party/httpcloak-quic-go
+
+replace github.com/sardanioss/udpbara => ./third_party/udpbara
+
+replace github.com/sardanioss/net => ./third_party/httpcloak-net

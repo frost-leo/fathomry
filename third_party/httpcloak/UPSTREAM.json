@@ -1,0 +1,328 @@
+{
+  "module": "github.com/sardanioss/httpcloak",
+  "version": "v1.7.2",
+  "origin_commit": "30379124605d212efe5240aacd60bd4b9ab7c6cf",
+  "module_sum": "h1:bkr6E/DWchBbmk6Fr4zEpMo+3HDX43fVNyBhcskAMu0=",
+  "go_mod_sum": "h1:1/KTNB7tlKw96yeHq0Dfa9XQoZWXkA8hd+ejXcZ68Xk=",
+  "go_minimum": "1.26.0",
+  "original_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "78089f6746103cad05551be404d018876fbedb945dd072a66b4e51d684edebfa"
+    },
+    {
+      "path": "dns/cache.go",
+      "sha256": "a86622710e2854e99480a880c32656d2f3e2fbed4d85e89c8cb094e0b3820b2a"
+    },
+    {
+      "path": "fingerprint/akamai.go",
+      "sha256": "670d59934b6bf18c35de0f0b912cb1a0e1ac0282f53e275fdd5ed3ada85080fc"
+    },
+    {
+      "path": "fingerprint/boundary.go",
+      "sha256": "2c22ffc08a6068d798cd1cebef4bba9e8e7a418784c971478e541d4b0da07f29"
+    },
+    {
+      "path": "fingerprint/client_hello_ids.go",
+      "sha256": "822c333427185bb073081ada6dad158157223fcb378b046d344bf74cbcdb75a0"
+    },
+    {
+      "path": "fingerprint/clienthello_source.go",
+      "sha256": "504caa823fd3a26fc79c9aa6d8fbb21ac95f1e8e6af30d12e97a9e4a456ed7d6"
+    },
+    {
+      "path": "fingerprint/custom_preset.go",
+      "sha256": "01ee02c7b70b30dcc923c3d935162bee1cb4f44f5eb396976ff88aa7cde9e727"
+    },
+    {
+      "path": "fingerprint/describe.go",
+      "sha256": "efb0791520311d6f1e3691455a82098d3e111ca2ba71cc1c2ba5aec4f5bcdb26"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-147-android.json",
+      "sha256": "1d0062649b4e37b2907f0268077d5c5e1bcdceeea5a8d8803708c7f8ac086ded"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-147-ios.json",
+      "sha256": "4f9979ad90a9c1a63d750e8bd10165a3009ca12ed46027a0a9d55934f571a232"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-147-linux.json",
+      "sha256": "32a8bed15b67a0623e475e72f5b3d1ea09711f4c6eab815682752dba0315c9b4"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-147-macos.json",
+      "sha256": "642986a23c9656ddee787c1c9da11fb0795f2280fc4da34fcfcd73b8798c67f3"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-147-windows.json",
+      "sha256": "61904506d91eabde1f268ea1bbf931d8592b494e6079114254a0e4656f17fdde"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-148-android.json",
+      "sha256": "156773635b60c09f97eedb1397e12cb1b967f42c7b838c0e65ea8c61de90b509"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-148-ios.json",
+      "sha256": "211c136bd830dff3f9852191854f9a2af6656ffdb97ba170cf64bedb99d2a98a"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-148-linux.json",
+      "sha256": "402a9de064f08c66b0d8492ccff2385d457f7fecad31108063fcbd40806017b1"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-148-macos.json",
+      "sha256": "e415f1c15c5561a9177f4cab490fe08b82fa6fe52128a290bbf0d6b2026e38d4"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-148-windows.json",
+      "sha256": "80b53530c506772138daa97e85f894bdd77f8820a7bfaf8da857977e94c2f26c"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-149-linux.json",
+      "sha256": "a4c9168e0135d9451cf13df40944e8773cfe8a99ea8c1dee0a0f88ffcb604990"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-149-macos.json",
+      "sha256": "2043e07cc348d44753d0839e9c958d485f2df3c53cc8ce4d173aee0924616a5c"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-149-windows.json",
+      "sha256": "a73c4889b9fa999e76ae96886bb41b2913024cb893123f33585b5c63e5980fe7"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-150-android.json",
+      "sha256": "6900bc2de8bb05ce3000cb8d76d5d824eedc7e2f9d226279dd526a0b2fc12bd2"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-150-ios.json",
+      "sha256": "196cafbf4ecc2f63e6697c9dc66c8bf46b7f4d3ecf1028b98e93af310a040b0a"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-150-linux.json",
+      "sha256": "235bce2bf622eb9872d136970f2c605479708b349e8fb0e93f7de2414571c669"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-150-macos.json",
+      "sha256": "d2f56130fc2c7be490018d5aaa832004bcc388850481e0ce547ae95896f04071"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-150-windows.json",
+      "sha256": "bc54bf74dc9a0cfb991ad32d02dad41f970138dbf97534bc4fcca5dc686fd2b2"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-151-android.json",
+      "sha256": "726a51a01a4dbf26418cc225326a1adcf9fc2b5337682e2ef74af02177034667"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-151-ios.json",
+      "sha256": "a04836b853ea72e3478d8f95ee66598f619249f988988350c9a88585cfa9daad"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-151-linux.json",
+      "sha256": "f74624d0fdad80cff6376ec53a746e4a6bc83efd9e8edbdf84da7397b6a6916f"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-151-macos.json",
+      "sha256": "6b9aa094a562e31f18b730cf6da4248309f6826a31de92df32c97ccc066619e0"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-151-windows.json",
+      "sha256": "a88249228ed448672ee6d0699a96bd914833ef87e032ddd7ce3c96a4f00f3962"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-152-android.json",
+      "sha256": "f3b80bd61de3ba68e9effe4686c5dcc5496bb87b2b7c7189f43502db015fbe05"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-152-ios.json",
+      "sha256": "341ec2ebcc156d11b3b851785ac08a31c612506ae402ab2230dfa099471adf4e"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-152-linux.json",
+      "sha256": "8ef76639ee657ea824cdd5554df15f0e617429bb644b0c095189b8c4756a50f3"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-152-macos.json",
+      "sha256": "586e890e1c0f34256fde7446c9bd2ccaf19030e1a57c7277689eee5c3c3fd591"
+    },
+    {
+      "path": "fingerprint/embedded/chrome-152-windows.json",
+      "sha256": "cdba95d5953eb56330ac487254c04b8d2eca1e0f520319a2459ff83829b46995"
+    },
+    {
+      "path": "fingerprint/embedded/firefox-133-linux.json",
+      "sha256": "6cf5e53a59098b7814d5b316e8e9479d94dcbaa82649d6afe0c423af9d01b1bf"
+    },
+    {
+      "path": "fingerprint/embedded/firefox-133-macos.json",
+      "sha256": "f4f9fb40963d58936273e022037ccfadd0b9eb2f17ab521968b9e24e45a22706"
+    },
+    {
+      "path": "fingerprint/embedded/firefox-133-windows.json",
+      "sha256": "c8111c3b4acdcb5aaf38335b6e3fa594a433ee4d318a2655798e97927944e8d9"
+    },
+    {
+      "path": "fingerprint/embedded/firefox-148-linux.json",
+      "sha256": "bd63d191b99580dea464cb9f5c807a63807affac95c9ad091ba27411e287a50e"
+    },
+    {
+      "path": "fingerprint/embedded/firefox-148-macos.json",
+      "sha256": "41749040605230fab544285d15baaac9cebc7c1778e2313e26337a9f48049e3d"
+    },
+    {
+      "path": "fingerprint/embedded/firefox-148-windows.json",
+      "sha256": "a6446957bd4aa73d9d9ae8eae5d12c5a9221608577260e578b5cd9d592faf720"
+    },
+    {
+      "path": "fingerprint/embedded.go",
+      "sha256": "3620eec2eda56f4507980670c1cb22cbc48987b3e413b30eb8d7989e197925ea"
+    },
+    {
+      "path": "fingerprint/headers.go",
+      "sha256": "d434aee3055e629560dee147169ec4315d8d1237f6ccb48c428bba527a0823dc"
+    },
+    {
+      "path": "fingerprint/ja3.go",
+      "sha256": "6b436e26b19d4b476e9b616f344aa9acdb832b7104a5d2088a8df491e70f02d2"
+    },
+    {
+      "path": "fingerprint/preset_pool.go",
+      "sha256": "57df86666a28b52b00c3fdc6b9ac775c4685d7d2fb2f9579f368d97f80d5d216"
+    },
+    {
+      "path": "fingerprint/presets.go",
+      "sha256": "4c744f1744bc1bff98c3538450a3c638be245cacfcb9386300597622d27acd47"
+    },
+    {
+      "path": "fingerprint/registry.go",
+      "sha256": "c23312e79840304135d49bbd0b6e117aa3a91f311d403adac005f36c76a537af"
+    },
+    {
+      "path": "fingerprint/strict_load.go",
+      "sha256": "90987fe6568f550dfb0f630b74e31c7f7f796437a1bed4dfe5e028146637367c"
+    },
+    {
+      "path": "fingerprint/suggest.go",
+      "sha256": "f0f2e8019745bdf2e879f34f4bade822658cbab31da28b6f7d5cb2eea303bb6c"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "ab2d0764b39b19c4149b4e5151e94b80935094734add20bea496ae0a8ea3696c"
+    },
+    {
+      "path": "go.sum",
+      "sha256": "3ce4ae8d0f3964e08dac44788ea3be9544cf2d7c5be6ac23d099d0803967fc7f"
+    },
+    {
+      "path": "internal/h2build/h2build.go",
+      "sha256": "3aa752943018a09ca8de00b04c07d3655acf98523ce950315853143284359d17"
+    },
+    {
+      "path": "internal/h3build/h3build.go",
+      "sha256": "2d14afea3579fe8f16f404b7393814cf97155d17dbf956230e843f17c8e7656e"
+    },
+    {
+      "path": "protocol/types.go",
+      "sha256": "0dfa3dca0e495afbdf5966d7cad1a697a22a8cf9a216f06e6dd84eda7279a809"
+    },
+    {
+      "path": "proxy/dialutil.go",
+      "sha256": "6ac86f914c99f4a50ef1e0136918c888abf325666738bc4b095ce6c4ae61cc03"
+    },
+    {
+      "path": "proxy/masque.go",
+      "sha256": "6e08e56214d2256441095964bda5f4a6567acc9b5e1fc50fd9700acef2bd2008"
+    },
+    {
+      "path": "proxy/masque_providers.go",
+      "sha256": "7cf8bc496b0a30e565d14f0c2b1905dad32b77dafd4cf1b86be15cf2704bb313"
+    },
+    {
+      "path": "proxy/socks5_tcp.go",
+      "sha256": "060f733b838ef3405051c0d66dc14433af4f23eb82a3acc6519e9a5e17106734"
+    },
+    {
+      "path": "proxy/socks5_udp.go",
+      "sha256": "fcc6eaeb1d54758fdeedd10fd15177e5e266a6268dbb8054ba716c3e5afa6be2"
+    },
+    {
+      "path": "transport/cookie_crumble.go",
+      "sha256": "0dedafad72be9c49bdc6c1f1ad3ccbb8dc2b4a81be0f39278d3dfe0f446ca20a"
+    },
+    {
+      "path": "transport/errors.go",
+      "sha256": "e31310319f526b1decfc8227a26f18a26db00b6e93132efc17acae16c8f59b55"
+    },
+    {
+      "path": "transport/freebind_linux.go",
+      "sha256": "395624ec75d612ff2794e07b998c8ea889e18d88e719d9d7f3e56b5a235daada"
+    },
+    {
+      "path": "transport/freebind_other.go",
+      "sha256": "1bc8f0ac8352e9bcea61d3663b83e5147deb84c534ee87e8e754dc0abd45b962"
+    },
+    {
+      "path": "transport/h1_header_case.go",
+      "sha256": "7719a45879de1f89b6cf6ee5d388fb36e8153f36cd4adbd668085f5c118e4d5f"
+    },
+    {
+      "path": "transport/http1_transport.go",
+      "sha256": "2c6fabca929789bd3381f39529e6685a13ee8bf5f305b985d797e8e821aa0c84"
+    },
+    {
+      "path": "transport/http2_transport.go",
+      "sha256": "918d3ebf818e6c4f68daed93c8f77c452fc60c566dd6ce1110f861487ff322cc"
+    },
+    {
+      "path": "transport/http3_transport.go",
+      "sha256": "84738001e825aa40a541d7b82f9d42515451bb48824cd058dd244402be79aa36"
+    },
+    {
+      "path": "transport/keylog.go",
+      "sha256": "8923bbf369d8a16718537d7aa48f37cf09d01e68e31836613b0ce8fe37f1d981"
+    },
+    {
+      "path": "transport/speculative_conn.go",
+      "sha256": "b6327077eda914153a79613f772d189ce5dccb7b16de6ae1597c1ef5141a0528"
+    },
+    {
+      "path": "transport/stream.go",
+      "sha256": "f5a52b3707ba1eee3d786525eb051c78e979a15725636dd343579133d6a02461"
+    },
+    {
+      "path": "transport/tcpip.go",
+      "sha256": "1e7ba90cb20e079d4da9482b364b2836a11844d89a9abaa1d565047c21f8a2fe"
+    },
+    {
+      "path": "transport/tcpip_darwin.go",
+      "sha256": "ad676d1c8e0acdd21797a8e5d32145a312baa295e7208d939659984bcbb6bb86"
+    },
+    {
+      "path": "transport/tcpip_linux.go",
+      "sha256": "1cde4753258ca04999c607b3aadb60e3e34005ce709ba373f84b299ebe5b8698"
+    },
+    {
+      "path": "transport/tcpip_other.go",
+      "sha256": "d6c4b1e959abb2bd06f5b3c2320d502dfba8a5151e01b66eeec6a4753be1359a"
+    },
+    {
+      "path": "transport/tcpip_windows.go",
+      "sha256": "cddb4808f38ca7e129c69f0ec18dc688d4e6ec7e018559b09c80c0e5206806d0"
+    },
+    {
+      "path": "transport/tls_cache.go",
+      "sha256": "2a11e698861676a62b60cf6453b63da039cf78d149acfbd7658609d405e60d83"
+    },
+    {
+      "path": "transport/tls_verify.go",
+      "sha256": "039448234e36feebb86aafd26b4540f2e42362f9c5c3b174395633d3987e39f3"
+    },
+    {
+      "path": "transport/transport.go",
+      "sha256": "34496148f162bd9322cc9fa74179c81de7a9cefcae66fbc14c280678a1116d7e"
+    }
+  ],
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "local_compatibility_revision": "v1"
+}
