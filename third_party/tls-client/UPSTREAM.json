@@ -1,0 +1,125 @@
+{
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "module": "github.com/bogdanfinn/tls-client",
+  "version": "v1.16.0",
+  "origin_commit": "291b8f9e1b86cc35f210bdb6bf44770bf2660ab5",
+  "module_sum": "h1:km3YLI6CMRLZnfrC+hGStePPryIicd3hoxFQvHB1itY=",
+  "go_mod_sum": "h1:TxbiXlpZhNN5xmxzsr3KhNAeqoEEPJafwgBbyp26Phc=",
+  "local_compatibility_revision": "v1",
+  "upstream_license": "BSD-4-Clause",
+  "upstream_license_blob": "1ec3d9e13867040dc77f5a9f624c8412b95e5525",
+  "backport": {
+    "url": "https://github.com/bogdanfinn/tls-client/pull/270",
+    "commit": "ab95f96277426446c65b36187314fb08baccf71e"
+  },
+  "original_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "7dab9a4dd66987fbe576d53c1ee047c193725df6f4fac67de315a127417fd151"
+    },
+    {
+      "path": "bandwidth/nope_tracker.go",
+      "sha256": "b4d84d1f4da4e2b682b7cb2741c5da8e5ae24c31e9430c025dbd886441317425"
+    },
+    {
+      "path": "bandwidth/tracked_conn.go",
+      "sha256": "ae2dd6a6ca48649ca072d4e28c634e9994fdea640522ba6fcf9e0822cb386dc3"
+    },
+    {
+      "path": "bandwidth/tracker.go",
+      "sha256": "c85e8ee35be087ac7d940f05b3e1bec80045e790e4fa44ab86afead67560abe4"
+    },
+    {
+      "path": "client.go",
+      "sha256": "9f1f850a2e1163a2457a60e68dc01acc89a2f346598c7cc96d5332de287ae053"
+    },
+    {
+      "path": "client_options.go",
+      "sha256": "2d4eb91841407e4d94afd812490f1cd9a5e8dfa978a1c633be81157e19e44826"
+    },
+    {
+      "path": "connect.go",
+      "sha256": "bc2e558e3098f3c541e9b05682c2b2a756e5ee4ffa38a3460323f212f911c26b"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "df3e4c79cbe2eca0b96dd2417707424857e9f41c52660f723752dc777f7f59d7"
+    },
+    {
+      "path": "go.sum",
+      "sha256": "8ca973a55c24afdae85051b158774a820b7f1dd9165e8a2c5da3b4abce32b34e"
+    },
+    {
+      "path": "ja3.go",
+      "sha256": "980108763f13bfa899eab0cdd3ac0f15448213fd7234f1d606cd73db6e9a7c9c"
+    },
+    {
+      "path": "jar.go",
+      "sha256": "372ee55f4b6f55b455193f8d7e08bad8912d864a22deed56417664b6ea08a0af"
+    },
+    {
+      "path": "logger.go",
+      "sha256": "6e90b8e93e2f82e421f109353dd066b88b623c3205833c6bb89f4d3bc5820d09"
+    },
+    {
+      "path": "mapper.go",
+      "sha256": "afe983ed5040d2bcb5bf47430a32be53cc8d1a31901d7ae1f6dfe53c87a53e7d"
+    },
+    {
+      "path": "pinner.go",
+      "sha256": "2491b64dca003088ac7ecab23fd58b4f0d9e8c9871e950066bc0f99b9c929873"
+    },
+    {
+      "path": "profiles/contributed_browser_profiles.go",
+      "sha256": "937cdaca9ab1875a812f53d8c86da5e596bd9b9acbb51d6cdfbfe9506875c051"
+    },
+    {
+      "path": "profiles/contributed_custom_profiles.go",
+      "sha256": "cffe656c2612c408a2cadc935b1bad16a64ad3da100c127136b3ba8b5cde1e3d"
+    },
+    {
+      "path": "profiles/extension_data.go",
+      "sha256": "a613710a4a4e9d2a34fb8f9ba6c91c51f79f45badd399606e2dc63acf3ed4e8c"
+    },
+    {
+      "path": "profiles/grease.go",
+      "sha256": "9220eb30e45d2601af5c0bfa117c552837b4fb144cc8c3626d7426b40f2c2e48"
+    },
+    {
+      "path": "profiles/internal_browser_profiles.go",
+      "sha256": "0b5cdfe72526dceed6e52a1053fd770f304141b67c7b032fd5dba63a56d5fe6c"
+    },
+    {
+      "path": "profiles/internal_custom_profiles.go",
+      "sha256": "f7915a2249f5d282f018bdc5117051f903769931cde9d17adecc9afcb207ce99"
+    },
+    {
+      "path": "profiles/profiles.go",
+      "sha256": "c3143ab0d5a41ff0a78b1b09570af12dc3acdacaa50315575a2e5d76028ee387"
+    },
+    {
+      "path": "racer.go",
+      "sha256": "a2e1f29ff6e9c3e830d6429c3022e7a5306b4bb92c55d6379d930dc889af0954"
+    },
+    {
+      "path": "roundtripper.go",
+      "sha256": "fd595e9ec9a9705a445a1e40e57104f4583eaea966b397cda68a7c905127c8b1"
+    },
+    {
+      "path": "socks5_udp.go",
+      "sha256": "a13f999f3c52352459ae51157821fe6dbfdf0743ea03bda59e79dbe4d39564fe"
+    },
+    {
+      "path": "utils.go",
+      "sha256": "d2498db995c5de07c8feeb8e46644baaca361d263131de9368ace0a6dd6a7099"
+    },
+    {
+      "path": "websocket.go",
+      "sha256": "43cd557f00e235429f401e4dffe84cdebb64901734e2292ab2e6ca6306d3bc62"
+    },
+    {
+      "path": "websocket_options.go",
+      "sha256": "abd5c920377daa1b8342a7f9d6f5d98b1effce903138b92a810dede459fc89f8"
+    }
+  ]
+}

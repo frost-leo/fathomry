@@ -22,6 +22,15 @@ go 1.26.0
 require (
 	github.com/apache/arrow-go/v18 v18.6.0
 	github.com/apache/iceberg-go v0.6.0
+	// TODO(gh-49): Recheck tls-client compatibility before SDK upgrades or framework
+	// releases. Retire local fixes only after an official candidate passes request
+	// isolation, racing winner/loser cleanup, cancellation, body integrity, proxy
+	// isolation, reconnect and native-extension regression gates. Preserve Fathomry
+	// contracts and exact upstream/local-patch provenance; do not rely on a tag or
+	// release note alone. Track evidence: https://github.com/frost-leo/fathomry/issues/49
+	// Publication also requires resolution of the upstream BSD-4-Clause / GPL
+	// compatibility gate; preserving LICENSE is not permission to relicense it.
+	github.com/bogdanfinn/tls-client v1.16.0
 	github.com/duckdb/duckdb-go-bindings v0.10505.0
 	github.com/duckdb/duckdb-go/v2 v2.10505.0
 	github.com/go-sql-driver/mysql v1.10.1
@@ -37,6 +46,7 @@ require (
 	// read/listen/reconnect/close gates; preserve Fathomry's contracts. Track evidence:
 	// https://github.com/frost-leo/fathomry/issues/21
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
+	github.com/quic-go/quic-go v0.59.1
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/viper v1.21.0
 	github.com/trinodb/trino-go-client v0.333.0
@@ -51,6 +61,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16
 	github.com/aws/smithy-go v1.25.1
+	github.com/bogdanfinn/fhttp v0.6.9
 	github.com/twmb/franz-go v1.21.6
 	github.com/twmb/franz-go/pkg/kfake v0.0.0-20260911174156-65d23a567563
 	github.com/twmb/franz-go/pkg/kmsg v1.13.1
@@ -90,7 +101,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
+	github.com/bdandy/go-errors v1.2.2 // indirect
+	github.com/bdandy/go-socks4 v1.2.3 // indirect
+	github.com/bogdanfinn/quic-go-utls v1.0.10-utls // indirect
+	github.com/bogdanfinn/utls v1.7.8-barnius // indirect
+	github.com/bogdanfinn/websocket v1.5.6-barnius // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+	github.com/cloudflare/circl v1.6.2 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/containerd/console v1.0.5 // indirect
 	github.com/creasty/defaults v1.8.0 // indirect
@@ -115,11 +132,13 @@ require (
 	github.com/mattn/go-runewidth v0.0.23 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pterm/pterm v0.12.83 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/substrait-io/substrait v0.87.0 // indirect
 	github.com/substrait-io/substrait-go/v8 v8.1.0 // indirect
 	github.com/substrait-io/substrait-protobuf/go v0.85.0 // indirect
+	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5 // indirect
 	github.com/twmb/avro v1.7.2 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
@@ -171,3 +190,5 @@ require (
 	gopkg.in/ini.v1 v1.67.3 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 )
+
+replace github.com/bogdanfinn/tls-client => ./third_party/tls-client
