@@ -137,6 +137,12 @@ Its local SDK compatibility patch and Provider have separate version axes.
 Upstream license compatibility remains unresolved; implementation delivery does
 not establish distribution permission or production/arbitrary-profile qualification.
 
+The [HTTPcloak v1 integration](reference/internal/httpclient/httpcloak/v1/interface.md)
+adds explicit H1/H2/direct-H3 requests and streams, external native/JSON presets,
+dynamic TCP proxies, bounded native ownership and independent framing/callback
+evidence. SDK corrections are separate from the Provider contract. UDP/MASQUE
+proxies, automatic protocol racing and native Session policy are not qualified.
+
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
 The [configuration contract](reference/internal/resource/configuration.md),
