@@ -22,6 +22,7 @@ import (
 
 type directDialer struct {
 	dialer net.Dialer
+	compat *compatibilityState
 }
 
 func newDirectDialer(timeout time.Duration, localAddr *net.TCPAddr, _dialer net.Dialer) proxy.ContextDialer {
@@ -36,15 +37,20 @@ func newDirectDialer(timeout time.Duration, localAddr *net.TCPAddr, _dialer net.
 }
 
 func (d *directDialer) Dial(network, addr string) (net.Conn, error) {
-	return d.dialer.Dial(network, addr)
+	return d.DialContext(context.Background(), network, addr)
 }
 
 func (d *directDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	if d.compat != nil {
+		return d.compat.dial(ctx, network, addr, d.dialer.DialContext)
+	}
 	return d.dialer.DialContext(ctx, network, addr)
 }
 
 type socksContextDialer struct {
 	socksDialer proxy.Dialer
+	forward     *directDialer
+	proxyURL    *url.URL
 }
 
 func newSocksContextDialer(socksDialer proxy.Dialer) socksContextDialer {
@@ -54,6 +60,18 @@ func newSocksContextDialer(socksDialer proxy.Dialer) socksContextDialer {
 }
 
 func (s *socksContextDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if s.proxyURL != nil {
+		forward := &compatSocksForward{ctx: ctx, base: s.forward}
+		defer forward.finish()
+		dialer, err := proxy.FromURL(s.proxyURL, forward)
+		if err != nil {
+			return nil, err
+		}
+		return dialer.Dial(network, address)
+	}
+	if dialer, ok := s.socksDialer.(proxy.ContextDialer); ok {
+		return dialer.DialContext(ctx, network, address)
+	}
 	return s.socksDialer.Dial(network, address)
 }
 
@@ -165,23 +183,29 @@ func handleSocks5ProxyDialer(proxyUrl *url.URL, dialer net.Dialer) (proxy.Contex
 		proxyAuth = nil
 	}
 
-	socksDialer, err := proxy.SOCKS5("tcp", proxyUrl.Host, proxyAuth, &dialer)
+	forward := &directDialer{dialer: dialer}
+	socksDialer, err := proxy.SOCKS5("tcp", proxyUrl.Host, proxyAuth, forward)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create socks5 proxy: %w", err)
 	}
 
 	scd := newSocksContextDialer(socksDialer)
+	scd.forward = forward
 
 	return &scd, nil
 }
 
 func handleSocks4ProxyDialer(proxyUrl *url.URL, dialer net.Dialer) (proxy.ContextDialer, error) {
-	socks4Dialer, err := proxy.FromURL(proxyUrl, &dialer)
+	forward := &directDialer{dialer: dialer}
+	socks4Dialer, err := proxy.FromURL(proxyUrl, forward)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create socks4 proxy dialer: %w", err)
 	}
 
 	scd := newSocksContextDialer(socks4Dialer)
+	scd.forward = forward
+	copyURL := *proxyUrl
+	scd.proxyURL = &copyURL
 	return &scd, nil
 }
 
@@ -213,24 +237,50 @@ func (c *connectDialer) DialContext(ctx context.Context, network, address string
 	}
 
 	connectHttp2 := func(rawConn net.Conn, h2clientConn *http2.ClientConn) (net.Conn, error) {
+		// A dial context governs establishment, not the returned tunnel's life.
+		lifetime, cancelLifetime := context.WithCancel(context.WithoutCancel(ctx))
+		req := req.Clone(lifetime)
 		req.Proto = "HTTP/2.0"
 		req.ProtoMajor = 2
 		req.ProtoMinor = 0
 		pr, pw := io.Pipe()
-		req.Body = pr
+		body := newCompatBody(pr, nil)
+		req.Body = body
+		setup, cancelSetup := context.WithCancel(ctx)
+		if c.Timeout > 0 {
+			cancelSetup()
+			setup, cancelSetup = context.WithTimeout(ctx, c.Timeout)
+		}
+		interrupted := make(chan struct{})
+		stop := context.AfterFunc(setup, func() {
+			cancelLifetime()
+			_ = body.Close()
+			_ = pw.Close()
+			close(interrupted)
+		})
 
 		resp, err := h2clientConn.RoundTrip(req)
-		if err != nil {
-			_ = rawConn.Close()
-			return nil, err
+		if !stop() {
+			<-interrupted
+		}
+		setupErr := setup.Err()
+		cancelSetup()
+		if err == nil && (resp == nil || resp.StatusCode != http.StatusOK) {
+			err = errors.New("Proxy returned no CONNECT response")
+			if resp != nil {
+				err = errors.New("Proxy responded with non 200 code: " + resp.Status)
+			}
+		}
+		if err != nil || setupErr != nil {
+			cancelLifetime()
+			cleanup := errors.Join(pw.Close(), body.Close())
+			if resp != nil && resp.Body != nil {
+				cleanup = errors.Join(cleanup, resp.Body.Close())
+			}
+			return nil, errors.Join(err, setupErr, cleanup)
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			_ = rawConn.Close()
-			return nil, errors.New("Proxy responded with non 200 code: " + resp.Status)
-		}
-
-		return newHttp2Conn(rawConn, pw, resp.Body), nil
+		return newHttp2Conn(rawConn, pw, resp.Body, body, cancelLifetime, !c.EnableH2ConnReuse), nil
 	}
 
 	connectHttp1 := func(rawConn net.Conn) (net.Conn, error) {
@@ -255,7 +305,11 @@ func (c *connectDialer) DialContext(ctx context.Context, network, address string
 			return nil, err
 		}
 
-		resp, err := http.ReadResponse(bufio.NewReader(rawConn), req)
+		var reader io.Reader = rawConn
+		if maximum := c.compat.proxyHeaderLimit(); maximum > 0 {
+			reader = io.LimitReader(rawConn, maximum)
+		}
+		resp, err := http.ReadResponse(bufio.NewReader(reader), req)
 		if err != nil {
 			if errors.Is(err, os.ErrDeadlineExceeded) {
 				c.logger.Error("deadline exceeded while trying to read proxy connection")
@@ -288,6 +342,9 @@ func (c *connectDialer) DialContext(ctx context.Context, network, address string
 				proxyConn, err := connectHttp2(rc, cc)
 				if err == nil {
 					return proxyConn, err
+				}
+				if ctx.Err() != nil {
+					return nil, err
 				}
 				// else: carry on and try again
 			}
@@ -335,6 +392,17 @@ func (c *connectDialer) DialContext(ctx context.Context, network, address string
 		return nil, errors.New("scheme " + c.ProxyUrl.Scheme + " is not supported")
 	}
 
+	interrupted := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { _ = rawConn.Close(); close(interrupted) })
+	var stopOnce sync.Once
+	stopRaw := func() {
+		stopOnce.Do(func() {
+			if !stop() {
+				<-interrupted
+			}
+		})
+	}
+	defer stopRaw()
 	switch negotiatedProtocol {
 	case "":
 		fallthrough
@@ -342,6 +410,9 @@ func (c *connectDialer) DialContext(ctx context.Context, network, address string
 		return connectHttp1(rawConn)
 	case "h2":
 		t := http2.Transport{}
+		if maximum := c.compat.proxyHeaderLimit(); maximum > 0 {
+			t.Settings = map[http2.SettingID]uint32{http2.SettingMaxHeaderListSize: uint32(maximum)}
+		}
 		h2clientConn, err := t.NewClientConn(rawConn)
 		if err != nil {
 			_ = rawConn.Close()
@@ -352,6 +423,10 @@ func (c *connectDialer) DialContext(ctx context.Context, network, address string
 		if err != nil {
 			_ = rawConn.Close()
 			return nil, err
+		}
+		stopRaw()
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Join(err, proxyConn.Close(), rawConn.Close())
 		}
 
 		if c.EnableH2ConnReuse {
@@ -368,8 +443,8 @@ func (c *connectDialer) DialContext(ctx context.Context, network, address string
 	}
 }
 
-func newHttp2Conn(c net.Conn, pipedReqBody *io.PipeWriter, respBody io.ReadCloser) net.Conn {
-	return &http2Conn{Conn: c, in: pipedReqBody, out: respBody}
+func newHttp2Conn(c net.Conn, pipedReqBody *io.PipeWriter, respBody io.ReadCloser, requestBody io.Closer, cancel context.CancelFunc, ownsRaw bool) net.Conn {
+	return &http2Conn{Conn: c, in: pipedReqBody, out: respBody, requestBody: requestBody, cancel: cancel, ownsRaw: ownsRaw}
 }
 
 func (c *connectDialer) dialRaw(ctx context.Context, network, address string) (net.Conn, error) {
@@ -381,8 +456,13 @@ func (c *connectDialer) dialRaw(ctx context.Context, network, address string) (n
 
 type http2Conn struct {
 	net.Conn
-	in  *io.PipeWriter
-	out io.ReadCloser
+	in          *io.PipeWriter
+	out         io.ReadCloser
+	requestBody io.Closer
+	cancel      context.CancelFunc
+	ownsRaw     bool
+	once        sync.Once
+	err         error
 }
 
 func (h *http2Conn) Read(p []byte) (n int, err error) {
@@ -394,7 +474,15 @@ func (h *http2Conn) Write(p []byte) (n int, err error) {
 }
 
 func (h *http2Conn) Close() error {
-	return errors.Join(h.in.Close(), h.out.Close())
+	var rawErr error
+	if h.ownsRaw {
+		rawErr = h.Conn.Close()
+	}
+	h.once.Do(func() {
+		h.cancel()
+		h.err = errors.Join(h.in.Close(), h.requestBody.Close(), h.out.Close())
+	})
+	return errors.Join(h.err, rawErr)
 }
 
 func (h *http2Conn) CloseConn() error {

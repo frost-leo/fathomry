@@ -203,6 +203,7 @@ func (pr *protocolRacer) startRace(req *http.Request, addr string, getTransportF
 	}
 	remaining := 2
 	var causes []error
+	var cleanup error
 	for remaining > 0 {
 		select {
 		case result := <-results:
@@ -214,28 +215,32 @@ func (pr *protocolRacer) startRace(req *http.Request, addr string, getTransportF
 						leg.cancel()
 					}
 				}
-				pr.drainRace(results, remaining)
+				drained := pr.drainRace(results, remaining)
 				body := result.response.Body
 				if body == nil {
 					body = http.NoBody
 				}
-				result.response.Body = newCompatBody(body, func() { pr.cleanupLeg(result.leg, nil) })
+				result.response.Body = newCompatBody(body, func() error {
+					cleanup := errors.Join(cleanup, pr.cleanupLeg(result.leg, nil))
+					<-drained.done
+					return errors.Join(cleanup, drained.err)
+				})
 				return result.response, nil
 			}
 			if result.err == nil {
 				result.err = errors.New("tls-client: empty racing result")
 			}
 			causes = append(causes, result.err)
-			pr.cleanupLeg(result.leg, result.response)
+			cleanup = errors.Join(cleanup, pr.cleanupLeg(result.leg, result.response))
 		case <-req.Context().Done():
 			for _, leg := range legs {
 				leg.cancel()
 			}
 			pr.drainRace(results, remaining)
-			return nil, errors.Join(req.Context().Err(), errors.Join(causes...))
+			return nil, errors.Join(req.Context().Err(), errors.Join(causes...), cleanup)
 		}
 	}
-	return nil, errors.Join(causes...)
+	return nil, errors.Join(errors.Join(causes...), cleanup)
 }
 
 func (pr *protocolRacer) runLeg(leg *raceLeg, addr string, getTransportFunc func(*http.Request, string) error, results chan<- racingResult) {
@@ -266,27 +271,40 @@ func (pr *protocolRacer) runLeg(leg *raceLeg, addr string, getTransportFunc func
 	result.response, result.err = pr.roundTrip(transport, leg.request, addr)
 }
 
-func (pr *protocolRacer) cleanupLeg(leg *raceLeg, response *http.Response) {
+func (pr *protocolRacer) cleanupLeg(leg *raceLeg, response *http.Response) error {
 	leg.cancel()
+	var cleanup error
 	if response != nil && response.Body != nil {
-		pr.compat.failed(response.Body.Close())
+		cleanup = response.Body.Close()
 	}
 	if leg.request.Body != nil {
-		pr.compat.failed(leg.request.Body.Close())
+		cleanup = errors.Join(cleanup, leg.request.Body.Close())
 	}
+	pr.compat.failed(cleanup)
+	return cleanup
 }
-func (pr *protocolRacer) drainRace(results <-chan racingResult, remaining int) {
+
+type raceDrain struct {
+	done chan struct{}
+	err  error
+}
+
+func (pr *protocolRacer) drainRace(results <-chan racingResult, remaining int) *raceDrain {
+	drained := &raceDrain{done: make(chan struct{})}
 	if remaining == 0 {
-		return
+		close(drained.done)
+		return drained
 	}
 	done := pr.compat.child()
 	go func() {
 		defer done()
+		defer close(drained.done)
 		for range remaining {
 			result := <-results
-			pr.cleanupLeg(result.leg, result.response)
+			drained.err = errors.Join(drained.err, pr.cleanupLeg(result.leg, result.response))
 		}
 	}()
+	return drained
 }
 
 // roundTrip sends the request over transport and, when the dial underneath

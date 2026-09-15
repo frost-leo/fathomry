@@ -130,6 +130,13 @@ production-site qualification; business credential and Provider-selection polici
 are not supplied. The integration/configuration versions are distinct from Go's
 standard-library version.
 
+The [tls-client v1 integration](reference/internal/httpclient/tlsclient/v1/interface.md)
+adds externally configured native/custom profiles, controlled H1/H2/H3-racing
+requests and streams, runtime proxy isolation and shared native resource bounds.
+Its local SDK compatibility patch and Provider have separate version axes.
+Publication remains blocked by the unresolved upstream license compatibility gate;
+loopback verification is not production-site or arbitrary-profile qualification.
+
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
 The [configuration contract](reference/internal/resource/configuration.md),

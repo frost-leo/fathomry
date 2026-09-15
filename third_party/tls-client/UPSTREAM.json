@@ -5,7 +5,7 @@
   "origin_commit": "291b8f9e1b86cc35f210bdb6bf44770bf2660ab5",
   "module_sum": "h1:km3YLI6CMRLZnfrC+hGStePPryIicd3hoxFQvHB1itY=",
   "go_mod_sum": "h1:TxbiXlpZhNN5xmxzsr3KhNAeqoEEPJafwgBbyp26Phc=",
-  "local_compatibility_revision": "v1",
+  "local_compatibility_revision": "v2",
   "upstream_license": "BSD-4-Clause",
   "upstream_license_blob": "1ec3d9e13867040dc77f5a9f624c8412b95e5525",
   "backport": {

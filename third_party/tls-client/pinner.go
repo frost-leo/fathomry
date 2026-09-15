@@ -3,7 +3,8 @@ package tls_client
 import (
 	"errors"
 	"fmt"
-	"reflect"
+	"net"
+	"slices"
 	"strings"
 
 	http "github.com/bogdanfinn/fhttp"
@@ -17,10 +18,9 @@ var DefaultBadPinHandler = func(req *http.Request) {
 
 var ErrBadPinDetected = errors.New("bad ssl pin detected")
 
-var certificatePinStorage = hpkp.NewMemStorage()
-
 type certificatePinner struct {
 	certificatePins map[string][]string
+	storage         *hpkp.MemStorage
 }
 
 type CertificatePinner interface {
@@ -30,6 +30,7 @@ type CertificatePinner interface {
 func NewCertificatePinner(certificatePins map[string][]string) (CertificatePinner, error) {
 	pinner := &certificatePinner{
 		certificatePins: certificatePins,
+		storage:         hpkp.NewMemStorage(),
 	}
 
 	err := pinner.init()
@@ -41,32 +42,54 @@ func NewCertificatePinner(certificatePins map[string][]string) (CertificatePinne
 }
 
 func (cp *certificatePinner) init() error {
-	if len(cp.certificatePins) == 0 {
-		return nil
-	}
-
+	normalized := make(map[string][]string, len(cp.certificatePins))
 	for host, pinsByHost := range cp.certificatePins {
-		includeSubdomains := false
-		if strings.Contains(host, "*.") {
-			includeSubdomains = true
-			host = strings.ReplaceAll(host, "*.", "")
+		includeSubdomains := strings.HasPrefix(host, "*.")
+		if includeSubdomains {
+			host = strings.TrimPrefix(host, "*.")
+		}
+		var err error
+		host, err = canonicalPinHost(host)
+		if err != nil {
+			return err
+		}
+		if includeSubdomains && net.ParseIP(host) != nil {
+			return errors.New("certificate pin wildcard requires a DNS name")
 		}
 
-		pinnedHost := certificatePinStorage.Lookup(host)
-
-		if pinnedHost != nil && reflect.DeepEqual(pinnedHost.Sha256Pins, pinsByHost) {
-			// another pinner instance with the same Pins already initialized the host. we do not need to pin again
+		if prior, ok := normalized[host]; ok {
+			pinnedHost := cp.storage.Lookup(host)
+			if !slices.Equal(prior, pinsByHost) || pinnedHost.IncludeSubDomains != includeSubdomains {
+				return errors.New("conflicting certificate pins for a canonical host")
+			}
 			continue
 		}
-
-		certificatePinStorage.Add(host, &hpkp.Header{
+		pins := slices.Clone(pinsByHost)
+		normalized[host] = pins
+		cp.storage.Add(host, &hpkp.Header{
 			Permanent:         true,
-			Sha256Pins:        pinsByHost,
+			Sha256Pins:        pins,
 			IncludeSubDomains: includeSubdomains,
 		})
 	}
-
+	cp.certificatePins = normalized
 	return nil
+}
+
+func canonicalPinHost(host string) (string, error) {
+	if address := net.ParseIP(host); address != nil {
+		return address.String(), nil
+	}
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	if host == "" || strings.ContainsAny(host, "*:\\/?#@[] \t\r\n\x00") {
+		return "", errors.New("invalid certificate pin host")
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" {
+			return "", errors.New("invalid certificate pin host")
+		}
+	}
+	return host, nil
 }
 
 func (cp *certificatePinner) Pin(conn *tls.UConn, host string) error {
@@ -76,7 +99,12 @@ func (cp *certificatePinner) Pin(conn *tls.UConn, host string) error {
 		return nil
 	}
 
-	pinnedHost := certificatePinStorage.Lookup(host)
+	var err error
+	host, err = canonicalPinHost(host)
+	if err != nil {
+		return err
+	}
+	pinnedHost := cp.storage.Lookup(host)
 
 	if pinnedHost == nil {
 		// host is not pinned, we treat it as valid

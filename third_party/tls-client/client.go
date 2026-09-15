@@ -584,7 +584,7 @@ func (c *httpClient) Do(req *http.Request) (*http.Response, error) {
 	c.executePostHooks(req, resp, err)
 	if done != nil {
 		if resp != nil && resp.Body != nil {
-			resp.Body = newCompatBody(resp.Body, done)
+			resp.Body = newCompatBody(resp.Body, func() error { done(); return nil })
 		} else {
 			done()
 		}

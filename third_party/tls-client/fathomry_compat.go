@@ -32,7 +32,7 @@ import (
 )
 
 // FathomryCompatibilityRevision identifies local corrections, not the SDK version.
-const FathomryCompatibilityRevision = "v1"
+const FathomryCompatibilityRevision = "v2"
 
 var (
 	ErrClientClosed      = errors.New("tls-client: client is closed")
@@ -57,22 +57,26 @@ func Close(client HttpClient) error {
 }
 
 type compatibilityState struct {
-	ctx     context.Context
-	cancel  context.CancelFunc
-	mu      sync.Mutex
-	closed  bool
-	work    sync.WaitGroup
-	conns   map[*compatConn]struct{}
-	h3      map[*http3.Transport]struct{}
-	closeMu sync.Mutex
-	cleanup error
+	ctx        context.Context
+	cancel     context.CancelFunc
+	mu         sync.Mutex
+	closed     bool
+	finished   bool
+	active     int
+	configured bool
+	control    FathomryControlV1
+	work       sync.WaitGroup
+	conns      map[*compatConn]struct{}
+	h3         map[*http3.Transport]func()
+	closeMu    sync.Mutex
+	cleanup    error
 }
 
 type compatibilityContextKey struct{}
 
 func newCompatibilityState() *compatibilityState {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &compatibilityState{ctx: ctx, cancel: cancel, conns: make(map[*compatConn]struct{}), h3: make(map[*http3.Transport]struct{})}
+	return &compatibilityState{ctx: ctx, cancel: cancel, conns: make(map[*compatConn]struct{}), h3: make(map[*http3.Transport]func())}
 }
 func (state *compatibilityState) begin(ctx context.Context) (context.Context, func(), error) {
 	state.mu.Lock()
@@ -81,23 +85,34 @@ func (state *compatibilityState) begin(ctx context.Context) (context.Context, fu
 		return nil, nil, ErrClientClosed
 	}
 	state.work.Add(1)
+	state.active++
 	state.mu.Unlock()
 	work, cancel := context.WithCancel(ctx)
 	stop := context.AfterFunc(state.ctx, cancel)
 	if state.ctx.Err() != nil {
 		cancel()
 	}
-	return work, func() { stop(); cancel(); state.work.Done() }, nil
+	return work, func() { stop(); cancel(); state.end() }, nil
+}
+
+func (state *compatibilityState) end() {
+	state.mu.Lock()
+	state.active--
+	state.mu.Unlock()
+	state.work.Done()
 }
 
 // A child is reserved only while its parent owns a work token. Cleanup can
 // therefore remain owned after new admission has been sealed.
 func (state *compatibilityState) child() func() {
+	state.mu.Lock()
 	state.work.Add(1)
-	return state.work.Done
+	state.active++
+	state.mu.Unlock()
+	return state.end
 }
 func (state *compatibilityState) failed(err error) {
-	if err == nil || errors.Is(err, net.ErrClosed) {
+	if err == nil || compatClosedError(err) {
 		return
 	}
 	state.mu.Lock()
@@ -106,14 +121,41 @@ func (state *compatibilityState) failed(err error) {
 		state.cleanup = err
 	}
 }
+
+func compatClosedError(err error) bool {
+	switch value := err.(type) {
+	case interface{ Unwrap() []error }:
+		causes := value.Unwrap()
+		if len(causes) == 0 {
+			return false
+		}
+		for _, cause := range causes {
+			if !compatClosedError(cause) {
+				return false
+			}
+		}
+		return true
+	case interface{ Unwrap() error }:
+		return compatClosedError(value.Unwrap())
+	default:
+		return errors.Is(err, net.ErrClosed)
+	}
+}
+
 func (state *compatibilityState) track(conn net.Conn) (net.Conn, error) {
+	return state.trackReserved(conn, func() {})
+}
+
+func (state *compatibilityState) trackReserved(conn net.Conn, release func()) (net.Conn, error) {
 	if nilInterface(conn) {
+		release()
 		return nil, errors.New("tls-client: nil native connection")
 	}
 	if tracked, ok := conn.(*compatConn); ok && tracked.owner == state {
+		release()
 		return tracked, nil
 	}
-	tracked := &compatConn{native: conn, owner: state, uses: newCompatUse()}
+	tracked := &compatConn{native: conn, owner: state, uses: newCompatUse(), release: release}
 	state.mu.Lock()
 	state.conns[tracked] = struct{}{}
 	closed := state.closed
@@ -132,11 +174,16 @@ func (state *compatibilityState) dial(ctx context.Context, network, addr string,
 	if err = work.Err(); err != nil {
 		return nil, err
 	}
-	conn, err := dial(work, network, addr)
-	if conn == nil && err != nil {
+	release, err := state.reserve(false)
+	if err != nil {
 		return nil, err
 	}
-	tracked, trackErr := state.track(conn)
+	conn, err := dial(work, network, addr)
+	if conn == nil && err != nil {
+		release()
+		return nil, err
+	}
+	tracked, trackErr := state.trackReserved(conn, release)
 	if err != nil || trackErr != nil || work.Err() != nil {
 		if tracked != nil {
 			err = errors.Join(err, tracked.Close())
@@ -146,13 +193,18 @@ func (state *compatibilityState) dial(ctx context.Context, network, addr string,
 	return tracked, nil
 }
 func (state *compatibilityState) registerH3(transport *http3.Transport) error {
+	release, err := state.reserve(true)
+	if err != nil {
+		return errors.Join(err, transport.Close())
+	}
 	state.mu.Lock()
 	closed := state.closed
 	if !closed {
-		state.h3[transport] = struct{}{}
+		state.h3[transport] = release
 	}
 	state.mu.Unlock()
 	if closed {
+		release()
 		return errors.Join(ErrClientClosed, transport.Close())
 	}
 	return nil
@@ -180,16 +232,24 @@ func (state *compatibilityState) close(rt *roundTripper) error {
 	state.mu.Unlock()
 	state.cancel()
 	state.closeTCP()
+	var retired []*http3.Transport
 	for _, transport := range transports {
 		err := transport.Close()
 		state.failed(err)
 		if err == nil {
-			state.mu.Lock()
-			delete(state.h3, transport)
-			state.mu.Unlock()
+			retired = append(retired, transport)
 		}
 	}
 	state.work.Wait()
+	for _, transport := range retired {
+		state.mu.Lock()
+		release := state.h3[transport]
+		delete(state.h3, transport)
+		state.mu.Unlock()
+		if release != nil {
+			release()
+		}
+	}
 	state.closeTCP()
 	rt.CloseIdleConnections()
 	rt.Lock()
@@ -200,6 +260,7 @@ func (state *compatibilityState) close(rt *roundTripper) error {
 	rt.Unlock()
 	state.mu.Lock()
 	defer state.mu.Unlock()
+	state.finished = state.active == 0 && len(state.conns) == 0 && len(state.h3) == 0
 	return state.cleanup
 }
 func nilInterface(value any) bool {
@@ -252,11 +313,12 @@ func (use *compatUse) stop() <-chan struct{} {
 }
 
 type compatConn struct {
-	native net.Conn
-	owner  *compatibilityState
-	uses   *compatUse
-	mu     sync.Mutex
-	closed bool
+	native  net.Conn
+	owner   *compatibilityState
+	uses    *compatUse
+	mu      sync.Mutex
+	closed  bool
+	release func()
 }
 
 func (conn *compatConn) Read(data []byte) (int, error) {
@@ -282,11 +344,14 @@ func (conn *compatConn) Close() error {
 	done := conn.uses.stop()
 	err := conn.native.Close()
 	<-done
-	if err == nil || errors.Is(err, net.ErrClosed) {
+	if err == nil || compatClosedError(err) {
 		conn.closed = true
 		conn.owner.mu.Lock()
 		delete(conn.owner.conns, conn)
 		conn.owner.mu.Unlock()
+		if conn.release != nil {
+			conn.release()
+		}
 		return nil
 	}
 	conn.owner.failed(err)
@@ -343,11 +408,11 @@ type compatBody struct {
 	io.ReadCloser
 	uses  *compatUse
 	once  sync.Once
-	after func()
+	after func() error
 	err   error
 }
 
-func newCompatBody(raw io.ReadCloser, after func()) *compatBody {
+func newCompatBody(raw io.ReadCloser, after func() error) *compatBody {
 	return &compatBody{ReadCloser: raw, uses: newCompatUse(), after: after}
 }
 
@@ -365,7 +430,7 @@ func (body *compatBody) Close() error {
 		body.err = body.ReadCloser.Close()
 		<-done
 		if body.after != nil {
-			body.after()
+			body.err = errors.Join(body.err, body.after())
 		}
 	})
 	return body.err

@@ -19,9 +19,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Local tls-client compatibility corrections
 
-**Status:** SDK-only local compatibility checkpoint for #49. This is not a
-Fathomry Provider implementation or a publication-ready dependency decision.
-The subsequent Provider integration belongs in a separate commit.
+**Status:** local compatibility dependency for #49, with a separately reviewable
+Provider integration in internal/httpclient/tlsclient/v1. This is not a
+publication-ready dependency decision. The original SDK-fix commit remains separate.
 
 ## Publication and license gate
 
@@ -40,7 +40,7 @@ upstream material. The embedded upstream notice in connect.go is also preserved.
 - Module: github.com/bogdanfinn/tls-client v1.16.0.
 - Immutable module-proxy origin: 291b8f9e1b86cc35f210bdb6bf44770bf2660ab5.
 - Original module sum: h1:km3YLI6CMRLZnfrC+hGStePPryIicd3hoxFQvHB1itY=.
-- Compatibility revision: v1, exported as FathomryCompatibilityRevision.
+- Compatibility revision: v2, exported as FathomryCompatibilityRevision.
 - [UPSTREAM.json](UPSTREAM.json) records original runtime-file hashes and provenance.
 - Runtime root files, profiles, bandwidth, module metadata and license are retained.
   Upstream examples, CFFI applications and external-site tests are not copied.
@@ -58,11 +58,37 @@ upstream material. The embedded upstream notice in connect.go is also preserved.
 | client.go | Pre-canceled/closed admission and native hook lifetime accounting. Existing hooks and native dial options are not removed. |
 | connect.go | Tracked physical proxy connections and context-driven proxy TLS setup, so a retained H2 CONNECT session does not escape cleanup. |
 | socks5_udp.go | Tracked SOCKS control connection and joined cleanup of connection-owned QUIC transport/UDP resources. |
+| fathomry_control.go | One-time Provider acquisition hooks for shared TCP/H3 quotas, positive managed shutdown evidence and bounded CONNECT response headers. |
+| pinner.go | Per-client pin storage instead of an unbounded, cross-instance process-global store. |
+| fathomry_profile.go | Preserve explicit profile-factory failures while retaining native placeholder behavior; refuse native modes that ignore explicit factories or forced H1. |
+| fathomry_http3.go | Check encoded response Content-Length before transparent gzip; preserve native H3 compression/header-input behavior. |
 | profiles/contributed_browser_profiles.go | Go formatting only, required by repository-wide formatting checks. No profile selection or contents are changed. |
 
 There is no new business profile, profile allowlist, Cookie/token policy, business
 retry or Provider rotation logic. Native retry/racing may still produce multiple
 external attempts; cancellation does not establish non-effect.
+
+Revision v2 adds the Provider control bridge, pin isolation, physical SOCKS
+connection accounting, context-interruptible CONNECT/SOCKS4 negotiation and
+bounded CONNECT headers. A successful racing response's Body.Close also joins
+loser cleanup and exposes its failures; canceled calls retain the original
+source-owned asynchronous drain behavior. The Provider keeps separate per-call
+reader evidence and source cleanup history. These integration requirements were
+not retroactively attributed to the original v1 SDK-only commit.
+
+The v2 integration review also corrected canonical DNS/IP pin matching and
+conflicting entries, generation-atomic reconnect cache retirement, cleartext
+IP-family selection, H2 CONNECT pipe/context handoff and cleanup, and encoded H3
+framing before decompression. `ConfigureFathomry` selects one physical connection
+per built-in H2 proxy tunnel because native deadlines operate on that connection,
+not individual streams. Origin pooling remains enabled. Physical cleanup failures
+remain retryable; the original raw SDK's unconfigured shared mode is not qualified.
+Some native H2 proxy refusals wait for the configured setup budget before their
+upload writer unblocks; status and deadline evidence remain available. No additional
+fhttp/QUIC/uTLS fork or per-stream deadline implementation is introduced.
+Mixed cleanup errors are not classified as confirmed closure merely because one
+branch contains net.ErrClosed. Only entirely closed-cause chains/joins are benign;
+independent failures retain their original error and ownership until successful retry.
 
 ## Native Close obligations and limits
 
@@ -80,8 +106,8 @@ attempt counts, distributed quotas or complete response-integrity policy.
 
 These changes are not a general certification of all upstream behavior. SDK cache
 bounds, configuration provenance, independent invocation evidence, controlled
-public extension exposure and complete Provider-level integrity validation remain
-work for the separate Fathomry integration. Real proxy-service/SOCKS deployment
+extension exposure and complete Provider-level integrity validation are supplied
+at the separate Provider boundary, not by the raw SDK API. Real proxy-service/SOCKS deployment
 qualification and production-site behavior are not established by these tests.
 
 ## Verification entry points

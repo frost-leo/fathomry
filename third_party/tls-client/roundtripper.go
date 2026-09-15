@@ -157,12 +157,11 @@ func (rt *roundTripper) dropCachedTransport(addr string, stale http.RoundTripper
 	rt.cachedTransportsLck.Lock()
 	if rt.cachedTransports[addr] == stale {
 		delete(rt.cachedTransports, addr)
+		rt.cachedKindsLck.Lock()
+		delete(rt.cachedKinds, addr)
+		rt.cachedKindsLck.Unlock()
 	}
 	rt.cachedTransportsLck.Unlock()
-
-	rt.cachedKindsLck.Lock()
-	delete(rt.cachedKinds, addr)
-	rt.cachedKindsLck.Unlock()
 
 	if closer, ok := stale.(interface{ CloseIdleConnections() }); ok {
 		closer.CloseIdleConnections()
@@ -306,12 +305,14 @@ func buildHTTP3Transport(cfg *http3Config) (http.RoundTripper, error) {
 		t3.MaxResponseHeaderBytes = profileDefaultMaxResponseHeaderBytes(cfg)
 	}
 
+	controlled := &fathomryHTTP3Transport{native: t3, disableCompression: t3.DisableCompression}
+	t3.DisableCompression = true
 	if cfg.compat != nil {
 		if err := cfg.compat.registerH3(t3); err != nil {
 			return nil, err
 		}
 	}
-	return t3, nil
+	return controlled, nil
 }
 
 func profileDefaultMaxResponseHeaderBytes(cfg *http3Config) int {
@@ -341,7 +342,7 @@ func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	if response.Body == nil {
 		done()
 	} else {
-		response.Body = newCompatBody(response.Body, done)
+		response.Body = newCompatBody(response.Body, func() error { done(); return nil })
 	}
 	return response, nil
 }
@@ -436,6 +437,10 @@ func (rt *roundTripper) dialTLSWithSetup(ctx context.Context, network, addr stri
 		network = "tcp6"
 	}
 
+	clientHelloID, err := handshakeClientHelloID(rt.clientHelloId)
+	if err != nil {
+		return nil, err
+	}
 	rawConn, err := rt.compat.dial(ctx, network, addr, rt.dialer.DialContext)
 	if err != nil {
 		return nil, err
@@ -459,7 +464,7 @@ func (rt *roundTripper) dialTLSWithSetup(ctx context.Context, network, addr stri
 
 	rawConn = rt.bandwidthTracker.TrackConnection(ctx, rawConn)
 
-	conn := tls.UClient(rawConn, tlsConfig, rt.clientHelloId, rt.withRandomTlsExtensionOrder, rt.forceHttp1, rt.disableHttp3)
+	conn := tls.UClient(rawConn, tlsConfig, clientHelloID, rt.withRandomTlsExtensionOrder, rt.forceHttp1, rt.disableHttp3)
 	if err = conn.HandshakeContext(ctx); err != nil {
 		_ = conn.Close()
 
@@ -623,6 +628,9 @@ func (rt *roundTripper) dial(ctx context.Context, network, addr string) (net.Con
 	if network == "tcp" && rt.disableIPV6 {
 		network = "tcp4"
 	}
+	if network == "tcp" && rt.disableIPV4 {
+		network = "tcp6"
+	}
 	return rt.compat.dial(ctx, network, addr, rt.dialer.DialContext)
 }
 
@@ -678,6 +686,10 @@ func (rt *roundTripper) dialTLSForWebsocket(ctx context.Context, network, addr s
 		network = "tcp6"
 	}
 
+	clientHelloID, err := handshakeClientHelloID(rt.clientHelloId)
+	if err != nil {
+		return nil, err
+	}
 	rawConn, err := rt.dialer.DialContext(ctx, network, addr)
 	if err != nil {
 		return nil, err
@@ -707,7 +719,7 @@ func (rt *roundTripper) dialTLSForWebsocket(ctx context.Context, network, addr s
 	rawConn = rt.bandwidthTracker.TrackConnection(ctx, rawConn)
 
 	// Force HTTP/1.1 for WebSocket connections (WebSocket doesn't work over HTTP/2)
-	conn := tls.UClient(rawConn, tlsConfig, rt.clientHelloId, rt.withRandomTlsExtensionOrder, true, true)
+	conn := tls.UClient(rawConn, tlsConfig, clientHelloID, rt.withRandomTlsExtensionOrder, true, true)
 	if err = conn.HandshakeContext(ctx); err != nil {
 		_ = conn.Close()
 		return nil, err
@@ -732,6 +744,14 @@ func (rt *roundTripper) getDialTLSAddr(req *http.Request) string {
 }
 
 func newRoundTripper(clientProfile profiles.ClientProfile, transportOptions *TransportOptions, serverNameOverwrite string, insecureSkipVerify, withRandomTlsExtensionOrder, forceHttp1, disableHttp3, disableSessionTickets, enableH3Racing bool, certificatePins map[string][]string, badPinHandlerFunc BadPinHandlerFunc, disableIPV6, disableIPV4 bool, bandwidthTracker bandwidth.BandwidthTracker, proxyURL string, dialer ...proxy.ContextDialer) (http.RoundTripper, error) {
+	if err := validateClientHelloFactory(clientProfile.GetClientHelloId()); err != nil {
+		return nil, err
+	}
+	id := clientProfile.GetClientHelloId()
+	if forceHttp1 && FathomryNativeSpecFactory(id.SpecFactory) &&
+		(id.Client == tls.HelloRandomized.Client || id.Client == tls.HelloRandomizedALPN.Client) {
+		return nil, errors.New("tls-client: native randomized ALPN bypasses forced HTTP/1")
+	}
 	pinner, err := NewCertificatePinner(certificatePins)
 	if err != nil {
 		return nil, fmt.Errorf("can not instantiate certificate pinner: %w", err)
@@ -739,10 +759,14 @@ func newRoundTripper(clientProfile profiles.ClientProfile, transportOptions *Tra
 
 	var clientSessionCache tls.ClientSessionCache
 
-	withSessionResumption := !disableSessionTickets && supportsSessionResumption(clientProfile.GetClientHelloId())
-
-	if withSessionResumption {
-		clientSessionCache = tls.NewLRUClientSessionCache(32)
+	if !disableSessionTickets {
+		withSessionResumption, err := supportsSessionResumption(clientProfile.GetClientHelloId())
+		if err != nil {
+			return nil, err
+		}
+		if withSessionResumption {
+			clientSessionCache = tls.NewLRUClientSessionCache(32)
+		}
 	}
 
 	rt := &roundTripper{
@@ -811,6 +835,9 @@ func newRoundTripper(clientProfile profiles.ClientProfile, transportOptions *Tra
 	if proxyDialer, ok := rt.dialer.(*connectDialer); ok {
 		proxyDialer.compat = rt.compat
 	}
+	if socksDialer, ok := rt.dialer.(*socksContextDialer); ok && socksDialer.forward != nil {
+		socksDialer.forward.compat = rt.compat
+	}
 	if rt.racer != nil {
 		rt.racer.compat = rt.compat
 	}
@@ -818,20 +845,29 @@ func newRoundTripper(clientProfile profiles.ClientProfile, transportOptions *Tra
 	return rt, nil
 }
 
-func supportsSessionResumption(id tls.ClientHelloID) bool {
-	spec, err := id.ToSpec()
-	if err != nil {
+func supportsSessionResumption(id tls.ClientHelloID) (bool, error) {
+	if err := validateClientHelloFactory(id); err != nil {
+		return false, err
+	}
+	var spec tls.ClientHelloSpec
+	var err error
+	if FathomryNativeSpecFactory(id.SpecFactory) {
 		spec, err = tls.UTLSIdToSpec(id)
 		if err != nil {
-			return false
+			return false, nil
+		}
+	} else {
+		spec, err = id.ToSpec()
+		if err != nil {
+			return false, err
 		}
 	}
 
 	for _, ext := range spec.Extensions {
 		if _, ok := ext.(*tls.UtlsPreSharedKeyExtension); ok {
-			return true
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
 }
