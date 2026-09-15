@@ -59,11 +59,13 @@ require (
 )
 
 require (
+	github.com/andybalholm/brotli v1.2.1
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16
 	github.com/aws/smithy-go v1.25.1
 	github.com/bogdanfinn/fhttp v0.6.9
 	github.com/bogdanfinn/utls v1.7.8-barnius
+	github.com/sardanioss/http v1.2.0
 	github.com/sardanioss/net v1.2.10
 	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5
 	github.com/twmb/franz-go v1.21.6
@@ -88,7 +90,6 @@ require (
 	atomicgo.dev/keyboard v0.2.9 // indirect
 	atomicgo.dev/schedule v0.1.0 // indirect
 	cloud.google.com/go v0.123.0 // indirect
-	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apache/thrift v0.23.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
@@ -137,7 +138,6 @@ require (
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pterm/pterm v0.12.83 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/sardanioss/http v1.2.0 // indirect
 	github.com/sardanioss/qpack v0.6.3 // indirect
 	github.com/sardanioss/utls v1.10.5 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
