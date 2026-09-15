@@ -1,0 +1,228 @@
+{
+  "module": "github.com/sardanioss/net",
+  "version": "v1.2.10",
+  "origin_commit": "131e2ee032e4eb76a2e6dbb9a8ea3ab9ccec0f9a",
+  "module_sum": "h1:3YIwGBtjU+DHusIQEfkYry89URwrbp/GVqP8gQMFRik=",
+  "go_mod_sum": "h1:BH4SOxKg5Cf0psT5htTmI7YVBXPsA+TF20Hb7glnLYA=",
+  "go_minimum": "1.24.0",
+  "original_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "36039aa222da18539df0d2504dc41c6217ce826db0f2ce412fa496132ab58e73"
+    },
+    {
+      "path": "go.sum",
+      "sha256": "891e89259b1588741f93bf5c9d5fa9c378435462ecbf3dcb776307f137968d66"
+    },
+    {
+      "path": "http/httpguts/guts.go",
+      "sha256": "3da54270a625540809f2f767e54e18acf27199aca64b6cf16d6d3fa3999de959"
+    },
+    {
+      "path": "http/httpguts/httplex.go",
+      "sha256": "97ced010c75a573c92a988ba83f9ce43346d3ba370975b72bbc7adcfd55dfe6b"
+    },
+    {
+      "path": "http/httpproxy/proxy.go",
+      "sha256": "2f5a831cb52e09a63390d56b63849e8b094e6a0fb6699612dda72e8a457e8dd6"
+    },
+    {
+      "path": "http2/.gitignore",
+      "sha256": "a72adf98822b3f9f99b5781137976efb8de250ebbfbcfc7a8851a6822553d234"
+    },
+    {
+      "path": "http2/ascii.go",
+      "sha256": "d8ee0e0a6b2c41a17a18e263b7f9b5701174dbe10e59496daadc9db6a647f708"
+    },
+    {
+      "path": "http2/ciphers.go",
+      "sha256": "623262af28491cd81b3570936cd06757f629d2ae4fb6ef087af6762f30d7a5eb"
+    },
+    {
+      "path": "http2/client_conn_pool.go",
+      "sha256": "73a6ee52089cfd3b2ff371ab53f5bd2b093c4e1b904a77e30c03eceed9a7cd57"
+    },
+    {
+      "path": "http2/config.go",
+      "sha256": "df9880273771a7d343278daea3feb840cc91f4840a050b214c73d5293ea67133"
+    },
+    {
+      "path": "http2/config_go125.go",
+      "sha256": "9665b3c2b284d337063d062745caa2ee9523e3bcf551340a55c5c3335c669864"
+    },
+    {
+      "path": "http2/config_go126.go",
+      "sha256": "45d0559e597e8095fe46d03d138c9c1d67b09bbba019eb750cb0833478a5f816"
+    },
+    {
+      "path": "http2/databuffer.go",
+      "sha256": "ad318dab6f9b9520c5b2262a74928f199befd7c8565454a89c1d2fc10bf901d6"
+    },
+    {
+      "path": "http2/errors.go",
+      "sha256": "fde1284c85d1730c86183ce604cfb22e917edfcd4ed9544a4a12d511befbea49"
+    },
+    {
+      "path": "http2/flow.go",
+      "sha256": "e3e3ba78d982dbb372408e2e3ccee2d6980f7824736405aab8a74fc263a9f10e"
+    },
+    {
+      "path": "http2/frame.go",
+      "sha256": "ee500ae3c1d14e0b99a71b971516e2c5331c673fd72a28617a40acca0f5995ce"
+    },
+    {
+      "path": "http2/gotrack.go",
+      "sha256": "2e404e35aa3d9c0350ce72191e5b1b525c6bb8ead1ce5bf8d8533aaf1c8efd3c"
+    },
+    {
+      "path": "http2/h2c/h2c.go",
+      "sha256": "e81ba377c2818f57d537c81ecfcc732e188819032ed17f8c2b77f98c7e739ea2"
+    },
+    {
+      "path": "http2/hpack/encode.go",
+      "sha256": "ba5160d4bb93ece8965461ffbc4b354ffcb36539436e1c39cd8dfd2978a2cb54"
+    },
+    {
+      "path": "http2/hpack/gen.go",
+      "sha256": "fa1f62fbb362f38cf173b47b777325974b06f6ef743d1cf4538419c507b00249"
+    },
+    {
+      "path": "http2/hpack/hpack.go",
+      "sha256": "468bb8569beb1271228967ef4873307b86824754b6e69aaa7e9ed4849307a519"
+    },
+    {
+      "path": "http2/hpack/huffman.go",
+      "sha256": "3d41693bd77da34093c1d334842d8cbeffb3a2f3e0fa5cf0af5e6e9e65b19be1"
+    },
+    {
+      "path": "http2/hpack/static_table.go",
+      "sha256": "0a49e0db0487138618481feaecd483658229c5d28e77c5cd60f1564d409c9cfd"
+    },
+    {
+      "path": "http2/hpack/tables.go",
+      "sha256": "6e8ce01dfb4d5e9e02a982581988621d2bc84b5e90708e1ffd3ef988cf8b2d5c"
+    },
+    {
+      "path": "http2/http2.go",
+      "sha256": "5755624995b7ad0058e33f24a2047e74f9a2a60d0243aa61e1e18ed27c059feb"
+    },
+    {
+      "path": "http2/pipe.go",
+      "sha256": "3fbe00025d441802c154549f5bd7562b9937ff43f1ce64c987bda75fcaf7f518"
+    },
+    {
+      "path": "http2/server.go",
+      "sha256": "722a49c9ce84e6eafc90a808c07b159b25b2db80909f7ff14ea4868be518001b"
+    },
+    {
+      "path": "http2/transport.go",
+      "sha256": "25f17350884407a4a078a269b22e42f53d3b4bc64b3c54b5807eebe88cffbf68"
+    },
+    {
+      "path": "http2/unencrypted.go",
+      "sha256": "2291ec3c4d8506834f013da5fefcb2356da8882e2176654f156da0d544899aae"
+    },
+    {
+      "path": "http2/write.go",
+      "sha256": "8ef00a8a066d645953dccf6dfedeb010db359a0029f00d3fc41812fa1a3424fb"
+    },
+    {
+      "path": "http2/writesched.go",
+      "sha256": "03a19b7c54368ad2d4e4df2d2698c4a8b1510471a69b6f75a4ef1ac0e6db5367"
+    },
+    {
+      "path": "http2/writesched_priority_rfc7540.go",
+      "sha256": "115503ac722505b067690e412c759ead70248b5959745dea1b5e0cc298db86b9"
+    },
+    {
+      "path": "http2/writesched_priority_rfc9218.go",
+      "sha256": "2f9b42f46fbbed54c4fd8e060d34f0526ab055453468432d0beea37cea761213"
+    },
+    {
+      "path": "http2/writesched_random.go",
+      "sha256": "954a0f0250969a083a5369f22538f0d010f7ee1a2b045216df075dad70b3c96c"
+    },
+    {
+      "path": "http2/writesched_roundrobin.go",
+      "sha256": "15f3db4cefc4b3179b59a2df67c79407cdc573b6008612d8a58d1ffc0c15d758"
+    },
+    {
+      "path": "idna/go118.go",
+      "sha256": "70f0410bd261f4c487d299926c0a7cc9e5bf3608fe8d727d8e930fa41fdca89a"
+    },
+    {
+      "path": "idna/idna10.0.0.go",
+      "sha256": "0555af3c21d8d0437960879aee697e5e3fd8afb2c9167034101058975eeb96df"
+    },
+    {
+      "path": "idna/idna9.0.0.go",
+      "sha256": "0e803efa6439c053639f5ec9717289f925c4b2a6be4efe28f2f946e6855b8d8a"
+    },
+    {
+      "path": "idna/pre_go118.go",
+      "sha256": "fb8edf54b7a4cf25cdace5049cee072279c8aeb96c62dc8518a7bb1fcc302758"
+    },
+    {
+      "path": "idna/punycode.go",
+      "sha256": "4e7adef5c3c4ff789ad439094738b5829896814e3fcd8a9a2c2c2ba40fa12a28"
+    },
+    {
+      "path": "idna/tables10.0.0.go",
+      "sha256": "63fc209f0c28f03d62fb1185b951bf738e2855807dd0946eca8c4568c63c34e5"
+    },
+    {
+      "path": "idna/tables11.0.0.go",
+      "sha256": "aa08b1c7cde5cd21bd18e8f3d09729c151f24aefe19f741e47475eb6eb1a6cea"
+    },
+    {
+      "path": "idna/tables12.0.0.go",
+      "sha256": "9915c1a1193bc7d3e4fb0ed5cae8442aedd5deb6a76ae59e8ee66ccfbc06b2bc"
+    },
+    {
+      "path": "idna/tables13.0.0.go",
+      "sha256": "4864c10a4f03ce9a1d4193445e0753fb926f09a52e0e5af914e72241de638e86"
+    },
+    {
+      "path": "idna/tables15.0.0.go",
+      "sha256": "9bd83e106704e95aaa6cd04aec72f697305b94d0b1917d3b0aa00356405d27ca"
+    },
+    {
+      "path": "idna/tables9.0.0.go",
+      "sha256": "3aef94a13749ea30cab3f8212f5c34edc58c772f3925ffd6dcc80272e6fc330e"
+    },
+    {
+      "path": "idna/trie.go",
+      "sha256": "8d2a16a56e4cab9d23a7afb49443bfe7a5ff0d74e885acc9121b4a9c598825eb"
+    },
+    {
+      "path": "idna/trie12.0.0.go",
+      "sha256": "e0886f479f3dc5734e79f08f7d3fcf54b9b19b5539ac31ce5ed0b5c9bf1e7c5a"
+    },
+    {
+      "path": "idna/trie13.0.0.go",
+      "sha256": "059e31556bdfff9d9b98660bae14911834a5e72475696a8b07baf0466ea17021"
+    },
+    {
+      "path": "idna/trieval.go",
+      "sha256": "7e2c4893145e4b3b4d7984d70244af9c358da4973915085a42689ed1f3ce5159"
+    },
+    {
+      "path": "internal/httpcommon/ascii.go",
+      "sha256": "7446cfcfe70f682d5ad3102ca0aeef3bfbef86c799f0c61af9be9e942fe950dd"
+    },
+    {
+      "path": "internal/httpcommon/headermap.go",
+      "sha256": "ee95dbc37a39a5a9ac3bc048ba3233f13d3f5e18e2faa8ba44d588218a888ade"
+    },
+    {
+      "path": "internal/httpcommon/request.go",
+      "sha256": "8c7b9bffb25c762a9ced2f38fa28c27df1001473ae10d5a54e5ff08cd5839564"
+    }
+  ],
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "local_compatibility_revision": "v1"
+}
