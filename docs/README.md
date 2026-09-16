@@ -143,6 +143,12 @@ dynamic TCP proxies, bounded native ownership and independent framing/callback
 evidence. SDK corrections are separate from the Provider contract. UDP/MASQUE
 proxies, automatic protocol racing and native Session policy are not qualified.
 
+The [chromedp v0 integration](reference/internal/browser/chromedp/v0/interface.md)
+adds named browser Providers with explicit process/connection ownership, isolated
+BrowserContext sessions, controlled native CDP/Actions, runtime proxy inputs and
+independent evidence. Browser load, output, cancellation and disposal are separate
+facts. Session concurrency is not a physical HTTP quota or a native-memory limit.
+
 Fixture passes and pinned YAML behavior do not establish service support, durable
 recovery or native-memory guarantees. See [package boundaries](architecture/package-boundaries.md).
 The [configuration contract](reference/internal/resource/configuration.md),
@@ -204,6 +210,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/sqlengine/doris/v1`](reference/internal/sqlengine/doris/v1/interface.md) | Bounded native Stream Load and SQL, label/row/visibility evidence, explicit connection ownership and [capability limits](reference/internal/sqlengine/doris/v1/capabilities.md) |
 | [`internal/logging/zap/v1`](reference/internal/logging/zap/v1/interface.md) | Typed logging, native multi-sink results, context extensions and [local file ownership/rotation](reference/internal/logging/zap/v1/file-output.md) |
 | [`internal/logging/zerolog/v1`](reference/internal/logging/zerolog/v1/interface.md) | Structured multi-sink logging/context, bounded evidence and [local file output](reference/internal/logging/zerolog/v1/file-output.md) |
+| [`internal/browser/chromedp/v0`](reference/internal/browser/chromedp/v0/interface.md) | Isolated browser sessions, scoped native CDP/Actions, explicit lifecycle/cleanup and browser-version evidence |
 | [`internal/telemetry/otel/v1`](reference/internal/telemetry/otel/v1/interface.md) | Logs, traces, metrics, propagation, explicit bounded export, ownership, options/errors and compatibility |
 | [`internal/telemetry/otel/v1/zapbridge`](reference/internal/telemetry/otel/v1/zapbridge/interface.md) | Borrowed typed Zap structured sink; Sync does not flush telemetry |
 | [`internal/telemetry/otel/v1/zerologbridge`](reference/internal/telemetry/otel/v1/zerologbridge/interface.md) | Borrowed immutable zerolog RecordWriter; independent telemetry lifecycle |

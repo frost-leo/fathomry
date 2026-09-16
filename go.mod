@@ -32,6 +32,7 @@ require (
 	// Upstream BSD-4-Clause / GPL compatibility remains unresolved; implementation
 	// delivery and preserving LICENSE do not establish distribution permission.
 	github.com/bogdanfinn/tls-client v1.16.0
+	github.com/chromedp/chromedp v0.16.0
 	github.com/duckdb/duckdb-go-bindings v0.10505.0
 	github.com/duckdb/duckdb-go/v2 v2.10505.0
 	github.com/go-sql-driver/mysql v1.10.1
@@ -65,6 +66,8 @@ require (
 	github.com/aws/smithy-go v1.25.1
 	github.com/bogdanfinn/fhttp v0.6.9
 	github.com/bogdanfinn/utls v1.7.8-barnius
+	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/sardanioss/http v1.2.0
 	github.com/sardanioss/net v1.2.10
 	github.com/tam7t/hpkp v0.0.0-20160821193359-2b70b4024ed5
@@ -110,6 +113,7 @@ require (
 	github.com/bdandy/go-socks4 v1.2.3 // indirect
 	github.com/bogdanfinn/quic-go-utls v1.0.10-utls // indirect
 	github.com/bogdanfinn/websocket v1.5.6-barnius // indirect
+	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/cloudflare/circl v1.6.2 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
@@ -120,6 +124,9 @@ require (
 	github.com/duckdb/duckdb-go-bindings/lib/linux-amd64 v0.10505.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/linux-arm64 v0.10505.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/windows-amd64 v0.10505.0 // indirect
+	github.com/gobwas/httphead v0.1.0 // indirect
+	github.com/gobwas/pool v0.2.1 // indirect
+	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
