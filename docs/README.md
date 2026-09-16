@@ -137,6 +137,13 @@ Its local SDK compatibility patch and Provider have separate version axes.
 Upstream license compatibility remains unresolved; implementation delivery does
 not establish distribution permission or production/arbitrary-profile qualification.
 
+The [Surf v1 integration](reference/internal/httpclient/surf/v1/interface.md)
+adds externally configured native/custom JA profiles, controlled H1/H2/H3 requests
+and streams, runtime CONNECT/SOCKS routing, bounded native work and independent
+evidence. Go 1.27, Surf and the local Surf/H2/H3 corrections have separate version
+axes. H3 does not imply JA fidelity. Native fork licensing and production-site
+qualification remain explicit prerequisites, not consequences of fixture passes.
+
 The [HTTPcloak v1 integration](reference/internal/httpclient/httpcloak/v1/interface.md)
 adds explicit H1/H2/direct-H3 requests and streams, external native/JSON presets,
 dynamic TCP proxies, bounded native ownership and independent framing/callback

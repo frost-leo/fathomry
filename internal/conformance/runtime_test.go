@@ -246,8 +246,18 @@ func TestRuntimeNativeStreamFailureOracle(t *testing.T) {
 		{new(truncatedStreamGuard), io.ErrUnexpectedEOF},
 		{new(wrappedStreamGuard), io.ErrUnexpectedEOF},
 	} {
-		if err := json.Unmarshal([]byte(`{"valid":true}`), fixture.target); !errors.Is(err, fixture.want) {
-			t.Fatal("valid outer JSON did not expose the native stream failure")
+		if direct := fixture.target.(json.Unmarshaler).UnmarshalJSON([]byte(`{"valid":true}`)); !errors.Is(direct, fixture.want) {
+			t.Fatalf("direct native stream failure changed: %T (%v)", direct, direct)
+		}
+		err := json.Unmarshal([]byte(`{"valid":true}`), fixture.target)
+		if fixture.want == io.EOF {
+			// Go 1.27 normalizes an unwrapped EOF at the JSON boundary.
+			var syntax *json.SyntaxError
+			if !errors.As(err, &syntax) {
+				t.Fatal("bare stream EOF did not remain a codec failure")
+			}
+		} else if !errors.Is(err, fixture.want) {
+			t.Fatal("valid outer JSON lost the native truncated-stream cause")
 		}
 		conformance.Private(t, fixture.want, diagnosticCanary)
 	}
