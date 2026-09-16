@@ -21,6 +21,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 A Go framework for durable, observable data workflows powered by Temporal.
 
+Development requires Go 1.27.0 or later. The selected Nuki SDK stack uses the
+Go 1.27 standard library; the previous Go 1.26 floor is no longer sufficient.
+
 ## Direction
 
 Fathomry focuses on explicit contracts, cohesive infrastructure clients,

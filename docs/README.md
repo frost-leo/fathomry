@@ -137,6 +137,13 @@ Its local SDK compatibility patch and Provider have separate version axes.
 Upstream license compatibility remains unresolved; implementation delivery does
 not establish distribution permission or production/arbitrary-profile qualification.
 
+The [Nuki v1 integration](reference/internal/httpclient/nuki/v1/interface.md) uses
+the distinct Nukilabs SDK with external native profiles, controlled H1/H2/H3,
+per-call routing and source-wide ownership/evidence bounds. Go 1.27.0 is required.
+Local Nuki, SOCKS, QUIC and QPACK corrections retain separate provenance and
+regressions. The SOCKS dependency's license/publication status remains unresolved;
+implementation is not distribution clearance or production-site qualification.
+
 The [Surf v1 integration](reference/internal/httpclient/surf/v1/interface.md)
 adds externally configured native/custom JA profiles, controlled H1/H2/H3 requests
 and streams, runtime CONNECT/SOCKS routing, bounded native work and independent
