@@ -1,0 +1,942 @@
+package surf_test
+
+import (
+	"bytes"
+	"compress/gzip"
+	"context"
+	"fmt"
+	"net"
+	"testing"
+	"time"
+
+	"github.com/enetx/g"
+	"github.com/enetx/http"
+	"github.com/enetx/http/httptest"
+	"github.com/enetx/surf"
+)
+
+func TestBuilderBuild(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient()
+	originalClient := client
+
+	builder := client.Builder()
+	if builder == nil {
+		t.Fatal("Builder() returned nil")
+	}
+
+	built := builder.Build().Unwrap()
+	if built != originalClient {
+		t.Error("Build().Unwrap() should return the same client instance")
+	}
+}
+
+func TestBuilderWith(t *testing.T) {
+	t.Parallel()
+
+	var clientMWCalled bool
+	var requestMWCalled bool
+	var responseMWCalled bool
+
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "test")
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		With(func(*surf.Client) error {
+			clientMWCalled = true
+			return nil
+		}).
+		With(func(*surf.Request) error {
+			requestMWCalled = true
+			return nil
+		}).
+		With(func(*surf.Response) error {
+			responseMWCalled = true
+			return nil
+		}).
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	if !clientMWCalled {
+		t.Error("client middleware was not called")
+	}
+	if !requestMWCalled {
+		t.Error("request middleware was not called")
+	}
+	if !responseMWCalled {
+		t.Error("response middleware was not called")
+	}
+}
+
+func TestBuilderWithPriority(t *testing.T) {
+	t.Parallel()
+
+	var executionOrder []int
+
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		With(func(*surf.Request) error {
+			executionOrder = append(executionOrder, 3)
+			return nil
+		}, 3).
+		With(func(*surf.Request) error {
+			executionOrder = append(executionOrder, 1)
+			return nil
+		}, 1).
+		With(func(*surf.Request) error {
+			executionOrder = append(executionOrder, 2)
+			return nil
+		}, 2).
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	// Should execute in priority order: 1, 2, 3
+	expected := []int{1, 2, 3}
+	if len(executionOrder) != len(expected) {
+		t.Fatalf("expected %d middleware calls, got %d", len(expected), len(executionOrder))
+	}
+
+	for i, exp := range expected {
+		if executionOrder[i] != exp {
+			t.Errorf("expected middleware order %v, got %v", expected, executionOrder)
+			break
+		}
+	}
+}
+
+func TestBuilderWithInvalidType(t *testing.T) {
+	t.Parallel()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for invalid middleware type")
+		}
+	}()
+
+	surf.NewClient().Builder().
+		With("invalid type").
+		Build().Unwrap()
+}
+
+func TestBuilderSingleton(t *testing.T) {
+	t.Parallel()
+
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	client.CloseIdleConnections()
+}
+
+func TestBuilderH2C(t *testing.T) {
+	t.Parallel()
+
+	// H2C requires special server setup, just test that method doesn't panic
+	client := surf.NewClient().Builder().
+		H2C().
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("H2C builder returned nil client")
+	}
+}
+
+func TestBuilderHTTP2Settings(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		HTTP2Settings().
+		HeaderTableSize(65536).
+		EnablePush(0).
+		MaxConcurrentStreams(1000).
+		InitialWindowSize(6291456).
+		MaxFrameSize(16384).
+		MaxHeaderListSize(262144).
+		ConnectionFlow(15663105).
+		Set().
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("HTTP2Settings builder returned nil client")
+	}
+}
+
+func TestBuilderImpersonate(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		Impersonate().
+		Chrome().
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("Impersonate builder returned nil client")
+	}
+
+	defer client.CloseIdleConnections()
+}
+
+func TestBuilderJA3(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		JA().
+		Chrome().
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("JA3 builder returned nil client")
+	}
+
+	defer client.CloseIdleConnections()
+}
+
+func TestBuilderUnixDomainSocket(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		UnixSocket("/tmp/test.sock").
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("UnixDomainSocket builder returned nil client")
+	}
+}
+
+func TestBuilderDNS(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		DNS("8.8.8.8:53").
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("DNS builder returned nil client")
+	}
+}
+
+func TestBuilderDNSOverTLS(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		DNSOverTLS().
+		Cloudflare().
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("DNSOverTLS builder returned nil client")
+	}
+}
+
+func TestBuilderTimeout(t *testing.T) {
+	t.Parallel()
+
+	timeout := 30 * time.Second
+
+	client := surf.NewClient().Builder().
+		Timeout(timeout).
+		Build().Unwrap()
+
+	if client.GetClient().Timeout != timeout {
+		t.Errorf("expected timeout %v, got %v", timeout, client.GetClient().Timeout)
+	}
+}
+
+func TestBuilderInterfaceAddr(t *testing.T) {
+	t.Parallel()
+
+	// Use localhost as a valid interface address
+	client := surf.NewClient().Builder().
+		InterfaceAddr("127.0.0.1").
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("InterfaceAddr builder returned nil client")
+	}
+
+	// Check that dialer has local address set
+	dialer := client.GetDialer()
+	if dialer.LocalAddr == nil {
+		t.Error("expected LocalAddr to be set")
+	}
+
+	addr, ok := dialer.LocalAddr.(*net.TCPAddr)
+	if !ok {
+		t.Errorf("expected TCPAddr, got %T", dialer.LocalAddr)
+	}
+
+	if addr.IP.String() != "127.0.0.1" {
+		t.Errorf("expected 127.0.0.1, got %s", addr.IP.String())
+	}
+}
+
+func TestBuilderProxy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		proxy g.String
+	}{
+		{"string proxy", "http://localhost:8080"},
+		{"g.String proxy", g.String("http://localhost:8080")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := surf.NewClient().Builder().
+				Proxy(tt.proxy).
+				Build().Unwrap()
+
+			if client == nil {
+				t.Error("Proxy builder returned nil client")
+			}
+		})
+	}
+}
+
+func TestBuilderAuth(t *testing.T) {
+	t.Parallel()
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		// Check Authorization header
+		auth := r.Header.Get("Authorization")
+		if auth == "" {
+			t.Error("expected Authorization header")
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	t.Run("BasicAuth", func(t *testing.T) {
+		client := surf.NewClient().Builder().
+			BasicAuth("user:pass").
+			Build().Unwrap()
+
+		resp := client.Get(g.String(ts.URL)).Do()
+		if resp.IsErr() {
+			t.Fatal(resp.Err())
+		}
+	})
+
+	t.Run("BearerAuth", func(t *testing.T) {
+		client := surf.NewClient().Builder().
+			BearerAuth("token123").
+			Build().Unwrap()
+
+		resp := client.Get(g.String(ts.URL)).Do()
+		if resp.IsErr() {
+			t.Fatal(resp.Err())
+		}
+	})
+}
+
+func TestBuilderUserAgent(t *testing.T) {
+	t.Parallel()
+
+	customUA := "CustomAgent/1.0"
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ua := r.Header.Get("User-Agent")
+		if ua != customUA {
+			t.Errorf("expected User-Agent %s, got %s", customUA, ua)
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		UserAgent(customUA).
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+}
+
+func TestBuilderHeaders(t *testing.T) {
+	t.Parallel()
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Custom") != "value1" {
+			t.Error("missing X-Custom header from SetHeaders")
+		}
+		if r.Header.Get("X-Added") != "value2" {
+			t.Error("missing X-Added header from AddHeaders")
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		SetHeaders("X-Custom", "value1").
+		AddHeaders("X-Added", "value2").
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+}
+
+func TestBuilderCookies(t *testing.T) {
+	t.Parallel()
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("test")
+		if err != nil || cookie.Value != "value" {
+			t.Errorf("expected test=value cookie, got %v", cookie)
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		AddCookies(&http.Cookie{Name: "test", Value: "value"}).
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+}
+
+func TestBuilderWithContext(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		// Just check that context is not nil and was set
+		if r.Context() == context.Background() {
+			t.Error("expected custom context")
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		WithContext(ctx).
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+}
+
+func TestBuilderContentType(t *testing.T) {
+	t.Parallel()
+
+	contentType := "application/custom"
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ct := r.Header.Get("Content-Type")
+		if ct != contentType {
+			t.Errorf("expected Content-Type %s, got %s", contentType, ct)
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		ContentType(g.String(contentType)).
+		Build().Unwrap()
+
+	resp := client.Post(g.String(ts.URL)).Body("data").Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+}
+
+func TestBuilderCacheBody(t *testing.T) {
+	t.Parallel()
+
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "cached content")
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		CacheBody().
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	// First read
+	content1 := resp.Ok().Body.String()
+	if content1.Unwrap() != "cached content" {
+		t.Errorf("expected 'cached content', got %s", content1)
+	}
+
+	// Second read should return cached content
+	content2 := resp.Ok().Body.String()
+	if content2.Unwrap() != "cached content" {
+		t.Error("expected cached content on second read")
+	}
+}
+
+func TestBuilderGetRemoteAddress(t *testing.T) {
+	t.Parallel()
+
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		GetRemoteAddress().
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	if resp.Ok().RemoteAddress() == nil {
+		t.Error("expected remote address to be captured")
+	}
+}
+
+func TestBuilderDisableKeepAlive(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		DisableKeepAlive().
+		Build().Unwrap()
+
+	transport := client.GetTransport().(*http.Transport)
+	if !transport.DisableKeepAlives {
+		t.Error("expected DisableKeepAlives to be true")
+	}
+}
+
+func TestBuilderDisableCompression(t *testing.T) {
+	t.Parallel()
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept-Encoding") != "" {
+			t.Error("expected no Accept-Encoding header")
+		}
+
+		w.Header().Set("Content-Encoding", "gzip")
+		w.WriteHeader(http.StatusOK)
+
+		var buf bytes.Buffer
+		gw := gzip.NewWriter(&buf)
+		gw.Write([]byte("test body"))
+		gw.Close()
+
+		w.Write(buf.Bytes())
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	result := surf.NewClient().Builder().DisableCompression().Build()
+	if result.IsErr() {
+		t.Fatalf("failed to build client: %v", result.Err())
+	}
+
+	resp := result.Ok().Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatalf("request failed: %v", resp.Err())
+	}
+
+	body := resp.Ok().Body.Bytes()
+
+	if body.String() == "test body" {
+		t.Error("expected body to remain compressed, but it was decoded")
+	}
+}
+
+func TestBuilderRetry(t *testing.T) {
+	t.Parallel()
+
+	attemptCount := 0
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		attemptCount++
+		if attemptCount < 3 {
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "success")
+		}
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		Retry(5, 10*time.Millisecond).
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	if resp.Ok().Attempts != 2 {
+		t.Errorf("expected 2 retry attempts, got %d", resp.Ok().Attempts)
+	}
+
+	if !resp.Ok().Body.Contains("success") {
+		t.Error("expected 'success' in body")
+	}
+}
+
+func TestBuilderRetryWithCustomCodes(t *testing.T) {
+	t.Parallel()
+
+	attemptCount := 0
+	handler := func(w http.ResponseWriter, _ *http.Request) {
+		attemptCount++
+		if attemptCount < 2 {
+			w.WriteHeader(http.StatusBadRequest) // 400 - should retry
+		} else {
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, "success")
+		}
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		Retry(3, 10*time.Millisecond, http.StatusBadRequest). // Custom retry code
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	if resp.Ok().Attempts != 1 {
+		t.Errorf("expected 1 retry attempt, got %d", resp.Ok().Attempts)
+	}
+}
+
+func TestBuilderForceHTTP1(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		ForceHTTP1().
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("ForceHTTP1 builder returned nil client")
+	}
+}
+
+func TestBuilderForceHTTP2(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		ForceHTTP2().
+		Build().Unwrap()
+
+	if client == nil {
+		t.Error("ForceHTTP2 builder returned nil client")
+	}
+}
+
+func TestBuilderSession(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient().Builder().
+		Session().
+		Build().Unwrap()
+
+	if client.GetClient().Jar == nil {
+		t.Error("expected cookie jar to be set for session")
+	}
+
+	if client.GetTLSConfig().ClientSessionCache == nil {
+		t.Error("expected TLS client session cache to be set")
+	}
+}
+
+func TestBuilderRedirects(t *testing.T) {
+	t.Parallel()
+
+	redirectCount := 0
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if redirectCount == 0 {
+			redirectCount++
+			http.Redirect(w, r, "/final", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "final")
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	t.Run("MaxRedirects", func(t *testing.T) {
+		client := surf.NewClient().Builder().
+			MaxRedirects(1).
+			Build().Unwrap()
+
+		resp := client.Get(g.String(ts.URL)).Do()
+		if resp.IsErr() {
+			t.Fatal(resp.Err())
+		}
+
+		if !resp.Ok().Body.Contains("final") {
+			t.Error("expected redirect to be followed")
+		}
+	})
+
+	t.Run("NotFollowRedirects", func(t *testing.T) {
+		redirectCount = 0 // Reset counter
+		client := surf.NewClient().Builder().
+			NotFollowRedirects().
+			Build().Unwrap()
+
+		resp := client.Get(g.String(ts.URL)).Do()
+		if resp.IsErr() {
+			t.Fatal(resp.Err())
+		}
+
+		if resp.Ok().StatusCode != 302 {
+			t.Errorf("expected status 302, got %d", resp.Ok().StatusCode)
+		}
+	})
+
+	t.Run("FollowOnlyHostRedirects", func(t *testing.T) {
+		client := surf.NewClient().Builder().
+			FollowOnlyHostRedirects().
+			Build().Unwrap()
+
+		if client == nil {
+			t.Error("FollowOnlyHostRedirects builder returned nil client")
+		}
+	})
+
+	t.Run("ForwardHeadersOnRedirect", func(t *testing.T) {
+		client := surf.NewClient().Builder().
+			ForwardHeadersOnRedirect().
+			Build().Unwrap()
+
+		if client == nil {
+			t.Error("ForwardHeadersOnRedirect builder returned nil client")
+		}
+	})
+}
+
+func TestBuilderRedirectPolicy(t *testing.T) {
+	t.Parallel()
+
+	redirectCount := 0
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		if redirectCount == 0 {
+			redirectCount++
+			http.Redirect(w, r, "/redirect", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	// Custom redirect policy that stops all redirects
+	client := surf.NewClient().Builder().
+		RedirectPolicy(func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		}).
+		Build().Unwrap()
+
+	resp := client.Get(g.String(ts.URL)).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+
+	// Should get the redirect response, not follow it
+	if resp.Ok().StatusCode != 302 {
+		t.Errorf("expected status 302, got %d", resp.Ok().StatusCode)
+	}
+}
+
+func TestBuilderBoundary(t *testing.T) {
+	t.Parallel()
+
+	expectedBoundary := "test-boundary-123"
+
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		contentType := r.Header.Get("Content-Type")
+		if contentType != "" && !g.String(contentType).Contains(g.String(expectedBoundary)) {
+			t.Errorf("expected boundary %s in content-type, got %s", expectedBoundary, contentType)
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(handler))
+	defer ts.Close()
+
+	client := surf.NewClient().Builder().
+		Boundary(func() g.String { return g.String(expectedBoundary) }).
+		Build().Unwrap()
+
+	// Test with multipart
+	mp := surf.NewMultipart().Field("field", "value")
+
+	resp := client.Post(g.String(ts.URL)).Multipart(mp).Do()
+	if resp.IsErr() {
+		t.Fatal(resp.Err())
+	}
+}
+
+func TestBuilderString(t *testing.T) {
+	t.Parallel()
+
+	builder := surf.NewClient().Builder().
+		Timeout(30 * time.Second).
+		UserAgent("Test/1.0")
+
+	str := builder.String()
+	if str == "" {
+		t.Error("expected non-empty string representation")
+	}
+
+	// String should contain type information
+	if !g.String(str).Contains("Builder") {
+		t.Error("expected 'builder' in string representation")
+	}
+}
+
+// Test that ForceHTTP3 can be called and returns the same builder instance
+func TestBuilderForceHTTP3(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient()
+	builder := client.Builder()
+
+	resultBuilder := builder.ForceHTTP3().HTTP3Settings().Set()
+
+	if resultBuilder != builder {
+		t.Error("ForceHTTP3 should return the same builder instance for fluent interface")
+	}
+}
+
+func TestBuilderForceHTTP3WithOtherSettings(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient()
+	builder := client.Builder()
+
+	resultBuilder := builder.ForceHTTP3().HTTP3Settings().Set().
+		Timeout(5 * time.Second).
+		Session()
+
+	if resultBuilder != builder {
+		t.Error("ForceHTTP3 should return the same builder instance for fluent interface")
+	}
+}
+
+// Test that we can chain ForceHTTP3 with other methods
+func TestBuilderForceHTTP3Chaining(t *testing.T) {
+	t.Parallel()
+
+	client := surf.NewClient()
+	builder := client.Builder()
+
+	result := builder.ForceHTTP3().HTTP3Settings().Set().Impersonate().Chrome().Build().Unwrap()
+
+	if result == nil {
+		t.Error("Builder should not return nil client")
+	}
+}
+
+func TestBuilderTLSConfigNil(t *testing.T) {
+	t.Parallel()
+
+	result := surf.NewClient().
+		Builder().
+		TLSConfig(nil).
+		Build()
+
+	if result.IsOk() {
+		t.Fatal("expected error when TLSConfig is nil")
+	}
+}
+
+// TestBuilderSecureTLS verifies that SecureTLS() disables InsecureSkipVerify.
+func TestBuilderSecureTLS(t *testing.T) {
+	t.Parallel()
+
+	// Default: InsecureSkipVerify = true
+	defaultClient := surf.NewClient().Builder().Build().Unwrap()
+	if !defaultClient.GetTLSConfig().InsecureSkipVerify {
+		t.Error("default: expected InsecureSkipVerify=true")
+	}
+
+	// With SecureTLS: InsecureSkipVerify = false
+	secureClient := surf.NewClient().Builder().SecureTLS().Build().Unwrap()
+	if secureClient.GetTLSConfig().InsecureSkipVerify {
+		t.Error("SecureTLS: expected InsecureSkipVerify=false")
+	}
+}
+
+// TestBuilderWebSocketGuard verifies that WebSocketGuard() can be enabled without panic.
+func TestBuilderWebSocketGuard(t *testing.T) {
+	t.Parallel()
+
+	// Should not panic.
+	client := surf.NewClient().Builder().WebSocketGuard().Build().Unwrap()
+	if client == nil {
+		t.Fatal("WebSocketGuard: Build() returned nil")
+	}
+}
