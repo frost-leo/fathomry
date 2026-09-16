@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -416,11 +417,44 @@ func TestNativeCompatibilityUnitControls(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	edit := exec.CommandContext(ctx, goBinary, "-C", nativeRoot, "mod", "edit", "-modfile="+moduleFile,
-		"-module=github.com/bogdanfinn/tls-client", "-droprequire=github.com/bogdanfinn/tls-client", "-dropreplace=github.com/bogdanfinn/tls-client")
+	inspect := exec.CommandContext(ctx, goBinary, "mod", "edit", "-json")
+	inspect.Dir, inspect.Env = root, environment
+	configurationJSON, err := inspect.Output()
+	if err != nil {
+		t.Fatal("inspect consuming replacements", err)
+	}
+	var module struct {
+		Replace []struct {
+			Old, New struct{ Path, Version string }
+		}
+	}
+	if err := json.Unmarshal(configurationJSON, &module); err != nil {
+		t.Fatal(err)
+	}
+	editArguments := []string{"-C", nativeRoot, "mod", "edit", "-modfile=" + moduleFile,
+		"-module=github.com/bogdanfinn/tls-client", "-droprequire=github.com/bogdanfinn/tls-client", "-dropreplace=github.com/bogdanfinn/tls-client"}
+	for _, replacement := range module.Replace {
+		if replacement.Old.Path == "github.com/bogdanfinn/tls-client" || replacement.New.Version != "" {
+			continue
+		}
+		from, target := replacement.Old.Path, replacement.New.Path
+		if replacement.Old.Version != "" {
+			from += "@" + replacement.Old.Version
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(root, target)
+		}
+		editArguments = append(editArguments, "-replace="+from+"="+target)
+	}
+	edit := exec.CommandContext(ctx, goBinary, editArguments...)
 	edit.Env = environment
 	if output, err := edit.CombinedOutput(); err != nil {
 		t.Fatalf("prepare consuming native module: %v\n%s", err, output)
+	}
+	graph := exec.CommandContext(ctx, goBinary, "-C", nativeRoot, "list", "-modfile="+moduleFile, "-mod=readonly", "-deps", "-test", "./...")
+	graph.Env = environment
+	if output, err := graph.CombinedOutput(); err != nil {
+		t.Fatalf("consuming native graph changed: %v\n%s", err, output)
 	}
 	configuration := exec.CommandContext(ctx, goBinary, "env", "CGO_ENABLED")
 	configuration.Env = environment

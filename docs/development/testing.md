@@ -29,8 +29,9 @@ meaningful check, then broaden. Do not weaken assertions to make a failure disap
 
 ## Prerequisites
 
-- Use the Go version required by [go.mod](../../go.mod). Recorded local verification
-  covers Go 1.26.0 and Go 1.26.4/linux/amd64, not a claim about the latest patch.
+- Use the Go version required by [go.mod](../../go.mod), currently Go 1.27.0.
+  Historical Go 1.26 verification does not qualify the current consuming graph;
+  the minimum is not a claim about the latest available patch.
 - Put the selected toolchain's `bin` first in `PATH` and use `GOTOOLCHAIN=local`
   so child Go commands use it too. Race runs need a suitable CGO/race environment;
   ordinary CGO-disabled checks are separate below.

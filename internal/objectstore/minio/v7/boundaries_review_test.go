@@ -182,7 +182,7 @@ func TestReviewUploadChecksumsRetainObservations(t *testing.T) {
 
 func TestReviewNativePointerErrorRetainsIdentity(t *testing.T) {
 	response := &native.ErrorResponse{Code: "AccessDenied", Message: "private-native-canary"}
-	err := nativeFailure(ErrRead, "tags", context.Background(), fmt.Errorf("wrapped: %w", response))
+	err := nativeFailure(ErrRead, "tags", context.Background(), errors.Join(response))
 	var observed *native.ErrorResponse
 	if !errors.Is(err, ErrDenied) || !errors.As(err, &observed) || observed != response {
 		t.Fatal("native pointer error lost its technical classification or cause")

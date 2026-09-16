@@ -1,0 +1,987 @@
+<p align="center">
+  <img src="https://user-images.githubusercontent.com/65846651/233453773-33f38b64-0adc-41b4-8e13-a49c89bf9db6.png">
+</p>
+
+<h1>Surf - Advanced HTTP Client for Go</h1>
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/enetx/surf.svg)](https://pkg.go.dev/github.com/enetx/surf)
+[![Coverage Status](https://coveralls.io/repos/github/enetx/surf/badge.svg?branch=main&service=github)](https://coveralls.io/github/enetx/surf?branch=main)
+[![Go](https://github.com/enetx/surf/actions/workflows/go.yml/badge.svg)](https://github.com/enetx/surf/actions/workflows/go.yml)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/enetx/surf)
+
+<p>Surf is a powerful, feature-rich HTTP client library for Go that makes working with HTTP requests intuitive and enjoyable. With advanced features like browser impersonation, JA3/JA4 fingerprinting, and comprehensive middleware support, Surf provides everything you need for modern web interactions.</p>
+
+## ✨ Key Features
+
+### 🎭 **Browser Impersonation**
+- **Chrome & Firefox Support**: Accurately mimic Chrome v152 and Firefox v148 browser fingerprints
+- **Platform Diversity**: Impersonate Windows, macOS, Linux, Android, and iOS devices
+- **TLS Fingerprinting**: Full JA3/JA4 fingerprint customization for enhanced privacy
+- **Automatic Headers**: Proper header ordering and browser-specific values
+- **WebKit Form Boundaries**: Accurate multipart form boundary generation matching real browsers
+
+### 🔒 **Advanced TLS & Security**
+- **Custom JA3/JA4**: Configure precise TLS fingerprints with `HelloID` and `HelloSpec`
+- **HTTP/3 Support**: Full HTTP/3 over QUIC with complete browser-specific fingerprinting
+- **HTTP/2 & HTTP/3**: Full HTTP/2 support with customizable settings (SETTINGS frame, window size, priority)
+- **Ordered Headers**: Browser-accurate header ordering for perfect fingerprint evasion
+- **Certificate Pinning**: Custom TLS certificate validation
+- **DNS-over-TLS**: Enhanced privacy with DoT support
+- **Proxy Support**: HTTP, HTTPS, SOCKS4 and SOCKS5 proxy configurations with UDP support for HTTP/3
+
+### 🚀 **Performance & Reliability**
+- **Connection Pooling**: Efficient connection reuse with singleton pattern
+- **Automatic Retries**: Configurable retry logic with custom status codes
+- **Response Caching**: Built-in body caching for repeated access
+- **Streaming Support**: Efficient handling of large responses and SSE
+- **Compression**: Automatic decompression of gzip, deflate, brotli, and zstd responses
+- **Keep-Alive**: Persistent connections with configurable parameters
+
+### 🛠️ **Developer Experience**
+- **Standard Library Compatible**: Convert to `net/http.Client` for third-party library integration
+- **Fluent API**: Chainable methods for elegant code
+- **Middleware System**: Extensible request/response/client middleware with priority support
+- **Type Safety**: Strong typing with generics support via [enetx/g](https://github.com/enetx/g)
+- **Debug Mode**: Comprehensive request/response debugging
+- **Error Handling**: Result type pattern for better error management
+- **Context Support**: Full context.Context integration for cancellation and timeouts
+
+## 📦 Installation
+
+```bash
+go get -u github.com/enetx/surf
+```
+
+**Required Go version:** 1.27+
+
+## 🔄 Standard Library Compatibility
+
+Surf provides seamless integration with Go's standard `net/http` package, allowing you to use Surf's advanced features with any library that expects a standard `*http.Client`.
+
+```go
+// Create a Surf client with advanced features
+surfClient := surf.NewClient().
+    Builder().
+    Impersonate().Chrome().
+    Session().
+    Build().
+    Unwrap()
+
+// Convert to standard net/http.Client
+stdClient := surfClient.Std()
+
+// Use with any third-party library
+// Example: AWS SDK, Google APIs, OpenAI client, etc.
+resp, err := stdClient.Get("https://api.example.com")
+```
+
+**Preserved Features When Using Std():**
+- ✅ JA3/TLS fingerprinting
+- ✅ HTTP/2, HTTP/3 settings && fingerprinting
+- ✅ Browser impersonation headers
+- ✅ Ordered headers
+- ✅ Cookies and sessions
+- ✅ Proxy configuration
+- ✅ Custom headers and User-Agent
+- ✅ Timeout settings
+- ✅ Redirect policies
+- ✅ Request/Response middleware
+
+**Limitations with Std():**
+- ❌ Retry logic (implement at application level)
+- ❌ Response body caching
+- ❌ Remote address tracking
+- ❌ Request timing information
+
+## 🚀 Quick Start
+
+### Basic GET Request
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "github.com/enetx/surf"
+)
+
+func main() {
+    resp := surf.NewClient().Get("https://api.github.com/users/github").Do()
+    if resp.IsErr() {
+        log.Fatal(resp.Err())
+    }
+
+    fmt.Println(resp.Ok().Body.String().Unwrap())
+}
+```
+
+### JSON Response Handling
+
+```go
+type User struct {
+    Name     string `json:"name"`
+    Company  string `json:"company"`
+    Location string `json:"location"`
+}
+
+resp := surf.NewClient().Get("https://api.github.com/users/github").Do()
+if resp.IsOk() {
+    var user User
+    resp.Ok().Body.JSON(&user)
+    fmt.Printf("User: %+v\n", user)
+}
+```
+
+## 🎭 Browser Impersonation
+
+### Chrome Impersonation
+
+```go
+client := surf.NewClient().
+    Builder().
+    Impersonate().
+    Chrome().        // Latest Chrome v152
+    Build().
+    Unwrap()
+
+resp := client.Get("https://example.com").Do()
+```
+
+### Firefox with Random OS
+
+```go
+client := surf.NewClient().
+    Builder().
+    Impersonate().
+    RandomOS().      // Randomly selects Windows, macOS, Linux, Android, or iOS
+    Firefox().       // Latest Firefox v148
+    Build().
+    Unwrap()
+```
+
+### Platform-Specific Impersonation
+
+```go
+// iOS Chrome
+client := surf.NewClient().
+    Builder().
+    Impersonate().
+    IOS().
+    Chrome().
+    Build().
+    Unwrap()
+
+// Android Chrome
+client := surf.NewClient().
+    Builder().
+    Impersonate().
+    Android().
+    Chrome().
+    Build().
+    Unwrap()
+```
+
+## 🚀 HTTP/3 & Complete QUIC Fingerprinting
+
+### Chrome HTTP/3 with Automatic Detection
+
+```go
+// Automatic HTTP/3 with Chrome fingerprinting
+client := surf.NewClient().
+    Builder().
+    Impersonate().Chrome().
+    ForceHTTP3().    // Auto-detects Chrome and applies appropriate HTTP/3 settings
+    Build().
+    Unwrap()
+
+resp := client.Get("https://cloudflare-quic.com/").Do()
+if resp.IsOk() {
+    fmt.Printf("Protocol: %s\n", resp.Ok().Proto) // HTTP/3.0
+}
+```
+
+### Firefox HTTP/3
+
+```go
+// Firefox with HTTP/3 fingerprinting
+client := surf.NewClient().
+    Builder().
+    Impersonate().Firefox().
+    ForceHTTP3().    // Auto-detects Firefox and applies Firefox HTTP/3 settings
+    Build().
+    Unwrap()
+
+resp := client.Get("https://cloudflare-quic.com/").Do()
+```
+
+### Manual HTTP/3 Configuration
+
+```go
+// Custom fingerprint settings
+client := surf.NewClient().
+    Builder().
+    HTTP3Settings().Grease().Set().
+    Build().
+    Unwrap()
+
+```
+
+### HTTP/3 Compatibility & Fallbacks
+
+HTTP/3 automatically handles compatibility issues:
+
+```go
+// With HTTP proxy - automatically falls back to HTTP/2
+client := surf.NewClient().
+    Builder().
+    Proxy("http://proxy:8080").    // HTTP proxies incompatible with HTTP/3
+    ForceHTTP3().                  // Will use HTTP/2 instead
+    Build().
+    Unwrap()
+
+// With SOCKS5 proxy - HTTP/3 works over UDP
+client := surf.NewClient().
+    Builder().
+    Proxy("socks5://127.0.0.1:1080").    // SOCKS5 UDP proxy supports HTTP/3
+    ForceHTTP3().                        // Will use HTTP/3 over SOCKS5
+    Build().
+    Unwrap()
+
+// With DNS settings - works seamlessly
+client := surf.NewClient().
+    Builder().
+    DNS("8.8.8.8:53").   // Custom DNS works with HTTP/3
+    ForceHTTP3().
+    Build().
+    Unwrap()
+
+// With DNS-over-TLS - works seamlessly
+client := surf.NewClient().
+    Builder().
+    DNSOverTLS().Google().   // DoT works with HTTP/3
+    ForceHTTP3()
+    Build().
+    Unwrap()
+```
+
+**Key HTTP/3 Features:**
+- ✅ **Complete QUIC Fingerprinting**: Full Chrome and Firefox QUIC transport parameter matching
+- ✅ **Header Ordering**: Perfect browser-like header sequence preservation
+- ✅ **SOCKS5 UDP Support**: HTTP/3 works seamlessly over SOCKS5 UDP proxies
+- ✅ **Automatic Fallback**: Smart fallback to HTTP/2 when HTTP proxies are configured
+- ✅ **DNS Integration**: Custom DNS and DNS-over-TLS support
+- ✅ **JA4QUIC Support**: Advanced QUIC fingerprinting with Initial Packet + TLS ClientHello
+- ✅ **Order Independence**: `ForceHTTP3()` works regardless of call order
+
+## 🔧 Advanced Configuration
+
+### Custom JA3 Fingerprint
+
+```go
+// Use specific browser versions
+client := surf.NewClient().
+    Builder().
+    JA().
+    Chrome().     // Latest Chrome
+    Build().
+    Unwrap()
+
+
+// Randomized fingerprints for evasion
+client := surf.NewClient().
+    Builder().
+    JA().
+    Randomized().    // Random TLS fingerprint
+    Build().
+    Unwrap()
+
+// With custom HelloID
+client := surf.NewClient().
+    Builder().
+    JA().
+    SetHelloID(utls.HelloChrome_Auto).
+    Build().
+    Unwrap()
+
+// With custom HelloSpec
+client := surf.NewClient().
+    Builder().
+    JA().
+    SetHelloSpec(customSpec).
+    Build().
+    Unwrap()
+```
+
+### HTTP/2 Configuration
+
+```go
+client := surf.NewClient().
+    Builder().
+    HTTP2Settings().
+    HeaderTableSize(65536).
+    EnablePush(0).
+    InitialWindowSize(6291456).
+    MaxHeaderListSize(262144).
+    ConnectionFlow(15663105).
+    Set().
+    Build().
+    Unwrap()
+```
+
+### HTTP/3 Configuration
+
+```go
+client := surf.NewClient().
+    Builder().
+	HTTP3Settings().
+	QpackMaxTableCapacity(65536).
+	MaxFieldSectionSize(262144).
+	QpackBlockedStreams(100).
+	H3Datagram(1).
+	Grease().
+	Set().
+    Build().
+    Unwrap()
+```
+
+### Proxy Configuration
+
+```go
+// Single proxy
+client := surf.NewClient().
+    Builder().
+    Proxy("http://proxy.example.com:8080").
+    Build().
+    Unwrap()
+```
+
+### SOCKS5 UDP Proxy Support
+Surf supports HTTP/3 over SOCKS5 UDP proxies, combining the benefits of modern QUIC protocol with proxy functionality:
+
+```go
+// HTTP/3 over SOCKS5 UDP proxy
+client := surf.NewClient().
+    Builder().
+    Proxy("socks5://127.0.0.1:1080").
+    Impersonate().Chrome().
+    ForceHTTP3().  // Uses HTTP/3 over SOCKS5 UDP
+    Build().
+    Unwrap()
+
+// SOCKS5 with custom DNS resolution
+client := surf.NewClient().
+    Builder().
+    DNS("8.8.8.8:53").              // Custom DNS resolver
+    Proxy("socks5://proxy:1080").   // SOCKS5 UDP proxy
+    ForceHTTP3().                   // HTTP/3 over SOCKS5
+    Build().
+    Unwrap()
+```
+
+## 🔌 Middleware System
+
+### Request Middleware
+
+```go
+client := surf.NewClient().
+    Builder().
+    With(func(req *surf.Request) error {
+        req.AddHeaders("X-Custom-Header", "value")
+        fmt.Printf("Request to: %s\n", req.GetRequest().URL)
+        return nil
+    }).
+    Build().
+    Unwrap()
+```
+
+### Response Middleware
+
+```go
+client := surf.NewClient().
+    Builder().
+    With(func(resp *surf.Response) error {
+        fmt.Printf("Response status: %d\n", resp.StatusCode)
+        fmt.Printf("Response time: %v\n", resp.Time)
+        return nil
+    }).
+    Build().
+    Unwrap()
+```
+
+### Client Middleware
+
+```go
+client := surf.NewClient().
+    Builder().
+    With(func(client *surf.Client) error {
+        // Modify client configuration
+        client.GetClient().Timeout = 30 * time.Second
+        return nil
+    }).
+    Build().
+    Unwrap()
+```
+
+## 📤 Request Types
+
+### POST with JSON
+
+```go
+user := map[string]string{
+    "name": "John Doe",
+    "email": "john@example.com",
+}
+
+resp := surf.NewClient().
+    Post("https://api.example.com/users").
+    Body(user).
+    Do()
+```
+
+### Form Data
+
+```go
+// Standard form data (field order not guaranteed)
+formData := map[string]string{
+    "username": "john",
+    "password": "secret",
+}
+
+resp := surf.NewClient().
+    Post("https://example.com/login").
+    Body(formData).
+    Do()
+
+// Ordered form data (preserves field insertion order)
+orderedForm := g.NewMapOrd[string, string]()
+orderedForm.Insert("username", "john")
+orderedForm.Insert("password", "secret")
+orderedForm.Insert("remember_me", "true")
+
+resp := surf.NewClient().
+    Post("https://example.com/login").
+    Body(orderedForm).
+    Do()
+```
+
+### File Upload
+
+```go
+// Single file upload
+mp := surf.NewMultipart().
+    File("file", g.NewFile("/path/to/file.pdf"))
+
+resp := surf.NewClient().
+    Post("https://api.example.com/upload").
+    Multipart(mp).
+    Do()
+
+// With additional form fields
+mp := surf.NewMultipart().
+    Field("description", "Important document").
+    Field("category", "reports").
+    File("file", g.NewFile("/path/to/file.pdf"))
+
+resp := surf.NewClient().
+    Post("https://api.example.com/upload").
+    Multipart(mp).
+    Do()
+```
+
+### Multipart Form
+
+```go
+// Simple multipart form with fields only
+mp := surf.NewMultipart().
+    Field("field1", "value1").
+    Field("field2", "value2")
+
+resp := surf.NewClient().
+    Post("https://api.example.com/form").
+    Multipart(mp).
+    Do()
+
+// Advanced multipart with files from different sources
+mp := surf.NewMultipart().
+    Field("description", "Multiple files").
+    File("document", g.NewFile("/path/to/doc.pdf")).               // Physical file
+    FileBytes("data", "data.json", g.Bytes(`{"key": "value"}`)).   // Bytes with custom filename
+    FileString("text", "note.txt", "Hello, World!").               // String content
+    FileReader("stream", "upload.bin", someReader).                // io.Reader
+    ContentType("application/pdf")                                 // Custom Content-Type for last file
+
+resp := surf.NewClient().
+    Post("https://api.example.com/upload").
+    Multipart(mp).
+    Do()
+```
+
+## 🔄 Session Management
+
+### Persistent Sessions
+
+```go
+client := surf.NewClient().
+    Builder().
+    Session().        // Enable cookie jar
+    Build().
+    Unwrap()
+
+// Login
+client.Post("https://example.com/login").Body(credentials).Do()
+
+// Subsequent requests will include session cookies
+resp := client.Get("https://example.com/dashboard").Do()
+```
+
+### Manual Cookie Management
+
+```go
+// Set cookies
+cookies := []*http.Cookie{
+    {Name: "session", Value: "abc123"},
+    {Name: "preference", Value: "dark_mode"},
+}
+
+resp := surf.NewClient().
+    Get("https://example.com").
+    AddCookies(cookies...).
+    Do()
+
+// Get cookies from response
+if resp.IsOk() {
+    for _, cookie := range resp.Ok().Cookies {
+        fmt.Printf("Cookie: %s = %s\n", cookie.Name, cookie.Value)
+    }
+}
+```
+
+## 📊 Response Handling
+
+### Status Code Checking
+
+```go
+resp := surf.NewClient().Get("https://api.example.com/data").Do()
+
+if resp.IsOk() {
+    switch {
+    case resp.Ok().StatusCode.IsSuccess():
+        fmt.Println("Success!")
+    case resp.Ok().StatusCode.IsRedirection():
+        fmt.Println("Redirected to:", resp.Ok().Location())
+    case resp.Ok().StatusCode.IsClientError():
+        fmt.Println("Client error:", resp.Ok().StatusCode)
+    case resp.Ok().StatusCode.IsServerError():
+        fmt.Println("Server error:", resp.Ok().StatusCode)
+    }
+}
+```
+
+### Body Processing
+
+```go
+resp := surf.NewClient().Get("https://example.com/data").Do()
+if resp.IsOk() {
+    body := resp.Ok().Body
+
+    // As string (returns g.Result[g.String])
+    if content := body.String(); content.IsOk() {
+        fmt.Println(content.Ok())
+    }
+
+    // As bytes (returns g.Result[g.Bytes])
+    if data := body.Bytes(); data.IsOk() {
+        fmt.Println(len(data.Ok()))
+    }
+
+    // UTF-8 conversion (returns g.Result[g.String])
+    if utf8Content := body.UTF8(); utf8Content.IsOk() {
+        fmt.Println(utf8Content.Ok())
+    }
+
+    // Check content
+    if body.Contains("success") {
+        fmt.Println("Request succeeded!")
+    }
+
+    // Save to file
+    err := body.Dump("response.html")
+}
+```
+
+### Streaming Large Responses
+
+```go
+resp := surf.NewClient().Get("https://example.com/large-file").Do()
+if resp.IsOk() {
+    stream := resp.Ok().Body.Stream()
+    defer stream.Close()
+
+    scanner := bufio.NewScanner(stream)
+    for scanner.Scan() {
+        fmt.Println(scanner.Text())
+    }
+}
+```
+
+### Server-Sent Events (SSE)
+
+```go
+resp := surf.NewClient().Get("https://example.com/events").Do()
+if resp.IsOk() {
+    resp.Ok().Body.SSE(func(event *sse.Event) bool {
+        fmt.Printf("Event: %s, Data: %s\n", event.Event, event.Data)
+        return true  // Continue reading (false to stop)
+    })
+}
+```
+
+## 🔍 Debugging
+
+### Request/Response Debugging
+
+```go
+resp := surf.NewClient().
+    Get("https://api.example.com").
+    Do()
+
+if resp.IsOk() {
+    resp.Ok().Debug().
+        Request().      // Show request details
+        Response(true). // Show response with body
+        Print()
+}
+```
+
+### TLS Information
+
+```go
+resp := surf.NewClient().Get("https://example.com").Do()
+if resp.IsOk() {
+    if tlsInfo := resp.Ok().TLSGrabber(); tlsInfo != nil {
+        fmt.Printf("TLS Version: %s\n", tlsInfo.TLSVersion)
+        fmt.Printf("Server Name: %s\n", tlsInfo.ExtensionServerName)
+        fmt.Printf("Fingerprint: %s\n", tlsInfo.FingerprintSHA256)
+        fmt.Printf("Common Name: %v\n", tlsInfo.CommonName)
+        fmt.Printf("Organization: %v\n", tlsInfo.Organization)
+    }
+}
+```
+
+## ⚡ Performance Optimization
+
+### Connection Reuse
+
+```go
+// Create a reusable client
+client := surf.NewClient().
+    Builder().
+    Impersonate().
+    Chrome().
+    Build().
+    Unwrap()
+
+// Reuse for multiple requests
+for i := 0; i < 100; i++ {
+    resp := client.Get("https://api.example.com/data").Do()
+    // Process response
+}
+
+// Clean up when done
+defer client.CloseIdleConnections()
+```
+
+### Response Caching
+
+```go
+client := surf.NewClient().
+    Builder().
+    CacheBody().      // Enable body caching
+    Build().
+    Unwrap()
+
+resp := client.Get("https://api.example.com/data").Do()
+if resp.IsOk() {
+    // First access reads from network
+    data1 := resp.Ok().Body.Bytes().Unwrap()
+
+    // Subsequent accesses use cache
+    data2 := resp.Ok().Body.Bytes().Unwrap()  // No network I/O
+}
+```
+
+### Retry Configuration
+
+```go
+client := surf.NewClient().
+    Builder().
+    Retry(3, 2*time.Second).           // Max 3 retries, 2 second wait
+    Build().
+    Unwrap()
+```
+
+## 🌐 Advanced Features
+
+### H2C (HTTP/2 Cleartext)
+
+```go
+// Enable HTTP/2 without TLS
+client := surf.NewClient().
+    Builder().
+    H2C().
+    Build().
+    Unwrap()
+
+resp := client.Get("http://localhost:8080/h2c-endpoint").Do()
+```
+
+### Custom Headers Order
+
+```go
+// Control exact header order for fingerprinting evasion
+headers := g.NewMapOrd[g.String, g.String]()
+headers.Insert("User-Agent", "Custom/1.0")
+headers.Insert("Accept", "*/*")
+headers.Insert("Accept-Language", "en-US")
+headers.Insert("Accept-Encoding", "gzip, deflate")
+
+client := surf.NewClient().
+    Builder().
+    SetHeaders(headers).  // Headers will be sent in this exact order
+    Build().
+    Unwrap()
+```
+
+### Custom DNS Resolver
+
+```go
+client := surf.NewClient().
+    Builder().
+    DNS("8.8.8.8:53").  // Use Google DNS
+    Build().
+    Unwrap()
+```
+
+### DNS-over-TLS
+
+```go
+client := surf.NewClient().
+    Builder().
+    DNSOverTLS().Cloudflare().  // Cloudflare DoT
+    Build().
+    Unwrap()
+```
+
+### Unix Domain Sockets
+
+```go
+client := surf.NewClient().
+    Builder().
+    UnixSocket("/var/run/docker.sock").
+    Build().
+    Unwrap()
+
+resp := client.Get("http://localhost/v1.41/containers/json").Do()
+```
+
+### Network Interface Binding
+
+```go
+client := surf.NewClient().
+    Builder().
+    InterfaceAddr("192.168.1.100").  // Bind to specific IP
+    Build().
+    Unwrap()
+```
+
+### Raw HTTP Requests
+
+```go
+rawRequest := `GET /api/data HTTP/1.1
+Host: example.com
+User-Agent: Custom/1.0
+Accept: application/json
+
+`
+
+resp := surf.NewClient().
+    Raw(g.String(rawRequest), "https").
+    Do()
+```
+
+## 📚 API Reference
+
+### Client Methods
+
+| Method | Description |
+|--------|-------------|
+| `NewClient()` | Creates a new HTTP client with defaults |
+| `Get(url)` | Creates a GET request |
+| `Post(url)` | Creates a POST request |
+| `Put(url)` | Creates a PUT request |
+| `Patch(url)` | Creates a PATCH request |
+| `Delete(url)` | Creates a DELETE request |
+| `Head(url)` | Creates a HEAD request |
+| `Options(url)` | Creates an OPTIONS request |
+| `Connect(url)` | Creates a CONNECT request |
+| `Trace(url)` | Creates a TRACE request |
+| `Raw(raw, scheme)` | Creates a request from raw HTTP |
+| `Builder()` | Returns a new Builder for client configuration |
+| `Std()` | Convert to standard `*net/http.Client` |
+| `CloseIdleConnections()` | Closes idle connections while keeping client usable |
+| `Close()` | Completely shuts down the client and releases all resources |
+
+### Builder Methods
+
+| Method | Description |
+|--------|-------------|
+| `Impersonate()` | Enable browser impersonation |
+| `JA()` | Configure JA3/JA4 fingerprinting |
+| `HTTP2Settings()` | Configure HTTP/2 parameters |
+| `HTTP3Settings()` | Configure HTTP/3 parameters |
+| `H2C()` | Enable HTTP/2 cleartext |
+| `Proxy(proxy)` | Set proxy configuration |
+| `DNS(dns)` | Set custom DNS resolver |
+| `DNSOverTLS()` | Configure DNS-over-TLS |
+| `Session()` | Enable cookie jar for sessions |
+| `Timeout(duration)` | Set request timeout |
+| `MaxRedirects(n)` | Set maximum redirects |
+| `NotFollowRedirects()` | Disable redirect following |
+| `FollowOnlyHostRedirects()` | Only follow same-host redirects |
+| `ForwardHeadersOnRedirect()` | Forward headers on redirects |
+| `RedirectPolicy(fn)` | Custom redirect policy function |
+| `Retry(max, wait, codes...)` | Configure retry logic |
+| `CacheBody()` | Enable response body caching |
+| `With(middleware, priority...)` | Add middleware |
+| `BasicAuth(auth)` | Set basic authentication |
+| `BearerAuth(token)` | Set bearer token authentication |
+| `UserAgent(ua)` | Set custom user agent |
+| `SetHeaders(headers...)` | Set request headers |
+| `AddHeaders(headers...)` | Add request headers |
+| `AddCookies(cookies...)` | Add cookies |
+| `WithContext(ctx)` | Add context |
+| `ContentType(type)` | Set content type |
+| `GetRemoteAddress()` | Track remote address |
+| `DisableKeepAlive()` | Disable keep-alive |
+| `DisableCompression()` | Disable compression |
+| `ForceHTTP1()` | Force HTTP/1.1 |
+| `ForceHTTP2()` | Force HTTP/2 |
+| `ForceHTTP3()` | Force HTTP/3 |
+| `UnixSocket(path)` | Use Unix socket |
+| `InterfaceAddr(addr)` | Bind to network interface |
+| `Boundary(fn)` | Custom multipart boundary generator |
+
+### Request Methods
+
+| Method | Description |
+|--------|-------------|
+| `Do()` | Execute the request |
+| `WithContext(ctx)` | Add context to request |
+| `Body(data)` | Set request body (JSON, form data, bytes, string, io.Reader) |
+| `SetHeaders(headers...)` | Set request headers |
+| `AddHeaders(headers...)` | Add request headers |
+| `AddCookies(cookies...)` | Add cookies to request |
+| `Multipart(mp)` | Set multipart form data for request |
+| `GetRequest()` | Returns underlying `*http.Request` |
+
+### Multipart Methods
+
+| Method | Description |
+|--------|-------------|
+| `NewMultipart()` | Creates a new Multipart builder |
+| `Field(name, value)` | Adds a form field |
+| `File(fieldName, file)` | Adds a file from `*g.File` |
+| `FileReader(fieldName, fileName, reader)` | Adds a file from `io.Reader` |
+| `FileString(fieldName, fileName, content)` | Adds a file from string content |
+| `FileBytes(fieldName, fileName, data)` | Adds a file from byte slice |
+| `ContentType(ct)` | Sets custom Content-Type for the last added file |
+| `FileName(name)` | Overrides filename for the last added file |
+| `Retry()` | Buffers multipart body for retry support |
+
+### Response Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `StatusCode` | `StatusCode` | HTTP status code |
+| `Headers` | `Headers` | Response headers |
+| `Cookies` | `Cookies` | Response cookies |
+| `Body` | `*Body` | Response body |
+| `URL` | `*url.URL` | Final URL after redirects |
+| `Time` | `time.Duration` | Request duration |
+| `ContentLength` | `int64` | Content length |
+| `Proto` | `string` | HTTP protocol version |
+| `Attempts` | `int` | Number of retry attempts |
+
+### Response Methods
+
+| Method | Description |
+|--------|-------------|
+| `Debug()` | Returns debug info for request/response inspection |
+| `Location()` | Returns the Location header (redirect URL) |
+| `TLSGrabber()` | Returns TLS connection information |
+| `Referer()` | Returns HTTP Referer header from original request |
+| `GetResponse()` | Returns underlying `*http.Response` |
+| `GetCookies(url)` | Returns cookies for a specific URL |
+| `SetCookies(url, cookies)` | Stores cookies in client's cookie jar |
+| `RemoteAddress()` | Returns remote server address |
+
+### Body Methods
+
+| Method | Description |
+|--------|-------------|
+| `String()` | Get body as string (returns `g.Result[g.String]`) |
+| `Bytes()` | Get body as bytes (returns `g.Result[g.Bytes]`) |
+| `JSON(v)` | Decode JSON into struct |
+| `XML(v)` | Decode XML into struct |
+| `UTF8()` | Convert to UTF-8 (returns `g.Result[g.String]`) |
+| `Stream()` | Get StreamReader for streaming (with Close support) |
+| `SSE(fn)` | Process Server-Sent Events |
+| `Dump(file)` | Save to file |
+| `Contains(pattern)` | Check if contains pattern |
+| `Limit(n)` | Limit body size |
+| `WithContext(ctx)` | Set context for cancellation of read operations |
+| `Close()` | Close body reader |
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## ❤️ Support / Sponsorship
+
+If you enjoy **Surf** and want to help keep development going, you can support the project with crypto donations:
+
+| USDT | TON | SOL | BTC | ETH |
+|--------------|-----|-----|-----|-----|
+| <img src="https://github.com/user-attachments/assets/72ccb81c-f958-416b-86f6-349c759cdb93" width="100" /> | <img src="https://github.com/user-attachments/assets/49431b49-3e43-49a6-8083-2f5cb39d4f4e" width="100" /> | <img src="https://github.com/user-attachments/assets/d92ba4e9-408b-411e-bc08-473725a880f8" width="100" /> | <img src="https://github.com/user-attachments/assets/67a1ac0e-de90-4341-a13c-614eb213f5da" width="100" /> | <img src="https://github.com/user-attachments/assets/2e1b6c2b-f4b8-47ca-9785-f0512198ae49" width="100" /> |
+
+Thank you for your support!
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [enetx/http](https://github.com/enetx/http) for enhanced HTTP functionality
+- HTTP/3 support and complete QUIC fingerprinting powered by [QUIC-GO](https://github.com/quic-go/quic-go)
+- TLS fingerprinting powered by [uTLS](https://github.com/refraction-networking/utls)
+- Generic utilities from [enetx/g](https://github.com/enetx/g)
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/enetx/surf/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/enetx/surf/discussions)
+- **Documentation**: [pkg.go.dev](https://pkg.go.dev/github.com/enetx/surf)
+
+
+<p align="center">
+  <b>Made with ❤️ by the Surf contributors</b>
+</p>

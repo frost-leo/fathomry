@@ -1,0 +1,128 @@
+{
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "module": "github.com/enetx/http3",
+  "version": "v1.0.9",
+  "origin_commit": "ba6a50293c3c477f83648f3faa9e58adaa807206",
+  "module_sum": "h1:TN/QdJNu463zgyJc84XqHevjaOkXGc6Suq+u32v1cvU=",
+  "archive_sha256": "e1512d115850b99f0fde16010efd49b7f3f723bd0784cdb8cf9370705e56d258",
+  "local_compatibility_revision": "v1",
+  "original_files": [
+    {
+      "path": "README.md",
+      "sha256": "8f970fa9102fc4703b9d2ed78b718b9805498eea12c13d11b8e2b057fd1502bd"
+    },
+    {
+      "path": "body.go",
+      "sha256": "841ee453503af261a91491121c9f858d4177bd52bf28c5ac99f2ca901b48d095"
+    },
+    {
+      "path": "capsule.go",
+      "sha256": "89e9e2dc44d77eafc2ba457f12999fd82a3bf8b5c0f581b0d7c1ceaf06dae824"
+    },
+    {
+      "path": "client.go",
+      "sha256": "f219879f6eec6ef902130bdf709051e1c2de9c3dd60af265024051484f92e7dc"
+    },
+    {
+      "path": "conn.go",
+      "sha256": "4d417e3fed4ee4e11877ab2a5d282c9dc2f094ebdf722a47dbd0fe0bf7bff836"
+    },
+    {
+      "path": "error.go",
+      "sha256": "54a9ee2b0bcf1e857a3f3b426caa0371531373706cf904d97137f9f367a3a68b"
+    },
+    {
+      "path": "error_codes.go",
+      "sha256": "6f35fe0eb9274ffe7c334fde67b929642084c795f94e0f722ee39b2f4f547359"
+    },
+    {
+      "path": "frames.go",
+      "sha256": "132b9c624299b5f9ce72caf8e35e640c38a5da8437b2b2329ec9c4395a5a02e4"
+    },
+    {
+      "path": "frames_settings_test.go",
+      "sha256": "9f879b067299c88d0d54e52fe2bc74d69399ab9827a2c2fb85f09494c21a3145"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "1b0bb354b9a538221c1bb87252284dda8a0fd2d51e25027d9b47ff2ea6729439"
+    },
+    {
+      "path": "gzip_reader.go",
+      "sha256": "3f04c17a52e67a6a3cfb8bf75f93d9a5c90cd863192d313d3bd75c8c797a12ab"
+    },
+    {
+      "path": "headers.go",
+      "sha256": "9c100657323a0ee32e5f5f118d58e83ff4746da4ba6d31f3b0bdf072b5ec4e71"
+    },
+    {
+      "path": "httpcommon/header.go",
+      "sha256": "5b903994addfe6abe71ea9420242c2718bfda2d8e15b43489bb8e0c35417cba2"
+    },
+    {
+      "path": "httpcommon/header_test.go",
+      "sha256": "095a666bf4e06e16d22a512fd851f7563369cb642c15c4fd542ee262decda498"
+    },
+    {
+      "path": "ip_addr.go",
+      "sha256": "5b59944b122a0c4f7330c318423b6a26645dff2a0f73d4ef1233273712bee948"
+    },
+    {
+      "path": "mockgen.go",
+      "sha256": "3f6caa9c07626629fb36fd306575702c091dbd319eb3d985809e9affa0c8827f"
+    },
+    {
+      "path": "qlog/event.go",
+      "sha256": "2b8d346237dcd72c48935730335461d99da81a00f50793f2ef6e640d0a5504e0"
+    },
+    {
+      "path": "qlog/frame.go",
+      "sha256": "c21785be05f9b17744b709c16849f9614924c679074c9e131149c6e75f29fe49"
+    },
+    {
+      "path": "qlog/qlog_dir.go",
+      "sha256": "a1383813b79a4eb85ee2298fd57d5ccb1eb6c1a33d21eaac0d2c5dbf793ee4fe"
+    },
+    {
+      "path": "qlog.go",
+      "sha256": "ef786393f4a8c8e1f2bc8961df7f2f319f4119073188c1d07de3e6f8641486db"
+    },
+    {
+      "path": "request_writer.go",
+      "sha256": "fe5735f806b0e796939728a305b3fc9fc85753da26b1d6ec9d99328e40361db4"
+    },
+    {
+      "path": "request_writer_order_test.go",
+      "sha256": "876ff5a1fc7468cb69c9f42e44771a28f570df73bf7f5b76e4345d649b7b3172"
+    },
+    {
+      "path": "response_writer.go",
+      "sha256": "11af21a0e914b99c7b82fbed95b0e46f132cd226e745a695fe176cf7e4fe0feb"
+    },
+    {
+      "path": "server.go",
+      "sha256": "6333d8e970c0ee87ef438ce1d5c6cf23213acefeab5441602239ee5ac7af7141"
+    },
+    {
+      "path": "server_conn.go",
+      "sha256": "8fff635f373e30531dee28477b36351c5f626b3c24a0adb0382827b90a009c77"
+    },
+    {
+      "path": "state_tracking_stream.go",
+      "sha256": "02dd48f2725538b4f59b1285f1f800af482a29d3534e4189847c64b3a42237c4"
+    },
+    {
+      "path": "stream.go",
+      "sha256": "22a721e8ab30d10a25c7a41c117241a38729a263880cab30524711265f93abcb"
+    },
+    {
+      "path": "trace.go",
+      "sha256": "46676f2bb8abe85e191158cd60fcd54627d34ca625a5495543a71f348b5bfdcd"
+    },
+    {
+      "path": "transport.go",
+      "sha256": "e46303935e356d21d206023674108abcef9dd611b65bea4087e6f9159c8c0589"
+    }
+  ],
+  "archive_license_file": null
+}

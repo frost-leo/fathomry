@@ -1,0 +1,91 @@
+package main
+
+import (
+	"log"
+
+	"github.com/enetx/g"
+	"github.com/enetx/g/rand"
+	"github.com/enetx/http2"
+	"github.com/enetx/surf"
+)
+
+func main() {
+	headers := g.NewMapOrd[g.String, g.String]()
+
+	headers.Insert(":method", "")
+	headers.Insert(":authority", "")
+	headers.Insert(":scheme", "")
+	headers.Insert(":path", "")
+	headers.Insert("sec-ch-ua", "\"Google Chrome\";v=\"87\", \" Not;A Brand\";v=\"99\", \"Chromium\";v=\"87\"")
+	headers.Insert("sec-ch-ua-mobile", "?0")
+	headers.Insert("sec-ch-ua-platform", "\"Windows\"")
+	headers.Insert("Upgrade-Insecure-Requests", "1")
+	headers.Insert(
+		"Accept",
+		"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+	)
+	headers.Insert("Sec-Fetch-Site", "none")
+	headers.Insert("Sec-Fetch-Mode", "navigate")
+	headers.Insert("Sec-Fetch-User", "?1")
+	headers.Insert("Sec-Fetch-Dest", "document")
+	headers.Insert("Accept-Encoding", "gzip, deflate, br")
+	headers.Insert("User-Agent", "")
+	headers.Insert("Accept-Language", "en-US,en;q=0.9")
+
+	priorityFrames := []http2.PriorityFrame{
+		{
+			FrameHeader: http2.FrameHeader{StreamID: 3},
+			PriorityParam: http2.PriorityParam{
+				StreamDep: 0,
+				Exclusive: false,
+				Weight:    200,
+			},
+		},
+		{
+			FrameHeader: http2.FrameHeader{StreamID: 5},
+			PriorityParam: http2.PriorityParam{
+				StreamDep: 0,
+				Exclusive: false,
+				Weight:    100,
+			},
+		},
+	}
+
+	b := g.NewBuilder()
+	b.WriteString("-------SurfFormBoundary")
+	b.WriteString(rand.String(7, g.ASCIILetters))
+
+	cli := surf.NewClient().
+		Builder().
+		Boundary(b.String).
+		HTTP2Settings().
+		EnablePush(1).
+		MaxConcurrentStreams(1000).
+		MaxFrameSize(16384).
+		MaxHeaderListSize(262144).
+		InitialWindowSize(6291456).
+		HeaderTableSize(65536).
+		NoRFC7540Priorities(1).
+		PriorityParam(http2.PriorityParam{
+			Exclusive: true,
+			Weight:    255,
+			StreamDep: 0,
+		}).
+		PriorityFrames(priorityFrames).
+		Set().
+		With(func(req *surf.Request) error {
+			req.SetHeaders(headers)
+			return nil
+		}).
+		Build().
+		Unwrap()
+
+	const url = "https://tls.peet.ws/api/all"
+
+	r := cli.Get(url).Do()
+	if r.IsErr() {
+		log.Fatal(r.Err())
+	}
+
+	r.Ok().Debug().Request(true).Response(true).Print()
+}
