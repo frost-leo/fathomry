@@ -1,0 +1,41 @@
+{
+  "module": "github.com/nukilabs/socks",
+  "version": "v1.0.1",
+  "commit": "6f45075855e22f75d2c0e69107356f49bea7bf53",
+  "module_sum": "h1:YRj0CgnfnBev9ibowGhPhNXfCCT7UxmQDS1/n6yioVw=",
+  "local_revision": "v1",
+  "original_sha256": {
+    "auth.go": "940c2837fb346085e10d3d586995ae8f775e714ec95612bd14b74705a5b3e8e0",
+    "client.go": "dc0dfbb7e9ceb9012b0f9072340efcba16dabf3321450ed60f4d5983830bdf18",
+    "common.go": "09e78376ef7fd86f1e0b155959c74c2b93bddee0613be51f0bc2fe47085d70f3",
+    "conn.go": "4222e4d3bacdee07e049a04f3d2000cf4a779532ddf75ba3f1a81442bf02218c",
+    "dialer.go": "82bc46be8fb7a821d47d181c9c78e0895951febe9935adff64fd7e8e708db720",
+    "go.mod": "8add9e226547021b44ae8694b00887a6f0ac346baaae6ad51f10d50532f4b08f",
+    "server.go": "45f1fac8886175f8d4fd768279430ea763a36167d9b373ca0af7512174f253f0",
+    "utils.go": "ff579e3fe21b8625d32c73ea2719afb6aa37fcb45bd55279dc49eff8deccb8ea"
+  },
+  "schema": "fathomry.sdk-source/v1",
+  "license": "GPL-3.0-or-later",
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "upstream_license": {
+    "file": null,
+    "status": "The acquired module has no license file and GitHub license metadata is null. No upstream grant is inferred."
+  }
+}

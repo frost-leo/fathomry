@@ -1,0 +1,51 @@
+{
+  "schema": "fathomry.sdk-source/v1",
+  "module": "github.com/nukilabs/qpack",
+  "version": "v0.7.0",
+  "commit": "8b61eff997c65a046f1134614e6ee9a118158313",
+  "module_sum": "h1:bIWuakfY1ZHY0t5f2SitZi17Y8tMW51d4ZtJJyeOjB4=",
+  "local_revision": "v1",
+  "license": "GPL-3.0-or-later",
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "upstream_license": {
+    "file": "LICENSE.md",
+    "status": "Original upstream notice retained byte-for-byte."
+  },
+  "original_sha256": {
+    "LICENSE.md": "1b6a897efd39b20b3cdce8cd306160d115dbded39d855ceeffe21dc11e4d53df",
+    "decoder.go": "6319c0a2e671e0c1d259664fccb6c9fa8cdf9756c7f00dc085cef3dc3fe73954",
+    "decoder_block.go": "640d4c52de2c27ea82288e3e446ff6e277db64be489fc7d8a2368b434e71fcee",
+    "decoder_dynamic.go": "afa87847e2e912e829452eedecfdb634e4af14059bc9474d7b992d661a7b214f",
+    "decoder_test.go": "3b38ae9e88b61e35bff4fba083eb74257af941acaf54670294a2875241255ccd",
+    "dynamic_table.go": "9bfba241834f881fa05d992caf2f503e89e8a76d77d2d979a7a46e83cd767c30",
+    "dynamic_test.go": "a9fc732c83fc01f67f339a14e5188871361887bd941cc11eae2a614655ef8556",
+    "encoder.go": "7ec0a47cffe8f3584f52078e38a1bd577e262f66f531756e747b299b3254b215",
+    "encoder_test.go": "0cbba4dc280a99bae9658866e8bda66ddf4500ba6244a714a9b04cda8f47a85b",
+    "fuzz_test.go": "2abd9834a4c0f3495205eb16b96137230555cee22e728f27daaa94facd108d6b",
+    "go.mod": "5e7ef2529df669ea22d429441c5b3fcf3e31589b2f03c1522bf863b405e48e56",
+    "go.sum": "e73ad67402367faf5eb3f956cbebc374eb1b4a2a98b712bf7dc261b759864185",
+    "header_field.go": "36a8ff1772db2da7b43cfee309f311b4c6e48813339cb2321d8f47b27aaf8f09",
+    "header_field_test.go": "59b747551248d487c878d6827321db4aa283196dbb94a1561cc0b6ce0fc550e9",
+    "qpack_test.go": "f10e4e815941ef1fc91b5c749ae6c6c1c7af0a501a60a9d402e3c80792f09a77",
+    "static_table.go": "efc9df41892a0033b31c96348aaabc15e7d251a772c33a256e4180291bb3dd39",
+    "static_table_test.go": "ddb808ff148aea02dcc5864380ac635c33b430937d2f277ff0cb7086b67cc972",
+    "varint.go": "a7074f062613e68d9c2366eb02292483f691d508e48e29a9fad6bfd5537b15d4"
+  }
+}
