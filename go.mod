@@ -65,6 +65,7 @@ require (
 	// read/listen/reconnect/close gates; preserve Fathomry's contracts. Track evidence:
 	// https://github.com/frost-leo/fathomry/issues/21
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
+	github.com/nexus-rpc/sdk-go v0.7.0
 	github.com/nukilabs/http v1.3.2
 	github.com/nukilabs/quic-go v1.3.0
 	// TODO(gh-53): Requalify the complete consuming graph and native lifecycle,
@@ -108,6 +109,8 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
 	go.opentelemetry.io/proto/otlp v1.11.0
+	go.temporal.io/api v1.63.5
+	go.temporal.io/sdk v1.49.0
 	go.uber.org/mock v0.6.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v3 v3.0.5
@@ -157,6 +160,7 @@ require (
 	github.com/duckdb/duckdb-go-bindings/lib/linux-arm64 v0.10505.0 // indirect
 	github.com/duckdb/duckdb-go-bindings/lib/windows-amd64 v0.10505.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -166,8 +170,11 @@ require (
 	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
+	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/gookit/color v1.6.0 // indirect
+	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
@@ -188,6 +195,7 @@ require (
 	github.com/miekg/dns v1.1.69 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
+	github.com/nexus-rpc/nexus-proto-annotations v0.1.0 // indirect
 	github.com/nukilabs/qpack v0.7.0 // indirect
 	github.com/nukilabs/socks v1.0.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.3.1 // indirect
@@ -195,6 +203,7 @@ require (
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pterm/pterm v0.12.83 // indirect
+	github.com/robfig/cron v1.2.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sardanioss/qpack v0.6.3 // indirect
@@ -225,6 +234,7 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
@@ -261,3 +271,10 @@ replace github.com/enetx/surf => ./third_party/surf
 replace github.com/enetx/http2 => ./third_party/surf-http2
 
 replace github.com/enetx/http3 => ./third_party/surf-http3
+
+// TODO(gh-61): Requalify the native lifecycle extension before SDK upgrades.
+// Retire it only after an upstream release proves Activity/Local Activity tails,
+// owned cache eviction, eager reservations and shared heartbeat callback joins
+// under the consuming dependency graph. Stop remains a bounded native request,
+// not a dependency-release certificate.
+replace go.temporal.io/sdk => ./third_party/temporal-sdk

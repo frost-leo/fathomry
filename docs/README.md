@@ -70,10 +70,20 @@ preserve existing local sinks and ownership. Export is explicitly scheduled;
 local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 
 There is no public Go package, project generator, application configuration loader,
-production service Provider or complete Temporal execution runtime yet. The intended
+production-qualified application runtime or Run/Item execution model yet. The intended
 `fathomry new <project>` entry is not runnable. The removed public `failure` contract
 is not replaced by a speculative error API. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
+
+The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
+adds named Namespace Clients, native execution handles, managed Worker registration
+and shutdown, Activity/Local Activity/Nexus callback evidence and controlled raw
+service access. Native Schedules, Worker Deployments, Sessions, serialization and
+backed/standalone Nexus operations have selected isolated service/replay evidence.
+The compatible browser profile also verifies history, Query and codec rendering.
+Logging, metrics and tracing use native injected interfaces, not concrete upper-
+layer Provider dependencies. Optional transport/backend profiles and broader
+deployment qualification remain separate from the implemented SDK contracts.
 
 The [Kafka integration](reference/internal/broker/franz/v1/interface.md) adds bounded
 franz-go production, Kafka-only atomic batches, exact historical reads, direct
