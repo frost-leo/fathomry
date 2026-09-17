@@ -52,6 +52,14 @@ LOCAL INFILE boundaries apply before SDK dispatch, including above verified TLS.
 The [contract](reference/internal/database/mysql/v1/interface.md) distinguishes
 isolated MySQL 8.4.11/InnoDB TLS writes over Unix sockets from separate TCP TLS reads.
 
+The [Redis integration](reference/internal/cache/redis/v9/interface.md) adds bounded
+native commands, batches, pinned transactions and subscriptions using official
+go-redis v9.22.0 without a local SDK replacement. Its
+[capability census](reference/internal/cache/redis/v9/capabilities.md) distinguishes
+topologies, experimental caching/batching, service-version requirements and native
+limits; [verification](reference/internal/cache/redis/v9/verification.md) separates
+protocol checks from authorized Standalone, Sentinel, Cluster and Ring profiles.
+
 The [Zap integration](reference/internal/logging/zap/v1/interface.md) adds typed,
 context-aware logging with independent evidence, multiple sinks and bounded Linux
 file rotation/gzip/retention. Its structured extension is composition-owned;

@@ -77,6 +77,7 @@ require (
 	github.com/quic-go/go-ossfuzz-seeds v0.1.0
 	github.com/quic-go/qpack v0.6.0
 	github.com/quic-go/quic-go v0.61.0
+	github.com/redis/go-redis/v9 v9.22.0
 	github.com/refraction-networking/utls v1.8.3-0.20260623165621-880e27d8b0e5
 	github.com/rs/zerolog v1.35.1
 	github.com/sardanioss/http v1.2.0
@@ -226,6 +227,7 @@ require (
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20260218203240-3dfff04db8fa // indirect
