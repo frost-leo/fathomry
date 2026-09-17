@@ -1,0 +1,1038 @@
+package internal
+
+import (
+	"context"
+	"encoding/binary"
+	"errors"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
+	commonpb "go.temporal.io/api/common/v1"
+	enumspb "go.temporal.io/api/enums/v1"
+	historypb "go.temporal.io/api/history/v1"
+	protocolpb "go.temporal.io/api/protocol/v1"
+	"go.temporal.io/api/proxy"
+	querypb "go.temporal.io/api/query/v1"
+	taskqueuepb "go.temporal.io/api/taskqueue/v1"
+	"go.temporal.io/api/update/v1"
+	"go.temporal.io/api/workflowservice/v1"
+	"go.temporal.io/api/workflowservicemock/v1"
+	"go.temporal.io/sdk/internal/common/metrics"
+	ilog "go.temporal.io/sdk/internal/log"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+type countingTaskHandler struct {
+	WorkflowTaskHandler
+	ProcessWorkflowTaskInvocationCount atomic.Uint32
+}
+
+func TestLocalActivityTaskPollerReturnsNilWhenTunnelStops(t *testing.T) {
+	stopCh := make(chan struct{})
+	tunnel := newLocalActivityTunnel(stopCh)
+	queuedTasks := []*localActivityTask{{}, {}}
+	require.True(t, tunnel.sendTask(queuedTasks[0]))
+	require.True(t, tunnel.sendTask(queuedTasks[1]))
+	close(stopCh)
+	poller := &localActivityTaskPoller{
+		laTunnel: tunnel,
+	}
+
+	require.False(t, tunnel.sendTask(&localActivityTask{}))
+	task, err := poller.PollTask()
+	require.NoError(t, err)
+	if task != nil {
+		t.Fatalf("PollTask() returned a non-nil task of type %T", task)
+	}
+	require.Nil(t, tunnel.taskQueueHead)
+	require.Nil(t, tunnel.taskQueueTail)
+	for _, task := range queuedTasks {
+		require.Nil(t, task.nextQueuedTask)
+	}
+}
+
+func TestLocalActivityTunnelTaskQueueGrowsWithDemand(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer func() {
+		select {
+		case <-stopCh:
+		default:
+			close(stopCh)
+		}
+	}()
+	tunnel := newLocalActivityTunnel(stopCh)
+	const taskCount = 100001
+	tasks := make([]localActivityTask, taskCount)
+
+	enqueueDone := make(chan bool, 1)
+	go func() {
+		for i := range tasks {
+			if !tunnel.sendTask(&tasks[i]) {
+				enqueueDone <- false
+				return
+			}
+		}
+		enqueueDone <- true
+	}()
+
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+	select {
+	case completed := <-enqueueDone:
+		require.True(t, completed)
+	case <-timer.C:
+		close(stopCh)
+		t.Fatal("local activity task submission blocked without a consumer")
+	}
+
+	for i := range tasks {
+		if received := tunnel.getTask(); received != &tasks[i] {
+			t.Fatalf("getTask() returned task %p, want %p", received, &tasks[i])
+		}
+		require.Nil(t, tasks[i].nextQueuedTask)
+	}
+	require.Nil(t, tunnel.taskQueueHead)
+	require.Nil(t, tunnel.taskQueueTail)
+}
+
+func TestLocalActivityTunnelTaskQueuePreservesOrder(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	tunnel := newLocalActivityTunnel(stopCh)
+	tasks := make([]*localActivityTask, 32)
+	for i := range tasks {
+		tasks[i] = &localActivityTask{}
+	}
+
+	for _, task := range tasks[:16] {
+		require.True(t, tunnel.sendTask(task))
+	}
+	for _, task := range tasks[:10] {
+		require.Same(t, task, tunnel.getTask())
+	}
+	for _, task := range tasks[16:] {
+		require.True(t, tunnel.sendTask(task))
+	}
+	for _, task := range tasks[10:] {
+		require.Same(t, task, tunnel.getTask())
+		require.Nil(t, task.nextQueuedTask)
+	}
+	require.Nil(t, tunnel.taskQueueHead)
+	require.Nil(t, tunnel.taskQueueTail)
+
+	require.True(t, tunnel.sendTask(tasks[0]))
+	require.Same(t, tasks[0], tunnel.getTask())
+	require.Nil(t, tasks[0].nextQueuedTask)
+}
+
+func (wth *countingTaskHandler) ProcessWorkflowTask(
+	task *workflowTask,
+	wfctx *workflowExecutionContextImpl,
+	hb workflowTaskHeartbeatFunc,
+) (*workflowTaskCompletion, error) {
+	wth.ProcessWorkflowTaskInvocationCount.Add(1)
+	return wth.WorkflowTaskHandler.ProcessWorkflowTask(task, wfctx, hb)
+}
+
+func TestPollRequestsIncludeWorkerControlTaskQueue(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	service := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+	const (
+		namespace    = "test-ns"
+		taskQueue    = "test-task-queue"
+		identity     = "test-worker"
+		controlQueue = "temporal-sys/worker-commands/test-ns/grouping-key"
+	)
+
+	service.EXPECT().PollWorkflowTaskQueue(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, req *workflowservice.PollWorkflowTaskQueueRequest, _ ...grpc.CallOption) (*workflowservice.PollWorkflowTaskQueueResponse, error) {
+			require.Equal(t, controlQueue, req.WorkerControlTaskQueue)
+			require.Equal(t, taskQueue, req.TaskQueue.GetName())
+			return &workflowservice.PollWorkflowTaskQueueResponse{}, nil
+		})
+
+	base := basePoller{
+		metricsHandler:         metrics.NopHandler,
+		workerBuildID:          "test-build-id",
+		workerControlTaskQueue: controlQueue,
+	}
+	wtp := &workflowTaskPoller{
+		basePoller:            base,
+		mode:                  NonSticky,
+		namespace:             namespace,
+		taskQueueName:         taskQueue,
+		identity:              identity,
+		service:               service,
+		logger:                ilog.NewDefaultLogger(),
+		numNormalPollerMetric: newNumPollerMetric(metrics.NopHandler, metrics.PollerTypeWorkflowTask),
+	}
+	_, err := wtp.poll(t.Context())
+	require.NoError(t, err)
+
+	service.EXPECT().PollActivityTaskQueue(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, req *workflowservice.PollActivityTaskQueueRequest, _ ...grpc.CallOption) (*workflowservice.PollActivityTaskQueueResponse, error) {
+			require.Equal(t, controlQueue, req.WorkerControlTaskQueue)
+			require.Equal(t, taskQueue, req.TaskQueue.GetName())
+			return &workflowservice.PollActivityTaskQueueResponse{}, nil
+		})
+
+	atp := &activityTaskPoller{
+		basePoller:      base,
+		namespace:       namespace,
+		taskQueueName:   taskQueue,
+		identity:        identity,
+		service:         service,
+		logger:          ilog.NewDefaultLogger(),
+		numPollerMetric: newNumPollerMetric(metrics.NopHandler, metrics.PollerTypeActivityTask),
+	}
+	_, err = atp.poll(t.Context())
+	require.NoError(t, err)
+}
+
+func TestWFTRacePrevention(t *testing.T) {
+	params := workerExecutionParameters{cache: NewWorkerCache()}
+	ensureRequiredParams(&params)
+	var (
+		taskQueue    = taskqueuepb.TaskQueue{Name: t.Name() + "task-queue"}
+		startedAttrs = historypb.WorkflowExecutionStartedEventAttributes{
+			TaskQueue: &taskQueue,
+		}
+		startedEvent     = createTestEventWorkflowExecutionStarted(1, &startedAttrs)
+		history          = historypb.History{Events: []*historypb.HistoryEvent{startedEvent}}
+		runID            = t.Name() + "-run-id"
+		wfID             = t.Name() + "-workflow-id"
+		wfe              = commonpb.WorkflowExecution{RunId: runID, WorkflowId: wfID}
+		wfType           = commonpb.WorkflowType{Name: t.Name() + "-workflow-type"}
+		ctrl             = gomock.NewController(t)
+		client           = workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+		resultsChan      = make(chan error, 2)
+		innerTaskHandler = newWorkflowTaskHandler(params, nil, newRegistry())
+		taskHandler      = &countingTaskHandler{WorkflowTaskHandler: innerTaskHandler}
+		contextManager   = taskHandler
+		codec            = binary.LittleEndian
+		completionChans  = []chan struct{}{make(chan struct{}), make(chan struct{})}
+		pollResp0        = workflowservice.PollWorkflowTaskQueueResponse{
+			Attempt:           1,
+			WorkflowExecution: &wfe,
+			WorkflowType:      &wfType,
+			History:           &history,
+			// encode the task pseudo-ID into the token; 0 here and 1 for
+			// pollResp1 below. The mock will use this as an index into
+			// `completionChans` (above) to get a task-specific control channel.
+			TaskToken: codec.AppendUint32(nil, 0),
+		}
+		pollResp1 = workflowservice.PollWorkflowTaskQueueResponse{
+			Attempt:           1,
+			WorkflowExecution: &wfe,
+			WorkflowType:      &wfType,
+			History:           &history,
+			TaskToken:         codec.AppendUint32(nil, 1),
+		}
+		task0 = workflowTask{task: &pollResp0}
+		task1 = workflowTask{task: &pollResp1}
+	)
+
+	t.Log("Didn't register any workflows so expect both future WFTs to " +
+		"end up calling RespondWorkflowTaskFailed")
+	client.EXPECT().RespondWorkflowTaskFailed(gomock.Any(), gomock.Any()).
+		Times(2).
+		DoAndReturn(func(
+			_ context.Context,
+			req *workflowservice.RespondWorkflowTaskFailedRequest,
+			_ ...grpc.CallOption,
+		) (*workflowservice.RespondWorkflowTaskFailedResponse, error) {
+			// find the appropriate channel for this task - the index is encoded
+			// into the TaskToken
+			ch := completionChans[int(codec.Uint32(req.TaskToken))]
+			<-ch
+			// these two reads ^v allow the test code to capture a task processing
+			// goroutine exactly here
+			<-ch
+			return &workflowservice.RespondWorkflowTaskFailedResponse{}, nil
+		})
+
+	poller := newWorkflowTaskProcessor(taskHandler, contextManager, client, params, uuid.NewString())
+
+	t.Log("Issue task0")
+	go func() { resultsChan <- poller.processWorkflowTask(&task0) }()
+
+	completionChans[0] <- struct{}{}
+	require.EqualValues(t, 1, taskHandler.ProcessWorkflowTaskInvocationCount.Load(),
+		"TaskHandler.ProcessWorkflowTask should have been called once")
+	t.Log("task0 has called TaskHandler.ProcessWorkflowTask and is blocked " +
+		"in the mock RespondWorkflowTaskFailed")
+
+	t.Log("Issue task1")
+	go func() { resultsChan <- poller.processWorkflowTask(&task1) }()
+
+	require.EqualValues(t, 1, taskHandler.ProcessWorkflowTaskInvocationCount.Load(),
+		"TaskHandler.ProcessWorkflowTask should only have been called once")
+
+	t.Log("Unblock task0 allowing poller.processWorkflowTask to return")
+	close(completionChans[0])
+	require.NoError(t, <-resultsChan)
+
+	t.Log("task1 should now proceed and block in the mock RespondWorkflowTaskFailed")
+	completionChans[1] <- struct{}{}
+	require.EqualValues(t, 2, taskHandler.ProcessWorkflowTaskInvocationCount.Load(),
+		"TaskHandler.ProcessWorkflowTask should have been called twice")
+
+	t.Log("Unblock task1 allowing poller.processWorkflowTask to return")
+	close(completionChans[1])
+	require.NoError(t, <-resultsChan)
+}
+
+func TestWFTCorruption(t *testing.T) {
+	cache := NewWorkerCache()
+	params := workerExecutionParameters{cache: cache}
+	ensureRequiredParams(&params)
+	wfType := commonpb.WorkflowType{Name: t.Name() + "-workflow-type"}
+	reg := newRegistry()
+	reg.RegisterWorkflowWithOptions(func(ctx Context) error {
+		return Await(ctx, func() bool {
+			return false
+		})
+	}, RegisterWorkflowOptions{
+		Name: wfType.Name,
+	})
+	var (
+		taskQueue    = taskqueuepb.TaskQueue{Name: t.Name() + "task-queue"}
+		startedAttrs = historypb.WorkflowExecutionStartedEventAttributes{
+			TaskQueue: &taskQueue,
+		}
+		startedEvent     = createTestEventWorkflowExecutionStarted(1, &startedAttrs)
+		history          = historypb.History{Events: []*historypb.HistoryEvent{startedEvent}}
+		runID            = t.Name() + "-run-id"
+		wfID             = t.Name() + "-workflow-id"
+		wfe              = commonpb.WorkflowExecution{RunId: runID, WorkflowId: wfID}
+		ctrl             = gomock.NewController(t)
+		client           = workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+		innerTaskHandler = newWorkflowTaskHandler(params, nil, reg)
+		taskHandler      = &countingTaskHandler{WorkflowTaskHandler: innerTaskHandler}
+		contextManager   = taskHandler
+		completionChans  = []chan struct{}{make(chan struct{}), make(chan struct{})}
+		codec            = binary.LittleEndian
+		pollResp0        = workflowservice.PollWorkflowTaskQueueResponse{
+			Attempt:           1,
+			WorkflowExecution: &wfe,
+			WorkflowType:      &wfType,
+			History:           &history,
+			// encode the task pseudo-ID into the token; 0 here and 1 for
+			// pollResp1 below. The mock will use this as an index into
+			// `completionChans` (above) to get a task-specific control channel.
+			TaskToken: codec.AppendUint32(nil, 0),
+		}
+		task0 = workflowTask{task: &pollResp0}
+	)
+
+	// Return an error on respond workflow task complete, the SDK should flush the workflow from cache
+	client.EXPECT().RespondWorkflowTaskCompleted(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context,
+			req *workflowservice.RespondWorkflowTaskCompletedRequest,
+			_ ...grpc.CallOption,
+		) (*workflowservice.RespondWorkflowTaskCompletedResponse, error) {
+			// find the appropriate channel for this task - the index is encoded
+			// into the TaskToken
+			ch := completionChans[int(codec.Uint32(req.TaskToken))]
+			<-ch
+			// these two reads ^v allow the test code to capture a task processing
+			// goroutine exactly here
+			<-ch
+			return nil, errors.New("Failure responding to workflow task")
+		})
+
+	poller := newWorkflowTaskProcessor(taskHandler, contextManager, client, params, uuid.NewString())
+	processTaskDone := make(chan struct{})
+	go func() {
+		require.Error(t, poller.processWorkflowTask(&task0))
+		close(processTaskDone)
+	}()
+	completionChans[0] <- struct{}{}
+	// Until RespondWorkflowTaskCompleted returns an error the workflow should be in cache
+	require.True(t, (*cache.sharedCache.workflowCache).Exist(runID))
+	close(completionChans[0])
+	<-processTaskDone
+	// Workflow should not be in cache
+	require.Nil(t, cache.getWorkflowContext(runID))
+}
+
+func TestWFTReset(t *testing.T) {
+	cache := NewWorkerCache()
+	params := workerExecutionParameters{
+		cache: cache,
+	}
+	ensureRequiredParams(&params)
+	wfType := commonpb.WorkflowType{Name: t.Name() + "-workflow-type"}
+	reg := newRegistry()
+	reg.RegisterWorkflowWithOptions(func(ctx Context) error {
+		_ = SetUpdateHandler(ctx, "update", func(ctx Context) error {
+			return nil
+		}, UpdateHandlerOptions{
+			Validator: func(ctx Context) error {
+				return errors.New("rejecting for test")
+			},
+		})
+		_ = Sleep(ctx, time.Second)
+		return Sleep(ctx, time.Second)
+	}, RegisterWorkflowOptions{
+		Name: wfType.Name,
+	})
+	var (
+		taskQueue = taskqueuepb.TaskQueue{Name: t.Name() + "task-queue"}
+		history0  = historypb.History{Events: []*historypb.HistoryEvent{
+			createTestEventWorkflowExecutionStarted(1, &historypb.WorkflowExecutionStartedEventAttributes{
+				TaskQueue: &taskQueue,
+			}),
+			createTestEventWorkflowTaskScheduled(2, &historypb.WorkflowTaskScheduledEventAttributes{
+				TaskQueue:           &taskQueue,
+				StartToCloseTimeout: &durationpb.Duration{Seconds: 10},
+				Attempt:             1,
+			}),
+			createTestEventWorkflowTaskStarted(3),
+			createTestEventWorkflowTaskCompleted(4, &historypb.WorkflowTaskCompletedEventAttributes{
+				ScheduledEventId: 2,
+				StartedEventId:   3,
+			}),
+			createTestEventTimerStarted(5, 5),
+			createTestEventWorkflowTaskScheduled(6, &historypb.WorkflowTaskScheduledEventAttributes{
+				TaskQueue:           &taskQueue,
+				StartToCloseTimeout: &durationpb.Duration{Seconds: 10},
+				Attempt:             1,
+			}),
+			createTestEventWorkflowTaskStarted(7),
+		}}
+		messages = []*protocolpb.Message{
+			createTestProtocolMessageUpdateRequest("test-update", 6, &update.Request{
+				Meta: &update.Meta{
+					UpdateId: "test-update",
+				},
+				Input: &update.Input{
+					Name: "update",
+				},
+			}),
+		}
+		history1 = historypb.History{Events: []*historypb.HistoryEvent{
+			createTestEventWorkflowTaskCompleted(4, &historypb.WorkflowTaskCompletedEventAttributes{
+				ScheduledEventId: 2,
+				StartedEventId:   3,
+			}),
+			createTestEventTimerStarted(5, 5),
+			createTestEventWorkflowTaskScheduled(6, &historypb.WorkflowTaskScheduledEventAttributes{
+				TaskQueue:           &taskQueue,
+				StartToCloseTimeout: &durationpb.Duration{Seconds: 10},
+				Attempt:             1,
+			}),
+			createTestEventWorkflowTaskStarted(7),
+		}}
+		history2 = historypb.History{Events: []*historypb.HistoryEvent{
+			createTestEventWorkflowTaskCompleted(4, &historypb.WorkflowTaskCompletedEventAttributes{
+				ScheduledEventId: 2,
+				StartedEventId:   3,
+			}),
+			createTestEventTimerStarted(5, 5),
+			createTestEventTimerFired(6, 5),
+			createTestEventWorkflowTaskScheduled(7, &historypb.WorkflowTaskScheduledEventAttributes{
+				TaskQueue:           &taskQueue,
+				StartToCloseTimeout: &durationpb.Duration{Seconds: 10},
+				Attempt:             1,
+			}),
+			createTestEventWorkflowTaskStarted(8),
+		}}
+		runID            = t.Name() + "-run-id"
+		wfID             = t.Name() + "-workflow-id"
+		wfe              = commonpb.WorkflowExecution{RunId: runID, WorkflowId: wfID}
+		ctrl             = gomock.NewController(t)
+		client           = workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+		innerTaskHandler = newWorkflowTaskHandler(params, nil, reg)
+		taskHandler      = &countingTaskHandler{WorkflowTaskHandler: innerTaskHandler}
+		contextManager   = taskHandler
+		pollResp0        = workflowservice.PollWorkflowTaskQueueResponse{
+			Attempt:                1,
+			WorkflowExecution:      &wfe,
+			WorkflowType:           &wfType,
+			History:                &history0,
+			Messages:               messages,
+			PreviousStartedEventId: 3,
+		}
+		task0     = workflowTask{task: &pollResp0}
+		pollResp1 = workflowservice.PollWorkflowTaskQueueResponse{
+			Attempt:                1,
+			WorkflowExecution:      &wfe,
+			WorkflowType:           &wfType,
+			History:                &history1,
+			PreviousStartedEventId: 3,
+		}
+		task1     = workflowTask{task: &pollResp1}
+		pollResp2 = workflowservice.PollWorkflowTaskQueueResponse{
+			Attempt:                1,
+			WorkflowExecution:      &wfe,
+			WorkflowType:           &wfType,
+			History:                &history2,
+			PreviousStartedEventId: 3,
+		}
+		task2 = workflowTask{task: &pollResp2}
+	)
+
+	// Return a workflow task to reset the workflow to a previous state
+	client.EXPECT().RespondWorkflowTaskCompleted(gomock.Any(), gomock.Any()).
+		Return(&workflowservice.RespondWorkflowTaskCompletedResponse{
+			ResetHistoryEventId: 3,
+		}, nil).Times(3)
+	// Return a workflow task to complete the workflow
+	client.EXPECT().RespondWorkflowTaskCompleted(gomock.Any(), gomock.Any()).
+		Return(&workflowservice.RespondWorkflowTaskCompletedResponse{}, nil)
+
+	poller := newWorkflowTaskProcessor(taskHandler, contextManager, client, params, uuid.NewString())
+	// Send a full history as part of the speculative WFT
+	require.NoError(t, poller.processWorkflowTask(&task0))
+	originalCachedExecution := cache.getWorkflowContext(runID)
+	require.NotNil(t, originalCachedExecution)
+	require.Equal(t, int64(3), originalCachedExecution.previousStartedEventID)
+	require.Equal(t, int64(5), originalCachedExecution.lastHandledEventID)
+	// Send some fake speculative WFTs to ensure the workflow is reset properly
+	require.NoError(t, poller.processWorkflowTask(&task1))
+	cachedExecution := cache.getWorkflowContext(runID)
+	require.True(t, originalCachedExecution == cachedExecution)
+	require.Equal(t, int64(3), cachedExecution.previousStartedEventID)
+	require.Equal(t, int64(5), cachedExecution.lastHandledEventID)
+	require.NoError(t, poller.processWorkflowTask(&task1))
+	cachedExecution = cache.getWorkflowContext(runID)
+	// Check the cached execution is the same as the original
+	require.True(t, originalCachedExecution == cachedExecution)
+	require.Equal(t, int64(3), cachedExecution.previousStartedEventID)
+	require.Equal(t, int64(5), cachedExecution.lastHandledEventID)
+	// Send a real WFT with new events
+	require.NoError(t, poller.processWorkflowTask(&task2))
+	cachedExecution = cache.getWorkflowContext(runID)
+	require.True(t, originalCachedExecution == cachedExecution)
+}
+
+type panickingTaskHandler struct {
+	WorkflowTaskHandler
+}
+
+func (wth *panickingTaskHandler) ProcessWorkflowTask(
+	task *workflowTask,
+	wfctx *workflowExecutionContextImpl,
+	hb workflowTaskHeartbeatFunc,
+) (*workflowTaskCompletion, error) {
+	panic("panickingTaskHandler")
+}
+
+func TestWFTPanicInTaskHandler(t *testing.T) {
+	cache := NewWorkerCache()
+	params := workerExecutionParameters{cache: cache}
+	ensureRequiredParams(&params)
+	wfType := commonpb.WorkflowType{Name: t.Name() + "-workflow-type"}
+	reg := newRegistry()
+	reg.RegisterWorkflowWithOptions(func(ctx Context) error {
+		return nil
+	}, RegisterWorkflowOptions{
+		Name: wfType.Name,
+	})
+	var (
+		taskQueue    = taskqueuepb.TaskQueue{Name: t.Name() + "task-queue"}
+		startedAttrs = historypb.WorkflowExecutionStartedEventAttributes{
+			TaskQueue: &taskQueue,
+		}
+		startedEvent     = createTestEventWorkflowExecutionStarted(1, &startedAttrs)
+		history          = historypb.History{Events: []*historypb.HistoryEvent{startedEvent}}
+		runID            = t.Name() + "-run-id"
+		wfID             = t.Name() + "-workflow-id"
+		wfe              = commonpb.WorkflowExecution{RunId: runID, WorkflowId: wfID}
+		ctrl             = gomock.NewController(t)
+		client           = workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+		innerTaskHandler = newWorkflowTaskHandler(params, nil, newRegistry())
+		taskHandler      = &panickingTaskHandler{WorkflowTaskHandler: innerTaskHandler}
+		contextManager   = taskHandler
+		codec            = binary.LittleEndian
+		pollResp0        = workflowservice.PollWorkflowTaskQueueResponse{
+			Attempt:           1,
+			WorkflowExecution: &wfe,
+			WorkflowType:      &wfType,
+			History:           &history,
+			TaskToken:         codec.AppendUint32(nil, 0),
+		}
+		task0 = workflowTask{task: &pollResp0}
+	)
+
+	poller := newWorkflowTaskProcessor(taskHandler, contextManager, client, params, uuid.NewString())
+	require.Error(t, poller.processWorkflowTask(&task0))
+	// Workflow should not be in cache
+	require.Nil(t, cache.getWorkflowContext(runID))
+}
+
+func TestLegacyQueryProcessingFailureReportedAsQueryFailure(t *testing.T) {
+	params := workerExecutionParameters{
+		cache:     NewWorkerCache(),
+		Namespace: "test-namespace",
+	}
+	ensureRequiredParams(&params)
+
+	ctrl := gomock.NewController(t)
+	client := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+
+	taskHandler := newWorkflowTaskHandler(params, nil, newRegistry())
+	poller := newWorkflowTaskProcessor(taskHandler, taskHandler, client, params, "")
+
+	taskToken := []byte("legacy-query-token")
+	taskErr := errors.New("failure while replaying history to serve a query")
+
+	task := &workflowservice.PollWorkflowTaskQueueResponse{
+		TaskToken: taskToken,
+		Attempt:   1,
+		WorkflowExecution: &commonpb.WorkflowExecution{
+			WorkflowId: "workflow-id",
+			RunId:      "run-id",
+		},
+		WorkflowType: &commonpb.WorkflowType{
+			Name: "workflow-type",
+		},
+		Query: &querypb.WorkflowQuery{
+			QueryType: "status",
+		},
+	}
+
+	client.EXPECT().
+		RespondQueryTaskCompleted(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context,
+			req *workflowservice.RespondQueryTaskCompletedRequest,
+			_ ...grpc.CallOption,
+		) (*workflowservice.RespondQueryTaskCompletedResponse, error) {
+			require.Equal(t, taskToken, req.TaskToken)
+			require.Equal(t, enumspb.QUERY_RESULT_TYPE_FAILED, req.CompletedType)
+			require.Equal(t, taskErr.Error(), req.ErrorMessage)
+			require.Equal(t, "test-namespace", req.Namespace)
+			require.NotNil(t, req.Failure)
+			return &workflowservice.RespondQueryTaskCompletedResponse{}, nil
+		})
+
+	_, err := poller.RespondTaskCompletedWithMetrics(
+		nil,
+		taskErr,
+		task,
+		time.Now(),
+		&workflowTaskStorageMetrics{},
+		nil,
+	)
+	require.NoError(t, err)
+}
+
+func TestLegacyQueryOutboundVisitorFailureReportedAsQueryFailure(t *testing.T) {
+	params := workerExecutionParameters{
+		cache:     NewWorkerCache(),
+		Namespace: "test-namespace",
+	}
+	ensureRequiredParams(&params)
+
+	visitorErr := errors.New("outbound payload visitor failure")
+	params.outboundPayloadVisitor = visitorFunc(
+		func(
+			_ *proxy.VisitPayloadsContext,
+			_ []*commonpb.Payload,
+		) ([]*commonpb.Payload, error) {
+			return nil, visitorErr
+		},
+	)
+
+	ctrl := gomock.NewController(t)
+	client := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+
+	taskHandler := newWorkflowTaskHandler(params, nil, newRegistry())
+	poller := newWorkflowTaskProcessor(taskHandler, taskHandler, client, params, "")
+
+	taskToken := []byte("legacy-query-outbound-token")
+
+	task := &workflowservice.PollWorkflowTaskQueueResponse{
+		TaskToken: taskToken,
+		Attempt:   1,
+		WorkflowExecution: &commonpb.WorkflowExecution{
+			WorkflowId: "workflow-id",
+			RunId:      "run-id",
+		},
+		WorkflowType: &commonpb.WorkflowType{
+			Name: "workflow-type",
+		},
+		Query: &querypb.WorkflowQuery{
+			QueryType: "status",
+		},
+	}
+
+	taskCompletion := &workflowTaskCompletion{
+		rawRequest: &workflowservice.RespondQueryTaskCompletedRequest{
+			TaskToken: taskToken,
+			QueryResult: &commonpb.Payloads{
+				Payloads: []*commonpb.Payload{
+					{Data: []byte("query-result")},
+				},
+			},
+		},
+	}
+
+	client.EXPECT().
+		RespondQueryTaskCompleted(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context,
+			req *workflowservice.RespondQueryTaskCompletedRequest,
+			_ ...grpc.CallOption,
+		) (*workflowservice.RespondQueryTaskCompletedResponse, error) {
+			require.Equal(t, taskToken, req.TaskToken)
+			require.Equal(t, enumspb.QUERY_RESULT_TYPE_FAILED, req.CompletedType)
+			require.Equal(t, visitorErr.Error(), req.ErrorMessage)
+			require.Equal(t, "test-namespace", req.Namespace)
+			require.NotNil(t, req.Failure)
+			return &workflowservice.RespondQueryTaskCompletedResponse{}, nil
+		})
+
+	_, err := poller.RespondTaskCompletedWithMetrics(
+		taskCompletion,
+		nil,
+		task,
+		time.Now(),
+		&workflowTaskStorageMetrics{},
+		nil,
+	)
+	require.NoError(t, err)
+}
+
+func TestLegacyQueryInboundVisitorFailureReportedAsQueryFailure(t *testing.T) {
+	params := workerExecutionParameters{
+		cache:     NewWorkerCache(),
+		Namespace: "test-namespace",
+	}
+	ensureRequiredParams(&params)
+
+	ctrl := gomock.NewController(t)
+	client := workflowservicemock.NewMockWorkflowServiceClient(ctrl)
+
+	taskHandler := newWorkflowTaskHandler(params, nil, newRegistry())
+	poller := newWorkflowTaskProcessor(taskHandler, taskHandler, client, params, "")
+
+	taskToken := []byte("legacy-query-inbound-token")
+	visitorErr := errors.New("inbound payload visitor failure")
+
+	task := &workflowservice.PollWorkflowTaskQueueResponse{
+		TaskToken: taskToken,
+		Attempt:   1,
+		WorkflowExecution: &commonpb.WorkflowExecution{
+			WorkflowId: "workflow-id",
+			RunId:      "run-id",
+		},
+		WorkflowType: &commonpb.WorkflowType{
+			Name: "workflow-type",
+		},
+		Query: &querypb.WorkflowQuery{
+			QueryType: "status",
+		},
+	}
+
+	client.EXPECT().
+		RespondQueryTaskCompleted(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context,
+			req *workflowservice.RespondQueryTaskCompletedRequest,
+			_ ...grpc.CallOption,
+		) (*workflowservice.RespondQueryTaskCompletedResponse, error) {
+			require.Equal(t, taskToken, req.TaskToken)
+			require.Equal(t, enumspb.QUERY_RESULT_TYPE_FAILED, req.CompletedType)
+			require.Equal(t, visitorErr.Error(), req.ErrorMessage)
+			require.Equal(t, "test-namespace", req.Namespace)
+			require.NotNil(t, req.Failure)
+			return &workflowservice.RespondQueryTaskCompletedResponse{}, nil
+		})
+
+	poller.handleInboundVisitorError(task, visitorErr)
+}
+
+func TestErrorToFailWorkflowTaskCause(t *testing.T) {
+	params := workerExecutionParameters{cache: NewWorkerCache()}
+	ensureRequiredParams(&params)
+
+	taskHandler := newWorkflowTaskHandler(params, nil, newRegistry())
+	poller := newWorkflowTaskProcessor(taskHandler, taskHandler, nil, params, "")
+
+	tests := []struct {
+		name  string
+		err   error
+		cause enumspb.WorkflowTaskFailedCause
+	}{
+		{
+			name:  "generic error",
+			err:   errors.New("something went wrong"),
+			cause: enumspb.WORKFLOW_TASK_FAILED_CAUSE_WORKFLOW_WORKER_UNHANDLED_FAILURE,
+		},
+		{
+			name:  "history mismatch",
+			err:   historyMismatchError{},
+			cause: enumspb.WORKFLOW_TASK_FAILED_CAUSE_NON_DETERMINISTIC_ERROR,
+		},
+		{
+			name:  "unknown sdk flag",
+			err:   unknownSdkFlagError{},
+			cause: enumspb.WORKFLOW_TASK_FAILED_CAUSE_NON_DETERMINISTIC_ERROR,
+		},
+		{
+			name:  "payload size error",
+			err:   payloadSizeError{message: "too large", size: 100, limit: 50},
+			cause: enumspb.WORKFLOW_TASK_FAILED_CAUSE_PAYLOADS_TOO_LARGE,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := poller.errorToFailWorkflowTask([]byte("token"), tc.err)
+			require.Equal(t, tc.cause, resp.Cause)
+		})
+	}
+}
+
+type mockTask struct{}
+
+func (mockTask) scaleDecision() (pollerScaleDecision, bool) { return pollerScaleDecision{}, false }
+func (mockTask) isEmpty() bool                              { return false }
+
+func TestActivityTaskProcessedAfterStopForShutdownDrain(t *testing.T) {
+	stopC := make(chan struct{})
+	close(stopC)
+	graceful := &atomic.Bool{}
+	graceful.Store(true)
+
+	handler := &pendingActivityTaskHandler{executed: make(chan struct{})}
+	poller := &activityTaskPoller{
+		basePoller: basePoller{
+			stopC:                        stopC,
+			metricsHandler:               metrics.NopHandler,
+			workerPollCompleteOnShutdown: graceful,
+		},
+		taskHandler:   handler,
+		taskQueueName: "test-task-queue",
+	}
+
+	now := timestamppb.Now()
+	err := poller.ProcessTask(&activityTask{task: &workflowservice.PollActivityTaskQueueResponse{
+		TaskToken:                   []byte("task-token"),
+		WorkflowType:                &commonpb.WorkflowType{Name: "workflow"},
+		ActivityType:                &commonpb.ActivityType{Name: "activity"},
+		StartedTime:                 now,
+		CurrentAttemptScheduledTime: now,
+		ScheduledTime:               now,
+	}})
+	require.NoError(t, err)
+
+	select {
+	case <-handler.executed:
+	case <-time.After(time.Second):
+		t.Fatal("activity task was not processed after shutdown started")
+	}
+}
+
+func TestActivityTaskNotProcessedAfterStopForLegacyShutdown(t *testing.T) {
+	stopC := make(chan struct{})
+	close(stopC)
+	graceful := &atomic.Bool{}
+
+	handler := &pendingActivityTaskHandler{executed: make(chan struct{})}
+	poller := &activityTaskPoller{
+		basePoller: basePoller{
+			stopC:                        stopC,
+			metricsHandler:               metrics.NopHandler,
+			workerPollCompleteOnShutdown: graceful,
+		},
+		taskHandler:   handler,
+		taskQueueName: "test-task-queue",
+	}
+
+	now := timestamppb.Now()
+	err := poller.ProcessTask(&activityTask{task: &workflowservice.PollActivityTaskQueueResponse{
+		TaskToken:                   []byte("task-token"),
+		WorkflowType:                &commonpb.WorkflowType{Name: "workflow"},
+		ActivityType:                &commonpb.ActivityType{Name: "activity"},
+		StartedTime:                 now,
+		CurrentAttemptScheduledTime: now,
+		ScheduledTime:               now,
+	}})
+	require.ErrorIs(t, err, errStop)
+
+	select {
+	case <-handler.executed:
+		t.Fatal("activity task was processed after shutdown without drain capability")
+	default:
+	}
+}
+
+func TestWorkflowTaskProcessAfterStopMatchesShutdownMode(t *testing.T) {
+	tests := []struct {
+		name                         string
+		workerPollCompleteOnShutdown *atomic.Bool
+		wantErr                      error
+	}{
+		{
+			name:    "nil capability",
+			wantErr: errStop,
+		},
+		{
+			name:                         "false capability",
+			workerPollCompleteOnShutdown: &atomic.Bool{},
+			wantErr:                      errStop,
+		},
+		{
+			name: "true capability",
+			workerPollCompleteOnShutdown: func() *atomic.Bool {
+				enabled := &atomic.Bool{}
+				enabled.Store(true)
+				return enabled
+			}(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stopC := make(chan struct{})
+			close(stopC)
+			wtp := &workflowTaskProcessor{
+				basePoller: basePoller{
+					stopC:                        stopC,
+					workerPollCompleteOnShutdown: tt.workerPollCompleteOnShutdown,
+				},
+				logger: ilog.NewNopLogger(),
+			}
+
+			err := wtp.ProcessTask(&workflowTask{})
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+type pendingActivityTaskHandler struct {
+	executed chan struct{}
+}
+
+func (h *pendingActivityTaskHandler) Execute(string, *workflowservice.PollActivityTaskQueueResponse) (activityTaskResult, error) {
+	close(h.executed)
+	return activityTaskResult{response: ErrActivityResultPending}, nil
+}
+
+func TestDoPollGracefulShutdown(t *testing.T) {
+	tests := []struct {
+		name            string
+		gracefulEnabled bool
+		wantErrStop     bool
+	}{
+		{
+			name:            "graceful enabled, waits for poll completion",
+			gracefulEnabled: true,
+		},
+		{
+			name:            "graceful disabled, returns errStop",
+			gracefulEnabled: false,
+			wantErrStop:     true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stopC := make(chan struct{})
+			graceful := &atomic.Bool{}
+			graceful.Store(tc.gracefulEnabled)
+
+			bp := basePoller{
+				stopC:                        stopC,
+				workerPollCompleteOnShutdown: graceful,
+			}
+
+			pollStarted := make(chan struct{})
+			pollRelease := make(chan struct{})
+			expectedTask := &mockTask{}
+
+			pollFunc := func(ctx context.Context) (taskForWorker, error) {
+				close(pollStarted)
+				select {
+				case <-pollRelease:
+					return expectedTask, nil
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+
+			type pollResult struct {
+				task taskForWorker
+				err  error
+			}
+			resultC := make(chan pollResult, 1)
+
+			go func() {
+				task, err := bp.doPoll(pollFunc)
+				resultC <- pollResult{task, err}
+			}()
+
+			<-pollStarted
+			close(stopC)
+			if tc.gracefulEnabled {
+				// Graceful mode: doPoll waits for poll to finish
+				close(pollRelease)
+			}
+			// Legacy mode: doPoll cancels context and returns immediately;
+			// goroutine exits via ctx.Done()
+
+			r := <-resultC
+
+			if tc.wantErrStop {
+				require.ErrorIs(t, r.err, errStop)
+				require.Nil(t, r.task)
+			} else {
+				require.NoError(t, r.err)
+				require.Equal(t, expectedTask, r.task)
+			}
+		})
+	}
+}
+
+func TestWorkflowTaskStorageMetricsTotalDuration(t *testing.T) {
+	base := time.Now()
+
+	t.Run("no batches", func(t *testing.T) {
+		metrics := &workflowTaskStorageMetrics{}
+		require.Equal(t, time.Duration(0), metrics.TotalDuration())
+	})
+
+	t.Run("concurrent batches counted once", func(t *testing.T) {
+		metrics := &workflowTaskStorageMetrics{}
+		metrics.PayloadBatchCompleted(2, 1024, base, base.Add(10*time.Second), []string{"s3"})
+		metrics.PayloadBatchCompleted(3, 2048, base.Add(5*time.Second), base.Add(15*time.Second), []string{"gcs"})
+
+		// Summing each batch's duration would report 20s.
+		require.Equal(t, 15*time.Second, metrics.TotalDuration())
+		require.Equal(t, 5, metrics.payloadCount)
+		require.Equal(t, int64(3072), metrics.totalSize)
+		require.Equal(t, []string{"gcs", "s3"}, metrics.GetDriverNames())
+	})
+
+	t.Run("disjoint batches summed", func(t *testing.T) {
+		metrics := &workflowTaskStorageMetrics{}
+		metrics.PayloadBatchCompleted(1, 1, base, base.Add(10*time.Second), nil)
+		metrics.PayloadBatchCompleted(1, 1, base.Add(20*time.Second), base.Add(30*time.Second), nil)
+		require.Equal(t, 20*time.Second, metrics.TotalDuration())
+	})
+
+	t.Run("adjacent and nested batches merged", func(t *testing.T) {
+		metrics := &workflowTaskStorageMetrics{}
+		metrics.PayloadBatchCompleted(1, 1, base, base.Add(10*time.Second), nil)
+		metrics.PayloadBatchCompleted(1, 1, base.Add(10*time.Second), base.Add(20*time.Second), nil)
+		metrics.PayloadBatchCompleted(1, 1, base.Add(12*time.Second), base.Add(18*time.Second), nil)
+		require.Equal(t, 20*time.Second, metrics.TotalDuration())
+	})
+}
