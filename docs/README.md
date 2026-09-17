@@ -65,6 +65,12 @@ context-aware logging with independent evidence, multiple sinks and bounded Linu
 file rotation/gzip/retention. Its structured extension is composition-owned;
 this integration neither imports zerolog nor installs an exporter/backend.
 
+The [mail integration](reference/internal/notification/mail/v0/interface.md) adds
+bounded outbound SMTP/MIME with verified TLS/authentication, plain/HTML bodies,
+generic CID resources/attachments, reusable connections and independent per-message
+and recipient-stage evidence. Chart rendering and recipient interaction remain
+upper-layer responsibilities; relay acceptance is not inbox placement or reading.
+
 Zerolog under `internal/logging/zerolog/v1` supplies bounded synchronous multi-sink
 JSON logging, immutable structured records/context association and owned local
 file rotation/gzip. Its [contract](reference/internal/logging/zerolog/v1/interface.md)
@@ -233,6 +239,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
 | [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Native pool lifecycle/statistics, ordinary SQL, reusable preparation, bounded results, transactions/savepoints and independent evidence |
 | [`internal/database/mysql/v1`](reference/internal/database/mysql/v1/interface.md) | Native sql.DB pooling, framed/TLS transport, controlled SQL/preparation, transactions and independent evidence |
+| [`internal/notification/mail/v0`](reference/internal/notification/mail/v0/interface.md) | SMTP/TLS/authentication, MIME bodies and assets, bounded connection reuse, partial/unknown effects and independent evidence |
 | [`internal/broker/franz/v1`](reference/internal/broker/franz/v1/interface.md) | [Options/bounds](reference/internal/broker/franz/v1/options.md), producer/direct consumer/checkpoints, [verification](reference/internal/broker/franz/v1/verification.md) |
 | [`internal/broker/franz/v1/otelbridge`](reference/internal/broker/franz/v1/otelbridge/interface.md) | Explicit bounded W3C header translation, without native SDK instrumentation hooks |
 | [`internal/objectstore/minio/v7`](reference/internal/objectstore/minio/v7/interface.md) | Bounded reads/transfers, conditional multipart, copy/versions/listing/removal, independent evidence and [verification](reference/internal/objectstore/minio/v7/verification.md) |
