@@ -71,6 +71,15 @@ generic CID resources/attachments, reusable connections and independent per-mess
 and recipient-stage evidence. Chart rendering and recipient interaction remain
 upper-layer responsibilities; relay acceptance is not inbox placement or reading.
 
+The [Lark / Feishu integration](reference/internal/notification/lark/v3/interface.md)
+adds bounded application notifications, native chart/table cards and CardKit
+updates, media, signed custom bots and authenticated HTTP event reception.
+Its opt-in [WebSocket receiver](reference/internal/notification/lark/v3/websocket.md)
+adds bounded heartbeat/reconnect and explicit acknowledgements. CardKit writes were
+verified, and the recipient confirmed the rendered Welcome/report. Cross-client
+rendering and the live persisted positive-ACK probe remain unqualified. No service
+or subscription settings are deployed implicitly.
+
 Zerolog under `internal/logging/zerolog/v1` supplies bounded synchronous multi-sink
 JSON logging, immutable structured records/context association and owned local
 file rotation/gzip. Its [contract](reference/internal/logging/zerolog/v1/interface.md)
@@ -240,6 +249,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Native pool lifecycle/statistics, ordinary SQL, reusable preparation, bounded results, transactions/savepoints and independent evidence |
 | [`internal/database/mysql/v1`](reference/internal/database/mysql/v1/interface.md) | Native sql.DB pooling, framed/TLS transport, controlled SQL/preparation, transactions and independent evidence |
 | [`internal/notification/mail/v0`](reference/internal/notification/mail/v0/interface.md) | SMTP/TLS/authentication, MIME bodies and assets, bounded connection reuse, partial/unknown effects and independent evidence |
+| [`internal/notification/lark/v3`](reference/internal/notification/lark/v3/interface.md) | Native charts/tables, application and signed-bot messages, lifecycle/inspection, media, CardKit updates and authenticated HTTP callbacks |
 | [`internal/broker/franz/v1`](reference/internal/broker/franz/v1/interface.md) | [Options/bounds](reference/internal/broker/franz/v1/options.md), producer/direct consumer/checkpoints, [verification](reference/internal/broker/franz/v1/verification.md) |
 | [`internal/broker/franz/v1/otelbridge`](reference/internal/broker/franz/v1/otelbridge/interface.md) | Explicit bounded W3C header translation, without native SDK instrumentation hooks |
 | [`internal/objectstore/minio/v7`](reference/internal/objectstore/minio/v7/interface.md) | Bounded reads/transfers, conditional multipart, copy/versions/listing/removal, independent evidence and [verification](reference/internal/objectstore/minio/v7/verification.md) |

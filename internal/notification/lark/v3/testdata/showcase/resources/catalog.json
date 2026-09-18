@@ -1,0 +1,419 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "card": {
+    "schema": "2.0",
+    "config": {
+      "update_multi": true
+    },
+    "header": {
+      "template": "blue",
+      "title": {
+        "tag": "plain_text",
+        "content": "Fathomry · Feishu capability report"
+      },
+      "subtitle": {
+        "tag": "plain_text",
+        "content": "Synthetic data · native charts and tables"
+      }
+    },
+    "body": {
+      "elements": [
+        {
+          "tag": "markdown",
+          "element_id": "intro",
+          "content": "**Issue #64 — integration showcase**\nThis report uses native Card JSON 2.0 components. API acceptance is not proof of rendering or reading."
+        },
+        {
+          "tag": "column_set",
+          "flex_mode": "stretch",
+          "columns": [
+            {
+              "tag": "column",
+              "width": "weighted",
+              "weight": 1,
+              "elements": [
+                {
+                  "tag": "markdown",
+                  "content": "**460**\nSynthetic items"
+                }
+              ]
+            },
+            {
+              "tag": "column",
+              "width": "weighted",
+              "weight": 1,
+              "elements": [
+                {
+                  "tag": "markdown",
+                  "content": "**4 months**\nFixed comparison window"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "hr"
+        },
+        {
+          "tag": "chart",
+          "element_id": "trend",
+          "chart_spec": {
+            "type": "line",
+            "title": {
+              "text": "Monthly items (count)"
+            },
+            "data": {
+              "values": [
+                {
+                  "period": "Jan",
+                  "items": 80
+                },
+                {
+                  "period": "Feb",
+                  "items": 120
+                },
+                {
+                  "period": "Mar",
+                  "items": 100
+                },
+                {
+                  "period": "Apr",
+                  "items": 160
+                }
+              ]
+            },
+            "xField": "period",
+            "yField": "items",
+            "point": {
+              "visible": true
+            },
+            "tooltip": {
+              "visible": true
+            }
+          }
+        },
+        {
+          "tag": "chart",
+          "element_id": "volume",
+          "chart_spec": {
+            "type": "bar",
+            "title": {
+              "text": "Monthly volume (count)"
+            },
+            "data": {
+              "values": [
+                {
+                  "period": "Jan",
+                  "items": 80
+                },
+                {
+                  "period": "Feb",
+                  "items": 120
+                },
+                {
+                  "period": "Mar",
+                  "items": 100
+                },
+                {
+                  "period": "Apr",
+                  "items": 160
+                }
+              ]
+            },
+            "xField": "period",
+            "yField": "items",
+            "tooltip": {
+              "visible": true
+            }
+          }
+        },
+        {
+          "tag": "chart",
+          "element_id": "outcomes",
+          "chart_spec": {
+            "type": "pie",
+            "title": {
+              "text": "Synthetic outcome share (items)"
+            },
+            "data": {
+              "values": [
+                {
+                  "outcome": "Accepted",
+                  "items": 420
+                },
+                {
+                  "outcome": "Rejected",
+                  "items": 30
+                },
+                {
+                  "outcome": "Unknown",
+                  "items": 10
+                }
+              ]
+            },
+            "valueField": "items",
+            "categoryField": "outcome",
+            "outerRadius": 0.8,
+            "legends": {
+              "visible": true,
+              "orient": "bottom"
+            },
+            "tooltip": {
+              "visible": true
+            }
+          }
+        },
+        {
+          "tag": "table",
+          "element_id": "data_table",
+          "page_size": 5,
+          "row_height": "low",
+          "columns": [
+            {
+              "name": "period",
+              "display_name": "Month",
+              "data_type": "text",
+              "width": "auto"
+            },
+            {
+              "name": "items",
+              "display_name": "Items",
+              "data_type": "number",
+              "format": {
+                "precision": 0,
+                "separator": true
+              },
+              "width": "auto"
+            },
+            {
+              "name": "status",
+              "display_name": "Dataset",
+              "data_type": "options",
+              "width": "auto"
+            }
+          ],
+          "rows": [
+            {
+              "period": "Jan",
+              "items": 80,
+              "status": [
+                {
+                  "text": "Synthetic",
+                  "color": "blue"
+                }
+              ]
+            },
+            {
+              "period": "Feb",
+              "items": 120,
+              "status": [
+                {
+                  "text": "Synthetic",
+                  "color": "blue"
+                }
+              ]
+            },
+            {
+              "period": "Mar",
+              "items": 100,
+              "status": [
+                {
+                  "text": "Synthetic",
+                  "color": "blue"
+                }
+              ]
+            },
+            {
+              "period": "Apr",
+              "items": 160,
+              "status": [
+                {
+                  "text": "Synthetic",
+                  "color": "blue"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "collapsible_panel",
+          "header": {
+            "title": {
+              "tag": "plain_text",
+              "content": "Data and interaction boundaries"
+            }
+          },
+          "elements": [
+            {
+              "tag": "markdown",
+              "content": "Jan 80 · Feb 120 · Mar 100 · Apr 160 items; total 460.\nOutcome chart: Accepted 420, Rejected 30, Unknown 10. These are synthetic values, not production statistics.\nChart tooltips and table pagination run in the Feishu client. Business button callbacks require a separately hosted, authenticated receiver."
+            }
+          ]
+        },
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "Open issue #64"
+          },
+          "type": "default",
+          "behaviors": [
+            {
+              "type": "open_url",
+              "default_url": "https://github.com/frost-leo/fathomry/issues/64"
+            }
+          ]
+        },
+        {
+          "tag": "markdown",
+          "content": "**Accessibility:** The table and text summary contain the same values as the charts. Mobile layout and client compatibility still require recipient inspection."
+        }
+      ]
+    }
+  },
+  "post": {
+    "en_us": {
+      "title": "Fathomry rich-post example",
+      "content": [
+        [
+          {
+            "tag": "text",
+            "text": "Synthetic data: 460 items across four months. "
+          },
+          {
+            "tag": "a",
+            "text": "Issue #64",
+            "href": "https://github.com/frost-leo/fathomry/issues/64"
+          }
+        ]
+      ]
+    },
+    "zh_cn": {
+      "title": "Fathomry 富文本示例",
+      "content": [
+        [
+          {
+            "tag": "text",
+            "text": "仅使用合成数据：四个月共 460 条。图表与表格保留原生交互。"
+          }
+        ]
+      ]
+    }
+  },
+  "interaction_card": {
+    "schema": "2.0",
+    "body": {
+      "elements": [
+        {
+          "tag": "form",
+          "name": "review",
+          "elements": [
+            {
+              "tag": "input",
+              "name": "comment",
+              "placeholder": {
+                "tag": "plain_text",
+                "content": "Review comment"
+              },
+              "label": {
+                "tag": "plain_text",
+                "content": "Comment"
+              }
+            },
+            {
+              "tag": "select_static",
+              "name": "rating",
+              "placeholder": {
+                "tag": "plain_text",
+                "content": "Select rating"
+              },
+              "options": [
+                {
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Readable"
+                  },
+                  "value": "readable"
+                },
+                {
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Needs adjustment"
+                  },
+                  "value": "adjust"
+                }
+              ]
+            },
+            {
+              "tag": "button",
+              "name": "submit",
+              "text": {
+                "tag": "plain_text",
+                "content": "Submit review"
+              },
+              "type": "primary",
+              "action_type": "form_submit"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "template_variables": {
+    "title": "Synthetic report",
+    "total": 460,
+    "series": [
+      {
+        "period": "Jan",
+        "items": 80
+      },
+      {
+        "period": "Feb",
+        "items": 120
+      },
+      {
+        "period": "Mar",
+        "items": 100
+      },
+      {
+        "period": "Apr",
+        "items": 160
+      }
+    ]
+  },
+  "data": [
+    {
+      "period": "Jan",
+      "items": 80
+    },
+    {
+      "period": "Feb",
+      "items": 120
+    },
+    {
+      "period": "Mar",
+      "items": 100
+    },
+    {
+      "period": "Apr",
+      "items": 160
+    }
+  ]
+}

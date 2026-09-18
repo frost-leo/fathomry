@@ -1,0 +1,239 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "card": {
+    "schema": "2.0",
+    "config": {
+      "update_multi": true,
+      "summary": {
+        "content": "Welcome to Fathomry."
+      },
+      "style": {
+        "color": {
+          "welcome_muted": {
+            "light_mode": "rgba(112,112,120,1)",
+            "dark_mode": "rgba(184,184,194,1)"
+          }
+        },
+        "text_size": {
+          "welcome_hero": {
+            "default": "heading-0",
+            "pc": "heading-0",
+            "mobile": "heading-0"
+          }
+        }
+      }
+    },
+    "body": {
+      "direction": "vertical",
+      "padding": "24px 24px 20px 24px",
+      "vertical_spacing": "0px",
+      "elements": [
+        {
+          "tag": "column_set",
+          "flex_mode": "stretch",
+          "columns": [
+            {
+              "tag": "column",
+              "width": "weighted",
+              "weight": 1,
+              "elements": [
+                {
+                  "tag": "markdown",
+                  "content": "**Fathomry**",
+                  "text_size": "heading-4",
+                  "text_align": "left",
+                  "margin": "0px"
+                }
+              ]
+            },
+            {
+              "tag": "column",
+              "width": "weighted",
+              "weight": 2,
+              "elements": [
+                {
+                  "tag": "markdown",
+                  "content": "<font color='welcome_muted'>GOOD THINGS START SMALL</font>",
+                  "text_size": "x-small",
+                  "text_align": "right",
+                  "margin": "4px 0px 0px 0px"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "hr",
+          "margin": "16px 0px 0px 0px"
+        },
+        {
+          "tag": "markdown",
+          "content": "<font color='orange'>╱</font>　 <font color='purple'>✦</font>　 <font color='carmine'>•</font>　 <font color='blue'>╲</font>　 <font color='green'>✧</font>",
+          "text_size": "heading-2",
+          "text_align": "center",
+          "margin": "30px 0px 14px 0px"
+        },
+        {
+          "tag": "markdown",
+          "content": "<font color='welcome_muted'>HERE'S TO WHAT COMES NEXT.</font>",
+          "text_size": "x-small",
+          "text_align": "center",
+          "margin": "0px 0px 14px 0px"
+        },
+        {
+          "tag": "markdown",
+          "element_id": "intro",
+          "content": "**Welcome to<br>Fathomry.**",
+          "text_size": "welcome_hero",
+          "text_align": "center",
+          "margin": "0px"
+        },
+        {
+          "tag": "markdown",
+          "content": "<font color='welcome_muted'>A place for ideas<br>to find their rhythm.</font>",
+          "text_size": "heading-3",
+          "text_align": "center",
+          "margin": "18px 0px 24px 0px"
+        },
+        {
+          "tag": "column_set",
+          "flex_mode": "stretch",
+          "horizontal_spacing": "12px",
+          "margin": "0px 0px 28px 0px",
+          "columns": [
+            {
+              "tag": "column",
+              "width": "weighted",
+              "weight": 1,
+              "elements": [
+                {
+                  "tag": "button",
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Explore Fathomry ↗"
+                  },
+                  "type": "primary",
+                  "behaviors": [
+                    {
+                      "type": "open_url",
+                      "default_url": "https://github.com/frost-leo/fathomry"
+                    }
+                  ]
+                }
+              ],
+              "horizontal_align": "right"
+            },
+            {
+              "tag": "column",
+              "width": "weighted",
+              "weight": 1,
+              "elements": [
+                {
+                  "tag": "button",
+                  "text": {
+                    "tag": "plain_text",
+                    "content": "Find your way →"
+                  },
+                  "type": "default",
+                  "behaviors": [
+                    {
+                      "type": "open_url",
+                      "default_url": "https://github.com/frost-leo/fathomry/blob/develop/docs/README.md"
+                    }
+                  ]
+                }
+              ],
+              "horizontal_align": "left"
+            }
+          ]
+        },
+        {
+          "tag": "collapsible_panel",
+          "element_id": "welcome_guide",
+          "expanded": false,
+          "margin": "0px 0px 8px 0px",
+          "padding": "12px 0px 0px 0px",
+          "vertical_spacing": "12px",
+          "header": {
+            "title": {
+              "tag": "markdown",
+              "content": "**A little direction, when you need it.**"
+            },
+            "padding": "8px 0px 8px 0px"
+          },
+          "elements": [
+            {
+              "tag": "markdown",
+              "content": "Fathomry is a Go framework for durable, observable data workflows on Temporal.",
+              "text_size": "normal",
+              "text_align": "left",
+              "margin": "0px"
+            },
+            {
+              "tag": "markdown",
+              "text_size": "normal",
+              "content": "**Explore the project** — source code and contribution guidelines.<br>**Read the documentation** — architecture, package contracts and runnable examples.<br>**Try a notification** — native cards, charts, files and explicit delivery evidence."
+            },
+            {
+              "tag": "markdown",
+              "content": "<font color='welcome_muted'>Explore at your own pace. The documentation connects architecture, package contracts and runnable examples.</font>",
+              "text_size": "notation",
+              "text_align": "left",
+              "margin": "0px"
+            }
+          ]
+        },
+        {
+          "tag": "markdown",
+          "element_id": "closing",
+          "content": "<font color='orange'>✦</font>",
+          "text_size": "heading-3",
+          "text_align": "center",
+          "margin": "30px 0px 14px 0px"
+        },
+        {
+          "tag": "markdown",
+          "content": "**Start with a spark.**<br><font color='welcome_muted'>Build something that lasts.</font>",
+          "text_size": "heading-1",
+          "text_align": "center",
+          "margin": "0px"
+        },
+        {
+          "tag": "markdown",
+          "content": "<font color='welcome_muted'>There is room for what you imagine.<br>We're glad you're here.</font>",
+          "text_size": "normal",
+          "text_align": "center",
+          "margin": "20px 0px 28px 0px"
+        },
+        {
+          "tag": "hr",
+          "margin": "0px 0px 16px 0px"
+        },
+        {
+          "tag": "markdown",
+          "content": "<font color='welcome_muted'>Fathomry · Made for the work ahead.</font>",
+          "text_size": "x-small",
+          "text_align": "center",
+          "margin": "0px"
+        }
+      ]
+    }
+  }
+}
