@@ -58,6 +58,31 @@ func floodPartialFrames(t *testing.T, socket *peerSocket) func() {
 	}
 }
 
+func waitRegressionState(t *testing.T, fixture *receiverFixture, done <-chan listened, readyForTest func(WebSocketStats) bool) WebSocketStats {
+	t.Helper()
+	ready := time.NewTimer(time.Second)
+	defer ready.Stop()
+	heartbeat := time.NewTicker(time.Millisecond)
+	defer heartbeat.Stop()
+	for {
+		stats := fixture.receiver.Status()
+		if readyForTest(stats) {
+			return stats
+		}
+		select {
+		case <-heartbeat.C:
+		case completed := <-done:
+			if completed.err != nil {
+				t.Fatal(completed.err)
+			}
+			result := awaitSocketResult(t, completed.receipt)
+			t.Fatalf("receiver stopped before test readiness: %v", result.Err())
+		case <-ready.C:
+			t.Fatal("required receiver state was not observed")
+		}
+	}
+}
+
 func TestWebSocketRegressionFragmentExpiryUnderTrafficWithHealthyPongs(t *testing.T) {
 	peer := newSocketPeer(t, false, nil)
 	options := socketTestOptions(peer)
@@ -67,13 +92,16 @@ func TestWebSocketRegressionFragmentExpiryUnderTrafficWithHealthyPongs(t *testin
 	fixture := bindReceiverTest(t, options, 8, 2)
 	cancel, done := startReceiver(t, fixture)
 	socket := nextSocket(t, peer)
+	// Upgrade completion does not prove the initial pong reached the receiver.
+	waitRegressionState(t, fixture, done, func(stats WebSocketStats) bool { return stats.Connected && stats.Pongs > 0 })
 	stopFlood := floodPartialFrames(t, socket)
 	defer stopFlood()
 	select {
 	case completed := <-done:
 		result := awaitSocketResult(t, completed.receipt)
 		stats := result.Outcome.Value.Stats()
-		if !errors.Is(result.Err(), ErrProtocol) || stats.FragmentsDiscarded != 1 || stats.Pongs == 0 || stats.Frames < 10 {
+		// Require a fragment and duplicate, not a minimum per-30ms throughput.
+		if !errors.Is(result.Err(), ErrProtocol) || stats.FragmentsDiscarded != 1 || stats.Pongs == 0 || stats.Frames-stats.Pongs < 2 {
 			t.Errorf("fragment expiry not independently enforced: err=%v discarded=%d pongs=%d frames=%d", result.Err(), stats.FragmentsDiscarded, stats.Pongs, stats.Frames)
 		}
 	case <-time.After(300 * time.Millisecond):
@@ -93,12 +121,15 @@ func TestWebSocketRegressionAckExpiryAndHeartbeatUnderTraffic(t *testing.T) {
 	fixture := bindReceiverTest(t, options, 8, 2)
 	cancel, done := startReceiver(t, fixture)
 	socket := nextSocket(t, peer)
+	waitRegressionState(t, fixture, done, func(stats WebSocketStats) bool { return stats.Connected && stats.Pongs > 0 })
+	stopFlood := floodPartialFrames(t, socket)
+	defer stopFlood()
+	// Establish duplicate traffic before starting the event's short ACK deadline.
+	waitRegressionState(t, fixture, done, func(stats WebSocketStats) bool { return stats.Frames-stats.Pongs >= 2 })
 	if err := socket.send(eventFrame("ack-expiry", notificationEvent())); err != nil {
 		t.Fatal(err)
 	}
 	event := nextEvent(t, fixture)
-	stopFlood := floodPartialFrames(t, socket)
-	defer stopFlood()
 	ctx, end := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer end()
 	result, err := event.Receipt().WaitReleased(ctx)
@@ -114,8 +145,8 @@ func TestWebSocketRegressionAckExpiryAndHeartbeatUnderTraffic(t *testing.T) {
 	if wireACK.StatusCode != 500 {
 		t.Errorf("wire ACK code=%d", wireACK.StatusCode)
 	}
-	stats := fixture.receiver.Status()
-	if !stats.Connected || stats.Pings < 2 || stats.Frames < 10 {
+	stats := waitRegressionState(t, fixture, done, func(stats WebSocketStats) bool { return stats.Connected && stats.Pings >= 2 })
+	if stats.Frames-stats.Pongs < 3 {
 		t.Errorf("heartbeat/healthy session did not progress: connected=%v pings=%d frames=%d", stats.Connected, stats.Pings, stats.Frames)
 	}
 	stopReceiver(t, cancel, done)

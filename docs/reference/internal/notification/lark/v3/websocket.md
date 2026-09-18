@@ -139,7 +139,12 @@ the last recoverable connection failure even if a later reconnect succeeds.
 ## Why not expose ws.Client
 
 The pinned official SDK supplies the protobuf Frame, heartbeat/response models,
-bootstrap request and configuration shapes. Gorilla is the SDK-pinned transport.
+bootstrap request and configuration shapes. The transport is Gorilla at the exact
+upstream crypto/rand mask-key fix, `v1.5.4-0.20240701034025-d67f41855da4`, overriding
+the SDK's v1.5.0 minimum without modifying upstream source. This is a qualified
+pseudo-version, not a tagged v1.5.4 release. Despite the advisory's fixed-version
+label, inspected v1.5.3 source still uses math/rand; its tag predates the actual fix.
+The consuming executable test verifies both SDK and transport versions/checksums.
 The Provider deliberately does not construct the native owning ws.Client:
 
 - native receive starts a goroutine for each message, without admission bounds;
@@ -175,4 +180,5 @@ that subscription is configured, nor that a user's message reached this listener
 Primary references:
 [Feishu subscription configuration](https://open.feishu.cn/document/server-docs/event-subscription-guide/event-subscription-configure-/request-url-configuration-case),
 [pinned SDK WebSocket source](https://github.com/larksuite/oapi-sdk-go/tree/v3.12.0/ws),
-[pinned Gorilla transport](https://github.com/gorilla/websocket/tree/v1.5.0).
+[pinned Gorilla transport](https://github.com/gorilla/websocket/tree/d67f41855da42d7bccd9ef050c49f7e54e783b95),
+[mask-key advisory](https://github.com/advisories/GHSA-w67g-5rqw-f597).
