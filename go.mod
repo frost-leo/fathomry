@@ -54,7 +54,8 @@ require (
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/google/uuid v1.6.0
-	github.com/gorilla/websocket v1.5.0
+	// TODO(gh-64): Requalify a tagged release containing the crypto/rand mask-key fix.
+	github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jackc/puddle/v2 v2.2.2
 	github.com/klauspost/compress v1.20.0

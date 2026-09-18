@@ -58,14 +58,20 @@ func TestActualConsumingExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
+	found, transportFound := false, false
 	for _, dep := range info.Deps {
 		if dep.Path == "github.com/larksuite/oapi-sdk-go/v3" {
 			found = dep.Version == "v3.12.0" && dep.Replace == nil && dep.Sum == "h1:H8NP6YIgfEX0RBhKse25npdeZoiaDv8mrw9nCnCVFRc="
 		}
+		if dep.Path == "github.com/gorilla/websocket" {
+			transportFound = dep.Version == "v1.5.4-0.20240701034025-d67f41855da4" && dep.Replace == nil && dep.Sum == "h1:PYKzliEgITjLJoJqbV90S0YRaG8LNAsICH6fp6MApC0="
+		}
 	}
 	if !found {
 		t.Fatal("consumer lacks exact unmodified SDK")
+	}
+	if !transportFound {
+		t.Fatal("consumer lacks the qualified patched WebSocket transport")
 	}
 }
 func TestFacadesContainNoNativeOrShutdownAuthority(t *testing.T) {
