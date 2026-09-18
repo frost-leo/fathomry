@@ -54,9 +54,14 @@ require (
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/google/uuid v1.6.0
+	github.com/gorilla/websocket v1.5.0
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/jackc/puddle/v2 v2.2.2
 	github.com/klauspost/compress v1.20.0
+	// TODO(gh-64): Requalify native global caches, hidden auth/dial retries,
+	// multipart/response bounds, callback verification and the WebSocket wire,
+	// fragment, acknowledgement and lifecycle controls before SDK upgrades.
+	github.com/larksuite/oapi-sdk-go/v3 v3.12.0
 	github.com/minio/minio-go/v7 v7.3.0
 	// TODO(gh-21): Recheck this pin and lifecycle compatibility before Nacos upgrades
 	// or framework releases. An official stable SDK must fix BOTH registry shutdown
