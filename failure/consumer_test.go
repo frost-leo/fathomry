@@ -111,6 +111,7 @@ func TestIndependentModuleArtifact(t *testing.T) {
 	write(filepath.Join(consumer, "go.mod"), []byte("module example.org/consumer\n\ngo 1.27.0\nrequire "+module+" "+version+"\n"))
 	for _, pair := range [][2]string{
 		{"failure/extension_test.go", "consumer_test.go"},
+		{"failure/testdata/presentation.json", "testdata/presentation.json"},
 		{"failure/testdata/configcheck/errors.go", "configcheck/errors.go"},
 		{"failure/testdata/orders/errors.go", "orders/errors.go"},
 	} {

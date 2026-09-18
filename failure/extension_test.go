@@ -21,6 +21,7 @@ package failure_test
 
 import (
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,9 @@ import (
 	"github.com/frost-leo/fathomry/failure/testdata/configcheck"
 	"github.com/frost-leo/fathomry/failure/testdata/orders"
 )
+
+//go:embed testdata/presentation.json
+var presentationResources []byte
 
 type commonOccurrence = failure.Error
 type refinedFailure struct {
@@ -186,6 +190,12 @@ func TestCompatibleRefinementPreservesOldClientContract(t *testing.T) {
 }
 
 func TestPresentationSeamHasIndependentKeysLocalesAndFailure(t *testing.T) {
+	var catalog struct {
+		Messages map[string]string `json:"messages"`
+	}
+	if err := json.Unmarshal(presentationResources, &catalog); err != nil {
+		t.Fatal(err)
+	}
 	err := configcheck.NewValidation([]configcheck.Violation{{Field: "port", Rule: "range"}})
 	identity := err.Code()
 	original, _ := err.Violations()
@@ -202,20 +212,11 @@ func TestPresentationSeamHasIndependentKeysLocalesAndFailure(t *testing.T) {
 		if !complete {
 			return fallback
 		}
-		var text string
-		switch locale + "/" + key {
-		case "fixture-a/cli.invalid":
-			text = "A CLI: "
-		case "fixture-b/cli.invalid":
-			text = "B CLI: "
-		case "fixture-a/report.warning":
-			text = "A report: "
-		case "fixture-b/report.warning":
-			text = "B report: "
-		default:
+		format, exists := catalog.Messages[locale+"/"+key]
+		if !exists {
 			return fallback
 		}
-		text += fields[0].Field
+		text := fmt.Sprintf(format, fields[0].Field)
 		if len(text) > 128 {
 			return fallback
 		}
@@ -225,13 +226,18 @@ func TestPresentationSeamHasIndependentKeysLocalesAndFailure(t *testing.T) {
 	outputs := map[string]bool{}
 	for _, locale := range []string{"fixture-a", "fixture-b"} {
 		for _, key := range []string{"cli.invalid", "report.warning"} {
-			outputs[present(locale, key, false)] = true
+			text := present(locale, key, false)
+			if text == "" || text == string(identity) {
+				t.Fatal("positive presentation fixture did not render")
+			}
+			outputs[text] = true
 		}
 	}
 	if len(outputs) != 4 {
 		t.Fatal("locale and resource identity were conflated")
 	}
-	for _, text := range []string{present("missing", "missing", false), present("fixture-a", "cli.invalid", true)} {
+	delete(catalog.Messages, "fixture-a/cli.invalid")
+	for _, text := range []string{present("missing", "missing", false), present("fixture-a", "cli.invalid", true), present("fixture-a", "cli.invalid", false)} {
 		if text != string(identity) || len(text) > failure.MaxCodeBytes {
 			t.Fatal("failed presenter has no safe fallback")
 		}

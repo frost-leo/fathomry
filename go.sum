@@ -456,6 +456,8 @@ github.com/nexus-rpc/nexus-proto-annotations v0.1.0 h1:2fELd+9sqUtNu6Fg//pw8YFsx
 github.com/nexus-rpc/nexus-proto-annotations v0.1.0/go.mod h1:n3UjF1bPCW8llR8tHvbxJ+27yPWrhpo8w/Yg1IOuY0Y=
 github.com/nexus-rpc/sdk-go v0.7.0 h1:38NrfY5rLnZAiMMs2ZfCKI/CSDzdfJG+27iAgfA8bUI=
 github.com/nexus-rpc/sdk-go v0.7.0/go.mod h1:FHdPfVQwRuJFZFTF0Y2GOAxCrbIBNrcPna9slkGKPYk=
+github.com/nicksnyder/go-i18n/v2 v2.6.1 h1:JDEJraFsQE17Dut9HFDHzCoAWGEQJom5s0TRd17NIEQ=
+github.com/nicksnyder/go-i18n/v2 v2.6.1/go.mod h1:Vee0/9RD3Quc/NmwEjzzD7VTZ+Ir7QbXocrkhOzmUKA=
 github.com/nukilabs/http v1.3.2 h1:UAKRsKT+DkfIewI2R4BH8k2C1b3XAanzBHxqCYWW6E0=
 github.com/nukilabs/http v1.3.2/go.mod h1:Kbg6IgUrCk4QvhE0D7Fy69EJbLl2Oo6DgnpUMiIH35k=
 github.com/nukilabs/utls v1.3.3 h1:CId1LAnm5IruWihEHXJz9gZVr8d601nxlUyhHH+L4Qw=

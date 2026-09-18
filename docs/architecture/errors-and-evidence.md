@@ -62,7 +62,7 @@ Keep these responsibilities separate:
 | Native evidence and technical effect | Provider, interpreted for the exact operation/mode; preserve confirmed, partial, and unknown scope |
 | Public-operation attribution and handoff | Adapter; preserve mapping between execution ownership and the technical evidence actually available |
 | Retry, toleration, reconciliation, or termination | Framework/public capability policy with declared business input; not inferred solely from a native error category |
-| Human presentation and localization | Presentation resources/boundary; language must not change machine identity or effect semantics |
+| Human presentation and localization | Public [i18n resources](../reference/i18n/interface.md) and presentation boundary; language must not change machine identity or effect semantics |
 
 Data and errors can coexist. Accepted, committed, visible, failed, partial, and
 unknown effects are useful distinctions, not a mandated universal enum. A request

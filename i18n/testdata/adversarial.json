@@ -1,0 +1,89 @@
+{
+  "license": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "templates": [
+    "",
+    " ",
+    "{{",
+    "{{.Unknown}}",
+    "{{range .Name}}{{.}}{{end}}",
+    "{{if .Name}}{{.Name}}{{end}}",
+    "{{with .Name}}{{.}}{{end}}",
+    "{{printf \"%1000000000s\" .Name}}",
+    "{{call .Name}}",
+    "{{.Name.Method}}",
+    "{{$x := .Name}}{{$x}}",
+    "{{.}}",
+    "{{define \"x\"}}{{.Name}}{{end}}",
+    "{{template \"x\"}}",
+    "{{block \"x\" .}}{{.Name}}{{end}}",
+    "{{/* empty */}}",
+    "{{.Name | html}}",
+    "{{index .Name 0}}",
+    "{{define \"\"}}{{.Name}}{{end}}",
+    "{{define \"\"}}{{end}}{{.Name}}",
+    "{{define \"profile-check\"}}{{.Name}}{{end}}"
+  ],
+  "positiveTemplates": [
+    "{{/* {{define \"\"}} */}}{{.Name}}",
+    " \n{{- .Name -}}\n "
+  ],
+  "invalidNumbers": [
+    "",
+    "-1",
+    "+1",
+    "NaN",
+    "Inf",
+    "1e1000000000",
+    "01",
+    "1.",
+    ".1",
+    " 1",
+    "1 ",
+    "1000000000",
+    "0.0000001",
+    "1.2.3"
+  ],
+  "invalidLocales": [
+    "en_US",
+    "en-",
+    "!",
+    "und",
+    "x-private",
+    "en-u-ca-gregory",
+    "de-1901",
+    "en,zh",
+    "en;q=0.5",
+    " en",
+    "en "
+  ],
+  "sourceEdits": {
+    "wording": "Hello, {{.Name}}!",
+    "singular": "{{.Owner}} owns {{.Count}} file.",
+    "description": "The count is a revised, reviewed display concept.",
+    "parameterDescription": "A quantity with updated review context.",
+    "changedType": "integer",
+    "renamedParameter": "Recipient"
+  },
+  "translationFix": "您好，{{.Name}}！",
+  "retry": {
+    "en": "The retry hint is 0 seconds.",
+    "zh-Hans": "重试提示为 0 秒。"
+  }
+}
