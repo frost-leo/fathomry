@@ -191,6 +191,7 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 
 | Package | Complete responsibility |
 | --- | --- |
+| `failure` | Public semantic identity, immutable in-process occurrences, typed-detail extension and bounded optional diagnostics; no SDK, localization or runtime policy |
 | `internal/fault` | Technical kinds, frozen context, multi-cause inspection and safe presentation |
 | `internal/resource` | Configuration preparation, source identity/provenance, assembly, authoritative ownership, limits, admission and leases |
 | `internal/invocation` | Requests/budgets, producers, outcomes/results, concrete read-only receipts, scopes/guards, required evidence delivery and optional observation |
@@ -198,6 +199,7 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | `internal/conformance` | Maintainer-only testing helpers; never a production dependency |
 
 ```text
+failure                   -> standard library
 internal/fault            -> standard library
 internal/resource         -> internal/fault, existing YAML
 internal/invocation       -> internal/resource, internal/fault
@@ -205,29 +207,32 @@ internal/compatibility    -> internal/resource, internal/fault
 internal/conformance      -> internal mechanisms, testing (test support only)
 ```
 
-No public error dependency, all-SDK aggregator or new module dependency is
-introduced. Compatibility assessment accepts the authoritative
+No internal-to-public error dependency, all-SDK aggregator or new module dependency
+is introduced. Compatibility assessment accepts the authoritative
 `*internal/resource.Access`; it does not introduce a public snapshot-assessment API.
 
 ## Pre-release API migration
 
 
-The complete top-level `source`, `operation`, `compatibility` and `failure`
-packages are withdrawn. There are no public aliases, forwarding constructors,
+The former top-level `source`, `operation`, `compatibility` and `failure`
+APIs were withdrawn. There are no public aliases, forwarding constructors,
 receipt interfaces, diagnostic shells or fixture-only bridges. The former public
 error package had no production consumer after internalization; its tests and build
 probe did not justify retaining a framework contract before the framework layer.
 It is removed, not copied into another package or rebuilt in the test fixtures.
 
-Future public capabilities and their error semantics will be designed against
-actual framework needs. This is a deferred contract, not an implicit promise of
-compatibility with the withdrawn Definition/Identity/Attribution API.
+Issue [#71](https://github.com/frost-leo/fathomry/issues/71) adds a new, explicitly
+limited [public failure foundation](../reference/failure/interface.md), validated
+against independent consumers and boundary fixtures. It does not restore the
+withdrawn Definition/Identity/Attribution API or deliver public operations/runtime.
+The other withdrawn packages remain absent.
 
 ## Technical facts and future public meaning
 
 The [error and evidence architecture](errors-and-evidence.md) owns the cross-package
 rules. The [fault interface](../reference/internal/fault/interface.md) specifies
-the implemented technical boundary; no public framework error API is prebuilt.
+the implemented technical boundary. The separate [public failure contract](../reference/failure/interface.md)
+does not change private Provider dependencies or execution-attribution ownership.
 
 ## Implementation references
 

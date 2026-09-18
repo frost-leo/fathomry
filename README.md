@@ -34,8 +34,10 @@ The project is in early development. Configuration preparation, resource ownersh
 controlled calls, technical errors, compatibility assessment and testing support
 are implemented as private foundations. A bounded internal Viper v1 integration
 supports explicit local acquisition and a separate preparation proof, not an
-application-wide loading path. There is no public Go API, production
-service Provider, CLI/project generator, application loader or complete runtime yet.
+application-wide loading path. The public [failure contract](docs/reference/failure/interface.md)
+adds stable extensible identities, typed-detail extension and safe diagnostics,
+not public operations or a durable error protocol. There is no production-qualified
+application runtime, CLI/project generator or application loader yet.
 The intended `fathomry new <project>` path remains future framework work, not
 business-owned assembly boilerplate.
 
@@ -76,6 +78,8 @@ Start with the [documentation map](docs/README.md) for current status and readin
 
 - [Architecture by topic](docs/README.md#architecture-by-topic): responsibilities,
   design rationale and cross-package guarantees.
+- [Public failure contract](docs/reference/failure/interface.md): independent
+  in-process identity and intentional inspection, without localization or SDKs.
 - [Internal package reference](docs/README.md#internal-package-reference): each
   package's `interface.md` contract and detailed topics.
 - [Development guides](docs/README.md#development-guides): SDK integration, testing

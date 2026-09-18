@@ -93,10 +93,12 @@ The [consuming-build test](../../../../internal/compatibility/consumer_test.go) 
 synthetic SDK behavior in an independent application's binary, then uses
 `debug/buildinfo.ReadFile` on that **same binary** and private `FromBuildInfo`.
 Reading the parent test executable would confuse the actual consumer with its
-inspector. Fathomry is deliberately required/replaced but contributes no public
-package, so its consumer metadata must be absent. This is not real linked-framework
+inspector. That probe deliberately requires/replaces Fathomry without importing
+any of its packages, so its consumer metadata must be absent. This is not real linked-framework
 dependency coverage; constructed BuildInfo tests cover dependency normalization.
 A separate in-module probe executes `Inspect` directly with Fathomry as main and
 VCS stamping enabled/disabled. Neither test
 requires an external application to import private machinery. Their selected JSON
 output is test transport, not a public diagnostic serialization contract.
+The separate [failure artifact consumer](../../../../failure/consumer_test.go)
+exercises the new public contract; it does not change this legacy build-info oracle.
