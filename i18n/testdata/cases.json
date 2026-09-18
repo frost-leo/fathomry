@@ -1,0 +1,295 @@
+{
+  "license": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "cases": [
+    {
+      "locale": "en",
+      "id": "demo.welcome",
+      "arguments": {
+        "Name": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Welcome, Mira!",
+      "matched": "en",
+      "resource": "en"
+    },
+    {
+      "locale": "zh-CN",
+      "id": "demo.welcome",
+      "arguments": {
+        "Name": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "欢迎，Mira！",
+      "matched": "zh-Hans",
+      "resource": "zh-Hans"
+    },
+    {
+      "locale": "zh-TW",
+      "id": "demo.welcome",
+      "arguments": {
+        "Name": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "歡迎，Mira！",
+      "matched": "zh-Hant",
+      "resource": "zh-Hant"
+    },
+    {
+      "locale": "zh-Hans",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "2"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Mira 有 2 个文件。",
+      "matched": "zh-Hans",
+      "resource": "zh-Hans"
+    },
+    {
+      "locale": "en",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "1"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Mira has 1 file.",
+      "matched": "en",
+      "resource": "en"
+    },
+    {
+      "locale": "en",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "1.0"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Mira has 1.0 files.",
+      "matched": "en",
+      "resource": "en"
+    },
+    {
+      "locale": "ru",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "1"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "У Mira 1 файл.",
+      "matched": "ru",
+      "resource": "ru"
+    },
+    {
+      "locale": "ru",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "2"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "У Mira 2 файла.",
+      "matched": "ru",
+      "resource": "ru"
+    },
+    {
+      "locale": "ru",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "5"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "У Mira 5 файлов.",
+      "matched": "ru",
+      "resource": "ru"
+    },
+    {
+      "locale": "ru",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "1.5"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "У Mira 1.5 файла.",
+      "matched": "ru",
+      "resource": "ru"
+    },
+    {
+      "locale": "fr",
+      "id": "demo.files",
+      "arguments": {
+        "Count": {
+          "type": "number",
+          "value": "1"
+        },
+        "Owner": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Mira has 1 file.",
+      "matched": "fr",
+      "resource": "en",
+      "fallback": "missing_translation"
+    },
+    {
+      "locale": "zh-Hans",
+      "id": "demo.source-only",
+      "text": "The source message remains available.",
+      "matched": "zh-Hans",
+      "resource": "en",
+      "fallback": "missing_translation"
+    },
+    {
+      "locale": "de",
+      "id": "demo.source-only",
+      "text": "The source message remains available.",
+      "matched": "en",
+      "resource": "en",
+      "fallback": "unsupported_locale"
+    },
+    {
+      "locale": "",
+      "id": "demo.welcome",
+      "arguments": {
+        "Name": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Welcome, Mira!",
+      "matched": "en",
+      "resource": "en"
+    },
+    {
+      "locale": "en-US",
+      "id": "demo.welcome",
+      "arguments": {
+        "Name": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Welcome, Mira!",
+      "matched": "en",
+      "resource": "en"
+    },
+    {
+      "locale": "en",
+      "id": "demo.scalars",
+      "arguments": {
+        "Flag": {
+          "type": "boolean",
+          "value": true
+        },
+        "Index": {
+          "type": "integer",
+          "value": -7
+        },
+        "Name": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "Mira: -7; true.",
+      "matched": "en",
+      "resource": "en"
+    },
+    {
+      "locale": "zh-Hans",
+      "id": "demo.scalars",
+      "arguments": {
+        "Flag": {
+          "type": "boolean",
+          "value": true
+        },
+        "Index": {
+          "type": "integer",
+          "value": -7
+        },
+        "Name": {
+          "type": "string",
+          "value": "Mira"
+        }
+      },
+      "text": "索引 -7；Mira。",
+      "matched": "zh-Hans",
+      "resource": "zh-Hans"
+    },
+    {
+      "locale": "en",
+      "id": "demo.opaque",
+      "arguments": {
+        "Name": {
+          "type": "string",
+          "value": "<b>{{.Missing}}</b>"
+        }
+      },
+      "text": "<b>{{.Missing}}</b>",
+      "matched": "en",
+      "resource": "en"
+    }
+  ]
+}

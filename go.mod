@@ -72,6 +72,7 @@ require (
 	// https://github.com/frost-leo/fathomry/issues/21
 	github.com/nacos-group/nacos-sdk-go/v2 v2.3.5
 	github.com/nexus-rpc/sdk-go v0.7.0
+	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/nukilabs/http v1.3.2
 	github.com/nukilabs/quic-go v1.3.0
 	// TODO(gh-53): Requalify the complete consuming graph and native lifecycle,
@@ -128,6 +129,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/net v0.58.0
 	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.41.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )
@@ -246,7 +248,6 @@ require (
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect

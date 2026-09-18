@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; a public failure foundation, private mechanisms and accepted architecture.
+**Status:** early development; public failure/i18n foundations, private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -99,6 +99,13 @@ public execution capability. No project generator, application configuration loa
 production-qualified application runtime or Run/Item model is supplied. The intended
 `fathomry new <project>` entry is not runnable. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
+
+The public [i18n foundation](reference/i18n/interface.md) prepares bounded external
+English/translation resources and renders plain text with explicit locale/fallback,
+named scalar/cardinal contracts, source freshness and immutable snapshot metadata.
+Independent business consumers own their resources. The failure package remains
+localization-independent; no CLI/report/runtime integration or full language catalog
+is supplied.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
@@ -210,6 +217,7 @@ current internal safeguards and their limits.
 | Your task | Start here |
 | --- | --- |
 | Define, inspect or extend a public failure | [Public failure contract](reference/failure/interface.md) |
+| Prepare and render business-owned localized resources | [Public i18n contract](reference/i18n/interface.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |

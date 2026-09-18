@@ -84,6 +84,11 @@ per-occurrence version field or durable reader. Adding a new code does not make
 changing an existing operation's promised code/cause/detail behavior compatible;
 the [old-client fixture](../../failure/extension_test.go) exercises that distinction.
 
+[Public i18n compatibility](../reference/i18n/interface.md#compatibility-freshness-and-rollback)
+separates module/API, resource profile, message contracts, source review,
+packaged snapshots and actual renderer/locale-data builds. Its immutable resources
+do not promise historical wording or Workflow replay across upgrades.
+
 [Build facts](../reference/internal/compatibility/build-info.md) and [assessment](../reference/internal/compatibility/assessment.md).
 
 This topic carries forward the [accepted integration standard](internal-sdk-integration.md)
