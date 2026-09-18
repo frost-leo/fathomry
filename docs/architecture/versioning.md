@@ -77,6 +77,13 @@ format; no universal version registry or migration engine is required.
 
 ## Implementation references
 
+[Public failure version owners](../reference/failure/interface.md#version-owners)
+separate framework module/API changes, semantic identity, typed machine details,
+presentation resources and future wire schemas. The common package has no
+per-occurrence version field or durable reader. Adding a new code does not make
+changing an existing operation's promised code/cause/detail behavior compatible;
+the [old-client fixture](../../failure/extension_test.go) exercises that distinction.
+
 [Build facts](../reference/internal/compatibility/build-info.md) and [assessment](../reference/internal/compatibility/assessment.md).
 
 This topic carries forward the [accepted integration standard](internal-sdk-integration.md)

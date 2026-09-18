@@ -37,14 +37,18 @@ for current availability and package contracts.
 ## Technical errors and framework meaning
 
 Future public capabilities must use a coherent framework error contract, not one
-competing system per layer. That contract is deferred; no public error package is
-implemented now. Internal SDK mechanisms do not depend on framework semantics. The private
+competing system per layer. The limited [public failure contract](../reference/failure/interface.md)
+now supplies in-process identity and intentional inspection, not public operations,
+execution attribution or a durable protocol. Internal SDK mechanisms do not depend
+on it or on framework semantics. The private
 `internal/fault` foundation retains technical kinds, bounded context and original
 multi-cause errors. Providers interpret native codes, responses and completion
 signals without losing intentional cause inspection or inventing effect certainty.
-Standard Go `error` is sufficient for a future outer boundary to retain the
-technical error as a cause. The current boundary fixtures use local sentinels,
-ordinary wrapping and a test-owned frozen attribution envelope, not public types.
+Standard Go `error` permits an outer boundary to expose a technical cause
+deliberately, but retaining original evidence does not require exposing SDK types.
+The [public boundary fixtures](../../internal/conformance/public_failure_test.go)
+use the new contract alongside independently retained native evidence and a
+test-owned frozen attribution envelope. They are not production Adapters.
 An already suitable error need not be wrapped merely to identify a layer. No
 converter registry, shared generic kernel or automatic business policy is required.
 
@@ -52,7 +56,8 @@ Keep these responsibilities separate:
 
 | Concern | Owner and contract |
 | --- | --- |
-| Public semantic identity and execution attribution | Future framework/capability boundary; deferred until actual public operations are implemented, without importing concrete SDKs into shared contracts |
+| Public semantic identity and inspection | Public `failure` contract; capability-owned codes and typed details, independent of SDKs and presentation |
+| Execution attribution | Future framework/capability boundary; not supplied by the failure foundation |
 | Technical kind, bounded context and original causes | Private `fault`; no Run/Item/framework-attempt semantics, public error dependency or retry/disposition flags |
 | Native evidence and technical effect | Provider, interpreted for the exact operation/mode; preserve confirmed, partial, and unknown scope |
 | Public-operation attribution and handoff | Adapter; preserve mapping between execution ownership and the technical evidence actually available |
@@ -116,6 +121,17 @@ require explicit privacy and cardinality rules; being useful in a trace does not
 automatically make a value safe as a metric label.
 
 ## Implementation references
+
+[Public failure interface](../reference/failure/interface.md) covers the minimal
+immutable occurrence, exact identity, typed detail ownership, optional diagnostic
+omission, compatibility and deterministic construction. Codes alone would repeat
+unsafe formatting at each capability; an unrestricted map or universal scalar
+union would weaken structured-detail contracts. The selected shared mechanics
+leave required machine detail with its actual capability owner.
+
+The native Temporal conversion and partial-Activity-result counterexamples remain
+unsupported integration boundaries, not fixed by this public package. Its runtime
+JSON refusal prevents accidental encoding from masquerading as a durable protocol.
 
 [Fault interface](../reference/internal/fault/interface.md), [diagnostics](../reference/internal/fault/diagnostics.md) and [call evidence](../reference/internal/invocation/evidence.md).
 

@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; private mechanisms and accepted architecture.
+**Status:** early development; a public failure foundation, private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -92,10 +92,12 @@ native HTTP/protobuf export and independent evidence. Separate Zap/zerolog bridg
 preserve existing local sinks and ownership. Export is explicitly scheduled;
 local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 
-There is no public Go package, project generator, application configuration loader,
-production-qualified application runtime or Run/Item execution model yet. The intended
-`fathomry new <project>` entry is not runnable. The removed public `failure` contract
-is not replaced by a speculative error API. Business authors are not expected to
+The public [failure contract](reference/failure/interface.md) provides extensible
+semantic identity, immutable occurrences, typed-detail extension and bounded
+optional diagnostics. It is a new limited contract, not the withdrawn API or a
+public execution capability. No project generator, application configuration loader,
+production-qualified application runtime or Run/Item model is supplied. The intended
+`fathomry new <project>` entry is not runnable. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
@@ -207,6 +209,7 @@ current internal safeguards and their limits.
 
 | Your task | Start here |
 | --- | --- |
+| Define, inspect or extend a public failure | [Public failure contract](reference/failure/interface.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |
