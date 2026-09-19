@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; public failure/i18n/version foundations, private mechanisms and accepted architecture.
+**Status:** early development; public configuration and failure/i18n/version foundations, private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -95,10 +95,18 @@ local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 The public [failure contract](reference/failure/interface.md) provides extensible
 semantic identity, immutable occurrences, typed-detail extension and bounded
 optional diagnostics. It is a new limited contract, not the withdrawn API or a
-public execution capability. No project generator, application configuration loader,
+public execution capability. No project generator,
 production-qualified application runtime or Run/Item model is supplied. The intended
 `fathomry new <project>` entry is not runnable. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
+
+The public [framework configuration capability](reference/framework/configuration/interface.md)
+adds finite loading with public input contracts, explicit source/environment selection,
+strict preparation, immutable values and safe source information. Its
+[local adapter](reference/adapters/configuration/local/interface.md) preserves original
+Viper-acquired bytes and owns file cleanup. An [independent project example](development/load-project-configuration.md)
+uses the public path without private assembly. Data schema versions remain separate
+from module/API compatibility; no remote loading, reload or generator is provided.
 
 The public [i18n foundation](reference/i18n/interface.md) prepares bounded external
 English/translation resources and renders plain text with explicit locale/fallback,
@@ -227,6 +235,7 @@ current internal safeguards and their limits.
 | Define, inspect or extend a public failure | [Public failure contract](reference/failure/interface.md) |
 | Prepare and render business-owned localized resources | [Public i18n contract](reference/i18n/interface.md) |
 | Inspect software/build versions or inject application declarations | [Public version contract](reference/version/interface.md) |
+| Load project settings through public framework capabilities | [Configuration contract](reference/framework/configuration/interface.md) and [independent project example](development/load-project-configuration.md) |
 | Build or use the offline version command | [CLI build guide](development/build-cli.md) and [machine-output profile](reference/cmd/fathomry/internal/command/version/version-output.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
