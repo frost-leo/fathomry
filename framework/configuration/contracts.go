@@ -33,8 +33,11 @@ import (
 // Native acquisition/parser causes are withheld; caller cancellation causes and
 // explicitly supplied schema-validation errors retain intentional inspection.
 const (
-	InvalidInput      failure.Code = "fathomry.configuration.invalid_input"
-	Unavailable       failure.Code = "fathomry.configuration.unavailable"
+	InvalidInput failure.Code = "fathomry.configuration.invalid_input"
+	Unavailable  failure.Code = "fathomry.configuration.unavailable"
+	// Missing and Denied are safe remote-acquisition causes, never native text.
+	Missing           failure.Code = "fathomry.configuration.missing"
+	Denied            failure.Code = "fathomry.configuration.denied"
 	UnsupportedSchema failure.Code = "fathomry.configuration.unsupported_schema"
 	Invalid           failure.Code = "fathomry.configuration.invalid"
 	ValidationFailed  failure.Code = "fathomry.configuration.validation_failed"

@@ -168,6 +168,26 @@ func TestIndependentModuleArtifact(t *testing.T) {
 	if strings.TrimSpace(selected) != version || bytes.Contains(read(filepath.Join(consumer, "go.mod")), []byte("replace ")) {
 		t.Fatal("consumer did not use an unreplaced module artifact")
 	}
+	localConsumer := consumer
+	consumer = filepath.Join(directory, "remote-consumer")
+	write(filepath.Join(consumer, "go.mod"), []byte("module example.org/remote\n\ngo 1.27.0\n\nrequire "+module+" "+version+"\n"))
+	write(filepath.Join(consumer, "go.sum"), read(filepath.Join(root, "go.sum")))
+	for _, name := range []string{"main.go", "main_test.go"} {
+		write(filepath.Join(consumer, name), read(filepath.Join(root, "adapters/configuration/nacos/testdata/project", name)))
+	}
+	t.Log(run(goBinary, "test", "-mod=mod", "-race", "-count=1", "-timeout=1m", "./..."))
+	run(goBinary, "build", "-mod=readonly", "-o", filepath.Join(consumer, "remote"), ".")
+	remoteGraph := strings.Fields(run(goBinary, "list", "-mod=readonly", "-deps", "-f", "{{.ImportPath}}", "./..."))
+	if !slices.Contains(remoteGraph, module+"/adapters/configuration/nacos") || !slices.Contains(remoteGraph, module+"/internal/configsource/nacos/v2") {
+		t.Fatal("remote consumer did not select the Nacos path")
+	}
+	for _, name := range remoteGraph {
+		if strings.HasPrefix(name, module+"/adapters/configuration/local") || strings.HasPrefix(name, module+"/internal/configsource/viper/") ||
+			strings.HasPrefix(name, "go.temporal.io/") || strings.HasPrefix(name, module+"/internal/database/") {
+			t.Fatalf("unrelated remote-consumer dependency: %s", name)
+		}
+	}
+	consumer = localConsumer
 	write(filepath.Join(consumer, "forbidden.go"), []byte("package main\nimport _ \""+module+"/internal/resource\"\n"))
 	command = exec.CommandContext(ctx, goBinary, "build", "-mod=readonly", ".")
 	command.Dir = consumer

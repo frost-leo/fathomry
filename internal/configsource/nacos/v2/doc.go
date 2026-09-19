@@ -24,7 +24,8 @@
 // # Bootstrap, acquisition and preparation
 //
 // [Open] validates and freezes [OptionsV1] before creating local transport
-// ownership; its context governs the entire client lifetime. [ServerV1] selects
+// ownership; [ValidateOptions] offers declaration-only preflight without a client.
+// Open's context governs the entire client lifetime. [ServerV1] selects
 // HTTP authentication and gRPC configuration endpoints independently. Successful
 // construction does not prove reachability, authentication or session readiness.
 //

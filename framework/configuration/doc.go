@@ -32,5 +32,7 @@
 //
 // Loading is finite and synchronous, with caller-owned contexts. It does not
 // discover projects, start watchers or initialize business clients/Workers.
+// Local and Nacos adapters supply finite acquisition without changing preparation;
+// transient remote connections are owned and joined by the selected adapter.
 // Providers and validators are trusted cooperative Go code, not a sandbox.
 package configuration
