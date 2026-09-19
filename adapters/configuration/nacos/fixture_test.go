@@ -38,8 +38,10 @@ import (
 	"github.com/frost-leo/fathomry/framework/configuration"
 	wire "github.com/nacos-group/nacos-sdk-go/v2/api/grpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -53,6 +55,7 @@ type fixture struct {
 	faultID     string
 	fault       int
 	malformed   bool
+	rpcDeadline bool
 	encrypted   bool
 	delay       time.Duration
 	requireAuth bool
@@ -145,6 +148,7 @@ func (f *fixture) Request(ctx context.Context, payload *wire.Payload) (*wire.Pay
 	registered := f.sessions[remote.Addr.String()]
 	content, present := f.content[request.DataID]
 	faultID, fault, malformed, encrypted, delay := f.faultID, f.fault, f.malformed, f.encrypted, f.delay
+	rpcDeadline := f.rpcDeadline
 	requireAuth := f.requireAuth
 	f.mu.Unlock()
 	if !registered {
@@ -174,6 +178,9 @@ func (f *fixture) Request(ctx context.Context, payload *wire.Payload) (*wire.Pay
 		}
 	}
 	if request.DataID == faultID {
+		if rpcDeadline {
+			return nil, status.Error(codes.DeadlineExceeded, "private-native-deadline-detail")
+		}
 		if malformed {
 			return &wire.Payload{Metadata: &wire.Metadata{Type: "ConfigQueryResponse"}, Body: &anypb.Any{Value: []byte("{")}}, nil
 		}

@@ -29,6 +29,8 @@ import (
 	"github.com/frost-leo/fathomry/failure"
 	"github.com/frost-leo/fathomry/framework/configuration"
 	native "github.com/frost-leo/fathomry/internal/configsource/nacos/v2"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // ProviderID identifies acquisition, independently of SDK and project versions.
@@ -51,6 +53,8 @@ var _ configuration.Provider = (*Provider)(nil)
 // uses a finite registered session, with one shared deadline for the whole load.
 // Only observed missing optional input becomes Absent. No usable prefix, native
 // diagnostic, endpoint/key inventory or stale cached value escapes a failure.
+// Observed native context/RPC deadlines retain context.DeadlineExceeded even before
+// the caller's context signals; this does not mean the caller context was canceled.
 //
 // Cleanup cancels and joins the native owner before returning, using a context
 // without cancellation. Native DNS or caller trace hooks can therefore delay
@@ -111,6 +115,8 @@ func classify(ctx context.Context, name string, err error) error {
 		return cancelled(ctx)
 	}
 	switch {
+	case errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded:
+		return problem(configuration.Cancelled, name, context.DeadlineExceeded)
 	case errors.Is(err, native.ErrMissing):
 		return problem(configuration.Unavailable, name, configuration.Missing)
 	case errors.Is(err, native.ErrDenied):

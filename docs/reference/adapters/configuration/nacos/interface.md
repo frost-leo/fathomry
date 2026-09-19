@@ -90,8 +90,14 @@ Required missing and denied acquisition return Unavailable with safe
 Native messages and error graphs are withheld, including URL/key/namespace text.
 
 Malformed/empty/unsupported content maps to Invalid; bounded capacity failures to
-LimitExceeded; caller cancellation or the total deadline to Cancelled. Caller
-cancellation causes and context cancellation/deadline identities remain deliberate
+LimitExceeded; caller cancellation or the total deadline to Cancelled. An observed
+native request's context.DeadlineExceeded cause or typed gRPC DeadlineExceeded
+status also maps to Cancelled with a safe context.DeadlineExceeded cause, even if the
+outer context has not signaled yet. This preserves request-budget evidence without
+claiming the caller's context was canceled or exposing the native error graph.
+Caller cancellation takes precedence and preserves its intentional cause. Native
+error text or connection-retirement cancellation alone does not establish a caller
+cancellation or deadline. Caller cancellation/deadline identities remain deliberate
 inspection data. Failures have only the approved Provider/source labels; a failed
 acquisition returns zero Input and a failed framework load returns zero Configuration.
 An earlier successful read is never substituted after later failure.

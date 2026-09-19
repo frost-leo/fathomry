@@ -123,7 +123,7 @@ func TestRemoteLayersAndFreshSnapshots(t *testing.T) {
 }
 
 func TestRemoteRefusalsAreNotOptionalAbsence(t *testing.T) {
-	for _, name := range []string{"missing", "denied", "empty", "malformed-document", "unknown-overridden", "malformed-protocol", "encrypted", "oversized"} {
+	for _, name := range []string{"missing", "denied", "empty", "malformed-document", "unknown-overridden", "malformed-protocol", "encrypted", "oversized", "rpc-deadline"} {
 		t.Run(name, func(t *testing.T) {
 			f := newFixture(t, false)
 			options := f.options()
@@ -153,12 +153,18 @@ func TestRemoteRefusalsAreNotOptionalAbsence(t *testing.T) {
 			case "oversized":
 				f.content["private-local"] = strings.Repeat("x", configuration.MaxDocumentBytes+1)
 				want = configuration.LimitExceeded
+			case "rpc-deadline":
+				f.rpcDeadline = true
+				want = configuration.Cancelled
 			}
 			f.mu.Unlock()
 			p := provider(t, options)
 			loaded, err := configuration.Load(context.Background(), definition(), configuration.Request{Provider: p})
 			if !errors.Is(err, want) {
 				t.Fatalf("wrong refusal: %v", err)
+			}
+			if name == "rpc-deadline" && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal("native RPC deadline cause was lost")
 			}
 			if name == "missing" && !errors.Is(err, configuration.Missing) || name == "denied" && !errors.Is(err, configuration.Denied) {
 				t.Fatal("safe remote cause lost")
