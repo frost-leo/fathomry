@@ -93,6 +93,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 	}
 	for _, path := range strings.Fields(string(output)) {
 		if path != "github.com/frost-leo/fathomry/failure" && path != "github.com/frost-leo/fathomry/i18n" &&
+			path != "github.com/frost-leo/fathomry/version" && path != "github.com/frost-leo/fathomry/version/presentation" &&
 			!strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
 			t.Errorf("unexpected public package: %s", path)
 		}
@@ -114,8 +115,9 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatal("Provider dependency check failed")
 	}
 	for _, path := range strings.Fields(string(output)) {
-		if path == "github.com/frost-leo/fathomry/failure" || path == "github.com/frost-leo/fathomry/i18n" {
-			t.Fatal("an internal production package depends on the public failure/i18n contracts")
+		if path == "github.com/frost-leo/fathomry/failure" || path == "github.com/frost-leo/fathomry/i18n" ||
+			path == "github.com/frost-leo/fathomry/version" || strings.HasPrefix(path, "github.com/frost-leo/fathomry/version/") {
+			t.Fatal("an internal production package depends on the public failure/i18n/version contracts")
 		}
 	}
 }

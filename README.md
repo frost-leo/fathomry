@@ -40,6 +40,10 @@ not public operations or a durable error protocol. The public
 [i18n foundation](docs/reference/i18n/interface.md) adds bounded external-resource
 localization with explicit fallback, source freshness and immutable snapshots.
 It remains independent of workflow execution and complete product language coverage.
+The public [version contract](docs/reference/version/interface.md) adds software
+version identity/precedence, consuming-build facts and validated application build
+declarations, with optional resource-first presentation—not business versioning
+or a release pipeline.
 There is no production-qualified
 application runtime, CLI/project generator or application loader yet.
 The intended `fathomry new <project>` path remains future framework work, not
@@ -86,6 +90,8 @@ Start with the [documentation map](docs/README.md) for current status and readin
   in-process identity and intentional inspection, without localization or SDKs.
 - [Public i18n contract](docs/reference/i18n/interface.md): resource-first messages,
   explicit locale/fallback and consumer-owned compatible resource snapshots.
+- [Public version contract](docs/reference/version/interface.md): software/build
+  identities, disclosure, declaration injection and artifact verification.
 - [Internal package reference](docs/README.md#internal-package-reference): each
   package's `interface.md` contract and detailed topics.
 - [Development guides](docs/README.md#development-guides): SDK integration, testing
