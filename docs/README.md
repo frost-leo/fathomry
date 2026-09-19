@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; public failure/i18n foundations, private mechanisms and accepted architecture.
+**Status:** early development; public failure/i18n/version foundations, private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -106,6 +106,12 @@ named scalar/cardinal contracts, source freshness and immutable snapshot metadat
 Independent business consumers own their resources. The failure package remains
 localization-independent; no CLI/report/runtime integration or full language catalog
 is supplied.
+
+The public [version foundation](reference/version/interface.md) separates exact
+software identity from precedence, native application/framework/dependency build
+facts and validated application declarations. Its [injection contract](reference/version/injection.md)
+requires actual artifact read-back; optional [presentation](reference/version/presentation/interface.md)
+uses existing i18n resources. No business versioning, CLI or release pipeline is supplied.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
@@ -218,6 +224,7 @@ current internal safeguards and their limits.
 | --- | --- |
 | Define, inspect or extend a public failure | [Public failure contract](reference/failure/interface.md) |
 | Prepare and render business-owned localized resources | [Public i18n contract](reference/i18n/interface.md) |
+| Inspect software/build versions or inject application declarations | [Public version contract](reference/version/interface.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |

@@ -28,6 +28,11 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 Start with the [compatibility interface](interface.md). Requirements, linked
 packages and verified behavior are different evidence.
 
+Independent applications use the [public version contract](../../version/interface.md),
+whose narrow adapter reuses this normalization without exporting the private
+assessment protocol. Its stricter validation, declaration and timestamp semantics
+are documented separately; the established private behavior below is unchanged.
+
 ## Actual builds are not dependency declarations
 
 `Inspect(BuildRequest)` reads `runtime/debug.ReadBuildInfo` from the consuming

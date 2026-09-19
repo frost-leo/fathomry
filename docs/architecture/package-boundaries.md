@@ -200,6 +200,9 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 
 ```text
 failure                   -> standard library
+i18n                      -> failure, selected localization libraries
+version                   -> failure, internal/compatibility, selected semver library
+version/presentation      -> version, i18n
 internal/fault            -> standard library
 internal/resource         -> internal/fault, existing YAML
 internal/invocation       -> internal/resource, internal/fault
@@ -226,6 +229,12 @@ limited [public failure foundation](../reference/failure/interface.md), validate
 against independent consumers and boundary fixtures. It does not restore the
 withdrawn Definition/Identity/Attribution API or deliver public operations/runtime.
 The other withdrawn packages remain absent.
+
+Issue [#75](https://github.com/frost-leo/fathomry/issues/75) adds the narrow
+[public software version contract](../reference/version/interface.md). It projects
+the existing private build normalizer without exporting assessment/access types,
+adding public compatibility evaluation or restoring withdrawn forwarding APIs.
+Internal production packages remain independent of these public contracts.
 
 ## Technical facts and future public meaning
 
