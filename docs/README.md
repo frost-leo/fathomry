@@ -104,14 +104,16 @@ The public [i18n foundation](reference/i18n/interface.md) prepares bounded exter
 English/translation resources and renders plain text with explicit locale/fallback,
 named scalar/cardinal contracts, source freshness and immutable snapshot metadata.
 Independent business consumers own their resources. The failure package remains
-localization-independent; no CLI/report/runtime integration or full language catalog
-is supplied.
+localization-independent. The offline CLI owns its English/Chinese resources;
+no business runtime integration or full language catalog is supplied.
 
 The public [version foundation](reference/version/interface.md) separates exact
 software identity from precedence, native application/framework/dependency build
 facts and validated application declarations. Its [injection contract](reference/version/injection.md)
 requires actual artifact read-back; optional [presentation](reference/version/presentation/interface.md)
-uses existing i18n resources. No business versioning, CLI or release pipeline is supplied.
+uses existing i18n resources. The [offline CLI](reference/cmd/fathomry/internal/root/interface.md)
+now consumes those contracts for help and software-version reporting; no
+project generator, business runtime or release pipeline is supplied.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
@@ -225,6 +227,7 @@ current internal safeguards and their limits.
 | Define, inspect or extend a public failure | [Public failure contract](reference/failure/interface.md) |
 | Prepare and render business-owned localized resources | [Public i18n contract](reference/i18n/interface.md) |
 | Inspect software/build versions or inject application declarations | [Public version contract](reference/version/interface.md) |
+| Build or use the offline version command | [CLI build guide](development/build-cli.md) and [machine-output profile](reference/cmd/fathomry/internal/command/version/version-output.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |
@@ -261,6 +264,9 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/invocation`](reference/internal/invocation/interface.md) | [Budgets](reference/internal/invocation/budgets.md), [completion](reference/internal/invocation/completion.md), [evidence](reference/internal/invocation/evidence.md), [observation](reference/internal/invocation/observation.md) |
 | [`internal/fault`](reference/internal/fault/interface.md) | [Diagnostics and inspection boundaries](reference/internal/fault/diagnostics.md) |
 | [`internal/compatibility`](reference/internal/compatibility/interface.md) | [Build facts](reference/internal/compatibility/build-info.md), [assessment and policy](reference/internal/compatibility/assessment.md) |
+| [`cmd/fathomry/internal/root`](reference/cmd/fathomry/internal/root/interface.md) | Explicit command composition and version entrypoints |
+| [`cmd/fathomry/internal/cli`](reference/cmd/fathomry/internal/cli/interface.md) | Private runner, checked streams, localized help and status |
+| [`cmd/fathomry/internal/command/version`](reference/cmd/fathomry/internal/command/version/interface.md) | Offline version operation, resources and [CLI JSON profile](reference/cmd/fathomry/internal/command/version/version-output.md) |
 | [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md) |
 | [`internal/configsource/viper/v1`](reference/internal/configsource/viper/v1/interface.md) | Native local profile, OptionsV1, raw handoff, ownership, bounds and version evidence |
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
@@ -289,6 +295,7 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
+- [Build and verify the offline CLI](development/build-cli.md).
 - [Write documentation](development/documentation.md), the canonical writing policy.
 - [Contribution policy](../.github/CONTRIBUTING.md), the canonical branch/signing/review rules.
 

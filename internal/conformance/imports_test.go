@@ -77,6 +77,19 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			}
 		})
 	}
+	for _, path := range []string{
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/cli",
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/root",
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/version",
+	} {
+		t.Run("reject-executable-private-"+path, func(t *testing.T) {
+			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
+			output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
+			if err == nil || !strings.Contains(string(output), "use of internal package "+path+" not allowed") {
+				t.Fatalf("wrong executable-private import rejection: %v\n%s", err, output)
+			}
+		})
+	}
 	for _, name := range []string{"source", "operation", "compatibility"} {
 		t.Run("withdrawn-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/" + name
@@ -92,7 +105,9 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatal("package inventory could not be inspected")
 	}
 	for _, path := range strings.Fields(string(output)) {
-		if path != "github.com/frost-leo/fathomry/failure" && path != "github.com/frost-leo/fathomry/i18n" &&
+		if path != "github.com/frost-leo/fathomry/cmd/fathomry" &&
+			!strings.HasPrefix(path, "github.com/frost-leo/fathomry/cmd/fathomry/internal/") &&
+			path != "github.com/frost-leo/fathomry/failure" && path != "github.com/frost-leo/fathomry/i18n" &&
 			path != "github.com/frost-leo/fathomry/version" && path != "github.com/frost-leo/fathomry/version/presentation" &&
 			!strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
 			t.Errorf("unexpected public package: %s", path)

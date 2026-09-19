@@ -1,0 +1,9 @@
+{
+  "license": ["fathomry", "Copyright (C) 2026  Frost Leo", "SPDX-License-Identifier: GPL-3.0-or-later", "", "This program is free software: you can redistribute it and/or modify", "it under the terms of the GNU General Public License as published by", "the Free Software Foundation, either version 3 of the License, or", "(at your option) any later version.", "", "This program is distributed in the hope that it will be useful,", "but WITHOUT ANY WARRANTY; without even the implied warranty of", "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the", "GNU General Public License for more details.", "", "You should have received a copy of the GNU General Public License", "along with this program. If not, see <http://www.gnu.org/licenses/>."],
+  "profile": "fathomry.i18n/v1",
+  "locale": "en",
+  "messages": [
+    {"id":"fathomry.cli.root.header","description":"Root introduction and usage before visible command summaries.","parameters":{},"forms":{"other":"Fathomry — durable, observable data workflows.\n\nUsage:\n  fathomry [flags]\n  fathomry [command]\n\nAvailable Commands:"}},
+    {"id":"fathomry.cli.root.footer","description":"Root flags and command-help hint after visible commands.","parameters":{},"forms":{"other":"\nFlags:\n  -h, --help            Show help\n      --lang string     Output language (default en)\n      --version         Show local software and build information\n      --output string   Version output: text or json (requires --version)\n\nUse fathomry help COMMAND for command options."}}
+  ]
+}

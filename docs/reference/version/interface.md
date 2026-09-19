@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../README.md) / Public package reference
 
 **Audience:** independent Go applications, framework maintainers and future builders.
-**Status:** implemented in-process contract; no release, CLI or deployment platform.
+**Status:** implemented in-process contract; consumed by the offline CLI, without a release or deployment platform.
 **Package:** `github.com/frost-leo/fathomry/version`.
 
 ## Responsibilities and call sequence
@@ -37,6 +37,9 @@ reported facts. `Build.CheckDeclaration` compares a complete expected claim.
 These operations do not manage business Workflow/run-mode versions, infer
 compatibility, run Git, read CI variables, discover a clock, build software or
 authenticate provenance. Reading a label is not release approval.
+[The CLI version command](../cmd/fathomry/internal/command/version/interface.md)
+consumes this contract but owns a separate machine-output profile and process
+behavior.
 [Version ownership](../../architecture/versioning.md) explains the separate axes.
 
 ## Software values and timestamps
