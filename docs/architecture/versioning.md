@@ -78,6 +78,19 @@ format; no universal version registry or migration engine is required.
 
 ## Implementation references
 
+The [public configuration capability](../reference/framework/configuration/interface.md)
+and [local adapter](../reference/adapters/configuration/local/interface.md) use
+ordinary Go API structs for schemas, requests, source documents, options and
+metadata. Module/API compatibility and independent consumer fixtures govern
+field/default/zero-value and error semantics; type/function version suffixes are
+not a substitute for that policy. The separate
+SchemaVersion is a project-owned data declaration, checked for a match rather
+than inferred from file contents or arbitrary Go code. Explicit business conversion
+does not mutate an earlier prepared value. Runtime handles are not wire DTOs;
+no unused parallel API, automatic migration or durable configuration format is
+introduced. This follows the [Go module compatibility guidance](https://go.dev/blog/module-compatibility)
+on compatible additions and explicit treatment of breaking changes.
+
 [Public software versions](../reference/version/interface.md) implement exact
 SemVer-profile identity separately from precedence, plus immutable consuming-build
 records. A narrow adapter reuses private build normalization without exporting

@@ -192,6 +192,8 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | Package | Complete responsibility |
 | --- | --- |
 | `failure` | Public semantic identity, immutable in-process occurrences, typed-detail extension and bounded optional diagnostics; no SDK, localization or runtime policy |
+| `framework/configuration` | Public configuration loading, project-data validation, immutable preparation and safe source explanation; no concrete Provider dependency |
+| `adapters/configuration/local` | Declarative local source selection and finite Viper acquisition, with public failures and owned file cleanup |
 | `internal/fault` | Technical kinds, frozen context, multi-cause inspection and safe presentation |
 | `internal/resource` | Configuration preparation, source identity/provenance, assembly, authoritative ownership, limits, admission and leases |
 | `internal/invocation` | Requests/budgets, producers, outcomes/results, concrete read-only receipts, scopes/guards, required evidence delivery and optional observation |
@@ -203,6 +205,8 @@ failure                   -> standard library
 i18n                      -> failure, selected localization libraries
 version                   -> failure, internal/compatibility, selected semver library
 version/presentation      -> version, i18n
+framework/configuration   -> failure, internal/resource
+adapters/configuration/local -> framework/configuration, failure, internal/configsource/viper/v1
 internal/fault            -> standard library
 internal/resource         -> internal/fault, existing YAML
 internal/invocation       -> internal/resource, internal/fault
