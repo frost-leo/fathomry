@@ -1,0 +1,12 @@
+{
+  "license": ["fathomry", "Copyright (C) 2026  Frost Leo", "SPDX-License-Identifier: GPL-3.0-or-later", "", "This program is free software: you can redistribute it and/or modify", "it under the terms of the GNU General Public License as published by", "the Free Software Foundation, either version 3 of the License, or", "(at your option) any later version.", "", "This program is distributed in the hope that it will be useful,", "but WITHOUT ANY WARRANTY; without even the implied warranty of", "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the", "GNU General Public License for more details.", "", "You should have received a copy of the GNU General Public License", "along with this program. If not, see <http://www.gnu.org/licenses/>."],
+  "profile": "fathomry.i18n/v1",
+  "locale": "zh-Hans",
+  "messages": [
+    {"id":"fathomry.cli.test.query.summary","source":"sha256:8925795ab7657d5f923f11ddd0e7f9a80537553ff184206cb5088b3dff1e35e4","forms":{"other":"仅用于测试的查询组"}},
+    {"id":"fathomry.cli.test.query.help","source":"sha256:ad1001aeca2d223fd5d48b5d9f31c71af0c47cc5e50a460a988b5bae8e958739","forms":{"other":"查询组帮助。"}},
+    {"id":"fathomry.cli.test.query.run.summary","source":"sha256:19c240abdf4acfa090246853129868ee6d7a8983a52f5223bb4583e6a66e57db","forms":{"other":"运行仅用于测试的查询"}},
+    {"id":"fathomry.cli.test.query.run.help","source":"sha256:5ae4402c3e65ee0ea86b6147c860c94eea9289a25082f8c18e93a533043b4371","forms":{"other":"嵌套查询帮助。\n\n用法：\n  fathomry query run [选项]\n\n选项：\n      --count int   正数测试计数"}},
+    {"id":"fathomry.cli.test.query_failure","source":"sha256:38ac9ed99ed69133bec48eabb97a30ed121122a8f43c702236c4065cbfe3a939","forms":{"other":"测试查询失败。"}}
+  ]
+}

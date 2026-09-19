@@ -43,9 +43,10 @@ It remains independent of workflow execution and complete product language cover
 The public [version contract](docs/reference/version/interface.md) adds software
 version identity/precedence, consuming-build facts and validated application build
 declarations, with optional resource-first presentation—not business versioning
-or a release pipeline.
+or a release pipeline. The [offline CLI](docs/development/build-cli.md) now
+provides help and `version`/`--version` in text or CLI-owned JSON.
 There is no production-qualified
-application runtime, CLI/project generator or application loader yet.
+application runtime, project generator or application loader yet.
 The intended `fathomry new <project>` path remains future framework work, not
 business-owned assembly boilerplate.
 
@@ -92,6 +93,8 @@ Start with the [documentation map](docs/README.md) for current status and readin
   explicit locale/fallback and consumer-owned compatible resource snapshots.
 - [Public version contract](docs/reference/version/interface.md): software/build
   identities, disclosure, declaration injection and artifact verification.
+- [Offline CLI](docs/reference/cmd/fathomry/internal/root/interface.md):
+  command composition, execution, language and output boundaries.
 - [Internal package reference](docs/README.md#internal-package-reference): each
   package's `interface.md` contract and detailed topics.
 - [Development guides](docs/README.md#development-guides): SDK integration, testing
