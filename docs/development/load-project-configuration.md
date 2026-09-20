@@ -56,10 +56,10 @@ This establishes consumer feasibility, not public release installation.
 
 ## Select remote configuration instead
 
-The [Nacos project fixture](../../adapters/configuration/nacos/testdata/project)
+The [Nacos project fixture](../../adapters/configuration/remote/nacos/testdata/project)
 uses the same framework loader and a different public Provider. It declares
 one required base document; no native client, watch or Close method enters the
-business program. The [adapter contract](../reference/adapters/configuration/nacos/interface.md)
+business program. The [adapter contract](../reference/adapters/configuration/remote/nacos/interface.md)
 defines bootstrap bounds, optionality, TLS/authentication and cleanup semantics.
 
 From the repository root with Go 1.27 selected, run only against explicitly
@@ -67,7 +67,7 @@ authorized endpoints and keys. This command performs remote reads and, when
 selected, authentication; it does not publish or delete remote configuration:
 
 ```sh
-go run ./adapters/configuration/nacos/testdata/project \
+go run ./adapters/configuration/remote/nacos/testdata/project \
   "$HTTP_URL" "$GRPC_ADDRESS" "$NACOS_NAMESPACE" "$NACOS_DATA_ID"
 ```
 
@@ -112,5 +112,5 @@ management-command host, source registry or Workflow execution.
 
 See the [public contract](../reference/framework/configuration/interface.md)
 for explicit environment conversion, diagnostics, ownership and unsupported
-cases, and the [local adapter](../reference/adapters/configuration/local/interface.md)
+cases, and the [local adapter](../reference/adapters/configuration/local/viper/interface.md)
 for path, absence and filesystem limitations.

@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package local
+package viper
 
 import (
 	"context"
@@ -34,7 +34,7 @@ import (
 )
 
 // ProviderID names this public acquisition adapter, not its SDK or data format.
-const ProviderID = "local"
+const ProviderID = "viper"
 
 // Provider owns only frozen declarations. ReadConfiguration acquires and closes
 // each file on its own stack; there is no Close method or retained native handle.

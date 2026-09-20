@@ -24,7 +24,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/frost-leo/fathomry/adapters/configuration/nacos"
+	"github.com/frost-leo/fathomry/adapters/configuration/remote/nacos"
 	"github.com/frost-leo/fathomry/framework/configuration"
 )
 

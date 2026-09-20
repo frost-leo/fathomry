@@ -67,7 +67,7 @@ not copy their runtime structs. Returned documents/changes are immutable, and
 RawCopy returns a new sensitive byte slice. Bootstrap values are borrowed only
 during Open; concurrent caller mutation during Open is unsupported.
 
-The public [Nacos configuration adapter](../../../../adapters/configuration/nacos/interface.md)
+The public [Nacos configuration adapter](../../../../adapters/configuration/remote/nacos/interface.md)
 uses this finite-read capability and owns complete transient cleanup for business
 projects. It does not expose Client, Watch or the private resource assembly.
 

@@ -34,7 +34,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/configuration/nacos"
+	"github.com/frost-leo/fathomry/adapters/configuration/remote/nacos"
 	"github.com/frost-leo/fathomry/failure"
 	"github.com/frost-leo/fathomry/framework/configuration"
 )

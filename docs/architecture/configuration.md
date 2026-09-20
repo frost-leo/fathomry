@@ -126,7 +126,7 @@ queries. It is not an assembled business-resource Provider or frozen preparation
 The [public configuration capability](../reference/framework/configuration/interface.md)
 now owns a finite local-loading path through a selected adapter. It preserves
 the preparation contract and captures only explicitly bound environment values.
-The [Nacos adapter](../reference/adapters/configuration/nacos/interface.md) uses the
+The [Nacos adapter](../reference/adapters/configuration/remote/nacos/interface.md) uses the
 same preparation contract for finite remote reads, with explicit earlier bootstrap
 and owned transient cleanup. It does not supply a common-time remote snapshot.
 Reload/rotation handoff remains unimplemented and

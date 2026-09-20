@@ -19,16 +19,21 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Local configuration Provider adapter
 
-[Documentation](../../../../README.md) / Public adapter reference
+[Documentation](../../../../../README.md) / Public adapter reference
 
 **Audience:** projects selecting local settings and adapter maintainers.
 **Status:** implemented file-only Provider adapter; no remote source or reload.
-**Package:** `github.com/frost-leo/fathomry/adapters/configuration/local`.
+**Package:** `github.com/frost-leo/fathomry/adapters/configuration/local/viper`.
 
 ## Declaration and loading
 
+Source kind is local; concrete Provider identity is `viper`. The development-time
+package move from `adapters/configuration/local` is intentional; callers update
+imports to this package. No compatibility alias or new classification interface
+is introduced. Remote implementations live separately under `remote/`.
+
 `New(Options)` freezes the selected files without I/O and returns a concurrent
-Provider. Pass it to the framework's [Load](../../../framework/configuration/interface.md).
+Provider. Pass it to the framework's [Load](../../../../framework/configuration/interface.md).
 The adapter uses the private Viper integration for bounded acquisition and hands
 original bytes, not native normalized settings, to framework preparation.
 
@@ -94,9 +99,9 @@ persistence/reconstruction. Original returned documents intentionally contain
 private data; the ordinary application path uses the framework's prepared value
 and safe description.
 
-[Native file tests](../../../../../adapters/configuration/local/local_test.go)
+[Native file tests](../../../../../../adapters/configuration/local/viper/local_test.go)
 cover selection, copies, optional/malformed/oversized sources, raw byte fidelity,
 cancellation and concurrent public loads.
-[Linux tests](../../../../../adapters/configuration/local/local_linux_test.go)
+[Linux tests](../../../../../../adapters/configuration/local/viper/local_linux_test.go)
 cover permission refusal and nonregular-file rejection. These are local
 filesystem checks, not remote-service or hostile-filesystem qualification.

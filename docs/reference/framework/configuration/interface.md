@@ -30,8 +30,8 @@ reload, mixed-source aggregation or durable configuration protocol.
 
 `Load` accepts a project-owned `Schema[T]` and `Request`, obtains original
 documents from an explicitly selected `Provider`, and prepares one immutable
-`Configuration[T]`. The [local adapter](../../adapters/configuration/local/interface.md)
-provides file acquisition; the [Nacos adapter](../../adapters/configuration/nacos/interface.md)
+`Configuration[T]`. The [local adapter](../../adapters/configuration/local/viper/interface.md)
+provides file acquisition; the [Nacos adapter](../../adapters/configuration/remote/nacos/interface.md)
 provides remote acquisition and owned cleanup. Projects declare their schema, sources and permitted
 environment bindings; they do not construct SDKs, resource factories or evidence
 receivers. The framework package imports no concrete Provider or adapter.
@@ -71,6 +71,18 @@ digits, dots, underscores or hyphens. They must contain no secrets; grammar
 validation is not a secret detector.
 
 ## Environment bindings
+
+`Request.LookupVariable` optionally supplies isolated literal values and safe
+origin labels. Nil uses exact process lookup with origin `process`; no ambient
+enumeration occurs. `VariableInfo.Source` records only the winning non-secret
+label, never a name, path or value. Absent lookup values must have empty value
+and origin. Custom lookups are synchronous trusted caller-owned functions.
+
+`LoadVariables(ctx, schema, bindings, lookup)` applies the same contracts to
+defaults and bindings before constructing the application Provider. The
+[dotenv adapter](../../adapters/configuration/local/dotenv/interface.md) can
+provide a file-only lookup or process-first fallback without mutating globals.
+Neither API automatically reads a file.
 
 Only names explicitly present in Request.Variables are looked up. A selected
 name is captured once before acquisition and never read again for that load.

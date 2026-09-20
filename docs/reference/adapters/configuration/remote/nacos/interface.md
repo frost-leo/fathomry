@@ -19,19 +19,19 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Nacos configuration Provider adapter
 
-[Documentation](../../../../README.md) / Public adapter reference
+[Documentation](../../../../../README.md) / Public adapter reference
 
 **Audience:** projects selecting remote settings and adapter maintainers.
 **Status:** implemented finite reads; native loopback TLS/authentication and consumer
 tests, not new external-service, multi-node or production qualification.
-**Package:** `github.com/frost-leo/fathomry/adapters/configuration/nacos`.
+**Package:** `github.com/frost-leo/fathomry/adapters/configuration/remote/nacos`.
 
 ## Responsibility and call sequence
 
 `New(Options)` validates and freezes explicit bootstrap without network I/O or
-native clients. Pass its Provider to [configuration.Load](../../../framework/configuration/interface.md).
+native clients. Pass its Provider to [configuration.Load](../../../../framework/configuration/interface.md).
 The adapter owns authentication, finite acquisition and cleanup using the
-[existing Nacos integration](../../../internal/configsource/nacos/v2/interface.md).
+[existing Nacos integration](../../../../internal/configsource/nacos/v2/interface.md).
 The framework owns environment capture, strict preparation and detached results.
 The business project never receives native handles or copies their assembly.
 
@@ -136,18 +136,18 @@ No metadata is relabeled as a durable Run input, content fingerprint or reload e
 
 ## Executable evidence
 
-[Public adapter tests](../../../../../adapters/configuration/nacos/nacos_test.go)
+[Public adapter tests](../../../../../../adapters/configuration/remote/nacos/nacos_test.go)
 exercise plaintext and TLS/authenticated reads, strict preparation, private
 diagnostics, absence/refusals, frozen declarations, concurrent bounds and cleanup.
 A blocked native TLS hook proves cancellation does not release admission while
 cleanup is pending; using the expired request context for Close fails that control.
 
-The [project fixture](../../../../../adapters/configuration/nacos/testdata/project)
+The [project fixture](../../../../../../adapters/configuration/remote/nacos/testdata/project)
 contains public declarations and a thin entry. Its
-[standalone executable test](../../../../../adapters/configuration/nacos/consumer_test.go)
+[standalone executable test](../../../../../../adapters/configuration/remote/nacos/consumer_test.go)
 runs against native loopback protocol servers. The framework's
-[independent module test](../../../../../framework/configuration/consumer_test.go)
+[independent module test](../../../../../../framework/configuration/consumer_test.go)
 separately builds/tests the remote consumer from an unreplaced file-proxy artifact
 and checks dependency isolation. Neither is new deployed-Nacos service acceptance.
 
-See the [project guide](../../../../development/load-project-configuration.md).
+See the [project guide](../../../../../development/load-project-configuration.md).

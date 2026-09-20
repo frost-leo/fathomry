@@ -34,7 +34,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/configuration/nacos"
+	"github.com/frost-leo/fathomry/adapters/configuration/remote/nacos"
 	"github.com/frost-leo/fathomry/framework/configuration"
 	wire "github.com/nacos-group/nacos-sdk-go/v2/api/grpc"
 	"google.golang.org/grpc"

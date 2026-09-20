@@ -60,7 +60,7 @@ func TestConsumerContract(t *testing.T) {
 	if again.Headers["Default"] != "kept" {
 		t.Fatal("consumer received shared mutable settings")
 	}
-	if loaded.Description().SchemaVersion != 1 || loaded.Description().Provider != "local" {
+	if loaded.Description().SchemaVersion != 1 || loaded.Description().Provider != "viper" {
 		t.Fatal("data schema and acquisition identity changed")
 	}
 }

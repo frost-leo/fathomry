@@ -122,6 +122,11 @@ type Request struct {
 	runtimeValue
 	Provider  Provider
 	Variables []Variable
+	// LookupVariable overrides named process lookup when non-nil. It is called
+	// once per distinct declared name, never for undeclared names. The caller
+	// owns its lifetime; it must be synchronous, stable and safe for intentional
+	// concurrent loads. No process environment is modified by the loader.
+	LookupVariable VariableLookup
 }
 
 // SourceInfo exposes only public source identity, layer and presence.
@@ -143,7 +148,24 @@ type Contribution struct {
 type VariableInfo struct {
 	Field   string
 	Present bool
+	// Source is a non-secret label for a present value, empty when absent.
+	Source string
 }
+
+// VariableValue is sensitive plain input, not a log or persistence projection.
+// Source uses the same non-secret label grammar as Document.Name. Absent values
+// must have empty Value and Source. The loader captures and validates each name
+// once; the lookup must not return mutable runtime handles or perform background work.
+type VariableValue struct {
+	runtimeValue
+	Value   string
+	Present bool
+	Source  string
+}
+
+// VariableLookup supplies a literal value and safe origin for one declared name.
+// A nil Request.LookupVariable uses the process environment with source "process".
+type VariableLookup func(name string) VariableValue
 
 // Description is detached, safe metadata, not a durable protocol.
 // Revision is an opaque preparation identity, not equality, authenticity or a Run

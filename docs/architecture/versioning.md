@@ -79,7 +79,7 @@ format; no universal version registry or migration engine is required.
 ## Implementation references
 
 The [public configuration capability](../reference/framework/configuration/interface.md)
-and [local adapter](../reference/adapters/configuration/local/interface.md) use
+and [local adapter](../reference/adapters/configuration/local/viper/interface.md) use
 ordinary Go API structs for schemas, requests, source documents, options and
 metadata. Module/API compatibility and independent consumer fixtures govern
 field/default/zero-value and error semantics; type/function version suffixes are

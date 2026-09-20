@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package local_test
+package viper_test
 
 import (
 	"bytes"
@@ -34,7 +34,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/frost-leo/fathomry/adapters/configuration/local"
+	local "github.com/frost-leo/fathomry/adapters/configuration/local/viper"
 	"github.com/frost-leo/fathomry/failure"
 	"github.com/frost-leo/fathomry/framework/configuration"
 )
@@ -107,7 +107,7 @@ func TestOptionalAbsenceIsNotInvalidContent(t *testing.T) {
 	}
 	assertEmpty(t, input)
 	occurrence, ok := failure.Inspect(err)
-	if !ok || !reflect.DeepEqual(occurrence.Diagnostic().Attributes, []failure.Attribute{{Name: "provider", Value: "local"}, {Name: "source", Value: "optional"}}) {
+	if !ok || !reflect.DeepEqual(occurrence.Diagnostic().Attributes, []failure.Attribute{{Name: "provider", Value: "viper"}, {Name: "source", Value: "optional"}}) {
 		t.Fatal("safe failure source missing")
 	}
 }

@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package local_test
+package viper_test
 
 import (
 	"context"
@@ -29,7 +29,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/configuration/local"
+	local "github.com/frost-leo/fathomry/adapters/configuration/local/viper"
 	"github.com/frost-leo/fathomry/framework/configuration"
 )
 

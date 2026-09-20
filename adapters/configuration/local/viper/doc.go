@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package local supplies the local-file Provider adapter for framework
+// Package viper supplies the local-file Provider adapter for framework
 // configuration loading. Projects declare literal file locations and layers;
 // the adapter owns acquisition and cleanup through the private Viper integration.
 // It exposes no Viper instance, resource factory, watcher or native error graph.
@@ -31,4 +31,4 @@
 // Symlinks follow normal OS behavior and selected files must remain stable during
 // acquisition. Cancellation cannot force a blocked filesystem or parser to stop.
 // No project discovery, environment expansion, directory scan or reload occurs.
-package local
+package viper
