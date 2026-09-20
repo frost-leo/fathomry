@@ -193,6 +193,7 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | --- | --- |
 | `failure` | Public semantic identity, immutable in-process occurrences, typed-detail extension and bounded optional diagnostics; no SDK, localization or runtime policy |
 | `framework/configuration` | Public configuration loading, project-data validation, immutable preparation and safe source explanation; no concrete Provider dependency |
+| `cmd/fathomry/internal/command/project` | Executable-private creation, templates and explicit SDK-bundle installation; not a public framework generator |
 | `adapters/configuration/local/viper` | Declarative local source selection and finite Viper acquisition, with public failures and owned file cleanup |
 | `adapters/configuration/local/dotenv` | Explicit bounded literal dotenv acquisition and isolated variable lookup; no process mutation or implicit discovery |
 | `adapters/configuration/remote/nacos` | Declarative remote bootstrap, finite native Nacos acquisition and joined transient cleanup; no watch or stale-cache substitution |

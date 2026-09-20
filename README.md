@@ -49,9 +49,11 @@ The public [configuration capability](docs/reference/framework/configuration/int
 now provides local or Nacos loading, explicit environment bindings, immutable
 prepared settings and safe source information through a selected Provider adapter.
 An independent Go consumer verifies the framework/project boundary.
-There is no production-qualified application runtime or project generator yet.
-The intended `fathomry new <project>` path remains future framework work, not
-business-owned assembly boilerplate.
+The [project creation command](docs/development/create-project.md) now generates
+independent configuration-capable projects with functional packages, explicit
+environment/Provider plans, opt-in dotenv and real public i18n settings.
+Generation is offline and command-owned; no production-qualified application
+runtime, Workflow scaffolding or business-owned private assembly is implied.
 
 An internal Nacos v2 configuration integration supplies raw reads, bounded
 invalidation subscriptions and owned protocol sessions. Its explicit compatibility

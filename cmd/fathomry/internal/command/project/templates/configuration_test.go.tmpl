@@ -1,0 +1,45 @@
+[[.GoNotice]]package configuration
+
+import (
+ "context"
+ "errors"
+ "testing"
+
+ "[[.Module]]/internal/resource"
+ framework "github.com/frost-leo/fathomry/framework/configuration"
+)
+
+func TestProjectSettings(t *testing.T){
+ prepared,err:=framework.LoadVariables(context.Background(),framework.Schema[resource.Config]{
+  SchemaVersion:resource.SchemaVersion,Defaults:resource.Defaults(),Validate:resource.Config.Validate,
+ },nil,nil)
+ if err!=nil{t.Fatal(err)}
+ value,err:=prepared.Value()
+ if err!=nil || value.I18n.DefaultLocale!="[[.DefaultLocale]]"{t.Fatal("feature defaults changed",err)}
+ value.I18n.DefaultLocale="changed"
+ copied,_:=prepared.Value()
+ if copied.I18n.DefaultLocale!="[[.DefaultLocale]]"{t.Fatal("configuration aliased caller data")}
+}
+
+func TestUnknownEnvironmentDoesNotAcquire(t *testing.T){
+ _,err:=Load(context.Background(),Options{Root:t.TempDir(),Environment:"undeclared",EnvFile:"missing.env"})
+ if !errors.Is(err,framework.InvalidInput){t.Fatal("undeclared environment was accepted")}
+ environments:=Environments()
+ environments[0]="mutated"
+ if Environments()[0]=="mutated"{t.Fatal("environment declarations are shared")}
+}
+
+func TestEnvironmentDeclarationsAreDistinct(t *testing.T){
+ names:=make(map[string]bool)
+ prefixes:=make(map[string]bool)
+ for _,declaration:=range declarations(){
+  prefix:=variablePrefix(declaration.Name)
+  if declaration.Name=="" || names[declaration.Name] || prefixes[prefix]{t.Fatal("environment declarations overlap")}
+  names[declaration.Name]=true
+  prefixes[prefix]=true
+  supported:=false
+  [[if .Local]]supported=supported || declaration.Mode=="local" && declaration.Provider=="viper"[[end]]
+  [[if .Remote]]supported=supported || declaration.Mode=="remote" && declaration.Provider=="nacos"[[end]]
+  if !supported{t.Fatal("environment selects an uncompiled provider")}
+ }
+}

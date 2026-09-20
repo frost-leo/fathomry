@@ -1,0 +1,61 @@
+[[.GoNotice]]package configuration
+
+import (
+ "context"
+
+ "[[.Module]]/internal/resource"
+ "github.com/frost-leo/fathomry/adapters/configuration/remote/nacos"
+ "github.com/frost-leo/fathomry/framework/configuration"
+)
+
+type bootstrap struct {
+ HTTPURL string `json:"http_url"`
+ GRPCAddress string `json:"grpc_address"`
+ Namespace string `json:"namespace"`
+ Group string `json:"group"`
+ BaseID string `json:"base_id"`
+ EnvironmentID string `json:"environment_id"`
+ LocalID string `json:"local_id"`
+ Username string `json:"username"`
+ Password string `json:"password"`
+ RootCAPEM string `json:"root_ca_pem"`
+ AllowInsecure bool `json:"allow_insecure"`
+}
+
+func remoteSource(ctx context.Context,options Options,lookup configuration.VariableLookup)(configuration.Provider,error){
+ prefix:=variablePrefix(options.Environment)+"NACOS_"
+ bindings:=[]configuration.Variable{
+  {Name:prefix+"HTTP_URL",Field:"/http_url",Required:true},
+  {Name:prefix+"GRPC_ADDRESS",Field:"/grpc_address",Required:true},
+  {Name:prefix+"NAMESPACE",Field:"/namespace"},
+  {Name:prefix+"GROUP",Field:"/group"},
+  {Name:prefix+"BASE_ID",Field:"/base_id"},
+  {Name:prefix+"ENVIRONMENT_ID",Field:"/environment_id"},
+  {Name:prefix+"LOCAL_ID",Field:"/local_id"},
+  {Name:prefix+"USERNAME",Field:"/username"},
+  {Name:prefix+"PASSWORD",Field:"/password"},
+  {Name:prefix+"ROOT_CA_PEM",Field:"/root_ca_pem"},
+  {Name:prefix+"ALLOW_INSECURE",Field:"/allow_insecure",Encoding:configuration.VariableJSON},
+ }
+ prepared,err:=configuration.LoadVariables(ctx,configuration.Schema[bootstrap]{
+  SchemaVersion:1,
+  Defaults:bootstrap{Group:"DEFAULT_GROUP",BaseID:"[[.Name]].base.yaml",
+   EnvironmentID:"[[.Name]]."+options.Environment+".yaml",LocalID:"[[.Name]]."+options.Environment+".local.yaml"},
+ },bindings,lookup)
+ if err!=nil{return nil,err}
+ values,err:=prepared.Value()
+ if err!=nil{return nil,err}
+ sources:=[]nacos.Source{
+  {Name:"base",Group:values.Group,DataID:values.BaseID,Layer:configuration.Base},
+  {Name:"environment",Group:values.Group,DataID:values.EnvironmentID,Layer:configuration.Environment},
+ }
+ if options.Local{
+  sources=append(sources,nacos.Source{Name:"local",Group:values.Group,DataID:values.LocalID,Layer:configuration.Local,Optional:true})
+ }
+ return nacos.New(nacos.Options{
+  SchemaVersion:resource.SchemaVersion,Namespace:values.Namespace,
+  Servers:[]nacos.Server{{HTTPURL:values.HTTPURL,GRPCAddress:values.GRPCAddress}},
+  Sources:sources,Username:values.Username,Password:values.Password,RootCAPEM:values.RootCAPEM,
+  AllowInsecure:values.AllowInsecure,
+ })
+}

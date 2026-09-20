@@ -1,0 +1,73 @@
+{
+  "license": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "profile": "fathomry.i18n/v1",
+  "locale": "zh-Hans",
+  "messages": [
+    {
+      "id": "fathomry.generated.help",
+      "source": "sha256:941ab1afbc540355ce6e9248552c842efb3ed1ac979abd9d0216d4196bfdbae0",
+      "forms": {
+        "other": "检查项目配置，不启动 Worker 或业务执行。\n\n用法：\n  {{.Project}} --environment <name> [--root <directory>] [--env-file <path>] [--local] [--lang <locale>]\n\n显式选择已声明环境。--root 默认为当前目录。\n--env-file 显式读取一个必需的字面量 dotenv 文件，不自动查找文件。\n--local 启用该环境的可选 Local 覆盖层。\n--lang 仅为本次调用覆盖项目语言；帮助与启动错误使用内置默认语言，\n不依赖配置加载。成功输出安全的 JSON 元数据和本地化结果，不输出配置值。"
+      }
+    },
+    {
+      "id": "fathomry.generated.error",
+      "source": "sha256:7225a730e27e34b2863276c7994324ae7c01998af62e4a0ec433de4cebfcfc1a",
+      "forms": {
+        "other": "配置检查失败：{{.Code}}"
+      }
+    },
+    {
+      "id": "fathomry.generated.valid",
+      "source": "sha256:a1956e750380d42f6f167290fe34aa4d90206719eb70476e3f760272f686fe2a",
+      "forms": {
+        "other": "配置检查通过。"
+      }
+    },
+    {
+      "id": "fathomry.generated.invalid_locale",
+      "forms": {
+        "other": "i18n.default_locale 或语言覆盖参数无效。请使用非空语言标签，并检查对应变量绑定；空的进程变量仍会覆盖 dotenv。错误码：{{.Code}}"
+      },
+      "source": "sha256:e1cfbaed2f984a1fd51f1bedb291357c435acc83b118c5d27147e42a13bf85ef"
+    },
+    {
+      "id": "fathomry.generated.invalid_input",
+      "forms": {
+        "other": "配置选择或启动声明无效。请按项目 README 检查已声明环境、命令参数及必需的启动输入。错误码：{{.Code}}"
+      },
+      "source": "sha256:a0157919c003a9967be260e952cd0629300813831478563798a4a81c83a3d3cc"
+    },
+    {
+      "id": "fathomry.generated.invalid_data",
+      "forms": {
+        "other": "配置内容无效。请检查 resource.Config 的字段名和类型、dotenv 语法及已声明的变量编码；不会使用部分配置。错误码：{{.Code}}"
+      },
+      "source": "sha256:a2ab80c23fb4dae4db58bbcad0c20ebc3f320631ab9f3ff10da75aa253fc2537"
+    },
+    {
+      "id": "fathomry.generated.unavailable",
+      "forms": {
+        "other": "无法读取必需的配置来源。请检查所选配置文档、显式 dotenv 文件或远程启动参数与访问权限；不会回退到本地或旧配置。错误码：{{.Code}}"
+      },
+      "source": "sha256:09e9a162a82b78af01f0e056e0addc753e38b2e45249ef420746a61974a768e9"
+    }
+  ]
+}

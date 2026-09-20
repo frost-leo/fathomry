@@ -24,6 +24,7 @@ import (
 	"io"
 
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/cli"
+	projectcmd "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project"
 	versioncmd "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/version"
 	"github.com/spf13/cobra"
 )
@@ -56,5 +57,6 @@ func New(call *cli.Invocation) *cobra.Command {
 		return versioncmd.Report(call, output)
 	}
 	call.Add(root, versioncmd.New(call), versioncmd.HelpID, versioncmd.SummaryID, versioncmd.Resources()...)
+	call.Add(root, projectcmd.New(call), projectcmd.HelpID, projectcmd.SummaryID, projectcmd.Resources()...)
 	return root
 }

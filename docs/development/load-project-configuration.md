@@ -104,8 +104,8 @@ prepared value. There is no generic automatic migration or code fingerprint.
 
 ## Framework and project boundaries
 
-Future project generation may reproduce the project's thin entry, public
-declarations, safe setting examples and checks. It must not copy private loading,
+[Project generation](create-project.md) produces a thin entry, public
+declarations, safe setting examples and checks. It does not copy private loading,
 resource ownership or SDK setup into generated source. A settings declaration
 is not an application initialization hook. Neither example implements a
 management-command host, source registry or Workflow execution.

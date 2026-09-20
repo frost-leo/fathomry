@@ -1,0 +1,172 @@
+[[.TextNotice]]# [[.Name]]
+
+An independent Go project using Fathomry [[.FrameworkVersion]]. This executable
+checks configuration and reports safe metadata with a localized result. It does
+not start a Worker, initialize services or execute business work.
+
+## Build and check
+
+Requires Go 1.27 or later and access to the selected Go module artifacts.
+Generation itself performs no network access or dependency download.
+For a remote environment, supply the bootstrap and documents described below
+before running its configuration check; building alone does not contact Nacos.
+
+```sh
+go mod tidy
+go test -race ./...
+go build -o bin/[[.Name]] ./cmd/[[.Name]]
+./bin/[[.Name]] --environment development
+```
+
+Run from this project root, or pass `--root /absolute/project/path`. No Git
+repository is initialized by generation. If an unrelated ancestor Git marker
+breaks Go's automatic VCS stamping, use `go build -buildvcs=false ...` or place
+the project in its intended repository; do not modify somebody else's Git state.
+
+## Explicit environment and source selection
+
+| Environment | Source kind | Provider |
+| --- | --- | --- |
+[[range .Environments]]| [[.Name]] | [[.Mode]] | [[.Provider]] |
+[[end]]
+Selection lives in `internal/configuration/sources.go`, not a runtime plugin
+registry. Change it as project-owned Go code. Only selected implementations are
+compiled. An unknown environment fails, never falls back to development.
+
+## Configuration declaration: start here
+
+`internal/resource/configuration.go` is the visible project configuration contract:
+`Config` declares fields, `Defaults()` declares initial choices, and `Validate()`
+checks pure rules. It composes the public `i18n.Settings` type without copying
+its implementation. This project-owned package is unrelated to Fathomry's private
+runtime resource machinery. It does not import loaders or adapters.
+
+| Application field | Type | Initial default | Rule |
+| --- | --- | --- | --- |
+| `i18n.default_locale` | string | `[[.DefaultLocale]]` | Nonempty language-script-region tag, <=64 bytes; unavailable translations fall back to English |
+
+`configs/base.yaml` shows every currently supported application field. Selected
+environment files override only changed fields; `{}` inherits base. Examples are
+editable project values, not a second implementation of framework defaults.
+
+To add a business setting, declare its field with an explicit `json` name in
+`resource.Config`, set any default in `Defaults()` and add necessary pure validation.
+Then supply its value in the desired environment document. No acquisition or
+Provider code changes are needed. To additionally permit a process/dotenv override,
+declare that binding in `internal/configuration/bindings.go`; this authorization
+is intentional, not automatic environment discovery.
+
+`internal/configuration` selects inputs and delegates loading into `resource.Config`.
+Add settings only for implemented public capabilities; do not copy private SDK
+options, connections or clients into the declaration.
+`internal/localization` owns embedded project resources. `cmd/[[.Name]]` is
+the thin process entry, not the owner of configuration acquisition.
+
+## Values, overrides and private dotenv files
+
+Precedence: typed defaults < base < selected environment < explicitly authorized
+local layer < declared variables. Variables prefer the process environment over
+the explicitly selected dotenv file, including an empty process value.
+
+```sh
+cp .env.development.example .env.development
+chmod 600 .env.development
+./bin/[[.Name]] --environment development --env-file .env.development
+```
+
+Edit copied values before using a remote environment. `.env.example` is the
+development example under a conventional filename. **No dotenv file is loaded
+automatically.** Production cannot silently inherit a developer's `.env`.
+Relative paths resolve from `--root`; absolute secret-mount paths are accepted.
+A selected missing, invalid or oversized file fails. Private dotenv files are
+ignored by Git, while examples contain no real credentials.
+
+Only environment-prefixed bindings in `bindings.go` and selected source bootstrap
+are consumed, for example `[[.Prefix]]_DEVELOPMENT_I18N_DEFAULT_LOCALE`.
+Other names are not implicitly applied. Every dotenv assignment must still be
+syntactically valid. Dotenv is literal KEY=VALUE input, not a shell script:
+no variable expansion, command substitution or process-environment mutation.
+Duplicate names fail; multiline values use double-quoted escapes such as `\n`.
+Process and dotenv origins appear in safe variable metadata without names/values.
+
+`--local` opts into the selected environment's optional Local layer. It is a
+precedence layer, not a request to switch a remote environment to local files.
+Missing optional input may be absent; invalid/denied/unavailable input still fails.
+
+[[if .Local]]### Local / Viper
+
+Local environments read `configs/base.yaml` and
+`configs/environments/<environment>.yaml`. The optional Local layer reads
+`configs/local/<environment>.yaml`. Copy the example before opting in.
+Files are explicit; no whole-directory scan or cross-environment merge occurs.
+[[end]]
+[[if .Remote]]### Remote / Nacos
+
+Remote environments use the bootstrap names in their dotenv examples, or matching
+process variables. HTTP and gRPC endpoints, credentials and TLS trust must be
+supplied before fetching application settings; they cannot come from Nacos itself.
+No file fallback, cached configuration, watch or implicit namespace inference exists.
+
+Default group is DEFAULT_GROUP. The base data ID is `[[.Name]].base.yaml`;
+environment ID is `[[.Name]].<environment>.yaml`; optional Local ID is
+`[[.Name]].<environment>.local.yaml`. Override through the explicit Nacos bindings
+in `sources_nacos.go`. Files in `configs/` are reviewed example content to publish
+through your authorized deployment process. This project never publishes them.
+
+The generated bootstrap supports one explicit server. Names below have prefix
+`[[.Prefix]]_<ENVIRONMENT>_NACOS_`; their full forms are in each remote dotenv example.
+
+| Suffix | Input and default |
+| --- | --- |
+| `HTTP_URL` | Required HTTP(S) authentication origin; no implicit endpoint discovery |
+| `GRPC_ADDRESS` | Required explicit host:port; not derived from HTTP |
+| `NAMESPACE` | Empty selects the native default namespace |
+| `GROUP` | `DEFAULT_GROUP` |
+| `BASE_ID` | `[[.Name]].base.yaml` |
+| `ENVIRONMENT_ID` | `[[.Name]].<environment>.yaml` |
+| `LOCAL_ID` | `[[.Name]].<environment>.local.yaml`, used only with `--local` |
+| `USERNAME`, `PASSWORD` | Both present or both absent; no real credentials in examples |
+| `ROOT_CA_PEM` | Explicit trust bundle, or empty for system roots |
+| `ALLOW_INSECURE` | JSON boolean, default false; true explicitly permits insecure transport |
+
+Other supported adapter options remain explicit Go declarations in `sources_nacos.go`,
+not hidden environment bindings. Add bindings deliberately if the project needs them.
+
+Setting HTTPS does not by itself secure the separate gRPC channel; provide trust
+and leave ALLOW_INSECURE=false outside explicitly authorized isolated testing.
+[[end]]
+## Internationalization
+
+Generated bootstrap language is [[.DefaultLocale]]. Effective
+`i18n.default_locale` selects project output after loading. `--lang` overrides
+one invocation without changing configuration; creation-tool `--lang` does not
+choose the generated project's default. English source and Chinese translations
+are embedded explicitly; valid unsupported languages use the existing English
+fallback. Help/startup failures need no local or remote configuration.
+
+## Configuration troubleshooting
+
+- Unknown environment or invalid declarations: check `sources.go`, command arguments
+  and the selected bootstrap example. A missing required variable is not a default.
+- Unavailable input: check required local documents, the explicitly selected dotenv
+  file, or the remote service, authentication and keys. There is no silent fallback.
+- Invalid data: check field names in `resource.Config`, types, literal dotenv syntax
+  and JSON encoding for non-text variable bindings. Overridden invalid input may
+  still be rejected; do not use a higher layer to hide malformed lower input.
+- Invalid locale: inspect `i18n.default_locale` and its selected variable binding;
+  an empty process value intentionally overrides a nonempty file value and fails.
+
+Failures preserve a stable code and provide localized guidance without printing
+private paths, variable names, credentials or raw parser/service diagnostics.
+
+## Patched dependencies and limits
+
+If a selected SDK bundle was supplied, `third_party/fathomry/manifest.json`
+records the version-bound sources and root `go.mod` has project-relative
+replacements. Preserve notices and provenance. Content hashes are not producer
+authentication, compatibility qualification or license clearance.
+`go mod verify` does not verify local replacement contents.
+
+This is editable source, not a managed project-regeneration engine. Do not rerun
+creation over this directory. Configuration success is not service readiness or
+a frozen Run fact; output is unversioned diagnostic metadata, never settings.
