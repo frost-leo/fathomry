@@ -1,0 +1,41 @@
+[[.GoNotice]]package configuration
+
+import (
+ "context"
+
+ "github.com/frost-leo/fathomry/framework/configuration"
+)
+
+type environmentSource struct {
+ Name string
+ Mode string
+ Provider string
+}
+
+// Declarations have one owner; environment validation and acquisition use this
+// same list. It is fresh data, not a mutable global or plugin registry.
+func declarations() []environmentSource {
+ return []environmentSource{
+  [[range .Environments]]{Name:"[[.Name]]",Mode:"[[.Mode]]",Provider:"[[.Provider]]"},
+  [[end]]
+ }
+}
+
+// Environments returns a detached list from the project's source declarations.
+func Environments() []string {
+ var names []string
+ for _,declaration:=range declarations(){names=append(names,declaration.Name)}
+ return names
+}
+
+func source(ctx context.Context, options Options, lookup configuration.VariableLookup)(configuration.Provider,error){
+ for _,declaration:=range declarations(){
+  if declaration.Name!=options.Environment{continue}
+  switch {
+  [[if .Local]]case declaration.Mode=="local" && declaration.Provider=="viper":return localSource(options)[[end]]
+  [[if .Remote]]case declaration.Mode=="remote" && declaration.Provider=="nacos":return remoteSource(ctx,options,lookup)[[end]]
+  default:return nil,configuration.InvalidInput
+  }
+ }
+ return nil,configuration.InvalidInput
+}

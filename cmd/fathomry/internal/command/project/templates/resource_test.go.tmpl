@@ -1,0 +1,18 @@
+[[.GoNotice]]package resource
+
+import (
+ "errors"
+ "testing"
+
+ "github.com/frost-leo/fathomry/i18n"
+)
+
+func TestConfigurationDeclaration(t *testing.T) {
+ defaults:=Defaults()
+ if defaults.I18n.DefaultLocale!="[[.DefaultLocale]]" || defaults.Validate()!=nil {
+  t.Fatal("project default declaration is invalid")
+ }
+ defaults.I18n.DefaultLocale=""
+ if !errors.Is(defaults.Validate(),i18n.InvalidLocale){t.Fatal("invalid feature configuration accepted")}
+ if Defaults().I18n.DefaultLocale!="[[.DefaultLocale]]"{t.Fatal("default declaration is shared mutable state")}
+}

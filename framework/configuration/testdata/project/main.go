@@ -27,7 +27,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/configuration/local"
+	local "github.com/frost-leo/fathomry/adapters/configuration/local/viper"
 	"github.com/frost-leo/fathomry/failure"
 	"github.com/frost-leo/fathomry/framework/configuration"
 )

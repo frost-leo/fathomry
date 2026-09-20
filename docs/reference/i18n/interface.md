@@ -47,6 +47,24 @@ coverage, production throughput, replay or historical output reconstruction.
 
 ## Prepare, render and retain provenance
 
+### Project configuration
+
+`Settings` is a pure, composable configuration type owned by this capability,
+not a copy of native renderer options. `DefaultSettings()` selects English.
+`Validate()` rejects empty, malformed or unsupported tag features;
+`Locale(override)` returns the canonical explicit override or configured default.
+An override does not hide an invalid default. Valid tags without a translation
+still follow the existing renderer's explicit English fallback contract.
+
+Projects compose this type with their own business settings, validate it before
+use, and pass the selected locale to `Catalog.Render`. It contains no live
+catalog, global registration or resource location. Resource composition remains
+explicit code. Bootstrap help/errors must use an available embedded default;
+reporting a configuration failure cannot depend on successfully reading that
+same remote configuration. See [settings tests](../../../i18n/settings_test.go).
+
+### Resource preparation
+
 1. Keep source/translation files in the owning project's reviewed version control.
    Supply explicit `Resource{Name, Data}` values, commonly using `embed.FS.ReadFile`.
 2. Call `Prepare` once for a complete composition. A failure returns no catalog;

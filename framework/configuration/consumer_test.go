@@ -142,11 +142,11 @@ func TestIndependentModuleArtifact(t *testing.T) {
 	run(goBinary, "build", "-race", "-mod=readonly", "-o", binary, ".")
 	configurationRoot := filepath.Join(directory, "settings")
 	write(filepath.Join(configurationRoot, "settings.yaml"), []byte("label: example\n"))
-	if output := run(binary, configurationRoot); output != "configuration loaded: provider=local schema=1\n" {
+	if output := run(binary, configurationRoot); output != "configuration loaded: provider=viper schema=1\n" {
 		t.Fatalf("unexpected standalone result: %q", output)
 	}
 	graph := run(goBinary, "list", "-mod=readonly", "-deps", "-f", "{{.ImportPath}}", "./...")
-	for _, required := range []string{module + "/framework/configuration", module + "/adapters/configuration/local", "github.com/spf13/viper"} {
+	for _, required := range []string{module + "/framework/configuration", module + "/adapters/configuration/local/viper", "github.com/spf13/viper"} {
 		if !slices.Contains(strings.Fields(graph), required) {
 			t.Fatalf("independent consumer did not exercise %s", required)
 		}
@@ -173,16 +173,16 @@ func TestIndependentModuleArtifact(t *testing.T) {
 	write(filepath.Join(consumer, "go.mod"), []byte("module example.org/remote\n\ngo 1.27.0\n\nrequire "+module+" "+version+"\n"))
 	write(filepath.Join(consumer, "go.sum"), read(filepath.Join(root, "go.sum")))
 	for _, name := range []string{"main.go", "main_test.go"} {
-		write(filepath.Join(consumer, name), read(filepath.Join(root, "adapters/configuration/nacos/testdata/project", name)))
+		write(filepath.Join(consumer, name), read(filepath.Join(root, "adapters/configuration/remote/nacos/testdata/project", name)))
 	}
 	t.Log(run(goBinary, "test", "-mod=mod", "-race", "-count=1", "-timeout=1m", "./..."))
 	run(goBinary, "build", "-mod=readonly", "-o", filepath.Join(consumer, "remote"), ".")
 	remoteGraph := strings.Fields(run(goBinary, "list", "-mod=readonly", "-deps", "-f", "{{.ImportPath}}", "./..."))
-	if !slices.Contains(remoteGraph, module+"/adapters/configuration/nacos") || !slices.Contains(remoteGraph, module+"/internal/configsource/nacos/v2") {
+	if !slices.Contains(remoteGraph, module+"/adapters/configuration/remote/nacos") || !slices.Contains(remoteGraph, module+"/internal/configsource/nacos/v2") {
 		t.Fatal("remote consumer did not select the Nacos path")
 	}
 	for _, name := range remoteGraph {
-		if strings.HasPrefix(name, module+"/adapters/configuration/local") || strings.HasPrefix(name, module+"/internal/configsource/viper/") ||
+		if strings.HasPrefix(name, module+"/adapters/configuration/local/viper") || strings.HasPrefix(name, module+"/internal/configsource/viper/") ||
 			strings.HasPrefix(name, "go.temporal.io/") || strings.HasPrefix(name, module+"/internal/database/") {
 			t.Fatalf("unrelated remote-consumer dependency: %s", name)
 		}

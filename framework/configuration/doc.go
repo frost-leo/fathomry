@@ -35,4 +35,8 @@
 // Local and Nacos adapters supply finite acquisition without changing preparation;
 // transient remote connections are owned and joined by the selected adapter.
 // Providers and validators are trusted cooperative Go code, not a sandbox.
+// LoadVariables supports typed bootstrap before constructing an acquisition
+// Provider. Request.LookupVariable permits isolated input such as an explicitly
+// selected dotenv file; nil preserves named process lookup. Only declared names
+// are captured and safe origin labels are retained, never names or values.
 package configuration

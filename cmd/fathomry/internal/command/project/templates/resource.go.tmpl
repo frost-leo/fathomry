@@ -1,0 +1,38 @@
+[[.GoNotice]]// Package resource declares this project's configuration data and pure rules.
+// It performs no configuration acquisition, environment lookup or resource setup.
+package resource
+
+import "github.com/frost-leo/fathomry/i18n"
+
+// SchemaVersion identifies this project's data format, not its software version.
+const SchemaVersion uint32 = 1
+
+// DefaultLocale supplies the project default, including pre-configuration help.
+// YAML and declared variables may override it after configuration is loaded.
+const DefaultLocale = "[[.DefaultLocale]]"
+
+// Config is the project's configuration contract. Extend it with business-owned
+// fields; use public feature settings instead of copying native SDK options.
+// Populated business fields may contain secrets; do not log the complete value.
+type Config struct {
+ // I18n configures presentation. YAML key i18n.default_locale is a nonempty
+ // language-script-region string; unsupported translations fall back to English.
+ // The initial variable binding is documented in README.md. No catalog lives here.
+ I18n i18n.Settings `json:"i18n"`
+}
+
+// Defaults returns independent data with the project's explicit initial choices.
+// Acquisition, overlays and process variables are deliberately absent.
+func Defaults() Config {
+ settings:=i18n.DefaultSettings()
+ settings.DefaultLocale=DefaultLocale
+ return Config{
+  I18n:settings,
+ }
+}
+
+// Validate checks feature and project invariants without I/O or mutation.
+// Returned errors are intentionally inspectable and must not contain private values.
+func (value Config) Validate() error {
+ return value.I18n.Validate()
+}

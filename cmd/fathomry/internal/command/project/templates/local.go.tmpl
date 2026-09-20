@@ -1,0 +1,20 @@
+[[.GoNotice]]package configuration
+
+import (
+ "path/filepath"
+
+ "[[.Module]]/internal/resource"
+ "github.com/frost-leo/fathomry/adapters/configuration/local/viper"
+ "github.com/frost-leo/fathomry/framework/configuration"
+)
+
+func localSource(options Options)(configuration.Provider,error){
+ files:=[]viper.File{
+  {Name:"base",Path:"base.yaml",Layer:configuration.Base},
+  {Name:"environment",Path:"environments/"+options.Environment+".yaml",Layer:configuration.Environment},
+ }
+ if options.Local{
+  files=append(files,viper.File{Name:"local",Path:"local/"+options.Environment+".yaml",Layer:configuration.Local,Optional:true})
+ }
+ return viper.New(viper.Options{Root:filepath.Join(options.Root,"configs"),SchemaVersion:resource.SchemaVersion,Files:files})
+}

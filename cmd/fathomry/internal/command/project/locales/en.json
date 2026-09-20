@@ -1,0 +1,113 @@
+{
+  "license": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "profile": "fathomry.i18n/v1",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.cli.new.summary",
+      "description": "Project command message: summary.",
+      "parameters": {},
+      "forms": {
+        "other": "Create an independent configuration-capable Go project"
+      }
+    },
+    {
+      "id": "fathomry.cli.new.help",
+      "description": "Project command message: help.",
+      "parameters": {},
+      "forms": {
+        "other": "Create an independent configuration-capable Go project.\n\nUsage:\n  fathomry new <name> --module <module-path> [options]\n\nOptions:\n  --directory <parent>         Existing destination parent (default .)\n  --framework-version <ver>    Exact framework module version; required for development builds\n  --configuration local|remote Default source kind (default local)\n  --provider viper|nacos       Provider for that kind (default viper/nacos respectively)\n  --environment-source <name>=<kind>/<provider>\n                              Override one declared environment; repeat for other environments\n  --default-locale en|zh-Hans  Generated project default language (default en)\n  --sdk-bundle <directory>     Explicit version-bound local SDK bundle\n  --lang <locale>             Creation-tool output language only\n\nEnvironments are development, test and production. For example, keep local\nViper for development and use --environment-source production=remote/nacos.\nGenerated dotenv examples require explicit --env-file selection at runtime.\nGeneration creates source only, without downloads, Git initialization or service access."
+      }
+    },
+    {
+      "id": "fathomry.cli.new.created",
+      "description": "Project command message: created.",
+      "parameters": {
+        "Name": {
+          "type": "string",
+          "description": "Validated public name."
+        },
+        "Module": {
+          "type": "string",
+          "description": "Validated public module."
+        },
+        "Provider": {
+          "type": "string",
+          "description": "Validated public provider."
+        },
+        "Version": {
+          "type": "string",
+          "description": "Validated public version."
+        }
+      },
+      "forms": {
+        "other": "Created {{.Name}} ({{.Module}}).\nDeclared default source: {{.Provider}}; see README for per-environment selections.\nFramework dependency: {{.Version}}\nGeneration does not download dependencies or start services. Follow the generated README to build and check configuration."
+      }
+    },
+    {
+      "id": "fathomry.project.invalid_input",
+      "description": "Project command message: invalid_input.",
+      "parameters": {},
+      "forms": {
+        "other": "Invalid project declaration. Check the module, version, provider and destination."
+      }
+    },
+    {
+      "id": "fathomry.project.exists",
+      "description": "Project command message: exists.",
+      "parameters": {},
+      "forms": {
+        "other": "The project destination already exists; nothing was overwritten."
+      }
+    },
+    {
+      "id": "fathomry.project.unavailable",
+      "description": "Project command message: unavailable.",
+      "parameters": {},
+      "forms": {
+        "other": "Project files could not be accessed or written."
+      }
+    },
+    {
+      "id": "fathomry.project.invalid_bundle",
+      "description": "Project command message: invalid_bundle.",
+      "parameters": {},
+      "forms": {
+        "other": "The SDK bundle, snapshot content or consuming replacements are invalid."
+      }
+    },
+    {
+      "id": "fathomry.project.incomplete",
+      "description": "Project command message: incomplete.",
+      "parameters": {},
+      "forms": {
+        "other": "Project creation is incomplete. The newly created directory remains; inspect it before retrying."
+      }
+    },
+    {
+      "id": "fathomry.project.cancelled",
+      "description": "Project command message: cancelled.",
+      "parameters": {},
+      "forms": {
+        "other": "Project creation was cancelled. Cancellation does not remove created files."
+      }
+    }
+  ]
+}

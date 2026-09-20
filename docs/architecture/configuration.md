@@ -126,7 +126,7 @@ queries. It is not an assembled business-resource Provider or frozen preparation
 The [public configuration capability](../reference/framework/configuration/interface.md)
 now owns a finite local-loading path through a selected adapter. It preserves
 the preparation contract and captures only explicitly bound environment values.
-The [Nacos adapter](../reference/adapters/configuration/nacos/interface.md) uses the
+The [Nacos adapter](../reference/adapters/configuration/remote/nacos/interface.md) uses the
 same preparation contract for finite remote reads, with explicit earlier bootstrap
 and owned transient cleanup. It does not supply a common-time remote snapshot.
 Reload/rotation handoff remains unimplemented and
@@ -135,6 +135,40 @@ must not retroactively relabel settings
 already used by in-flight work or weaken its execution constraints.
 
 ## Implementation references
+
+### Generated project composition
+
+The implemented [creation command](../development/create-project.md) separates
+source kind (local/remote), concrete implementation (Viper/Nacos), deployment
+environment and precedence layer. Category directories do not add interfaces;
+the public loader remains independent of every adapter. Explicit project-owned
+source declarations permit development and production to use different Providers
+in one binary, without implicit mixed-source merging or failure fallback.
+
+Bootstrap inputs locate configuration before it can be loaded. The generated
+project's `internal/resource` declares types, defaults and pure validation; its
+`internal/configuration` selects sources and loads those types, never the reverse.
+This declaration module is not the framework's existing private resource/lifecycle
+package. Project-owned data composes pure settings owned by public capabilities, initially
+`i18n.Settings`, alongside business fields. Runtime handles never enter those
+structs. New capabilities supply their own real public contracts before generation
+offers them; a private SDK integration alone does not justify generated settings.
+This avoids both one unbounded framework settings object and every project
+reimplementing infrastructure. No global mutable settings or plugin registry is added.
+
+Dotenv is explicit bounded acquisition, not shell execution or mutation of the
+process environment. Process variables override file values, including empty
+values. Only declared environment-prefixed bindings reach preparation. There is
+no automatic `.env` search that can leak development inputs into production.
+Remote acquisition failures remain errors, not permission to read local fallback.
+Help and startup-error language are available before remote loading; effective
+project language is applied after valid settings exist.
+
+See the [dotenv contract](../reference/adapters/configuration/local/dotenv/interface.md)
+and [public i18n settings](../reference/i18n/interface.md#project-configuration).
+Same-binary local/remote selection, typed business-schema extensions, literal
+dotenv precedence and real localized output are exercised by independent generated
+consumers. These checks do not establish production-service readiness.
 
 [Resource interface](../reference/internal/resource/interface.md) and [configuration contract](../reference/internal/resource/configuration.md).
 

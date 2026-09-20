@@ -33,7 +33,7 @@ type variableInput struct {
 	info []VariableInfo
 }
 
-func prepareVariables[T any](bindings []Variable) (variableInput, error) {
+func prepareVariables[T any](bindings []Variable, lookup VariableLookup) (variableInput, error) {
 	fail := func() (variableInput, error) {
 		return variableInput{}, problem(InvalidInput)
 	}
@@ -96,40 +96,42 @@ func prepareVariables[T any](bindings []Variable) (variableInput, error) {
 		}
 		paths[index] = path
 	}
-	type captured struct {
-		value   string
-		present bool
+	if lookup == nil {
+		lookup = ProcessVariable
 	}
-	captures := make(map[string]captured)
+	captures := make(map[string]VariableValue)
 	values := make(map[string]any)
 	result := variableInput{}
 	total := 0
 	for index, binding := range bindings {
 		item, exists := captures[binding.Name]
 		if !exists {
-			item.value, item.present = os.LookupEnv(binding.Name)
+			item = lookup(binding.Name)
 			captures[binding.Name] = item
 		}
-		result.info = append(result.info, VariableInfo{Field: strings.Clone(binding.Field), Present: item.present})
-		if !item.present {
+		if item.Present && !validLabel(item.Source) || !item.Present && (item.Value != "" || item.Source != "") {
+			return fail()
+		}
+		result.info = append(result.info, VariableInfo{Field: strings.Clone(binding.Field), Present: item.Present, Source: strings.Clone(item.Source)})
+		if !item.Present {
 			if binding.Required {
 				return fail()
 			}
 			continue
 		}
-		if len(item.value) > MaxDocumentBytes-total {
+		if len(item.Value) > MaxDocumentBytes-total {
 			return variableInput{}, problem(LimitExceeded)
 		}
-		total += len(item.value)
-		if !utf8.ValidString(item.value) {
+		total += len(item.Value)
+		if !utf8.ValidString(item.Value) {
 			return fail()
 		}
-		var value any = item.value
+		var value any = item.Value
 		if binding.Encoding == VariableJSON {
-			if !json.Valid([]byte(item.value)) {
+			if !json.Valid([]byte(item.Value)) {
 				return fail()
 			}
-			value = json.RawMessage(item.value)
+			value = json.RawMessage(item.Value)
 		}
 		target := values
 		path := paths[index]
@@ -168,4 +170,15 @@ func validVariableName(value string) bool {
 		}
 	}
 	return true
+}
+
+// ProcessVariable reads one exact process variable, preserving explicit empty
+// values. Callers must keep the environment stable during a load when a coherent
+// view is needed; this is not an atomic process-environment snapshot.
+func ProcessVariable(name string) VariableValue {
+	value, present := os.LookupEnv(name)
+	if !present {
+		return VariableValue{}
+	}
+	return VariableValue{Value: value, Present: true, Source: "process"}
 }

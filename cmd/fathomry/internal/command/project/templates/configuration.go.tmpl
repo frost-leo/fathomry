@@ -1,0 +1,47 @@
+[[.GoNotice]]// Package configuration loads the configuration declared by resource.
+package configuration
+
+import (
+ "context"
+ "path/filepath"
+ "slices"
+
+ "[[.Module]]/internal/resource"
+ "github.com/frost-leo/fathomry/adapters/configuration/local/dotenv"
+ framework "github.com/frost-leo/fathomry/framework/configuration"
+)
+
+// Options selects one declared environment and optional explicit private inputs.
+// Relative EnvFile paths resolve from Root. An empty EnvFile reads no dotenv file.
+type Options struct {
+ Root string
+ Environment string
+ EnvFile string
+ Local bool
+}
+
+// Load delegates acquisition, validation and immutable publication to Fathomry.
+// Local overrides are opt-in and environment-scoped. No resources are initialized.
+func Load(ctx context.Context, options Options)(framework.Configuration[resource.Config],error){
+ if ctx==nil || options.Root=="" || !slices.Contains(Environments(),options.Environment){
+  return framework.Configuration[resource.Config]{},framework.InvalidInput
+ }
+ root,err:=filepath.Abs(options.Root)
+ if err!=nil{return framework.Configuration[resource.Config]{},framework.InvalidInput}
+ options.Root=root
+ var lookup framework.VariableLookup
+ if options.EnvFile!=""{
+  path:=options.EnvFile
+  if !filepath.IsAbs(path){path=filepath.Join(root,path)}
+  values,err:=dotenv.ReadFile(ctx,filepath.Clean(path))
+  if err!=nil{return framework.Configuration[resource.Config]{},err}
+  lookup=values.LookupWithProcess
+ }
+ provider,err:=source(ctx,options,lookup)
+ if err!=nil{return framework.Configuration[resource.Config]{},err}
+ return framework.Load(ctx,framework.Schema[resource.Config]{
+  SchemaVersion:resource.SchemaVersion,Defaults:resource.Defaults(),Validate:resource.Config.Validate,
+ },framework.Request{
+  Provider:provider,Variables:variables(options.Environment),LookupVariable:lookup,
+ })
+}

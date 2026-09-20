@@ -22,15 +22,16 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Executable-private package reference
 
 **Audience:** maintainers adding approved Fathomry executable commands.
-**Status:** implemented root/help/version composition only; no query, control, generator or application runtime.
+**Status:** implemented root/help/version/new composition; no query, control or application runtime.
 **Package:** `github.com/frost-leo/fathomry/cmd/fathomry/internal/root`.
 
 `Run` delegates process-independent execution to [CLI mechanics](../cli/interface.md).
 `New` constructs a fresh root with explicit `--lang`, root-local `--version` and
 version-only `--output`, then registers the real
-[version command package](../command/version/interface.md). It opens no
+[version command package](../command/version/interface.md) and
+[project creation command](../command/project/interface.md). Construction opens no
 configuration, network connection or Provider. `main` owns OS streams/signals
-and final exit. The dependency direction is `main → root → cli + command/version`;
+and final exit. The dependency direction is `main → root → cli + command packages`;
 the common CLI mechanics package never imports a concrete command. A separate,
 test-only nested command package proves independent registration, help,
 execution-time acquisition and cleanup without shipping a placeholder query.
@@ -46,8 +47,9 @@ semantics, and `--` ends option parsing. Unknown root or group command names
 remain usage errors even when followed by `--help`; visible command groups
 derive their child list from the registered tree.
 
-When adding a later command family, first establish its public framework
-operation and evidence contract in its own approved issue. Give the family a
+When adding a later runtime command family, first establish its public framework
+operation and evidence contract in its own approved issue. Creation is command-owned
+tooling, not a public framework operation. Give each family a
 cohesive private package that owns typed options, help resources, output schema
 and lazy dependency/cleanup behavior; register it explicitly in `New`. Do not
 put its business/query semantics in `cli`, create a global service locator or

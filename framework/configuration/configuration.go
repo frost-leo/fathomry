@@ -90,7 +90,7 @@ func Load[T any](ctx context.Context, schema Schema[T], request Request) (Config
 	if err := checkContext(ctx); err != nil {
 		return fail(err)
 	}
-	variables, err := prepareVariables[T](request.Variables)
+	variables, err := prepareVariables[T](request.Variables, request.LookupVariable)
 	if err != nil {
 		return fail(err)
 	}

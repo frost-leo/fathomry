@@ -95,20 +95,28 @@ local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 The public [failure contract](reference/failure/interface.md) provides extensible
 semantic identity, immutable occurrences, typed-detail extension and bounded
 optional diagnostics. It is a new limited contract, not the withdrawn API or a
-public execution capability. No project generator,
-production-qualified application runtime or Run/Item model is supplied. The intended
-`fathomry new <project>` entry is not runnable. Business authors are not expected to
+public execution capability. No production-qualified application runtime or Run/Item
+model is supplied. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
 
 The public [framework configuration capability](reference/framework/configuration/interface.md)
 adds finite loading with public input contracts, explicit source/environment selection,
 strict preparation, immutable values and safe source information. Its
-[local adapter](reference/adapters/configuration/local/interface.md) preserves original
+[local adapter](reference/adapters/configuration/local/viper/interface.md) preserves original
 Viper-acquired bytes and owns file cleanup. An [independent project example](development/load-project-configuration.md)
-uses the public path without private assembly. The [Nacos adapter](reference/adapters/configuration/nacos/interface.md)
+uses the public path without private assembly. The [Nacos adapter](reference/adapters/configuration/remote/nacos/interface.md)
 adds finite remote reads with explicit bootstrap, authentication and owned cleanup.
 Data schema versions remain separate from module/API compatibility; no reload,
-mixed-source aggregation or generator is provided.
+mixed-source aggregation is provided. The
+[dotenv helper](reference/adapters/configuration/local/dotenv/interface.md) adds
+explicit literal file input without process-environment mutation.
+
+The [project creation command](development/create-project.md) generates one
+independent business module with separate resource declarations, configuration
+loading and localization packages,
+per-environment source plans and selected dependencies. Public feature-owned
+settings are composed with project data; dotenv and language overrides have
+explicit precedence. It does not generate unimplemented service placeholders.
 
 The public [i18n foundation](reference/i18n/interface.md) prepares bounded external
 English/translation resources and renders plain text with explicit locale/fallback,
@@ -122,8 +130,8 @@ software identity from precedence, native application/framework/dependency build
 facts and validated application declarations. Its [injection contract](reference/version/injection.md)
 requires actual artifact read-back; optional [presentation](reference/version/presentation/interface.md)
 uses existing i18n resources. The [offline CLI](reference/cmd/fathomry/internal/root/interface.md)
-now consumes those contracts for help and software-version reporting; no
-project generator, business runtime or release pipeline is supplied.
+now consumes those contracts for help and software-version reporting, alongside
+command-owned project creation; no business runtime or release pipeline is supplied.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
@@ -234,6 +242,7 @@ current internal safeguards and their limits.
 
 | Your task | Start here |
 | --- | --- |
+| Create a configuration-capable independent project | [Project creation](development/create-project.md) |
 | Define, inspect or extend a public failure | [Public failure contract](reference/failure/interface.md) |
 | Prepare and render business-owned localized resources | [Public i18n contract](reference/i18n/interface.md) |
 | Inspect software/build versions or inject application declarations | [Public version contract](reference/version/interface.md) |
