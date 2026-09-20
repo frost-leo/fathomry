@@ -27,6 +27,8 @@
 // resource I/O, global registration or background work. Callers must not mutate
 // resource bytes during Prepare or argument maps during Render. Localized text
 // is not escaped for HTML, terminals or notification channels.
+// Settings supplies pure project-owned default-locale data with validation and
+// explicit invocation override selection; it never loads a catalog or globals.
 //
 // Resource profile, message contracts, source fingerprints, resource snapshots
 // and actual renderer builds are separate compatibility axes. This package does
