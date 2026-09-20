@@ -32,6 +32,9 @@ func options() OptionsV1 {
 }
 func TestOptionsDefaultsBoundsAndCopies(t *testing.T) {
 	input := options()
+	if err := ValidateOptions(input); err != nil {
+		t.Fatal("valid bootstrap refused before construction", err)
+	}
 	value, _, err := prepareOptions(input)
 	if err != nil || value.Keys[0].Group != "DEFAULT_GROUP" || value.Timeout != 10*time.Second || value.Active != 4 {
 		t.Fatal("defaults changed", err)
@@ -53,6 +56,9 @@ func TestOptionsDefaultsBoundsAndCopies(t *testing.T) {
 	for index, change := range cases {
 		input := options()
 		change(&input)
+		if err := ValidateOptions(input); err == nil {
+			t.Fatalf("invalid bootstrap validation succeeded at case %d", index)
+		}
 		if _, _, err := prepareOptions(input); err == nil {
 			t.Fatalf("invalid bootstrap accepted at case %d", index)
 		}

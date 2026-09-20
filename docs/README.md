@@ -105,8 +105,10 @@ adds finite loading with public input contracts, explicit source/environment sel
 strict preparation, immutable values and safe source information. Its
 [local adapter](reference/adapters/configuration/local/interface.md) preserves original
 Viper-acquired bytes and owns file cleanup. An [independent project example](development/load-project-configuration.md)
-uses the public path without private assembly. Data schema versions remain separate
-from module/API compatibility; no remote loading, reload or generator is provided.
+uses the public path without private assembly. The [Nacos adapter](reference/adapters/configuration/nacos/interface.md)
+adds finite remote reads with explicit bootstrap, authentication and owned cleanup.
+Data schema versions remain separate from module/API compatibility; no reload,
+mixed-source aggregation or generator is provided.
 
 The public [i18n foundation](reference/i18n/interface.md) prepares bounded external
 English/translation resources and renders plain text with explicit locale/fallback,

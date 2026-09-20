@@ -46,11 +46,10 @@ declarations, with optional resource-first presentation—not business versionin
 or a release pipeline. The [offline CLI](docs/development/build-cli.md) now
 provides help and `version`/`--version` in text or CLI-owned JSON.
 The public [configuration capability](docs/reference/framework/configuration/interface.md)
-now provides local loading, explicit environment bindings, immutable
+now provides local or Nacos loading, explicit environment bindings, immutable
 prepared settings and safe source information through a selected Provider adapter.
 An independent Go consumer verifies the framework/project boundary.
-There is no production-qualified application runtime, project generator or public
-remote configuration loader yet.
+There is no production-qualified application runtime or project generator yet.
 The intended `fathomry new <project>` path remains future framework work, not
 business-owned assembly boilerplate.
 
@@ -100,7 +99,7 @@ Start with the [documentation map](docs/README.md) for current status and readin
 - [Offline CLI](docs/reference/cmd/fathomry/internal/root/interface.md):
   command composition, execution, language and output boundaries.
 - [Framework configuration](docs/reference/framework/configuration/interface.md):
-  local loading and explicit data-schema compatibility, with an [independent project example](docs/development/load-project-configuration.md).
+  local/remote loading and explicit data-schema compatibility, with [independent project examples](docs/development/load-project-configuration.md).
 - [Internal package reference](docs/README.md#internal-package-reference): each
   package's `interface.md` contract and detailed topics.
 - [Development guides](docs/README.md#development-guides): SDK integration, testing

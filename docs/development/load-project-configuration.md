@@ -21,7 +21,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 [Documentation](../README.md) / Development
 
-**Audience:** developers using the current local configuration capability.
+**Audience:** developers using the current local or Nacos configuration capability.
 **Status:** real public loading example; no generated project, Worker or service initialization.
 
 The [project fixture](../../framework/configuration/testdata/project) is a small
@@ -54,6 +54,36 @@ consumer compatibility tests and executes the resulting program. Cached dependen
 archives are supplied through file-only proxies; registry network is disabled.
 This establishes consumer feasibility, not public release installation.
 
+## Select remote configuration instead
+
+The [Nacos project fixture](../../adapters/configuration/nacos/testdata/project)
+uses the same framework loader and a different public Provider. It declares
+one required base document; no native client, watch or Close method enters the
+business program. The [adapter contract](../reference/adapters/configuration/nacos/interface.md)
+defines bootstrap bounds, optionality, TLS/authentication and cleanup semantics.
+
+From the repository root with Go 1.27 selected, run only against explicitly
+authorized endpoints and keys. This command performs remote reads and, when
+selected, authentication; it does not publish or delete remote configuration:
+
+```sh
+go run ./adapters/configuration/nacos/testdata/project \
+  "$HTTP_URL" "$GRPC_ADDRESS" "$NACOS_NAMESPACE" "$NACOS_DATA_ID"
+```
+
+The example reads only the explicitly named bootstrap environment variables
+FATHOMRY_EXAMPLE_NACOS_USERNAME, FATHOMRY_EXAMPLE_NACOS_PASSWORD and
+FATHOMRY_EXAMPLE_NACOS_ROOT_CA_PEM. Empty credentials select no login; empty trust
+uses system roots. TLS is required unless FATHOMRY_EXAMPLE_NACOS_INSECURE is exactly
+true, an explicit plaintext test profile. Do not put credentials in command arguments
+or committed example files. Bootstrap is available before the remote settings;
+the loaded document cannot choose a new endpoint or expand its own access rights.
+
+The independent module test also compiles and tests these public declarations
+without a source replacement. A separate standalone executable test performs
+successful authenticated/TLS reads against native loopback protocol servers.
+This is not fresh external-Nacos deployment or production qualification.
+
 ## Changing structures without silently changing existing projects
 
 The fixture keeps its consumer declarations and behavioral expectations.
@@ -77,8 +107,8 @@ prepared value. There is no generic automatic migration or code fingerprint.
 Future project generation may reproduce the project's thin entry, public
 declarations, safe setting examples and checks. It must not copy private loading,
 resource ownership or SDK setup into generated source. A settings declaration
-is not an application initialization hook. The current example does not implement
-a management-command host, source registry, remote loading or Workflow execution.
+is not an application initialization hook. Neither example implements a
+management-command host, source registry or Workflow execution.
 
 See the [public contract](../reference/framework/configuration/interface.md)
 for explicit environment conversion, diagnostics, ownership and unsupported

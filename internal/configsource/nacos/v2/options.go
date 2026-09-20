@@ -158,6 +158,14 @@ type settings struct {
 	Queue         int           `json:"queue"`
 }
 
+// ValidateOptions checks bootstrap without creating a client or doing I/O.
+// Input is borrowed only during validation; success does not freeze caller storage
+// or prove service readiness. Open repeats validation and freezes its own copy.
+func ValidateOptions(input OptionsV1) error {
+	_, _, err := prepareOptions(input)
+	return err
+}
+
 // prepareOptions validates the complete selection before construction and clones
 // retained caller data. Preparing TLS trust does not establish server identity.
 func prepareOptions(input OptionsV1) (settings, *tls.Config, error) {

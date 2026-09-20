@@ -22,8 +22,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../README.md) / Public framework capability
 
 **Audience:** independent business projects and configuration-adapter maintainers.
-**Status:** implemented finite local-loading path; no application runtime, generator,
-remote loading, reload or durable configuration protocol.
+**Status:** implemented finite local/Nacos loading; no application runtime, generator,
+reload, mixed-source aggregation or durable configuration protocol.
 **Package:** `github.com/frost-leo/fathomry/framework/configuration`.
 
 ## Responsibilities and use
@@ -31,7 +31,8 @@ remote loading, reload or durable configuration protocol.
 `Load` accepts a project-owned `Schema[T]` and `Request`, obtains original
 documents from an explicitly selected `Provider`, and prepares one immutable
 `Configuration[T]`. The [local adapter](../../adapters/configuration/local/interface.md)
-provides file acquisition. Projects declare their schema, files and permitted
+provides file acquisition; the [Nacos adapter](../../adapters/configuration/nacos/interface.md)
+provides remote acquisition and owned cleanup. Projects declare their schema, sources and permitted
 environment bindings; they do not construct SDKs, resource factories or evidence
 receivers. The framework package imports no concrete Provider or adapter.
 
@@ -105,6 +106,10 @@ withheld by the local adapter; selected safe filesystem categories remain
 inspectable. Unclassified custom-Provider errors become Unavailable without
 exposing their native cause. Provider-supplied public failure occurrences retain
 their declared identity and deliberate cause contract.
+
+The Nacos adapter retains safe Missing/Denied causes under Unavailable, rather
+than leaking native remote errors. These optional inspection identities do not
+change the local adapter's existing filesystem-cause contract.
 
 Caller cancellation causes and the project's explicitly supplied validation error
 remain deliberate public inspection data. Printing the outer failure stays safe;
