@@ -24,9 +24,6 @@
 // # Preparation and resource ownership
 //
 // Use [Prepare] to validate and freeze a [Schema] and [Input] before construction.
-// [PrepareData] reuses preparation without source identity for framework data;
-// it cannot grant resource selection. [Prepared.Copy] returns an independent,
-// potentially sensitive settings value rather than diagnostic metadata.
 // [Select] preserves the exact settings/capability types; [WithLimits] attaches
 // admission policy to that selection. [Assemble] receives separate initialization
 // and cleanup contexts and validates the selection set before running factories.

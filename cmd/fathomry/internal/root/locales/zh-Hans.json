@@ -1,9 +1,0 @@
-{
-  "license": ["fathomry", "Copyright (C) 2026  Frost Leo", "SPDX-License-Identifier: GPL-3.0-or-later", "", "This program is free software: you can redistribute it and/or modify", "it under the terms of the GNU General Public License as published by", "the Free Software Foundation, either version 3 of the License, or", "(at your option) any later version.", "", "This program is distributed in the hope that it will be useful,", "but WITHOUT ANY WARRANTY; without even the implied warranty of", "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the", "GNU General Public License for more details.", "", "You should have received a copy of the GNU General Public License", "along with this program. If not, see <http://www.gnu.org/licenses/>."],
-  "profile": "fathomry.i18n/v1",
-  "locale": "zh-Hans",
-  "messages": [
-    {"id":"fathomry.cli.root.header","source":"sha256:ad76d9037f0175c17dfeaba442c806c42039e18a150cd95326c4e96f8a98f04b","forms":{"other":"Fathomry — 持久、可观测的数据工作流。\n\n用法：\n  fathomry [选项]\n  fathomry [命令]\n\n可用命令："}},
-    {"id":"fathomry.cli.root.footer","source":"sha256:6f423edccfc8f24da5acb446a88834ea93042ecd59e7ee3848357a68e8a2ca0d","forms":{"other":"\n选项：\n  -h, --help            显示帮助\n      --lang string     输出语言（默认 en）\n      --version         显示本地软件与构建信息\n      --output string   版本输出：text 或 json（需要 --version）\n\n使用 fathomry help 命令名 查看该命令的选项。"}}
-  ]
-}

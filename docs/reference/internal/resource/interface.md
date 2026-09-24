@@ -34,7 +34,6 @@ bootstrap code or a public Provider SDK. See [package boundaries](../../../archi
 | Surface | Calling contract |
 | --- | --- |
 | `Schema`, `Input`, `Prepare`, `Prepared` | Validate/freeze explicitly supplied settings before acquiring resources |
-| `PrepareData`, `Prepared.Copy` | Reuse preparation for source-neutral data with independent value copies; no resource construction authority |
 | `Select`, `WithLimits` | Keep the exact typed token and attach a policy before construction |
 | `Assemble`, `Factory`, `Resource` | Use separate initialization/cleanup contexts; report acquired cleanup responsibility even on error |
 | `Bind`, `AccessFor`, `Access` | `Bind` returns the capability; `AccessFor` supplies scoped admission; `Bind` alone does not wrap SDK methods |
@@ -43,12 +42,6 @@ bootstrap code or a public Provider SDK. See [package boundaries](../../../archi
 | `Snapshot`, `Close`, `ReleaseResult` | Observe/discharge responsibility without inventing completion |
 
 ### Preparation before construction
-
-`PrepareData` uses the same engine without inventing a Provider/source identity.
-Its description has an empty Identity; resource selection preflight rejects it
-before any factory runs. This is consumed by the public framework configuration
-boundary, not an alias exposing internal types. `Prepared.Copy` deliberately
-returns potentially sensitive plain data, distinct from safe metadata.
 
 1. Define a Provider-owned `Schema[T]`: configuration format, typed defaults, and
    pure semantic validation. Resolve and authorize secrets in outer composition.

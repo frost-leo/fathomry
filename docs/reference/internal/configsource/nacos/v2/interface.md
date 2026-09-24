@@ -47,8 +47,7 @@ Temporal commands.
 
 ## Call sequence and ownership
 
-1. Resolve `OptionsV1` outside Nacos. `ValidateOptions` checks declarations without
-   I/O or a client and does not freeze caller storage. `Open` validates and freezes it before
+1. Resolve `OptionsV1` outside Nacos. `Open` validates and freezes it before
    constructing local transport ownership; return is not service readiness.
 2. `Read` acquires one preselected key. `ReadAll` acquires every selected key in
    input order, returning nil on any required failure.
@@ -66,10 +65,6 @@ the subscription. Clients and subscriptions support concurrent operations; do
 not copy their runtime structs. Returned documents/changes are immutable, and
 RawCopy returns a new sensitive byte slice. Bootstrap values are borrowed only
 during Open; concurrent caller mutation during Open is unsupported.
-
-The public [Nacos configuration adapter](../../../../adapters/configuration/remote/nacos/interface.md)
-uses this finite-read capability and owns complete transient cleanup for business
-projects. It does not expose Client, Watch or the private resource assembly.
 
 Finite reads intentionally create and close one Nacos session per read/batch,
 rather than reuse a possibly replaced TCP connection without Nacos registration.

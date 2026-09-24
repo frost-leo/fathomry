@@ -295,11 +295,8 @@ mechanism overhead, not SDK throughput or a native-memory cap. Sustained fixture
 check declared high-water limits, not every physical resource.
 
 The [build test](../../internal/compatibility/consumer_test.go) executes SDK behavior
-and inspects that same binary. That legacy probe intentionally imports no Fathomry
-package; a separate in-module probe covers framework-as-main. The new
-[failure artifact consumer](../../failure/consumer_test.go) exercises the public
-contract with `GOWORK=off`, a fresh writable module cache and no consumer replacements.
-Do not substitute
+and inspects that same binary. Fathomry intentionally contributes no public package
+there; a separate in-module probe covers framework-as-main. Do not substitute
 inspector metadata or manufacture passing support records from startup facts.
 
 Actual SDK termination, session/account isolation, service effects, native buffers
@@ -307,17 +304,3 @@ and workload/SLO limits still need concrete integration evidence. No Temporal
 command, converter or history/payload format is introduced by these foundations;
 future changes to those boundaries need appropriate replay evidence. Keep raw
 logs in local issue literature, not the product manual.
-
-For the public failure contract, run the artifact consumer and boundary fixtures
-before broad checks, then exercise both malformed-input fuzz targets:
-
-```sh
-go test -race -count=1 -timeout=3m ./failure ./internal/conformance
-go test ./failure -run '^$' -fuzz '^FuzzOccurrence$' -fuzztime=10s -parallel=2
-go test ./failure -run '^$' -fuzz '^FuzzValidationDetail$' -fuzztime=10s -parallel=2
-```
-
-The local file-proxy archive contains the current repository's regular tracked or
-non-ignored new files, excluding nested modules; it is not a release or SDK migration.
-The selected counterexamples and transport exclusions remain in the
-[package contract](../reference/failure/interface.md#determinism-and-transport-exclusions).
