@@ -28,13 +28,6 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 Start with the [resource interface](interface.md). This is the contract for
 supplied settings, not an application configuration-file format.
 
-`PrepareData` also supports source-neutral framework data with the same schema,
-layer and copying rules. It does not fabricate Provider identity or grant a usable
-resource selection. Its caller chooses the data schema's Format explicitly;
-`Prepared.Copy` returns an independent settings value, not a diagnostic projection.
-The [public loader](../../framework/configuration/interface.md) owns the application
-boundary and source policy without exposing Prepared or resource factories.
-
 ## Format and layer semantics
 
 `Input.Format` must equal the nonzero `Schema.Format`; there is no fallback to a

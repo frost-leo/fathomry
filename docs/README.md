@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; public configuration and failure/i18n/version foundations, private mechanisms and accepted architecture.
+**Status:** early development; private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -92,46 +92,11 @@ native HTTP/protobuf export and independent evidence. Separate Zap/zerolog bridg
 preserve existing local sinks and ownership. Export is explicitly scheduled;
 local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 
-The public [failure contract](reference/failure/interface.md) provides extensible
-semantic identity, immutable occurrences, typed-detail extension and bounded
-optional diagnostics. It is a new limited contract, not the withdrawn API or a
-public execution capability. No production-qualified application runtime or Run/Item
-model is supplied. Business authors are not expected to
+There is no public Go package, project generator, application configuration loader,
+production-qualified application runtime or Run/Item execution model yet. The intended
+`fathomry new <project>` entry is not runnable. The removed public `failure` contract
+is not replaced by a speculative error API. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
-
-The public [framework configuration capability](reference/framework/configuration/interface.md)
-adds finite loading with public input contracts, explicit source/environment selection,
-strict preparation, immutable values and safe source information. Its
-[local adapter](reference/adapters/configuration/local/viper/interface.md) preserves original
-Viper-acquired bytes and owns file cleanup. An [independent project example](development/load-project-configuration.md)
-uses the public path without private assembly. The [Nacos adapter](reference/adapters/configuration/remote/nacos/interface.md)
-adds finite remote reads with explicit bootstrap, authentication and owned cleanup.
-Data schema versions remain separate from module/API compatibility; no reload,
-mixed-source aggregation is provided. The
-[dotenv helper](reference/adapters/configuration/local/dotenv/interface.md) adds
-explicit literal file input without process-environment mutation.
-
-The [project creation command](development/create-project.md) generates one
-independent business module with separate resource declarations, configuration
-loading and localization packages,
-per-environment source plans and selected dependencies. Public feature-owned
-settings are composed with project data; dotenv and language overrides have
-explicit precedence. It does not generate unimplemented service placeholders.
-
-The public [i18n foundation](reference/i18n/interface.md) prepares bounded external
-English/translation resources and renders plain text with explicit locale/fallback,
-named scalar/cardinal contracts, source freshness and immutable snapshot metadata.
-Independent business consumers own their resources. The failure package remains
-localization-independent. The offline CLI owns its English/Chinese resources;
-no business runtime integration or full language catalog is supplied.
-
-The public [version foundation](reference/version/interface.md) separates exact
-software identity from precedence, native application/framework/dependency build
-facts and validated application declarations. Its [injection contract](reference/version/injection.md)
-requires actual artifact read-back; optional [presentation](reference/version/presentation/interface.md)
-uses existing i18n resources. The [offline CLI](reference/cmd/fathomry/internal/root/interface.md)
-now consumes those contracts for help and software-version reporting, alongside
-command-owned project creation; no business runtime or release pipeline is supplied.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
@@ -242,12 +207,6 @@ current internal safeguards and their limits.
 
 | Your task | Start here |
 | --- | --- |
-| Create a configuration-capable independent project | [Project creation](development/create-project.md) |
-| Define, inspect or extend a public failure | [Public failure contract](reference/failure/interface.md) |
-| Prepare and render business-owned localized resources | [Public i18n contract](reference/i18n/interface.md) |
-| Inspect software/build versions or inject application declarations | [Public version contract](reference/version/interface.md) |
-| Load project settings through public framework capabilities | [Configuration contract](reference/framework/configuration/interface.md) and [independent project example](development/load-project-configuration.md) |
-| Build or use the offline version command | [CLI build guide](development/build-cli.md) and [machine-output profile](reference/cmd/fathomry/internal/command/version/version-output.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |
@@ -284,9 +243,6 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/invocation`](reference/internal/invocation/interface.md) | [Budgets](reference/internal/invocation/budgets.md), [completion](reference/internal/invocation/completion.md), [evidence](reference/internal/invocation/evidence.md), [observation](reference/internal/invocation/observation.md) |
 | [`internal/fault`](reference/internal/fault/interface.md) | [Diagnostics and inspection boundaries](reference/internal/fault/diagnostics.md) |
 | [`internal/compatibility`](reference/internal/compatibility/interface.md) | [Build facts](reference/internal/compatibility/build-info.md), [assessment and policy](reference/internal/compatibility/assessment.md) |
-| [`cmd/fathomry/internal/root`](reference/cmd/fathomry/internal/root/interface.md) | Explicit command composition and version entrypoints |
-| [`cmd/fathomry/internal/cli`](reference/cmd/fathomry/internal/cli/interface.md) | Private runner, checked streams, localized help and status |
-| [`cmd/fathomry/internal/command/version`](reference/cmd/fathomry/internal/command/version/interface.md) | Offline version operation, resources and [CLI JSON profile](reference/cmd/fathomry/internal/command/version/version-output.md) |
 | [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md) |
 | [`internal/configsource/viper/v1`](reference/internal/configsource/viper/v1/interface.md) | Native local profile, OptionsV1, raw handoff, ownership, bounds and version evidence |
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
@@ -315,7 +271,6 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
-- [Build and verify the offline CLI](development/build-cli.md).
 - [Write documentation](development/documentation.md), the canonical writing policy.
 - [Contribution policy](../.github/CONTRIBUTING.md), the canonical branch/signing/review rules.
 

@@ -34,26 +34,10 @@ The project is in early development. Configuration preparation, resource ownersh
 controlled calls, technical errors, compatibility assessment and testing support
 are implemented as private foundations. A bounded internal Viper v1 integration
 supports explicit local acquisition and a separate preparation proof, not an
-application-wide loading path. The public [failure contract](docs/reference/failure/interface.md)
-adds stable extensible identities, typed-detail extension and safe diagnostics,
-not public operations or a durable error protocol. The public
-[i18n foundation](docs/reference/i18n/interface.md) adds bounded external-resource
-localization with explicit fallback, source freshness and immutable snapshots.
-It remains independent of workflow execution and complete product language coverage.
-The public [version contract](docs/reference/version/interface.md) adds software
-version identity/precedence, consuming-build facts and validated application build
-declarations, with optional resource-first presentation—not business versioning
-or a release pipeline. The [offline CLI](docs/development/build-cli.md) now
-provides help and `version`/`--version` in text or CLI-owned JSON.
-The public [configuration capability](docs/reference/framework/configuration/interface.md)
-now provides local or Nacos loading, explicit environment bindings, immutable
-prepared settings and safe source information through a selected Provider adapter.
-An independent Go consumer verifies the framework/project boundary.
-The [project creation command](docs/development/create-project.md) now generates
-independent configuration-capable projects with functional packages, explicit
-environment/Provider plans, opt-in dotenv and real public i18n settings.
-Generation is offline and command-owned; no production-qualified application
-runtime, Workflow scaffolding or business-owned private assembly is implied.
+application-wide loading path. There is no public Go API, production
+service Provider, CLI/project generator, application loader or complete runtime yet.
+The intended `fathomry new <project>` path remains future framework work, not
+business-owned assembly boilerplate.
 
 An internal Nacos v2 configuration integration supplies raw reads, bounded
 invalidation subscriptions and owned protocol sessions. Its explicit compatibility
@@ -92,16 +76,6 @@ Start with the [documentation map](docs/README.md) for current status and readin
 
 - [Architecture by topic](docs/README.md#architecture-by-topic): responsibilities,
   design rationale and cross-package guarantees.
-- [Public failure contract](docs/reference/failure/interface.md): independent
-  in-process identity and intentional inspection, without localization or SDKs.
-- [Public i18n contract](docs/reference/i18n/interface.md): resource-first messages,
-  explicit locale/fallback and consumer-owned compatible resource snapshots.
-- [Public version contract](docs/reference/version/interface.md): software/build
-  identities, disclosure, declaration injection and artifact verification.
-- [Offline CLI](docs/reference/cmd/fathomry/internal/root/interface.md):
-  command composition, execution, language and output boundaries.
-- [Framework configuration](docs/reference/framework/configuration/interface.md):
-  local/remote loading and explicit data-schema compatibility, with [independent project examples](docs/development/load-project-configuration.md).
 - [Internal package reference](docs/README.md#internal-package-reference): each
   package's `interface.md` contract and detailed topics.
 - [Development guides](docs/README.md#development-guides): SDK integration, testing

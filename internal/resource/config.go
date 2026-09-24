@@ -112,19 +112,6 @@ func (prepared Prepared[T]) settings() (T, error) {
 	return value, err
 }
 
-// Copy returns independent plain settings, including nested maps and slices.
-// Values may contain secrets; this is deliberate access, not diagnostics.
-func (prepared Prepared[T]) Copy() (T, error) {
-	return prepared.settings()
-}
-
-// PrepareData applies the same preparation contract without claiming a Provider
-// resource identity. Its description has an empty Identity; Select/Assemble cannot
-// use it to construct a resource. Format belongs to the supplied data schema.
-func PrepareData[T any](schema Schema[T], layers []Layer) (Prepared[T], error) {
-	return prepare(schema, Input{Format: schema.Format, Layers: layers}, false)
-}
-
 // Prepare structurally validates every layer before merging; unknown or mistyped
 // overridden fields are not ignored. Semantic validation runs on resolved settings.
 // Precedence is Defaults < Base < Environment < Local < Variables, independent of
@@ -137,10 +124,6 @@ func PrepareData[T any](schema Schema[T], layers []Layer) (Prepared[T], error) {
 // implicit reload are unsupported. Numbers
 // must use JSON numeric syntax; integer fields reject fractions and exponents.
 func Prepare[T any](schema Schema[T], input Input) (Prepared[T], error) {
-	return prepare(schema, input, true)
-}
-
-func prepare[T any](schema Schema[T], input Input, identified bool) (Prepared[T], error) {
 	location := fault.Context{Operation: "prepare"}
 	if validID(input.Identity.Provider) {
 		location.Provider = input.Identity.Provider
@@ -151,7 +134,7 @@ func prepare[T any](schema Schema[T], input Input, identified bool) (Prepared[T]
 	fail := func(cause error) (Prepared[T], error) {
 		return Prepared[T]{}, ErrConfiguration.New(location, cause)
 	}
-	if identified && (!validID(input.Identity.Provider) || !validID(input.Identity.Name)) {
+	if !validID(input.Identity.Provider) || !validID(input.Identity.Name) {
 		return fail(errors.New("source: invalid identity"))
 	}
 	if schema.Format == 0 || input.Format != schema.Format {

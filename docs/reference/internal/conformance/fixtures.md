@@ -117,11 +117,9 @@ network/sumdb access and owns a writable temporary module cache for cleanup.
 The consuming probe explicitly imports/executes YAML, declares its selected version
 and executes SDK behavior. The parent inspects that same built executable via
 `debug/buildinfo.ReadFile` and private `FromBuildInfo`. Fathomry is an intentionally
-unused requirement there, with absent Framework metadata: that probe does not
-import the new public failure package. The in-module probe executes `Inspect` with real
+unused requirement there, with absent Framework metadata: no public package is
+retained just to link it. The in-module probe executes `Inspect` with real
 Fathomry-as-main/VCS facts; synthetic BuildInfo tests cover dependency normalization,
 not real external framework consumption. The probes' selected JSON output is private
 test transport, not a public serialization contract. The independent import checks
 do not force `-race`; race coverage is an explicit in-module verification.
-The separate [public failure artifact consumer](../../../../failure/consumer_test.go)
-does run its independent typed consumers with the race detector.

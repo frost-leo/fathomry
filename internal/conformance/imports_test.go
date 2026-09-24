@@ -66,7 +66,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("independent module smoke compilation failed: %v\n%s", err, output)
 	}
-	t.Logf("independent module smoke compilation (no framework import):\n%s", output)
+	t.Logf("independent module smoke compilation (no public API):\n%s", output)
 	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1", "configsource/nacos/v2", "database/pgx/v5", "database/mysql/v1"} {
 		t.Run("reject-internal-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/internal/" + name
@@ -77,20 +77,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			}
 		})
 	}
-	for _, path := range []string{
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/cli",
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/root",
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/version",
-	} {
-		t.Run("reject-executable-private-"+path, func(t *testing.T) {
-			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
-			output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
-			if err == nil || !strings.Contains(string(output), "use of internal package "+path+" not allowed") {
-				t.Fatalf("wrong executable-private import rejection: %v\n%s", err, output)
-			}
-		})
-	}
-	for _, name := range []string{"source", "operation", "compatibility"} {
+	for _, name := range []string{"source", "operation", "compatibility", "failure"} {
 		t.Run("withdrawn-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/" + name
 			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
@@ -105,15 +92,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatal("package inventory could not be inspected")
 	}
 	for _, path := range strings.Fields(string(output)) {
-		if path != "github.com/frost-leo/fathomry/cmd/fathomry" &&
-			!strings.HasPrefix(path, "github.com/frost-leo/fathomry/cmd/fathomry/internal/") &&
-			path != "github.com/frost-leo/fathomry/failure" && path != "github.com/frost-leo/fathomry/i18n" &&
-			path != "github.com/frost-leo/fathomry/version" && path != "github.com/frost-leo/fathomry/version/presentation" &&
-			path != "github.com/frost-leo/fathomry/framework/configuration" &&
-			path != "github.com/frost-leo/fathomry/adapters/configuration/local/viper" &&
-			path != "github.com/frost-leo/fathomry/adapters/configuration/local/dotenv" &&
-			path != "github.com/frost-leo/fathomry/adapters/configuration/remote/nacos" &&
-			!strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
+		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
 			t.Errorf("unexpected public package: %s", path)
 		}
 	}
@@ -127,17 +106,6 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/database/") || strings.HasPrefix(path, "github.com/jackc/pgx/") || path == "github.com/go-sql-driver/mysql" ||
 			strings.HasPrefix(path, "github.com/frost-leo/fathomry/") && !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
 			t.Errorf("technical mechanisms depend on framework errors or test support: %s", path)
-		}
-	}
-	output, err = run(root, "list", "-deps", "./internal/...")
-	if err != nil {
-		t.Fatal("Provider dependency check failed")
-	}
-	for _, path := range strings.Fields(string(output)) {
-		if path == "github.com/frost-leo/fathomry/failure" || path == "github.com/frost-leo/fathomry/i18n" ||
-			path == "github.com/frost-leo/fathomry/version" || strings.HasPrefix(path, "github.com/frost-leo/fathomry/version/") ||
-			strings.HasPrefix(path, "github.com/frost-leo/fathomry/framework/") || strings.HasPrefix(path, "github.com/frost-leo/fathomry/adapters/") {
-			t.Fatal("an internal production package depends on public contracts or adapters")
 		}
 	}
 }

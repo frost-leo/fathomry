@@ -43,7 +43,6 @@ for current availability and package contracts.
 | Configuration schema | Format and capability maintainers; define supported formats, field meanings, defaults, and handling of unknown or incompatible input |
 | Effective source-configuration revision | Composition; identify the settings used by that source without confusing them with the schema version or exposing secrets |
 | Actual SDK and Go build | Build evidence plus Provider requirements; distinguish dependency declarations and reference/test versions from what the consuming binary actually contains |
-| Software release label and build declaration | Application producer; complete version syntax is not release approval, and declared release/time/source values do not overwrite native module/build facts |
 | Integration bootstrap contract | Integration maintainers; the Viper `OptionsV1` Go type is independent of its SDK-major import path and of application configuration formats; runtime readers are separate, and no persisted bootstrap format or migration protocol is implied |
 | Service, protocol, and SDK mode | Provider evidence and deployment selection; record observed values, enabled features, critical options, and what was or was not verified |
 | Public/persisted results, messages, objects, and error formats | Respective contract/format owner; specify historical interpretation, missing/zero/unknown values, compatibility, and migration or rejection |
@@ -77,45 +76,6 @@ Define historical-reader and migration/refusal policy before publishing such a
 format; no universal version registry or migration engine is required.
 
 ## Implementation references
-
-The [public configuration capability](../reference/framework/configuration/interface.md)
-and [local adapter](../reference/adapters/configuration/local/viper/interface.md) use
-ordinary Go API structs for schemas, requests, source documents, options and
-metadata. Module/API compatibility and independent consumer fixtures govern
-field/default/zero-value and error semantics; type/function version suffixes are
-not a substitute for that policy. The separate
-SchemaVersion is a project-owned data declaration, checked for a match rather
-than inferred from file contents or arbitrary Go code. Explicit business conversion
-does not mutate an earlier prepared value. Runtime handles are not wire DTOs;
-no unused parallel API, automatic migration or durable configuration format is
-introduced. This follows the [Go module compatibility guidance](https://go.dev/blog/module-compatibility)
-on compatible additions and explicit treatment of breaking changes.
-
-[Public software versions](../reference/version/interface.md) implement exact
-SemVer-profile identity separately from precedence, plus immutable consuming-build
-records. A narrow adapter reuses private build normalization without exporting
-the assessment protocol. Main-source facts stay separate from dependency and
-replacement records; unknown source state never becomes clean.
-
-The [four-field declaration seam](../reference/version/injection.md) combines
-native BuildInfo with explicit linker/caller claims instead of adding a persisted
-stamp schema. This keeps the contract small but requires native artifact execution
-to verify linker injection: cross-target BuildInfo reads do not recover those
-variables. Native and declared provenance are distinguishable, neither authenticated.
-The optional resource-owned presenter depends on version and i18n; version itself
-does not depend on localization. Business Workflow/mode versioning remains separate.
-
-[Public failure version owners](../reference/failure/interface.md#version-owners)
-separate framework module/API changes, semantic identity, typed machine details,
-presentation resources and future wire schemas. The common package has no
-per-occurrence version field or durable reader. Adding a new code does not make
-changing an existing operation's promised code/cause/detail behavior compatible;
-the [old-client fixture](../../failure/extension_test.go) exercises that distinction.
-
-[Public i18n compatibility](../reference/i18n/interface.md#compatibility-freshness-and-rollback)
-separates module/API, resource profile, message contracts, source review,
-packaged snapshots and actual renderer/locale-data builds. Its immutable resources
-do not promise historical wording or Workflow replay across upgrades.
 
 [Build facts](../reference/internal/compatibility/build-info.md) and [assessment](../reference/internal/compatibility/assessment.md).
 

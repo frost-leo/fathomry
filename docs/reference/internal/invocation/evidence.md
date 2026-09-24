@@ -51,9 +51,6 @@ wrapping can retain every original cause at a meaningful future boundary. The
 fixtures use local sentinels with `errors.Join`/`fmt.Errorf`, not a replacement
 public error system. Frozen higher-level attribution stays in their typed evidence
 envelope. Handling an error does not discharge independent evidence responsibility.
-The [public failure fixtures](../../../../internal/conformance/public_failure_test.go)
-exercise that same boundary with real public identities while retaining native
-causes privately. They do not add a dependency from invocation to `failure`.
 
 `Inbox[T]` is the framework's independent process-local evidence boundary:
 

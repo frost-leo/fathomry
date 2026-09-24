@@ -34,14 +34,12 @@ shared across the private fault/resource/invocation/compatibility foundations
 rather than owned by one runtime package. Making it a public testing SDK would
 expose an unnecessary API and misstate that scope.
 
-Independent business projects can consume the limited
-[public failure contract](../../failure/interface.md), not private mechanisms or
-this internal tool. Public operations and framework runtime remain deferred.
+Independent business projects cannot consume a public Fathomry package yet: the
+framework/capability/error API is deferred. They do not import this internal tool.
 The [import boundary test](../../../../internal/conformance/imports_test.go) smoke-compiles
-an independent module, rejects private packages and the three still-withdrawn
-public packages, and audits private production dependencies. The separate
-[artifact consumer](../../../../failure/consumer_test.go) builds and exercises the
-public contract without importing SDKs or adding consumer replacements. The
+an independent module, rejects all five internal packages and all four withdrawn
+public packages, and audits the private production dependency graph. The smoke
+compile is not execution of a public error contract. The
 [internal composition fixture](../../../../internal/conformance/composition_test.go)
 retains the complete preparation/assembly/call/evidence path. Dynamic receipt/stream
 field/method checks supplement import rejection in maintainer fixtures.

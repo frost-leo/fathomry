@@ -79,8 +79,6 @@ admission and evidence loops remain framework responsibilities. The CLI,
   [boundary tests](../../internal/conformance/boundary_test.go) use local sentinels
   and ordinary wrapping plus a test-owned attribution envelope, not a replacement
   public error API, production Adapter or unbounded lookup table.
-  The [public failure controls](../../internal/conformance/public_failure_test.go)
-  additionally prove intentional public mapping without reversing private dependencies.
 - Keep required evidence independent of business error handling and diagnostics.
   Recording/export failure cannot replace the primary result or invent durability.
 - Test shutdown at saturation. Drive necessary native drain/stop through existing
