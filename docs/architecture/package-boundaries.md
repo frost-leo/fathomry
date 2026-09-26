@@ -75,7 +75,9 @@ In both paths, technical results travel from Provider through Adapter to the
 public caller and, where required, the framework's evidence boundary. This is
 a collaboration path, not a requirement for a wrapper at every diagram arrow.
 
-Public semantic errors belong to the framework contract. Internal technical errors,
+Public semantic errors use the independent [failure/v1 contract](../reference/failure/v1/interface.md);
+conditions and typed facts belong to their capability or business owner, without
+requiring Framework bootstrap. Internal technical errors,
 correlation and required-evidence mechanics do not become public merely because an
 Adapter consumes them. Public dependencies must not pull in concrete Providers,
 SDK clients, framework orchestration or business workflows. Adapters depend on
@@ -219,8 +221,9 @@ internal/compatibility    -> internal/resource, internal/fault
 internal/conformance      -> internal mechanisms, testing (test support only)
 ```
 
-No public error dependency, all-SDK aggregator or new module dependency is
-introduced. Compatibility assessment accepts the authoritative
+These internal production mechanisms have no public error dependency or all-SDK
+aggregator. The separate `failure/v1` package depends only on the standard library.
+Compatibility assessment accepts the authoritative
 `*internal/resource.Access`; it does not introduce a public snapshot-assessment API.
 
 ## Pre-release API migration
@@ -233,15 +236,17 @@ error package had no production consumer after internalization; its tests and bu
 probe did not justify retaining a framework contract before the framework layer.
 It is removed, not copied into another package or rebuilt in the test fixtures.
 
-Future public capabilities and their error semantics will be designed against
-actual framework needs. This is a deferred contract, not an implicit promise of
-compatibility with the withdrawn Definition/Identity/Attribution API.
+The separately implemented `failure/v1` contract supplies owner-qualified identity
+and direct in-process occurrences. It does not restore or promise compatibility
+with the withdrawn Definition/Identity/Attribution API, and has no unversioned facade.
+Future public operations own their semantic mappings and attribution.
 
 ## Technical facts and future public meaning
 
 The [error and evidence architecture](errors-and-evidence.md) owns the cross-package
 rules. The [fault interface](../reference/internal/fault/interface.md) specifies
-the implemented technical boundary; no public framework error API is prebuilt.
+the implemented technical boundary. The [public failure interface](../reference/failure/v1/interface.md)
+specifies the independent in-process boundary, not a Framework runtime or durable codec.
 
 ## Implementation references
 

@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; public CLI foundation, private mechanisms and accepted architecture.
+**Status:** early development; public CLI and in-process failure contracts, private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -100,8 +100,10 @@ Command extension is private and first-party only; see
 
 There is no public domain package, application configuration loader,
 production-qualified application runtime or Run/Item execution model yet. The
-four-file `fathomry new` bootstrap is not a workflow application. The removed public `failure` contract
-is not replaced by a speculative error API. Business authors are not expected to
+four-file `fathomry new` bootstrap is not a workflow application. The public
+[`failure/v1`](reference/failure/v1/interface.md) contract supplies independent
+in-process identity, deliberate causes and safe diagnostics, not a restored legacy
+API or a durable error codec. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
@@ -244,6 +246,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | Package contract | Scope |
 | --- | --- |
 | [`cli`](reference/cli/interface.md) | First-party root/help and local-source project creation; no public command registration |
+| [`failure/v1`](reference/failure/v1/interface.md) | Stdlib-only in-process identity, direct occurrences, intentional causes and safe owned diagnostics |
 
 ## Internal package reference
 

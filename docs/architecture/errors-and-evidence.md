@@ -36,15 +36,19 @@ for current availability and package contracts.
 
 ## Technical errors and framework meaning
 
-Future public capabilities must use a coherent framework error contract, not one
-competing system per layer. That contract is deferred; no public error package is
-implemented now. Internal SDK mechanisms do not depend on framework semantics. The private
+Public capabilities share the independent [failure/v1 contract](../reference/failure/v1/interface.md),
+not a competing system per layer. Capability and business owners define their own
+conditions and typed facts; production mappings remain separately scoped.
+Internal SDK mechanisms do not depend on public semantics. The private
 `internal/fault` foundation retains technical kinds, bounded context and original
 multi-cause errors. Providers interpret native codes, responses and completion
 signals without losing intentional cause inspection or inventing effect certainty.
-Standard Go `error` is sufficient for a future outer boundary to retain the
-technical error as a cause. The current boundary fixtures use local sentinels,
-ordinary wrapping and a test-owned frozen attribution envelope, not public types.
+Standard Go `error` permits an outer boundary to retain a technical error as a
+cause only when that exposure is part of its deliberate contract. Private native
+evidence may instead remain with its mapping owner. The existing internal boundary
+fixtures use local sentinels and frozen attribution; the separate
+[v1 boundary fixtures](../../internal/conformance/failure_v1_test.go) exercise
+public promotion without implementing a production Adapter.
 An already suitable error need not be wrapped merely to identify a layer. No
 converter registry, shared generic kernel or automatic business policy is required.
 
@@ -52,7 +56,7 @@ Keep these responsibilities separate:
 
 | Concern | Owner and contract |
 | --- | --- |
-| Public semantic identity and execution attribution | Future framework/capability boundary; deferred until actual public operations are implemented, without importing concrete SDKs into shared contracts |
+| Public semantic identity and execution attribution | Capability/business owner using failure/v1 for identity; execution attribution stays capability-owned, without concrete SDKs in the shared contract |
 | Technical kind, bounded context and original causes | Private `fault`; no Run/Item/framework-attempt semantics, public error dependency or retry/disposition flags |
 | Native evidence and technical effect | Provider, interpreted for the exact operation/mode; preserve confirmed, partial, and unknown scope |
 | Public-operation attribution and handoff | Adapter; preserve mapping between execution ownership and the technical evidence actually available |
