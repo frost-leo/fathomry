@@ -46,8 +46,9 @@ Their errors use `internal/fault`, never public framework attribution. Examples
 importing them are in-module maintainer fixtures.
 Business authors declare allowed configuration/capabilities and write business
 logic. Future loaders (including configuration-center SDKs), resource assembly,
-admission and evidence loops remain framework responsibilities. The CLI,
-`fathomry new`, loader and full execution entry are not implemented here.
+admission and evidence loops remain framework responsibilities. The public
+[CLI entry](../reference/cli/interface.md) supplies root/help; `fathomry new`,
+the application loader and full execution entry remain unimplemented.
 
 ## 2. Implement and test the guarantees
 

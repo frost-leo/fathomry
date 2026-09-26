@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; private mechanisms and accepted architecture.
+**Status:** early development; public CLI foundation, private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -92,7 +92,12 @@ native HTTP/protobuf export and independent evidence. Separate Zap/zerolog bridg
 preserve existing local sinks and ownership. Export is explicitly scheduled;
 local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 
-There is no public Go package, project generator, application configuration loader,
+The public [CLI package](reference/cli/interface.md) and thin executable provide
+root/help, explicit borrowed I/O, resource-backed language and process signal policy.
+Command extension is private and first-party only; see
+[Adding commands](development/cli-commands.md).
+
+There is no public domain package, project generator, application configuration loader,
 production-qualified application runtime or Run/Item execution model yet. The intended
 `fathomry new <project>` entry is not runnable. The removed public `failure` contract
 is not replaced by a speculative error API. Business authors are not expected to
@@ -207,6 +212,7 @@ current internal safeguards and their limits.
 
 | Your task | Start here |
 | --- | --- |
+| Use the CLI or add a first-party command | [CLI interface](reference/cli/interface.md) and [command maintenance](development/cli-commands.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |
@@ -230,6 +236,12 @@ These pages own cross-package reasoning and obligations, not package API listing
 
 The [integration-standard index](architecture/internal-sdk-integration.md) preserves
 the existing S01-S12 identifiers and links each to its canonical topic.
+
+## Public package reference
+
+| Package contract | Scope |
+| --- | --- |
+| [`cli`](reference/cli/interface.md) | First-party root/help usage; no public command registration |
 
 ## Internal package reference
 
@@ -269,6 +281,7 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 
 ## Development guides
 
+- [Add first-party CLI commands](development/cli-commands.md).
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
 - [Write documentation](development/documentation.md), the canonical writing policy.

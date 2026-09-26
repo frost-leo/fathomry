@@ -92,7 +92,8 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatal("package inventory could not be inspected")
 	}
 	for _, path := range strings.Fields(string(output)) {
-		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
+		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") &&
+			path != "github.com/frost-leo/fathomry/cli" && path != "github.com/frost-leo/fathomry/cmd/fathomry" {
 			t.Errorf("unexpected public package: %s", path)
 		}
 	}
