@@ -93,13 +93,14 @@ preserve existing local sinks and ownership. Export is explicitly scheduled;
 local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 
 The public [CLI package](reference/cli/interface.md) and thin executable provide
-root/help, explicit borrowed I/O, resource-backed language and process signal policy.
+root/help, [local-source project creation](reference/cli/new.md), explicit borrowed
+I/O, resource-backed language and process signal policy.
 Command extension is private and first-party only; see
 [Adding commands](development/cli-commands.md).
 
-There is no public domain package, project generator, application configuration loader,
-production-qualified application runtime or Run/Item execution model yet. The intended
-`fathomry new <project>` entry is not runnable. The removed public `failure` contract
+There is no public domain package, application configuration loader,
+production-qualified application runtime or Run/Item execution model yet. The
+four-file `fathomry new` bootstrap is not a workflow application. The removed public `failure` contract
 is not replaced by a speculative error API. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
 
@@ -213,6 +214,7 @@ current internal safeguards and their limits.
 | Your task | Start here |
 | --- | --- |
 | Use the CLI or add a first-party command | [CLI interface](reference/cli/interface.md) and [command maintenance](development/cli-commands.md) |
+| Create a Go project using a local Fathomry checkout | [Local-source project creation](reference/cli/new.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |
@@ -241,7 +243,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 
 | Package contract | Scope |
 | --- | --- |
-| [`cli`](reference/cli/interface.md) | First-party root/help usage; no public command registration |
+| [`cli`](reference/cli/interface.md) | First-party root/help and local-source project creation; no public command registration |
 
 ## Internal package reference
 
