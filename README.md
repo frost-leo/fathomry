@@ -34,8 +34,10 @@ The project is in early development. Configuration preparation, resource ownersh
 controlled calls, technical errors, compatibility assessment and testing support
 are implemented as private foundations. A bounded internal Viper v1 integration
 supports explicit local acquisition and a separate preparation proof, not an
-application-wide loading path. There is no public Go API, production
-service Provider, CLI/project generator, application loader or complete runtime yet.
+application-wide loading path. The public [CLI entry](docs/reference/cli/interface.md)
+provides root/help with explicit in-process and process-owned usage. There is no
+public domain API, production service Provider, project generator, application
+loader or complete runtime yet.
 The intended `fathomry new <project>` path remains future framework work, not
 business-owned assembly boilerplate.
 

@@ -134,7 +134,7 @@ need network access, CGO, isolated services or additional authorization.
 Use existing executable examples and tests. Distinguish a successful build, a
 test double, SDK execution and real-service execution. A skipped test, a source
 review or a version string is not a supported-service result. Do not describe the
-intended `fathomry new` command as runnable while the CLI remains unimplemented.
+intended `fathomry new` command as runnable while project generation remains unimplemented.
 
 ## Preserve evidence, versions and links
 

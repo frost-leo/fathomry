@@ -39,6 +39,20 @@ for current availability and package contracts.
 
 The role names below describe responsibilities, not mandatory Go packages.
 
+The implemented [CLI](../reference/cli/interface.md) is an inbound entry, not a
+domain capability or outbound Adapter. Public Run/Main usage is separate from
+private command construction and first-party family composition. The shipped
+root/help graph uses native parsing and the standard library, not an all-SDK
+aggregator. Later selected command families can grow that graph; package boundaries,
+not separate files, determine dependencies. Technical foundations must not depend
+back on this public entry.
+
+The CLI owns checked delivery and process presentation, while actual operations
+retain domain rules, effect meaning and resource ownership. This avoids requiring
+business projects to copy command and signal machinery without introducing a
+public command registry, generic lifecycle container or project delegation protocol.
+See the [first-party maintainer procedure](../development/cli-commands.md).
+
 | Role | Owns | Does not own |
 | --- | --- | --- |
 | Framework | Public capability contracts; execution identity and attribution rules; orchestration and control; interpretation of business results; reliable evidence recording and Item/Run disposition | Invented service guarantees or the mechanics of every SDK |
