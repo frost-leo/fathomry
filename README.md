@@ -35,11 +35,11 @@ controlled calls, technical errors, compatibility assessment and testing support
 are implemented as private foundations. A bounded internal Viper v1 integration
 supports explicit local acquisition and a separate preparation proof, not an
 application-wide loading path. The public [CLI entry](docs/reference/cli/interface.md)
-provides root/help with explicit in-process and process-owned usage. There is no
-public domain API, production service Provider, project generator, application
-loader or complete runtime yet.
-The intended `fathomry new <project>` path remains future framework work, not
-business-owned assembly boilerplate.
+provides root/help and [local-source project creation](docs/reference/cli/new.md)
+with explicit in-process and process-owned usage. `fathomry new <directory>`
+creates a four-file Go executable using the public CLI, not a workflow application.
+There is no public domain API, production service Provider, application loader or
+complete runtime yet.
 
 An internal Nacos v2 configuration integration supplies raw reads, bounded
 invalidation subscriptions and owned protocol sessions. Its explicit compatibility

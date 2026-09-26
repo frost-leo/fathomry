@@ -22,15 +22,16 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../README.md) / Public package reference
 
 **Audience:** Go callers embedding Fathomry's first-party command entry.
-**Status:** implemented root/help foundation; runtime acceptance targets Go 1.27.0
-on Linux/amd64. No domain commands, project generation or complete runtime.
+**Status:** implemented root/help and local-source project creation; runtime acceptance
+targets Go 1.27.0 on Linux/amd64. No domain commands or complete runtime.
 **Package:** `github.com/frost-leo/fathomry/cli`.
 
 ## Responsibilities and use
 
 The public surface is `Run`, `Main` and `Streams`. It exposes usage, not command
 registration. Native Cobra objects, construction and composition remain private.
-Only root/help ships; test command families never enter the executable.
+Root/help and [`new <directory>`](new.md) ship; test command families never enter
+the executable.
 
 A standalone process entry is simply:
 
@@ -71,6 +72,7 @@ fathomry -h
 fathomry help
 fathomry help help
 fathomry --lang zh-CN help
+fathomry new --help
 ```
 
 Unknown command paths, extra help targets, malformed flags and unsupported language
@@ -135,7 +137,8 @@ retained and later writes to that stream are suppressed. Already-written bytes a
 not retracted. A handler ignoring an output error cannot turn it into success.
 
 Normal diagnostics are bounded resource-backed projections, never raw parser or
-operation `Error()` strings. They are attempted once without recursive reporting.
+operation `Error()` strings. A command may add owned explanatory text; the host's
+failure summary is attempted once without recursive reporting.
 Returned errors retain known primary, output, cancellation and cleanup causes for
 `errors.Is/As`; they may contain sensitive data and must not be printed blindly.
 Cancellation is observed again after a diagnostic write completes, so cancellation
@@ -183,8 +186,11 @@ subprocesses, including full stdout/stderr pipes and subsequent forced terminati
 
 ## Dependencies and qualification
 
-The root/help production package graph contains the CLI, native Cobra/pflag and the
-standard library on Linux; it does not import Fathomry's technical SDK integrations.
+The production package graph contains the CLI, its private project command, native
+Cobra/pflag, x/mod's modfile/module/semver/internal-lazyregexp packages and the
+standard library on Linux. Linking the CLI includes the generator's dependencies;
+file-level separation does not make them optional. It does not import Fathomry's
+technical SDK integrations.
 An unrelated module actually builds and runs both public entries with `GOWORK=off`
 and exactly one source replacement, for Fathomry itself. It copies no SDK replacement
 graph or host mechanics.
@@ -193,7 +199,8 @@ Checkout builds and source-replacement consumption do not qualify
 `go install ...@version`, an installable release, all-SDK consumption, automatic
 discovery of future project code, or another OS's runtime behavior.
 
-[Issue #88](https://github.com/frost-leo/fathomry/issues/88) defines this scope.
+[Issue #88](https://github.com/frost-leo/fathomry/issues/88) defines the entry foundation;
+[issue #90](https://github.com/frost-leo/fathomry/issues/90) adds local-source creation.
 [Adjacent tests](../../../cli/run_test.go),
 [independent consumption](../../../cli/consumer_test.go) and
 [Linux process acceptance](../../../cli/process_linux_test.go) provide executable

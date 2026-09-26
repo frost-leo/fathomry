@@ -1,0 +1,29 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "messages": {
+    "new": "使用明确指定的本地 Fathomry 源码创建 Go 项目",
+    "module": "新项目的 Go 模块路径（必填）",
+    "source": "本地 Fathomry 源码根目录（必填）",
+    "created": "项目文件已创建。请参阅 README.md，显式执行依赖解析和构建步骤。",
+    "notStarted": "项目创建未能开始。请检查参数、目标路径和所选源码。",
+    "partial": "项目创建未完成；可能保留部分文件。请检查目标后再重试。",
+    "completeDelivery": "项目文件已完整写入，但命令交付未完成。请检查目标后再重试。"
+  }
+}

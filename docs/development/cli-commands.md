@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../README.md) / Development
 
 **Audience:** Fathomry maintainers implementing an approved command feature.
-**Status:** executable maintainer procedure for the root/help foundation.
+**Status:** executable maintainer procedure for the first-party CLI.
 No custom-command, plugin or public registration API is provided.
 
 ## Place the feature with its owner
@@ -87,8 +87,11 @@ perform operations.
   presentation from escaping the resource-backed path.
 
 For a real operation, validate CLI syntax first, then call its typed framework
-operation or selected public capability. Domain invariants must also hold for
-non-CLI callers. Do not reimplement SDK/resource management in a command.
+operation, selected public capability or a private command-owned operation when
+the CLI owns the feature. [Project creation](../reference/cli/new.md) uses standard
+filesystem and module facilities without adding a public framework/Adapter layer.
+Domain invariants must also hold for non-CLI callers. Do not reimplement
+SDK/resource management in a command.
 
 The actual resource owner uses structured cleanup, normally a defer with
 `errors.Join`, on success, operation failure, partial initialization and cooperative
@@ -136,7 +139,7 @@ test scratch data. On the maintainer workspace:
 ```sh
 job=$(mktemp -d /home/frost/tmp/codex-build/jobs/build.XXXXXX)
 export TMPDIR="$job"
-go test -race -count=1 -timeout=3m ./cli ./internal/conformance
+go test -race -count=1 -timeout=3m ./cli/... ./internal/conformance
 go vet ./cli/... ./cmd/fathomry ./cli/internal/testdata/commandfamily
 go build -o "$job/fathomry" ./cmd/fathomry
 "$job/fathomry" help

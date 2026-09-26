@@ -95,7 +95,9 @@ func TestUnrelatedModulePublicEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(directory, "consumer")
-	goCommand(t, directory, "build", "-mod=mod", "-buildvcs=false", "-o", binary, ".")
+	goCommand(t, directory, "mod", "tidy")
+	goCommand(t, directory, "mod", "tidy", "-diff")
+	goCommand(t, directory, "build", "-mod=readonly", "-buildvcs=false", "-o", binary, ".")
 	for _, prefix := range [][]string{nil, {"run"}} {
 		for _, test := range []struct {
 			args     []string
@@ -122,7 +124,17 @@ func TestUnrelatedModulePublicEntries(t *testing.T) {
 		t.Fatalf("unexpected replacements: %+v", metadata.Replace)
 	}
 	dependencies := goCommand(t, directory, "list", "-deps", "-f", "{{if not .Standard}}{{.ImportPath}}{{end}}", ".")
-	allowed := map[string]bool{"example.org/unrelated-cli-consumer": true, "github.com/frost-leo/fathomry/cli": true, "github.com/spf13/cobra": true, "github.com/spf13/pflag": true}
+	allowed := map[string]bool{
+		"example.org/unrelated-cli-consumer":                         true,
+		"github.com/frost-leo/fathomry/cli":                          true,
+		"github.com/frost-leo/fathomry/cli/internal/command/project": true,
+		"github.com/spf13/cobra":                                     true,
+		"github.com/spf13/pflag":                                     true,
+		"golang.org/x/mod/internal/lazyregexp":                       true,
+		"golang.org/x/mod/semver":                                    true,
+		"golang.org/x/mod/module":                                    true,
+		"golang.org/x/mod/modfile":                                   true,
+	}
 	for _, path := range strings.Fields(string(dependencies)) {
 		if !allowed[path] {
 			t.Errorf("unexpected production dependency %s", path)

@@ -22,6 +22,7 @@ package cli
 import (
 	"strings"
 
+	"github.com/frost-leo/fathomry/cli/internal/command/project"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -29,6 +30,7 @@ import (
 func commands(words *text) *cobra.Command {
 	root := &cobra.Command{Use: "fathomry", Short: words.english["root"], Args: cobra.NoArgs}
 	root.Annotations = map[string]string{"fathomry.short.zh-CN": words.chinese["root"]}
+	root.AddCommand(project.New())
 	return root
 }
 

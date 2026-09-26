@@ -17,13 +17,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package cli provides the first-party Fathomry command entry points.
-//
-// Run borrows explicit invocation inputs and never exits or changes signal policy.
-// Main owns process arguments, streams, signals and exit. Root/help and local-source
-// project creation are shipped; command construction and extension are private.
-// Independent Run calls have fresh
-// parser state; callers remain responsible for shared streams and callbacks.
-// Runtime acceptance is Go 1.27 on Linux. Arbitrary blocked I/O is not interruptible
-// by Run, and a delivery failure says nothing about remote effects.
-package cli
+// Package project owns the first-party local-source project creation command.
+// New builds invocation-local metadata; execution validates and renders a private
+// request before exclusively creating four files under an existing trusted parent.
+// The operation owns file handles, observes cooperative cancellation and retains
+// partial output on failure. It never deletes, merges or retries a destination.
+// No public project API, external tool execution or application runtime is provided.
+package project

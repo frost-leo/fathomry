@@ -321,6 +321,7 @@ func TestInvocationIsolation(t *testing.T) {
 }
 
 func FuzzExplicitRun(f *testing.F) {
+	f.Add("new\x00target\x00--module=example.org/app\x00--fathomry-source=..")
 	for _, seed := range []string{"", "help", "--lang\x00zh-CN\x00--bad", "--bad\x00--lang\x00zh-CN", "--\x00--lang=zh-CN", "missing\x00--help", "--help=UNTRUSTED-CANARY\x1b[31m", "-htest.unknown=x"} {
 		f.Add(seed)
 	}
@@ -330,7 +331,12 @@ func FuzzExplicitRun(f *testing.F) {
 		}
 		args := strings.Split(input, "\x00")
 		original := slices.Clone(args)
-		status, err, output, diagnostic := capture(context.Background(), args, commands)
+		status, err, output, diagnostic := capture(context.Background(), args, func(words *text) *cobra.Command {
+			// Keep arbitrary fuzz argv on the original metadata-only root/help surface.
+			root := commands(words)
+			root.RemoveCommand(root.Commands()...)
+			return root
+		})
 		if status != 0 && status != 2 || (err == nil) != (status == 0) {
 			t.Fatalf("unexpected outcome: %d %v", status, err)
 		}
