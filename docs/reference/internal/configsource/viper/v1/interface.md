@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** framework configuration and integration maintainers.
-**Status:** implemented internal local profile; no public configuration loader.
+**Status:** implemented private parsed/raw file profiles; the public Adapter is separate.
 **Package:** `github.com/frost-leo/fathomry/internal/configsource/viper/v1` (Go name `viper`).
 
 ## Responsibilities and call sequence
@@ -49,6 +49,14 @@ show this separate composition. An explicitly bound environment string supplies
 a variables document in that fixture; this is not a published environment-value
 format or a public loader. Optional-file selection also remains test-owned
 composition policy. Business code is not expected to assemble this internal API.
+
+`RawFile(ctx, path, limit)` is the narrow Adapter acquisition seam. It uses the
+same owned stat/open/read/close and byte limits without native parsing, validates
+UTF-8, and distinguishes present-empty bytes from positive OS absence and failure.
+It does not assert that Viper decoding succeeded. The
+[public local Adapter](../../../../adapters/configsource/viper/v1/interface.md)
+owns complete batches, public errors and periodic observation; the private parsed
+Load/Document query contract above is unchanged.
 
 ## Supported native profile
 

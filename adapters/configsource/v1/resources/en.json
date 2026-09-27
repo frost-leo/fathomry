@@ -1,0 +1,96 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.adapters.configsource",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.adapters.configsource:invalid_value",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Invalid configuration source value."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:limit",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration source limit exceeded."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:invalid_cursor",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The cursor belongs to a different observer."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:concurrent_wait",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A configuration wait is already active."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:closed",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configuration observer is closed."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:wait",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configuration wait did not complete."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:cleanup",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration source cleanup failed."
+      }
+    }
+  ]
+}

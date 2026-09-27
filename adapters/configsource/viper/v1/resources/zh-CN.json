@@ -1,0 +1,61 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.adapters.configsource.viper",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.adapters.configsource.viper:invalid_settings",
+      "source": "6dfb7928e43783b0fd5e76bb1c3dfaf7ff1b5e008c708b1337e0c48de5a71576",
+      "forms": {
+        "other": "本地配置来源设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:read",
+      "source": "df4bbe2f1fa1bdf8554a5e2762ca20a04a31a88e360c9fc6e6c786504ce6c280",
+      "forms": {
+        "other": "无法读取本地配置。 来源：{source}；阶段：{phase}。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:limit",
+      "source": "042f6149e9c932fb6805a3c7ba7f8ebb5f730d6a313941cf0eb37bdba43fd366",
+      "forms": {
+        "other": "本地配置超出支持的限制。 来源：{source}；阶段：{phase}。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:encoding",
+      "source": "2928c776efbb16e559c488d10c49b5a4dfe974ac6f8086bca4e930ae850aadfa",
+      "forms": {
+        "other": "本地配置不是有效的 UTF-8。 来源：{source}；阶段：{phase}。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:cleanup",
+      "source": "aac0428dc1a2a1c639bc855662e84d78a7caae64a3a596c73c36978260ae051f",
+      "forms": {
+        "other": "本地配置清理失败。 来源：{source}；阶段：{phase}。"
+      }
+    }
+  ]
+}

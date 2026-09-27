@@ -98,8 +98,8 @@ I/O, resource-backed language and process signal policy.
 Command extension is private and first-party only; see
 [Adding commands](development/cli-commands.md).
 
-There is no public domain package, application configuration loader,
-production-qualified application runtime or Run/Item execution model yet. The
+There is no public domain package, production-qualified application runtime or
+Run/Item execution model yet. The
 four-file `fathomry new` bootstrap is not a workflow application. The public
 [`failure/v1`](reference/failure/v1/interface.md) contract supplies independent
 in-process identity, deliberate causes and safe diagnostics, not a restored legacy
@@ -113,6 +113,17 @@ uses this mechanism with feature-owned resources and invocation-local language.
 Explicit failure module/condition/fact catalogs and checked i18n bindings support
 definition discovery without runtime registration. `cli.Catalogs()` exposes the
 built-in root/project inventories without command execution or service startup.
+
+The [Adapter-layer](reference/adapters/v1/interface.md) and
+[Framework-layer](reference/framework/v1/interface.md) catalog entries compose
+feature-owned complete condition/resource/binding identities explicitly, independently
+of runtime instances. They do not import concrete SDKs or start configuration.
+The [configuration API](reference/framework/configuration/v1/interface.md) supplies
+typed Core/project Load and explicit Watch with immutable snapshots. Independently
+usable [local](reference/adapters/configsource/viper/v1/interface.md) and
+[Nacos](reference/adapters/configsource/nacos/v1/interface.md) sources own raw
+acquisition and live recovery. Loading settings does not activate credentials,
+reconstruct clients, start a workflow or rewrite frozen execution facts.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
@@ -256,6 +267,12 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`cli`](reference/cli/interface.md) | First-party root/help and local-source project creation; no public command registration |
 | [`failure/v1`](reference/failure/v1/interface.md) | Stdlib-only in-process identity, direct occurrences, intentional causes and safe owned diagnostics |
 | [`i18n/v1`](reference/i18n/v1/interface.md) | Immutable resource catalogs, exact lookup, explicit fallback and bounded scalar/cardinal rendering |
+| [`adapters/v1`](reference/adapters/v1/interface.md) | Explicit static Adapter registration and existing error/resource/binding queries |
+| [`framework/v1`](reference/framework/v1/interface.md) | Framework feature registration and selected Adapter catalog composition |
+| [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Immutable raw batches, coherent observations and explicit lifetime contracts |
+| [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Literal UTF-8 file Capture and paced periodic Observe |
+| [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Fresh remote Capture and one native push/reconciliation/recovery loop |
+| [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Core plus typed project configuration, explicit Load/Watch and presentation binding |
 
 ## Internal package reference
 
@@ -298,6 +315,7 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 - [Add first-party CLI commands](development/cli-commands.md).
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
+- [Verify public configuration](development/configuration-testing.md), including independent consumers and opt-in isolated Nacos tests.
 - [Write documentation](development/documentation.md), the canonical writing policy.
 - [Contribution policy](../.github/CONTRIBUTING.md), the canonical branch/signing/review rules.
 

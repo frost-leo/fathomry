@@ -24,6 +24,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"io"
 	"strconv"
@@ -157,8 +158,7 @@ func validateJSON(raw []byte) error {
 	if len(raw) > MaxWireBytes || !utf8.Valid(raw) {
 		return errors.New("invalid bounded JSON")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
+	decoder := jsontext.NewDecoder(bytes.NewReader(raw))
 	nodes := 0
 	var visit func(int) error
 	visit = func(depth int) error {
@@ -166,46 +166,42 @@ func validateJSON(raw []byte) error {
 		if depth > 64 || nodes > 32768 {
 			return errors.New("JSON structure bound exceeded")
 		}
-		token, err := decoder.Token()
+		token, err := decoder.ReadToken()
 		if err != nil {
 			return err
 		}
-		if delimiter, ok := token.(json.Delim); ok {
-			switch delimiter {
-			case '{':
-				seen := make(map[string]bool)
-				for decoder.More() {
-					item, err := decoder.Token()
-					if err != nil {
-						return err
-					}
-					name, ok := item.(string)
-					if !ok || seen[name] {
-						return errors.New("duplicate JSON key")
-					}
-					seen[name] = true
-					if err := visit(depth + 1); err != nil {
-						return err
-					}
+		switch token.Kind() {
+		case '{':
+			for decoder.PeekKind() != '}' {
+				item, err := decoder.ReadToken()
+				if err != nil {
+					return err
 				}
-			case '[':
-				for decoder.More() {
-					if err := visit(depth + 1); err != nil {
-						return err
-					}
+				if item.Kind() != '"' {
+					return errors.New("invalid JSON name")
 				}
-			default:
-				return errors.New("unexpected JSON delimiter")
+				if err := visit(depth + 1); err != nil {
+					return err
+				}
 			}
-			_, err = decoder.Token()
-			return err
+		case '[':
+			for decoder.PeekKind() != ']' {
+				if err := visit(depth + 1); err != nil {
+					return err
+				}
+			}
+		case '}', ']':
+			return errors.New("unexpected JSON delimiter")
+		default:
+			return nil
 		}
-		return nil
+		_, err = decoder.ReadToken()
+		return err
 	}
 	if err := visit(0); err != nil {
 		return err
 	}
-	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+	if _, err := decoder.ReadToken(); err != io.EOF {
 		return errors.New("trailing JSON input")
 	}
 	return nil

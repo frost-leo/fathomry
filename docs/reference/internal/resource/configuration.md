@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../README.md) / Internal package reference
 
 **Audience:** Provider and composition authors.
-**Status:** implemented supplied-input preparation; no loader or reload.
+**Status:** implemented supplied-input preparation, including an identity-neutral data seam.
 **Package:** `github.com/frost-leo/fathomry/internal/resource`.
 
 Start with the [resource interface](interface.md). This is the contract for
@@ -46,6 +46,13 @@ derive or inject those at their actual ownership boundary.
 
 Each explicit layer supplies one YAML mapping; JSON syntax is accepted as YAML.
 This is a restricted YAML input contract, not a promise to accept all YAML features:
+
+The explicit internal `JSONVariables(content)` constructor is the sole exception:
+it decodes generated environment data as strict JSON, preserving Unicode strings,
+decoded map names and exact number spellings without YAML normalization. Ordinary
+`Layer` literals, including Variables, retain the existing YAML behavior. Both
+paths use the same structural checks, merge, copy and validation engine below.
+Malformed UTF-8/Unicode escapes, duplicate decoded names and trailing values reject.
 
 | Aspect | Contract |
 | --- | --- |
@@ -87,12 +94,21 @@ case-fold mapping keys, and modify a map supplied to `MergeConfigMap`; its
 are not interchangeable with the contract above. Taking `AllSettings()` cannot
 recover input distinctions already lost. Loading must preserve the raw authorized
 layer distinctions and invoke the existing preparation/merge once, not silently
-apply a competing precedence or null policy. Configuration-center SDKs such as
-Nacos would also be framework-owned; none is selected or integrated here.
+apply a competing precedence or null policy. The
+[public configuration loader](../../framework/configuration/v1/interface.md)
+consumes raw local/Nacos Adapter observations through `PrepareData`; it owns typed
+composition, while the selected Adapter owns acquisition and recovery.
 [Viper documentation](https://github.com/spf13/viper/tree/v1.21.0),
 [merge/lookup implementation](https://github.com/spf13/viper/blob/v1.21.0/viper.go).
 
 ## Isolation, provenance and revision
+
+`PrepareData`/`PreparedData.ValueCopy` share this engine without a named resource
+Identity. They do not create an Assembly or a token accepted by resource.Select.
+Named Prepare retains its identity admission. `CheckDocumentFormat` uses the same
+strict parser to check each original external header without re-emitting bytes.
+The [neutral-seam tests](../../../../internal/resource/data_test.go) cover copying,
+guards, unchanged named admission and format rejection.
 
 Preparation freezes resolved bytes, not an alias to the caller's maps or slices.
 Every factory receives a freshly decoded settings copy, including when the same

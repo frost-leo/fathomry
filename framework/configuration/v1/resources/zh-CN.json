@@ -1,0 +1,117 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.framework.configuration",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.framework.configuration:invalid_schema",
+      "source": "7a998db23bddc1ddec7530eb1e2d2a77acc1763026360bf6baf0750149fcacde",
+      "forms": {
+        "other": "配置结构或默认值无效。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:invalid_plan",
+      "source": "ecbccec31976ec93cb6fd75e35ccf0e0d1f0a55db712b99a8bccf0e7e034a0d7",
+      "forms": {
+        "other": "配置输入计划无效。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:limit",
+      "source": "d2ae6988568bbe1a24333c9a2c9d6f9881e2397462ee396ce68d572b877c79ea",
+      "forms": {
+        "other": "配置超出支持的限制。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:missing",
+      "source": "a1958fa0ca95ede2639583b4daf458a0b6d632d0e5a3f81b94180acb2ca04fc4",
+      "forms": {
+        "other": "缺少必需的配置文档。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:format",
+      "source": "53610696a2ef0e9e1b43f699f47ee24fb5be84d0b6c3b474a8df6578881988a0",
+      "forms": {
+        "other": "配置文档格式无效。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:preparation",
+      "source": "46e49c6b8f2a46981ca5ac99d97e09cb8d85238f6cbaf1203bb92a89657bfe7f",
+      "forms": {
+        "other": "配置不满足声明的契约。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:invalid_value",
+      "source": "25f0f4ace4f5ef4aa09cd68a3ce8d9a88c55bf1cee2713fadfd5724048172bc6",
+      "forms": {
+        "other": "配置运行时值无效。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:invalid_cursor",
+      "source": "05fee527a4fbfa230fdb3e2c1ea608f1170409c1f3dfa7a3ff870761c10df0cf",
+      "forms": {
+        "other": "游标不属于此配置所有者。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:concurrent_wait",
+      "source": "9afe30fa23d9520f18f122ca73b9013780735170f5d7b9ad171bdc28e8c99dde",
+      "forms": {
+        "other": "已有配置等待正在进行。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:closed",
+      "source": "84d7a9f5592de2dcbcafe301cb3f850137e3168923fbcfdc0cab7065efaef47d",
+      "forms": {
+        "other": "实时配置已关闭。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:wait",
+      "source": "ae31271257e91efa145612bd05595b5296fabcea63109a18ba1f5dbf2a4f906a",
+      "forms": {
+        "other": "配置等待未完成。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:presentation",
+      "source": "cee3cc04b39841b165d2af26ad946c86c3764a92abbe00e20fbe486bc4ccdf2b",
+      "forms": {
+        "other": "无法绑定配置的显示时区。"
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:cleanup",
+      "source": "c22951de25389ce1cf2a016ad47069ecd4f31f4be8bd50d58acb0f212ef05736",
+      "forms": {
+        "other": "配置观察器清理失败。"
+      }
+    }
+  ]
+}

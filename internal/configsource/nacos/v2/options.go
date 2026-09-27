@@ -158,6 +158,12 @@ type settings struct {
 	Queue         int           `json:"queue"`
 }
 
+// ValidateOptions admits deferred public bootstrap without opening a Client.
+func ValidateOptions(input OptionsV1) error {
+	_, _, err := prepareOptions(input)
+	return err
+}
+
 // prepareOptions validates the complete selection before construction and clones
 // retained caller data. Preparing TLS trust does not establish server identity.
 func prepareOptions(input OptionsV1) (settings, *tls.Config, error) {

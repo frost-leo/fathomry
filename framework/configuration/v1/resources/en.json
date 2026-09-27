@@ -1,0 +1,156 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.framework.configuration",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.framework.configuration:invalid_schema",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Invalid configuration schema or defaults."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:invalid_plan",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Invalid configuration input plan."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:limit",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration exceeds a supported limit."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:missing",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A required configuration document is missing."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:format",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A configuration document has an invalid format."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:preparation",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration does not satisfy its declared contract."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:invalid_value",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Invalid configuration runtime value."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:invalid_cursor",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The cursor belongs to a different configuration owner."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:concurrent_wait",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A configuration wait is already active."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:closed",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The live configuration is closed."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:wait",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configuration wait did not complete."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:presentation",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configured display zone could not be bound."
+      }
+    },
+    {
+      "id": "fathomry.framework.configuration:cleanup",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration observer cleanup failed."
+      }
+    }
+  ]
+}

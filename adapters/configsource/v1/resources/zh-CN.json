@@ -1,0 +1,75 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.adapters.configsource",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.adapters.configsource:invalid_value",
+      "source": "44ec51ed120d9db68cc686abbc05590a30e547cab66984fefb396e81ef60d926",
+      "forms": {
+        "other": "配置来源值无效。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:limit",
+      "source": "1a7b0ec3260a49c82031cccd00520a8f01dd27cbf6a577f13d22bae6b28efd1a",
+      "forms": {
+        "other": "超出配置来源限制。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:invalid_cursor",
+      "source": "4ad9d645c479f8d306d890252a3e69fbb8e1d7c333e32d23617dbb0601a2f680",
+      "forms": {
+        "other": "游标不属于此观察器。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:concurrent_wait",
+      "source": "31e7502eb6e162bfa76b3e95c4582bded42ec641991b5a880c1af67a76711690",
+      "forms": {
+        "other": "已有配置等待正在进行。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:closed",
+      "source": "9b87c79756c19be8251af9a6d80b24332237f307dc49754e86cdb47f85123485",
+      "forms": {
+        "other": "配置观察器已关闭。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:wait",
+      "source": "a04773e2c8fcb4d99a3b218f8c04c5c1515766cab6511d01721679e0ea8f5c22",
+      "forms": {
+        "other": "配置等待未完成。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource:cleanup",
+      "source": "54f95cd938d7efbde57d9c38b4002e46abd2813621dcf7526d22df0a434d4799",
+      "forms": {
+        "other": "配置来源清理失败。"
+      }
+    }
+  ]
+}
