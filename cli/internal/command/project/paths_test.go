@@ -82,7 +82,8 @@ func TestNativeDestinationTraversal(t *testing.T) {
 			} else if spelling == "trailing-separator" {
 				target += "/"
 			}
-			effect, err := create(context.Background(), request{target, "example.org/path", source})
+			creation := create(context.Background(), request{target, "example.org/path", source})
+			effect, err := creation.observation, creation.err
 			if effect != complete || err != nil {
 				t.Fatalf("create: %v %v", effect, err)
 			}
@@ -113,7 +114,8 @@ func TestNativeExistingTargetTraversal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			effect, err := create(context.Background(), request{logical + "/link/../existing", "example.org/path", source})
+			creation := create(context.Background(), request{logical + "/link/../existing", "example.org/path", source})
+			effect, err := creation.observation, creation.err
 			if effect != untouched || !errors.Is(err, os.ErrExist) {
 				t.Fatalf("existing native target accepted: %v %v", effect, err)
 			}
@@ -149,7 +151,8 @@ func TestNativeSourceTraversal(t *testing.T) {
 				mustWrite(t, filepath.Join(physical, "go.mod"), "module example.org/wrong-source\ngo 1.27.0\n")
 			}
 			target := filepath.Join(root, "app")
-			effect, err := create(context.Background(), request{target, "example.org/path", logical + "/link/.."})
+			creation := create(context.Background(), request{target, "example.org/path", logical + "/link/.."})
+			effect, err := creation.observation, creation.err
 			if profile == "valid" {
 				if effect != complete || err != nil {
 					t.Fatalf("valid native source refused: %v %v", effect, err)
@@ -168,7 +171,8 @@ func TestNativeSourceTraversal(t *testing.T) {
 func TestNativeSourceOverlapTraversal(t *testing.T) {
 	_, logical, physical := traversalFixture(t)
 	sourceProfile(t, physical)
-	effect, err := create(context.Background(), request{logical + "/link/../app", "example.org/path", physical})
+	creation := create(context.Background(), request{logical + "/link/../app", "example.org/path", physical})
+	effect, err := creation.observation, creation.err
 	if effect != untouched || !errors.Is(err, errOverlap) {
 		t.Fatalf("native source overlap accepted: %v %v", effect, err)
 	}
@@ -197,7 +201,8 @@ func TestNativeTraversalRequiresExistingDirectories(t *testing.T) {
 					input.directory = component + "/../app"
 					wrongDestination = filepath.Join(logical, "app")
 				}
-				effect, err := create(context.Background(), input)
+				creation := create(context.Background(), input)
+				effect, err := creation.observation, creation.err
 				if effect != untouched || err == nil {
 					t.Fatalf("invalid intermediate component accepted: %v %v", effect, err)
 				}
@@ -219,7 +224,8 @@ func TestPhysicalInvocationDirectory(t *testing.T) {
 			if sourceSpelling == "relative" {
 				input.source = "../framework"
 			}
-			effect, err := create(context.Background(), input)
+			creation := create(context.Background(), input)
+			effect, err := creation.observation, creation.err
 			if effect != complete || err != nil {
 				t.Fatalf("physical CWD not respected: %v %v", effect, err)
 			}

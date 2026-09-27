@@ -21,7 +21,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"io"
 	"reflect"
 
@@ -44,10 +43,12 @@ type Streams struct {
 //
 // Status is 0 on success, 2 on invalid user input, 130 on otherwise pure caller
 // cancellation, and 1 on configuration, execution, deadline, output or cleanup
-// failure. Independent failures outrank cancellation. Returned errors preserve
-// causes for errors.Is/As, but may contain sensitive native data: do not print them
-// as diagnostics. A safe diagnostic is attempted once on failure; invalid
-// invocation inputs return without writing. Success means the supplied writers
+// failure. Independent failures outrank cancellation. Host and project conditions
+// identify their own failures; a sole semantic occurrence is retained unchanged.
+// Independent failures are joined without inferring a primary. Raw/foreign joins
+// and native causes may contain sensitive data: do not print them as diagnostics.
+// A safe diagnostic is attempted once on failure; invalid invocation inputs
+// return without writing. Success means the supplied writers
 // accepted the bytes, not that caller-owned buffers were flushed or made durable.
 // No automatic retry, rollback or remote-termination inference is performed.
 func Run(ctx context.Context, args []string, streams Streams) (int, error) {
@@ -56,33 +57,52 @@ func Run(ctx context.Context, args []string, streams Streams) (int, error) {
 
 func run(ctx context.Context, args []string, streams Streams, construct func(*text) *cobra.Command) (int, error) {
 	if missing(ctx) || missing(streams.Stdin) || missing(streams.Stdout) || missing(streams.Stderr) {
-		return 1, errInputs
+		return 1, hostFailure(ErrInputs)
 	}
 	words := newText()
-	output, diagnostics := &checkedWriter{writer: streams.Stdout}, &checkedWriter{writer: streams.Stderr}
-	finish := func(err error) (int, error) {
-		err = errors.Join(err, output.failure(), diagnostics.failure(), cancellation(ctx))
-		status := exitStatus(err)
-		if status != 0 {
-			key := "failed"
-			if status == 2 {
-				key = "invalid"
-			}
-			if status == 130 {
-				key = "canceled"
-			}
-			_, _ = io.WriteString(diagnostics, words.get(key)+"\n")
-			err = errors.Join(err, diagnostics.failure(), cancellation(ctx))
-			status = exitStatus(err)
+	output, diagnostics := &checkedWriter{writer: streams.Stdout, stream: stdoutStream}, &checkedWriter{writer: streams.Stderr, stream: stderrStream}
+	var callerCancellation error
+	observeCancellation := func() error {
+		if callerCancellation == nil {
+			callerCancellation = cancellation(ctx)
 		}
-		return status, err
+		return callerCancellation
 	}
-	if err := cancellation(ctx); err != nil {
-		return finish(err)
+	finish := func(err error, usage bool) (int, error) {
+		var diagnosticRender error
+		snapshot := func() completion {
+			return completion{
+				returned: err, usage: usage, presentation: words.failure(),
+				output: output.failure(), diagnostics: diagnostics.failure(),
+				diagnosticRender: diagnosticRender, cancellation: observeCancellation(),
+			}
+		}
+		result := snapshot()
+		status := result.status()
+		if status != 0 {
+			key := diagnosticKey(result.err(), status)
+			message, renderErr := words.render("fathomry.cli:"+key, words.language)
+			diagnosticRender = renderErr
+			if renderErr != nil {
+				message = "fathomry.cli.presentation_failed"
+			}
+			if diagnostics.failure() == nil {
+				_, _ = io.WriteString(diagnostics, message+"\n")
+			}
+			result = snapshot()
+		}
+		return result.status(), result.err()
 	}
+	if observeCancellation() != nil {
+		return finish(nil, false)
+	}
+	if err := words.failure(); err != nil {
+		return finish(err, false)
+	}
+
 	root := construct(words)
 	if err := prepare(root, words); err != nil {
-		return finish(err)
+		return finish(err, false)
 	}
 	root.SetIn(streams.Stdin)
 	root.SetOut(output)
@@ -96,42 +116,42 @@ func run(ctx context.Context, args []string, streams Streams, construct func(*te
 	argv := append([]string{}, args...)
 	selected, err := parseCommand(ctx, root, argv)
 	if err != nil {
-		return finish(usageError{err})
+		return finish(usageFailure(err), true)
 	}
 	operands := selected.Flags().Args()
 	help, _ := selected.Flags().GetBool("help")
 	if selected.Name() == "help" {
 		target, rest, err := root.Find(operands)
 		if err != nil {
-			return finish(usageError{err})
+			return finish(usageFailure(err), true)
 		}
 		if len(rest) != 0 || target.Hidden {
-			return finish(usageError{errArguments})
+			return finish(hostFailure(ErrUsage), true)
 		}
-		return finish(renderHelp(output, target, words))
+		return finish(renderHelp(output, target, words), false)
 	}
 	if selected.RunE == nil {
 		if len(operands) != 0 {
-			return finish(usageError{errArguments})
+			return finish(hostFailure(ErrUsage), true)
 		}
-		return finish(renderHelp(output, selected, words))
+		return finish(renderHelp(output, selected, words), false)
 	}
 	if help {
-		return finish(renderHelp(output, selected, words))
+		return finish(renderHelp(output, selected, words), false)
 	}
 	if err := selected.ValidateArgs(operands); err != nil {
-		return finish(usageError{err})
+		return finish(usageFailure(err), true)
 	}
 	if err := selected.ValidateRequiredFlags(); err != nil {
-		return finish(usageError{err})
+		return finish(usageFailure(err), true)
 	}
 	if err := selected.ValidateFlagGroups(); err != nil {
-		return finish(usageError{err})
+		return finish(usageFailure(err), true)
 	}
-	if err := cancellation(ctx); err != nil {
-		return finish(err)
+	if observeCancellation() != nil {
+		return finish(nil, false)
 	}
-	return finish(selected.RunE(selected, operands))
+	return finish(selected.RunE(selected, operands), false)
 }
 
 func parseCommand(ctx context.Context, command *cobra.Command, args []string) (*cobra.Command, error) {
@@ -178,5 +198,5 @@ func cancellation(ctx context.Context) error {
 	if ctx.Err() == nil {
 		return nil
 	}
-	return errors.Join(ctx.Err(), context.Cause(ctx))
+	return combine(ctx.Err(), context.Cause(ctx))
 }

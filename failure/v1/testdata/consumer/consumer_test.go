@@ -386,3 +386,48 @@ func TestExtensionLoggingForms(t *testing.T) {
 		}
 	}
 }
+
+func TestIndependentDefinitionModules(t *testing.T) {
+	root := failure.ModuleDefinition{
+		ID: "example.source", Source: "consumer.source",
+		Conditions: []failure.ConditionDefinition{{Condition: sourceRejected, Contract: "v1"}},
+		Contracts:  []failure.FactContract{{ID: "example.source:query", Revision: "v1", Use: failure.PresentationInput, Access: failure.OwnerFacts, Fields: []failure.FactField{{Name: "state", Kind: failure.EnumFact, Required: true, UnknownAllowed: true, Values: []string{"unknown", "known"}}}}},
+		Children:   []failure.ModuleDefinition{{ID: "example.source.sync", Source: "consumer.sync", Conditions: []failure.ConditionDefinition{{Condition: "example.source.sync.failed", Contract: "v1"}}}},
+	}
+	catalog, err := failure.PrepareDefinitions(root, failure.ModuleDefinition{ID: "example.sourcex", Source: "lookalike"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	modules, _ := catalog.Modules()
+	if len(modules) != 3 || modules[0].Parent != "" || modules[1].Parent != "example.source" {
+		t.Fatal(modules)
+	}
+	if _, exists, _ := catalog.Module("example"); exists {
+		t.Fatal("synthetic parent")
+	}
+	direct, _, _ := catalog.Definitions(root.ID, false)
+	subtree, _, _ := catalog.Definitions(root.ID, true)
+	if len(direct) != 1 || len(subtree) != 2 {
+		t.Fatal("false hierarchy", direct, subtree)
+	}
+	contract, exists, err := catalog.Contract("example.source:query")
+	if err != nil || !exists || contract.Use != failure.PresentationInput || contract.Access != failure.OwnerFacts || !contract.Fields[0].Required || !contract.Fields[0].UnknownAllowed {
+		t.Fatal(contract, err)
+	}
+	contract.Fields[0].Values[0] = "changed"
+	root.Contracts[0].Fields[0].Values[1] = "changed"
+	again, _, _ := catalog.Contract(contract.ID)
+	if again.Fields[0].Values[0] != "known" || again.Fields[0].Values[1] != "unknown" {
+		t.Fatal("definition alias")
+	}
+	unknown, err := failure.New("external.source.unavailable")
+	if inspected, ok := failure.Inspect(unknown); err != nil || !ok || inspected != unknown || !errors.Is(unknown, failure.Condition("external.source.unavailable")) {
+		t.Fatal("mandatory registry")
+	}
+	if _, exists, err := catalog.Lookup("external.source.unavailable"); err != nil || exists {
+		t.Fatal("observed-error registration")
+	}
+	if bad, err := failure.PrepareDefinitions(root, root); err == nil || bad != nil {
+		t.Fatal("duplicate admission")
+	}
+}

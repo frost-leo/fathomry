@@ -20,6 +20,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -27,7 +28,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/frost-leo/fathomry/cli/internal/command/project"
 	"github.com/frost-leo/fathomry/cli/internal/testdata/commandfamily"
+	"github.com/frost-leo/fathomry/i18n/v1"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 func TestLanguageOrderFallbackAndMachineIdentity(t *testing.T) {
@@ -77,7 +82,8 @@ func TestNoAmbientLocaleOrUnsafeParserDiagnostic(t *testing.T) {
 	if status != 2 || !errors.Is(err, errLanguage) || strings.Contains(diagnostic, "TOKEN") || strings.ContainsAny(diagnostic, "\x1b\r") {
 		t.Fatalf("%d %v %q", status, err, diagnostic)
 	}
-	if !strings.Contains(err.Error(), "TOKEN") {
+	var native *pflag.InvalidValueError
+	if !errors.As(err, &native) || !strings.Contains(native.Error(), "TOKEN") {
 		t.Fatal("inspectable native cause was erased")
 	}
 }
@@ -85,27 +91,63 @@ func TestNoAmbientLocaleOrUnsafeParserDiagnostic(t *testing.T) {
 func TestResourcesAreCompleteAndLicensed(t *testing.T) {
 	words := newText()
 	for _, key := range []string{"root", "help", "helpFlag", "language", "usage", "commands", "flags", "invalid", "failed", "canceled"} {
-		if words.english[key] == "" {
+		if words.english(key) == "" {
 			t.Errorf("missing English %s", key)
 		}
 	}
 	words.language = "zh-CN"
-	delete(words.chinese, "failed")
-	if words.get("failed") != words.english["failed"] {
+	english, err := resources.ReadFile("resources/en.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	chinese, err := resources.ReadFile("resources/zh-cn.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var translation struct {
+		Schema   string            `json:"schema"`
+		Profile  string            `json:"profile"`
+		Owner    string            `json:"owner"`
+		Locale   string            `json:"locale"`
+		Messages []json.RawMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(chinese, &translation); err != nil {
+		t.Fatal(err)
+	}
+	kept := translation.Messages[:0]
+	for _, message := range translation.Messages {
+		var identity struct{ ID string }
+		if err := json.Unmarshal(message, &identity); err != nil {
+			t.Fatal(err)
+		}
+		if identity.ID != "fathomry.cli:failed" {
+			kept = append(kept, message)
+		}
+	}
+	translation.Messages = kept
+	chinese, err = json.Marshal(translation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	words.catalog, err = i18n.Prepare(i18n.Source{Name: "en", Data: english}, i18n.Source{Name: "zh", Data: chinese})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if words.get("failed") != words.english("failed") {
 		t.Fatal("English fallback failed")
 	}
 	header, err := os.ReadFile("../.github/LICENSE_HEADER")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"resources/en.json", "resources/zh-cn.json", "internal/testdata/commandfamily/resources/en.json", "internal/testdata/commandfamily/resources/zh-cn.json"} {
+	for _, path := range []string{"resources/en.json", "resources/zh-cn.json", "internal/command/project/resources/en.json", "internal/command/project/resources/zh-cn.json", "internal/testdata/commandfamily/resources/en.json", "internal/testdata/commandfamily/resources/zh-cn.json"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		var resource struct {
 			License  []string `json:"license_notice"`
-			Messages map[string]string
+			Messages json.RawMessage
 		}
 		if err := json.Unmarshal(data, &resource); err != nil {
 			t.Fatal(err)
@@ -113,7 +155,24 @@ func TestResourcesAreCompleteAndLicensed(t *testing.T) {
 		if strings.Join(resource.License, "\n") != strings.TrimSpace(string(header)) {
 			t.Errorf("incomplete license %s", path)
 		}
-		for key, value := range resource.Messages {
+		values := map[string]string{}
+		if strings.Contains(path, "testdata") {
+			if err := json.Unmarshal(resource.Messages, &values); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			var messages []struct {
+				ID    string
+				Forms map[string]string
+			}
+			if err := json.Unmarshal(resource.Messages, &messages); err != nil {
+				t.Fatal(err)
+			}
+			for _, message := range messages {
+				values[message.ID] = message.Forms["other"]
+			}
+		}
+		for key, value := range values {
 			if value == "" || strings.ContainsAny(value, "\x1b\r\n") {
 				t.Errorf("invalid text %s %s", path, key)
 			}
@@ -132,5 +191,72 @@ func TestNativeGoTestShorthandCompatibility(t *testing.T) {
 	status, _, _, _ := capture(context.Background(), []string{"--test.unknown=x"}, commands)
 	if status != 2 {
 		t.Fatalf("long-flag negative control: %d", status)
+	}
+}
+
+func TestNativeMetadataUsesEnglishCatalog(t *testing.T) {
+	words := newText()
+	words.language = "zh-CN"
+	root := commands(words)
+	if err := prepare(root, words); err != nil {
+		t.Fatal(err)
+	}
+	if root.Short != words.english("root") || root.PersistentFlags().Lookup("lang").Usage != words.english("language") ||
+		root.PersistentFlags().Lookup("help").Usage != words.english("helpFlag") {
+		t.Fatal("native English metadata was missing or selected by display language")
+	}
+	ids := root.PersistentFlags().Lookup("help").Annotations["fathomry.usage.id"]
+	if len(ids) != 1 || ids[0] != "fathomry.cli:helpFlag" {
+		t.Fatal("missing help resource binding")
+	}
+}
+
+func TestEmptyBindingsDoNotSilentlyBecomeLegacyMetadata(t *testing.T) {
+	for _, mode := range []string{"command", "flag-empty", "flag-many"} {
+		words := newText()
+		root := commands(words)
+		if err := prepare(root, words); err != nil {
+			t.Fatal(err)
+		}
+		switch mode {
+		case "command":
+			root.Annotations["fathomry.short.id"] = ""
+		case "flag-empty":
+			root.PersistentFlags().Lookup("help").Annotations["fathomry.usage.id"] = nil
+		case "flag-many":
+			root.PersistentFlags().Lookup("help").Annotations["fathomry.usage.id"] = []string{"fathomry.cli:helpFlag", "extra"}
+		}
+		if err := validateBindings(root, words); err == nil {
+			t.Fatal("invalid preparation binding", mode)
+		}
+		// A fresh invocation verifies the rendering gate without a prior retained failure.
+		fresh := newText()
+		if err := renderHelp(&bytes.Buffer{}, root, fresh); err == nil || fresh.failure() == nil {
+			t.Fatal("unretained hard binding failure", mode)
+		}
+	}
+}
+
+func TestExplicitCatalogEnglishFallbackIsSuccessful(t *testing.T) {
+	sources, err := project.Sources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	english, err := resources.ReadFile("resources/en.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := i18n.Prepare(sources[0], i18n.Source{Name: "root", Data: english})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"--lang=zh-CN", "--help"}, {"new", "--lang=zh-CN", "--help"}} {
+		status, err, out, diagnostic := capture(context.Background(), args, func(words *text) *cobra.Command {
+			words.catalog = catalog
+			return commands(words)
+		})
+		if status != 0 || err != nil || diagnostic != "" || !strings.Contains(out, "Create a Go project") || !strings.Contains(out, "Usage") {
+			t.Fatal(status, err, out, diagnostic)
+		}
 	}
 }

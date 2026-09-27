@@ -20,118 +20,126 @@
 package cli
 
 import (
-	"embed"
-	"encoding/json"
-	"fmt"
-	"io"
-	"strings"
+	"sync"
+	"unicode"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"github.com/frost-leo/fathomry/i18n/v1"
 )
 
-//go:embed resources/*.json
-var resources embed.FS
-
 type text struct {
-	language string
-	english  map[string]string
-	chinese  map[string]string
+	language     string
+	catalog      *i18n.Catalog
+	bindings     *i18n.Bindings
+	boundCatalog *i18n.Catalog
+	mutex        sync.Mutex
+	err          error
 }
 
 func newText() *text {
-	load := func(path string) map[string]string {
-		data, err := resources.ReadFile(path)
-		if err != nil {
-			panic(err)
-		}
-		var resource struct{ Messages map[string]string }
-		if err := json.Unmarshal(data, &resource); err != nil {
-			panic(err)
-		}
-		return resource.Messages
+	catalogs, err := Catalogs()
+	return &text{language: "en", catalog: catalogs.Messages, boundCatalog: catalogs.Messages, bindings: catalogs.Bindings, err: err}
+}
+
+func (words *text) retain(err error) error {
+	words.mutex.Lock()
+	defer words.mutex.Unlock()
+	if words.err == nil {
+		words.err = err
 	}
-	return &text{language: "en", english: load("resources/en.json"), chinese: load("resources/zh-cn.json")}
+	return err
+}
+
+func (words *text) failure() error {
+	words.mutex.Lock()
+	defer words.mutex.Unlock()
+	return words.err
+}
+
+func (words *text) render(id, locale string) (string, error) {
+	words.mutex.Lock()
+	if words.boundCatalog != words.catalog {
+		var err error
+		words.bindings, err = prepareHostBindings(words.catalog)
+		words.boundCatalog = words.catalog
+		if words.err == nil {
+			words.err = err
+		}
+	}
+	bindings := words.bindings
+	words.mutex.Unlock()
+	if bindings != nil {
+		if _, exists, err := bindings.Lookup(id); err != nil {
+			return "", words.retain(err)
+		} else if exists {
+			selection, err := bindings.Resolve(id, locale)
+			if err != nil {
+				return "", words.retain(err)
+			}
+			result, err := selection.Render(nil)
+			if err != nil {
+				return "", words.retain(err)
+			}
+			return words.safeText(result.Text)
+		}
+	}
+	selection, err := words.catalog.Resolve(id, locale)
+	if err != nil {
+		return "", words.retain(err)
+	}
+	result, err := selection.Render(nil, nil)
+	if err != nil {
+		return "", words.retain(err)
+	}
+	return words.safeText(result.Text)
+}
+
+func (words *text) safeText(value string) (string, error) {
+	for _, char := range value {
+		if unicode.IsControl(char) {
+			return "", words.retain(hostFailure(ErrDefinition))
+		}
+	}
+	return value, nil
 }
 
 func (words *text) get(key string) string {
-	if words.language == "zh-CN" && words.chinese[key] != "" {
-		return words.chinese[key]
-	}
-	return words.english[key]
+	value, _ := words.render("fathomry.cli:"+key, words.language)
+	return value
 }
 
-type languageValue struct{ words *text }
+func (words *text) english(key string) string {
+	value, _ := words.render("fathomry.cli:"+key, "en")
+	return value
+}
 
-func (value *languageValue) String() string { return value.words.language }
-func (value *languageValue) Type() string   { return "string" }
-func (value *languageValue) Set(input string) error {
-	switch {
-	case strings.EqualFold(input, "en"):
-		value.words.language = "en"
-	case strings.EqualFold(input, "zh-CN"):
-		value.words.language = "zh-CN"
-	default:
-		return errLanguage
+func (words *text) validate() error {
+	if err := words.failure(); err != nil {
+		return err
+	}
+	definitions, err := words.catalog.Inspect()
+	if err != nil {
+		return words.retain(err)
+	}
+	for _, definition := range definitions {
+		if definition.Cardinal || len(definition.Arguments) != 0 {
+			return words.retain(hostFailure(ErrDefinition))
+		}
+		for _, form := range definition.Forms {
+			for _, char := range form.Pattern {
+				if unicode.IsControl(char) {
+					return words.retain(hostFailure(ErrDefinition))
+				}
+			}
+		}
+	}
+	for _, key := range []string{"root", "help", "helpFlag", "language", "usage", "commands", "flags", "invalid", "failed", "canceled"} {
+		found, err := words.catalog.Lookup("fathomry.cli:"+key, "en")
+		if err != nil {
+			return words.retain(err)
+		}
+		if !found.TranslationExists || found.Definition.Contract != "v1" {
+			return words.retain(hostFailure(ErrDefinition))
+		}
 	}
 	return nil
-}
-
-func shortText(command *cobra.Command, words *text) string {
-	if words.language == "zh-CN" && command.Annotations["fathomry.short.zh-CN"] != "" {
-		return command.Annotations["fathomry.short.zh-CN"]
-	}
-	return command.Short
-}
-
-func renderHelp(writer io.Writer, command *cobra.Command, words *text) error {
-	usage := command.CommandPath() + strings.TrimPrefix(command.Use, command.Name())
-	if _, err := fmt.Fprintf(writer, "%s\n\n%s: %s\n", shortText(command, words), words.get("usage"), usage); err != nil {
-		return err
-	}
-	headingWritten := false
-	for _, child := range command.Commands() {
-		if child.Hidden {
-			continue
-		}
-		if !headingWritten {
-			if _, err := fmt.Fprintf(writer, "\n%s:\n", words.get("commands")); err != nil {
-				return err
-			}
-			headingWritten = true
-		}
-		if _, err := fmt.Fprintf(writer, "  %s\t%s\n", child.Name(), shortText(child, words)); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(writer, "\n%s:\n", words.get("flags")); err != nil {
-		return err
-	}
-	var writeErr error
-	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
-	flags.AddFlagSet(command.LocalFlags())
-	flags.AddFlagSet(command.InheritedFlags())
-	flags.VisitAll(func(flag *pflag.Flag) {
-		if flag.Hidden || writeErr != nil {
-			return
-		}
-		description := flag.Usage
-		if words.language == "zh-CN" {
-			if translated := flag.Annotations["fathomry.usage.zh-CN"]; len(translated) != 0 && translated[0] != "" {
-				description = translated[0]
-			}
-		}
-		if flag.Name == "help" {
-			description = words.get("helpFlag")
-		}
-		name := "--" + flag.Name
-		if flag.Shorthand != "" {
-			name = "-" + flag.Shorthand + ", " + name
-		}
-		if flag.NoOptDefVal == "" {
-			name += " <" + flag.Value.Type() + ">"
-		}
-		_, writeErr = fmt.Fprintf(writer, "  %s\t%s\n", name, description)
-	})
-	return writeErr
 }

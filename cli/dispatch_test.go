@@ -129,11 +129,12 @@ func TestDispatchPrefixHelpTerminatorsAndValidation(t *testing.T) {
 				t.Fatalf("status=%d error=%v invoked=%v stdout=%q stderr=%q", status, err, invoked, out, diagnostic)
 			}
 			words := newText()
+			words.language = "zh-CN"
 			if test.zh {
-				if !strings.Contains(diagnostic, words.chinese["invalid"]) {
+				if !strings.Contains(diagnostic, words.get("invalid")) {
 					t.Fatalf("wrong language: %q", diagnostic)
 				}
-			} else if strings.Contains(diagnostic, words.chinese["invalid"]) || strings.Contains(out, words.chinese["usage"]) {
+			} else if strings.Contains(diagnostic, words.get("invalid")) || strings.Contains(out, words.get("usage")) {
 				t.Fatalf("wrong language: %q %q", out, diagnostic)
 			}
 		})

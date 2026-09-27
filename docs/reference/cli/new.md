@@ -142,6 +142,22 @@ or late cancellation can return nonzero even with all four files complete; this
 does not undo generation. Language selection affects command prose, not the
 generated module, Go code, English README or ignore rules.
 
+The command produces [public condition values](interface.md#output-causes-and-effects)
+at the boundary that knows their meaning. For example, selected-source refusal
+and existing-destination refusal are distinct conditions with feature-owned
+localized explanations; raw paths and parser text are not interpolated. The same
+create call supplies the condition and its private effect observation to the
+presenter. A source/output error found elsewhere in a cause tree is not substituted.
+
+The private creation observation has a narrow meaning: untouched does not mean
+the destination is absent; incomplete means complete write/close success was not
+established and may include all bytes being present; complete means all four
+writes/closes reported success, not fsync/crash durability. These observations
+remain operation-owned and are not a new public recovery/result API. Programmatic
+recovery facts may justify a separately specified typed contract, independently of
+whether messages need interpolation. No condition or after-the-fact directory
+inspection alone authorizes automatic retry, removal or repair.
+
 The supported filesystem profile is trusted existing parents and ordinary
 concurrent creation, not hostile pathname replacement, an atomic directory
 transaction, crash durability or forced interruption of blocked OS calls.

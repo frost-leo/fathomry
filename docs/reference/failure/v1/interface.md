@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../README.md) / Public package reference
 
 **Audience:** capability, Adapter and independent business-project authors.
-**Status:** implemented v1 Go contract; no durable conversion or production mappings.
+**Status:** implemented v1 Go contract; CLI/i18n use the core, with no durable conversion.
 **Package:** `github.com/frost-leo/fathomry/failure/v1` (package name `failure`).
 
 ## Responsibilities and call sequence
@@ -34,17 +34,20 @@ See the [executable examples](../../../../failure/v1/example_test.go) and
 [Go declarations](../../../../failure/v1/error.go).
 
 The production dependency closure is standard-library-only. There is no nested
-module, unversioned facade, registry, native-error translation, optional annotation
+module, unversioned facade, ambient registry, native-error translation, optional annotation
 bag, resource acquisition, logging, locale selection or retry policy.
-`internal/fault` remains private and unchanged. Existing CLI return values are
-not converted: a raw CLI aggregate need not be a directly inspectable occurrence.
+`internal/fault` remains private and unchanged. The
+[CLI boundary](../../cli/interface.md#output-causes-and-effects) uses host- and
+command-owned conditions, preserving a sole suitable occurrence and explicitly
+joining independent failures. This is consumer-owned meaning, not automatic
+primary selection: raw joins and ordinary wrappers remain directly uninspectable.
 
 ## Identity, absence and bounds
 
 `Condition` is a comparable string type. Its exact ASCII grammar is
 `[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+`, at most 128 bytes. The prefix before
 the final dot identifies the owner's namespace; the last component identifies
-its condition. There is no normalization, namespace authentication or registration.
+its condition. There is no normalization, namespace authentication or required registration.
 A valid unfamiliar code is preserved. Grammar does not establish privacy,
 authenticity or safe metric cardinality: never derive codes from secrets,
 request IDs, payloads or untrusted dynamic labels.
@@ -144,8 +147,8 @@ refusal for JSON logs. Nil or zero-core pointers log absence and remain uninspec
 
 The [independent consumer fixture](../../../../failure/v1/testdata/consumer/consumer_test.go)
 contains two unrelated detail owners, copying/accessor controls and explicit
-forwarding methods. It is an example of owner responsibilities, not a new catalog
-or SDK for extending arbitrary runtime objects.
+forwarding methods and definition composition. It demonstrates owner responsibilities,
+not an SDK for extending arbitrary runtime objects.
 
 A presenter must take identity and safe typed facts from the **same supplied
 extension**, or from an explicitly owner-selected occurrence-and-facts binding.
@@ -162,6 +165,57 @@ resources. No translation catalog or mandatory locale/template fields are suppli
 Partial outputs, effect uncertainty, cleanup obligations, credential generations
 and normal empty/filtered/superseded outcomes stay with their operation owners,
 not in a universal Error/result model. A timeout does not prove no external effect.
+
+## Explicit module and condition atlas
+
+`PrepareDefinitions` admits caller-supplied `ModuleDefinition` roots and their
+immediate children. Registration means explicitly supplying declarations, not
+`init` discovery or recording encountered errors. For example,
+`fathomry.cli` contains `fathomry.cli.project` without requiring an invented
+`fathomry` root. Roots cannot overlap. Children must match exact namespace
+segments; a condition's owner must exactly equal its declaring module.
+Duplicates reject even when identical; no registration-order overrides.
+
+The immutable `DefinitionCatalog` supplies complete sorted `Modules`, `Inspect`
+and `Contracts`, exact `Module`/`Lookup`/`Contract`, and explicit direct/subtree
+`Definitions`. Missing bounded identities report absence, not a synthesized
+definition. A prepared empty catalog is valid; nil/zero catalogs return
+`ErrDefinitionCatalog`. Invalid declarations return `ErrDefinitions`; admission
+or query bounds return `ErrDefinitionLimit`. These static construction errors
+retain no rejected data. No runtime API consults the catalog: unfamiliar valid
+conditions still construct, inspect and match normally.
+
+Condition semantic revisions and optional fact-contract references are explicit.
+Fact contracts distinguish occurrence facts from presentation inputs and owner-only
+from separately supported public access. They describe approved scalar/enum
+projections, not arbitrary Go objects, accessors or a reflection/serialization
+schema. Required presence and allowed unknown are independent. Unknown is never
+implicitly zero/false/empty; the owner defines its representation. A declaration
+does not prove that a producer obeys it or expose a private field at runtime.
+Human explanations remain in feature resources, not this package.
+
+Inclusive admission bounds are 64 modules, depth 8, 512 conditions, 256 fact
+contracts, 16 fields per contract and 16 values per enum. Module IDs use the
+condition-owner grammar up to 126 bytes; contract IDs are `module:name` up to
+128 bytes, with local names up to 64. Source labels are at most 128 bytes;
+revisions/field names/enum tokens are at most 64 and units at most 32. These
+machine tokens use nonempty ASCII letters/digits/underscore/hyphen/dot/slash.
+Source labels identify declarations, not files read or authenticated publishers.
+
+Aggregate admitted string bytes are at most 524,288. A separate 4,194,304-byte
+complete inspection envelope charges six times admitted string bytes, 256 bytes
+per module/condition/contract, 192 per field and 32 per enum value. This is a
+conservative projection bound, not exact heap accounting or a durable JSON schema.
+Counts, remaining-capacity arithmetic and duplicate identities are checked before
+descending potentially cyclic child slices or cloning declarations. Complete
+validation precedes publication. Every query owns mutable slice layers; prepared
+strings are detached from caller backing storage. Shared catalogs support
+concurrent queries, provided callers do not overwrite shared handles.
+
+See [definition tests](../../../../failure/v1/definitions_test.go) and the genuine
+independent consumer above. The optional
+[i18n binding layer](../../i18n/v1/interface.md#explicit-modules-and-checked-bindings)
+consumes these declarations; failure itself never imports i18n.
 
 ## Versions and compatibility
 

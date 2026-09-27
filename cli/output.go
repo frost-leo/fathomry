@@ -22,29 +22,26 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"sync"
+
+	"github.com/frost-leo/fathomry/failure/v1"
 )
 
-var (
-	errInputs     = errors.New("cli: invalid invocation inputs")
-	errDefinition = errors.New("cli: invalid command definition")
-	errArguments  = errors.New("cli: invalid arguments")
-	errLanguage   = errors.New("cli: unsupported language")
+const (
+	errInputs     = ErrInputs
+	errDefinition = ErrDefinition
+	errArguments  = ErrUsage
+	errLanguage   = ErrLanguage
 )
-
-type usageError struct{ error }
-
-func (err usageError) Unwrap() error { return err.error }
-
-type outputError struct{ error }
-
-func (err outputError) Unwrap() error { return err.error }
 
 type checkedWriter struct {
 	mutex  sync.Mutex
 	writer io.Writer
 	err    error
+	stream streamKind
 }
 
 func (writer *checkedWriter) Write(data []byte) (int, error) {
@@ -61,10 +58,49 @@ func (writer *checkedWriter) Write(data []byte) (int, error) {
 		err = errors.Join(err, io.ErrShortWrite)
 	}
 	if err != nil {
-		writer.err = outputError{err}
+		writer.err = &outputFailure{core: hostFailure(ErrOutput, err), stream: writer.stream}
 	}
 	return count, writer.err
 }
+
+type streamKind uint8
+
+const (
+	unknownStream streamKind = iota
+	stdoutStream
+	stderrStream
+)
+
+// outputFailure owns one immutable stream observation and the same exact core.
+// It is not a project-effect receipt or a wrapper added at every package layer.
+type outputFailure struct {
+	core   *failure.Error
+	stream streamKind
+}
+
+func (err *outputFailure) Failure() *failure.Error {
+	if err == nil {
+		return nil
+	}
+	return err.core
+}
+func (err *outputFailure) Error() string { return err.Failure().Error() }
+func (err *outputFailure) Unwrap() error {
+	if err == nil || err.core == nil {
+		return nil
+	}
+	return err.core
+}
+func (err outputFailure) Format(state fmt.State, verb rune) {
+	if verb == 'q' {
+		_, _ = fmt.Fprintf(state, "%q", (&err).Error())
+	} else {
+		_, _ = io.WriteString(state, (&err).Error())
+	}
+}
+func (err *outputFailure) LogValue() slog.Value    { return slog.StringValue(err.Error()) }
+func (outputFailure) MarshalJSON() ([]byte, error) { return nil, failure.ErrSerialization }
+func (*outputFailure) UnmarshalJSON([]byte) error  { return failure.ErrSerialization }
 
 func (writer *checkedWriter) failure() error {
 	writer.mutex.Lock()
@@ -79,15 +115,11 @@ func exitStatus(err error) int {
 	if onlyCancellation(err) {
 		return 130
 	}
-	if onlyUsage(err) {
-		return 2
-	}
 	return 1
 }
 
 func onlyCancellation(err error) bool {
-	switch err.(type) {
-	case usageError, outputError:
+	if _, semantic := err.(failure.Occurrence); semantic {
 		return false
 	}
 	if err == context.Canceled {
@@ -107,25 +139,6 @@ func onlyCancellation(err error) bool {
 	}
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
 		return onlyCancellation(wrapped.Unwrap())
-	}
-	return false
-}
-
-func onlyUsage(err error) bool {
-	if _, ok := err.(usageError); ok {
-		return true
-	}
-	if joined, ok := err.(interface{ Unwrap() []error }); ok {
-		causes := joined.Unwrap()
-		if len(causes) == 0 {
-			return false
-		}
-		for _, cause := range causes {
-			if !onlyUsage(cause) {
-				return false
-			}
-		}
-		return true
 	}
 	return false
 }

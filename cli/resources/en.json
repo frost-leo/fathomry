@@ -17,16 +17,110 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "messages": {
-    "root": "Fathomry command line",
-    "help": "Show help for a command",
-    "helpFlag": "Show help",
-    "language": "Human language: en or zh-CN",
-    "usage": "Usage",
-    "commands": "Commands",
-    "flags": "Flags",
-    "invalid": "Invalid command or arguments.",
-    "failed": "Command delivery failed; effects may have occurred.",
-    "canceled": "Command canceled; effects may have occurred."
-  }
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.cli",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.cli:root",
+      "contract": "v1",
+      "context": "Root command description.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Fathomry command line"
+      }
+    },
+    {
+      "id": "fathomry.cli:help",
+      "contract": "v1",
+      "context": "Help command description.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Show help for a command"
+      }
+    },
+    {
+      "id": "fathomry.cli:helpFlag",
+      "contract": "v1",
+      "context": "Help option description.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Show help"
+      }
+    },
+    {
+      "id": "fathomry.cli:language",
+      "contract": "v1",
+      "context": "Display-language option description.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Human language: en or zh-CN"
+      }
+    },
+    {
+      "id": "fathomry.cli:usage",
+      "contract": "v1",
+      "context": "Usage heading.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Usage"
+      }
+    },
+    {
+      "id": "fathomry.cli:commands",
+      "contract": "v1",
+      "context": "Commands heading.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Commands"
+      }
+    },
+    {
+      "id": "fathomry.cli:flags",
+      "contract": "v1",
+      "context": "Options heading.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Flags"
+      }
+    },
+    {
+      "id": "fathomry.cli:invalid",
+      "contract": "v1",
+      "context": "Host diagnostic for invalid user input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Invalid command or arguments."
+      }
+    },
+    {
+      "id": "fathomry.cli:failed",
+      "contract": "v1",
+      "context": "Host diagnostic for failed delivery with unknown effects.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Command delivery failed; effects may have occurred."
+      }
+    },
+    {
+      "id": "fathomry.cli:canceled",
+      "contract": "v1",
+      "context": "Host diagnostic for caller cancellation with unknown effects.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Command canceled; effects may have occurred."
+      }
+    }
+  ]
 }

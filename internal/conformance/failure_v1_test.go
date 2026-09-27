@@ -147,8 +147,8 @@ func TestPublicFailureIndependentFactsAndCLIJoin(t *testing.T) {
 	if status != 2 || err == nil {
 		t.Fatal("CLI rejecting control")
 	}
-	if _, ok := failure.Inspect(err); ok {
-		t.Fatal("CLI aggregate acquired occurrence")
+	if current, ok := failure.Inspect(err); !ok || current.Diagnostic().Condition != cli.ErrUsage {
+		t.Fatal("CLI did not expose its own usage condition")
 	}
 }
 

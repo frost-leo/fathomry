@@ -106,6 +106,14 @@ in-process identity, deliberate causes and safe diagnostics, not a restored lega
 API or a durable error codec. Business authors are not expected to
 recreate private assembly machinery as startup boilerplate.
 
+The public [`i18n/v1`](reference/i18n/v1/interface.md) catalog supplies strict
+resource preparation, complete owned inspection, exact presence, explicit locale
+selection and bounded scalar/cardinal rendering. Existing CLI root/project text
+uses this mechanism with feature-owned resources and invocation-local language.
+Explicit failure module/condition/fact catalogs and checked i18n bindings support
+definition discovery without runtime registration. `cli.Catalogs()` exposes the
+built-in root/project inventories without command execution or service startup.
+
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
 and shutdown, Activity/Local Activity/Nexus callback evidence and controlled raw
@@ -247,6 +255,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | --- | --- |
 | [`cli`](reference/cli/interface.md) | First-party root/help and local-source project creation; no public command registration |
 | [`failure/v1`](reference/failure/v1/interface.md) | Stdlib-only in-process identity, direct occurrences, intentional causes and safe owned diagnostics |
+| [`i18n/v1`](reference/i18n/v1/interface.md) | Immutable resource catalogs, exact lookup, explicit fallback and bounded scalar/cardinal rendering |
 
 ## Internal package reference
 
