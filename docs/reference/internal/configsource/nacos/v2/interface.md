@@ -60,6 +60,22 @@ Temporal commands.
 5. Close subscriptions or their owning client. Retain the same owner after a
    timed-out Close and retry with a fresh cleanup budget.
 
+The [public Nacos Adapter](../../../../adapters/configsource/nacos/v1/interface.md)
+uses three narrow seams instead of requiring another native engine:
+`ValidateOptions` admits deferred bootstrap; `ReadRawAll` retains present-empty
+content and explicit `Document.Missing` slots; `ObserveRaw` receives complete raw
+batches from the same registration/reconciliation/recovery loop. Read/ReadAll keep
+their required-document behavior, and Watch retains its invalidation contract.
+Raw reconciliation enforces the 4-MiB aggregate bound before retaining a batch.
+ObserveRaw's synchronous callback is internal bounded handoff, not caller business
+logic. Public source/framework state and errors are not imported by this package.
+ReadRawAll and ObserveRaw separately supply the failed selected-key index, or -1
+when unknown/success. This attribution is produced at the query boundary, never
+recovered by searching arbitrary retained context causes. A validated native
+ChangedConfigs response schedules a paced follow-up in the same raw observation
+loop; no new poller/session is added. Metadata-only Watch retains its hash-only
+acquisition and does not inherit raw-batch retention limits.
+
 Open's context owns the whole lifetime. Canceling a Next wait does not cancel
 the subscription. Clients and subscriptions support concurrent operations; do
 not copy their runtime structs. Returned documents/changes are immutable, and

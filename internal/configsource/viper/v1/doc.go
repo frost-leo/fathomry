@@ -28,6 +28,8 @@
 // instance per input. Each input supplies versioned [OptionsV1] and exactly one
 // absolute file path or borrowed reader. Files opened by Load are closed before
 // return; caller readers are never closed. Failure returns no usable new prefix.
+// [RawFile] reuses bounded owned file reading without requiring successful native
+// syntax parsing; it preserves UTF-8 present-empty bytes and positive OS absence.
 //
 // [Document.RawCopy] preserves original bytes for the existing resource preparation
 // boundary. Composition chooses the authorized layer identities and precedence;

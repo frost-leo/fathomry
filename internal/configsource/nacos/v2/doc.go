@@ -34,6 +34,8 @@
 // [Document.RawCopy] feeds existing resource preparation after composition assigns
 // layer identity and precedence. Native MD5/time fields are observations, not
 // authenticity, preparation revisions or a common-time snapshot.
+// [Client.ReadRawAll] shares the finite path but preserves present-empty content
+// and positive Missing slots for Adapter-owned required/optional policy.
 //
 // # Observation and shutdown
 //
@@ -42,6 +44,9 @@
 // resynchronization requires re-reading every selected key. Pushes and periodic
 // hash/presence comparisons can coalesce or duplicate notifications. Reconnection
 // requires new Nacos setup/listen registration, not just another gRPC TCP connection.
+// [Client.ObserveRaw] reuses that same owned loop and hands complete bounded raw
+// acquisitions to the Adapter without a second refetch. Its internal callback
+// must remain bounded and synchronous; it is not a business callback surface.
 //
 // [Subscription.Close] and [Client.Close] cancel owned work and wait for local
 // completion. A timed-out close retains responsibility and must be retried.

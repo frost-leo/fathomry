@@ -1,0 +1,40 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.adapters",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.adapters:invalid_catalog",
+      "source": "968acbea6d76e2a30603885350dfd0f936c5adf6fa462e86d3b1ca9c3a13c63e",
+      "forms": {
+        "other": "无法组合静态模块声明。"
+      }
+    },
+    {
+      "id": "fathomry.adapters:limit",
+      "source": "c62b1c2e6b76d26af45197370325232e0546018543fcecf3cd3e4bce46a46ee4",
+      "forms": {
+        "other": "静态模块声明超出支持的限制。"
+      }
+    }
+  ]
+}

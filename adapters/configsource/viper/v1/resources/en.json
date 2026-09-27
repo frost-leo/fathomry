@@ -1,0 +1,112 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.adapters.configsource.viper",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.adapters.configsource.viper:invalid_settings",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Invalid local configuration source settings."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:read",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {
+        "source": {
+          "kind": "string",
+          "meaning": "Declared non-secret logical source alias."
+        },
+        "phase": {
+          "kind": "string",
+          "meaning": "Known public source operation."
+        }
+      },
+      "cardinal": false,
+      "forms": {
+        "other": "Local configuration could not be read. Source: {source}; phase: {phase}."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:limit",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {
+        "source": {
+          "kind": "string",
+          "meaning": "Declared non-secret logical source alias."
+        },
+        "phase": {
+          "kind": "string",
+          "meaning": "Known public source operation."
+        }
+      },
+      "cardinal": false,
+      "forms": {
+        "other": "Local configuration exceeds a supported limit. Source: {source}; phase: {phase}."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:encoding",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {
+        "source": {
+          "kind": "string",
+          "meaning": "Declared non-secret logical source alias."
+        },
+        "phase": {
+          "kind": "string",
+          "meaning": "Known public source operation."
+        }
+      },
+      "cardinal": false,
+      "forms": {
+        "other": "Local configuration is not valid UTF-8. Source: {source}; phase: {phase}."
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.viper:cleanup",
+      "contract": "v1",
+      "context": "Configuration boundary refusal.",
+      "args": {
+        "source": {
+          "kind": "string",
+          "meaning": "Declared non-secret logical source alias."
+        },
+        "phase": {
+          "kind": "string",
+          "meaning": "Known public source operation."
+        }
+      },
+      "cardinal": false,
+      "forms": {
+        "other": "Local configuration cleanup failed. Source: {source}; phase: {phase}."
+      }
+    }
+  ]
+}

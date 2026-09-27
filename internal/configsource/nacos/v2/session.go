@@ -153,18 +153,39 @@ func (client *Client) newSession(ctx context.Context, index int, notify func(key
 }
 func (current *session) failure(operation string, err error) error {
 	identity := ErrUnavailable
-	if status.Code(err) == codes.Unauthenticated || status.Code(err) == codes.PermissionDenied {
+	var standard error
+	switch rpcCode(err) {
+	case codes.Unauthenticated, codes.PermissionDenied:
 		identity = ErrDenied
-	} else if status.Code(err) == codes.ResourceExhausted {
+	case codes.ResourceExhausted:
 		identity = ErrLimit
+	case codes.Canceled:
+		standard = context.Canceled
+	case codes.DeadlineExceeded:
+		standard = context.DeadlineExceeded
 	}
-	return fail(identity, operation, err, current.ctx.Err(), context.Cause(current.ctx))
+	return fail(identity, operation, standard, err, current.ctx.Err(), context.Cause(current.ctx))
+}
+
+// Only a directly returned native RPC status is protocol evidence. Joined local
+// context failures may retain arbitrary borrowed causes and are not inspected.
+func rpcCode(err error) codes.Code {
+	if rpc, ok := err.(interface{ GRPCStatus() *status.Status }); ok {
+		return rpc.GRPCStatus().Code()
+	}
+	return codes.Unknown
 }
 
 // call keeps native response decoding inside the caller's allowance and budget.
 // Only code 301 (registration not ready) is retried here; it is not configuration
 // absence, and retry exhaustion must retain the last native failure.
 func (current *session) call(ctx context.Context, value request.IRequest, expected string, authenticated bool) (response.IResponse, error) {
+	return current.callObserved(ctx, value, expected, authenticated, nil)
+}
+
+// attempted distinguishes an issued unary call from prior authentication/setup.
+// It is local acquisition evidence, never proof that a remote effect occurred.
+func (current *session) callObserved(ctx context.Context, value request.IRequest, expected string, authenticated bool, attempted *bool) (response.IResponse, error) {
 	work, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
 	stop := context.AfterFunc(current.ctx, func() { cancel(context.Cause(current.ctx)) })
@@ -185,8 +206,14 @@ func (current *session) call(ctx context.Context, value request.IRequest, expect
 				return nil, err
 			}
 		}
+		if attempted != nil {
+			*attempted = true
+		}
 		raw, err := current.unary.Request(work, current.owner.envelope(value, accessToken))
 		if err != nil {
+			if code := rpcCode(err); authenticated && (code == codes.Unauthenticated || code == codes.PermissionDenied) {
+				current.owner.forgetToken(current.index, accessToken)
+			}
 			return nil, current.failure("request", err)
 		}
 		result, err := decodeResponse(raw, expected)

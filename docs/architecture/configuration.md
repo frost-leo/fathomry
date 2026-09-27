@@ -123,10 +123,13 @@ list/null/empty/duplicate/unknown-key rules, revision identity and freezing beha
 The [Viper v1 technical integration](../reference/internal/configsource/viper/v1/interface.md)
 implements a bounded local acquisition profile with explicitly bound live environment
 queries. It is not an assembled business-resource Provider or frozen preparation.
-The full framework loader and reload/rotation handoff remain unimplemented and
-need their own explicit contracts before support is claimed. A replacement or reload
-must not retroactively relabel settings
-already used by in-flight work or weaken its execution constraints.
+The [public configuration API](../reference/framework/configuration/v1/interface.md)
+now provides typed Core/project Load and explicit Watch. Source Adapters own the
+single acquisition/recovery loop; Framework recomputes from original defaults and
+publishes checked immutable snapshots. Instance construction/credential activation
+and client rotation remain separate, unimplemented application boundaries.
+A replacement or reload must not retroactively relabel settings already used by
+in-flight work or weaken its execution constraints.
 
 ## Implementation references
 

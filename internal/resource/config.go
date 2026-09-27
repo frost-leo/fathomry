@@ -41,9 +41,11 @@ import (
 // Layer supplies one explicitly authorized YAML mapping (JSON syntax is accepted
 // as YAML). Bytes are borrowed during Prepare only, with at most one layer per kind.
 // Environment/Variables are declarations, NOT instructions to read process state.
+// JSONVariables explicitly selects strict JSON decoding for generated variables.
 type Layer struct {
-	Kind    LayerKind
-	Content []byte
+	Kind          LayerKind
+	Content       []byte
+	jsonVariables bool
 }
 
 // Input selects one Provider configuration format. Format is not a source revision.
@@ -124,6 +126,10 @@ func (prepared Prepared[T]) settings() (T, error) {
 // implicit reload are unsupported. Numbers
 // must use JSON numeric syntax; integer fields reject fractions and exponents.
 func Prepare[T any](schema Schema[T], input Input) (Prepared[T], error) {
+	return prepare(schema, input, true)
+}
+
+func prepare[T any](schema Schema[T], input Input, named bool) (Prepared[T], error) {
 	location := fault.Context{Operation: "prepare"}
 	if validID(input.Identity.Provider) {
 		location.Provider = input.Identity.Provider
@@ -134,7 +140,7 @@ func Prepare[T any](schema Schema[T], input Input) (Prepared[T], error) {
 	fail := func(cause error) (Prepared[T], error) {
 		return Prepared[T]{}, ErrConfiguration.New(location, cause)
 	}
-	if !validID(input.Identity.Provider) || !validID(input.Identity.Name) {
+	if named && (!validID(input.Identity.Provider) || !validID(input.Identity.Name)) {
 		return fail(errors.New("source: invalid identity"))
 	}
 	if schema.Format == 0 || input.Format != schema.Format {
@@ -169,7 +175,7 @@ func Prepare[T any](schema Schema[T], input Input) (Prepared[T], error) {
 			return fail(errors.New("source: invalid or duplicate layer kind"))
 		}
 		previous = layer.Kind
-		values, err := parseMapping(layer.Content)
+		values, err := layer.mapping()
 		if err != nil {
 			return fail(err)
 		}

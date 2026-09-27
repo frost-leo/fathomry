@@ -87,6 +87,14 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			}
 		})
 	}
+	t.Run("reject-adapter-private-state", func(t *testing.T) {
+		path := "github.com/frost-leo/fathomry/adapters/configsource/internal/owned"
+		write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
+		output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
+		if err == nil || !strings.Contains(string(output), "use of internal package "+path+" not allowed") {
+			t.Fatalf("wrong Adapter-private import rejection: %v\n%s", err, output)
+		}
+	})
 	output, err = run(root, "list", "./...")
 	if err != nil {
 		t.Fatal("package inventory could not be inspected")
@@ -95,6 +103,13 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") &&
 			path != "github.com/frost-leo/fathomry/failure/v1" &&
 			path != "github.com/frost-leo/fathomry/i18n/v1" &&
+			path != "github.com/frost-leo/fathomry/adapters/v1" &&
+			path != "github.com/frost-leo/fathomry/framework/v1" &&
+			path != "github.com/frost-leo/fathomry/adapters/configsource/v1" &&
+			path != "github.com/frost-leo/fathomry/adapters/configsource/viper/v1" &&
+			path != "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1" &&
+			path != "github.com/frost-leo/fathomry/adapters/configsource/internal/owned" &&
+			path != "github.com/frost-leo/fathomry/framework/configuration/v1" &&
 			path != "github.com/frost-leo/fathomry/cli/internal/command/project" &&
 			path != "github.com/frost-leo/fathomry/cli" && path != "github.com/frost-leo/fathomry/cmd/fathomry" {
 			t.Errorf("unexpected public package: %s", path)
@@ -110,6 +125,16 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/database/") || strings.HasPrefix(path, "github.com/jackc/pgx/") || path == "github.com/go-sql-driver/mysql" ||
 			strings.HasPrefix(path, "github.com/frost-leo/fathomry/") && !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
 			t.Errorf("technical mechanisms depend on framework errors or test support: %s", path)
+		}
+	}
+	output, err = run(root, "list", "-deps", "./internal/configsource/...")
+	if err != nil {
+		t.Fatal("configuration mechanism dependency check failed")
+	}
+	for _, path := range strings.Fields(string(output)) {
+		if strings.HasPrefix(path, "github.com/frost-leo/fathomry/adapters/") ||
+			strings.HasPrefix(path, "github.com/frost-leo/fathomry/framework/") {
+			t.Errorf("internal acquisition depends back on a public layer: %s", path)
 		}
 	}
 }

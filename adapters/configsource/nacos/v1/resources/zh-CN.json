@@ -1,0 +1,68 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.adapters.configsource.nacos",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.adapters.configsource.nacos:invalid_settings",
+      "source": "5819752f262b7483c4d031e591fc2eb6f677422841395c828f12ca6c74185f6f",
+      "forms": {
+        "other": "远程配置来源设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.nacos:read",
+      "source": "7d08e0af199c48f531dc230086239c9a0081c5dc6d5a5e39193566777de3c90b",
+      "forms": {
+        "other": "远程配置获取失败。 来源：{source}；阶段：{phase}。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.nacos:denied",
+      "source": "1212ccd690e5aa35edf7d57e7ae909653d66f66e2f4ccabd8ea50a35bdd9bb60",
+      "forms": {
+        "other": "远程配置访问被拒绝。 来源：{source}；阶段：{phase}。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.nacos:protocol",
+      "source": "c2d2bf119c3bc042931b37f60b32d419a06b8ed41dc35fb1757f7dda5e07a381",
+      "forms": {
+        "other": "远程配置响应无效或不受支持。 来源：{source}；阶段：{phase}。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.nacos:limit",
+      "source": "2cb60e70c993e73c83678b44d1a736630352345c28d57c4e9968b5552784f7c1",
+      "forms": {
+        "other": "远程配置超出支持的限制。 来源：{source}；阶段：{phase}。"
+      }
+    },
+    {
+      "id": "fathomry.adapters.configsource.nacos:cleanup",
+      "source": "4331445553ee78feed5d0e95abbade898409b8f888edc956a30f98f54c4df90e",
+      "forms": {
+        "other": "远程配置清理失败。 来源：{source}；阶段：{phase}。"
+      }
+    }
+  ]
+}
