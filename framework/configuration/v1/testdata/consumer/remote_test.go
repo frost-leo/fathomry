@@ -408,6 +408,9 @@ func TestRemoteObserveRecoveryAndBounds(t *testing.T) {
 	}
 	closeOwner(t, observer.Close)
 	settings := fixture.settings()
+	// Exercise the aggregate limit, not a one-second throughput requirement for
+	// five large documents under race instrumentation and shared CI scheduling.
+	settings.RequestTimeout = 10 * time.Second
 	fixture.mu.Lock()
 	settings.Documents = nil
 	for index := range 5 {
@@ -420,8 +423,12 @@ func TestRemoteObserveRecoveryAndBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if batch, err := bounded.Capture(context.Background()); batch != nil || !errors.Is(err, remote.ErrLimit) {
-		t.Fatal("aggregate remote prefix escaped", err)
+	batch, err := bounded.Capture(context.Background())
+	if batch != nil {
+		t.Fatal("aggregate remote prefix escaped")
+	}
+	if !errors.Is(err, remote.ErrLimit) {
+		t.Fatalf("aggregate capture did not reach its limit (deadline=%t, canceled=%t): %v", errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled), err)
 	}
 	observing, err := bounded.Observe(context.Background())
 	if err != nil {
@@ -429,8 +436,27 @@ func TestRemoteObserveRecoveryAndBounds(t *testing.T) {
 	}
 	t.Cleanup(func() { closeOwner(t, observing.Close) })
 	state := awaitRaw(t, observing, func(state source.State) bool { return state.Status == source.Degraded })
-	if state.Batch != nil || !errors.Is(state.Failure, remote.ErrLimit) {
-		t.Fatal("reconciliation retained over-limit batch", state.Failure)
+	if state.Batch != nil {
+		t.Fatal("reconciliation retained over-limit batch")
+	}
+	if !errors.Is(state.Failure, remote.ErrLimit) {
+		t.Fatalf("aggregate observation did not reach its limit (deadline=%t, canceled=%t): %v", errors.Is(state.Failure, context.DeadlineExceeded), errors.Is(state.Failure, context.Canceled), state.Failure)
+	}
+	closeOwner(t, observing.Close)
+	settings.Documents = settings.Documents[:4]
+	exact, err := remote.Select(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	batch, err = exact.Capture(context.Background())
+	if err != nil || batch == nil || len(batch.Documents()) != 4 {
+		t.Fatal("exact remote aggregate boundary rejected", err)
+	}
+	for _, document := range batch.Documents() {
+		raw, presence, err := batch.RawCopy(document.Name)
+		if err != nil || presence != source.Present || len(raw) != source.MaxDocumentBytes {
+			t.Fatal("exact remote aggregate truncated a document", err)
+		}
 	}
 }
 func TestRemoteFrameworkWatchNoSecondAcquisition(t *testing.T) {
