@@ -22,6 +22,11 @@
 // Run borrows explicit invocation inputs and never exits or changes signal policy.
 // Main owns process arguments, streams, signals and exit. Root/help and local-source
 // project creation are shipped; command construction and extension are private.
+// Host and project failures use owner-defined failure/v1 conditions. Run preserves
+// a sole semantic error and joins independent failures without inferring a primary.
+// Conditions do not replace exit status or prove whether effects occurred.
+// Catalogs exposes immutable built-in module/error/resource/binding inventories
+// without command execution or ambient language. Definitions remain feature-owned.
 // Independent Run calls have fresh
 // parser state; callers remain responsible for shared streams and callbacks.
 // Runtime acceptance is Go 1.27 on Linux. Arbitrary blocked I/O is not interruptible

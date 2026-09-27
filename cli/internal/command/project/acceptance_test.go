@@ -137,6 +137,18 @@ func TestActualGeneratedModuleJourney(t *testing.T) {
 		"example.org/generated/v2",
 		"github.com/frost-leo/fathomry/cli",
 		"github.com/frost-leo/fathomry/cli/internal/command/project",
+		"github.com/frost-leo/fathomry/failure/v1",
+		"github.com/frost-leo/fathomry/i18n/v1",
+		"golang.org/x/text/internal/tag",
+		"golang.org/x/text/internal/language",
+		"golang.org/x/text/internal/language/compact",
+		"golang.org/x/text/language",
+		"golang.org/x/text/internal/catmsg",
+		"golang.org/x/text/internal/stringset",
+		"golang.org/x/text/internal/number",
+		"golang.org/x/text/internal",
+		"golang.org/x/text/message/catalog",
+		"golang.org/x/text/feature/plural",
 		"github.com/spf13/cobra", "github.com/spf13/pflag",
 		"golang.org/x/mod/internal/lazyregexp", "golang.org/x/mod/modfile",
 		"golang.org/x/mod/module", "golang.org/x/mod/semver",
@@ -163,7 +175,7 @@ func TestActualGeneratedModuleJourney(t *testing.T) {
 		}
 	}
 	slices.Sort(modules)
-	if !slices.Equal(modules, []string{"github.com/frost-leo/fathomry", "github.com/spf13/cobra", "github.com/spf13/pflag", "golang.org/x/mod"}) {
+	if !slices.Equal(modules, []string{"github.com/frost-leo/fathomry", "github.com/spf13/cobra", "github.com/spf13/pflag", "golang.org/x/mod", "golang.org/x/text"}) {
 		t.Fatalf("unrelated SDKs in binary: %v", modules)
 	}
 	t.Logf("binary Go version: %s; modules: %v", build.GoVersion, modules)

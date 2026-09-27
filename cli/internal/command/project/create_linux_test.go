@@ -34,7 +34,8 @@ func TestLinuxSourceFIFOIsRefusedWithoutReading(t *testing.T) {
 	if err := syscall.Mkfifo(filepath.Join(input.source, "go.mod"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	effect, err := create(context.Background(), input)
+	creation := create(context.Background(), input)
+	effect, err := creation.observation, creation.err
 	if effect != untouched || !errors.Is(err, errSource) {
 		t.Fatalf("FIFO accepted: %v %v", effect, err)
 	}
@@ -64,7 +65,8 @@ func TestLinuxPermissionFailures(t *testing.T) {
 					t.Error(err)
 				}
 			})
-			effect, err := create(context.Background(), input)
+			creation := create(context.Background(), input)
+			effect, err := creation.observation, creation.err
 			if effect != untouched || !errors.Is(err, os.ErrPermission) {
 				t.Fatalf("permission failure: %v %v", effect, err)
 			}

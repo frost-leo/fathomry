@@ -94,10 +94,37 @@ func TestUnrelatedModulePublicEntries(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "main.go"), source, 0600); err != nil {
 		t.Fatal(err)
 	}
+	contractTests, err := os.ReadFile("testdata/consumer/main_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "main_test.go"), contractTests, 0600); err != nil {
+		t.Fatal(err)
+	}
 	binary := filepath.Join(directory, "consumer")
 	goCommand(t, directory, "mod", "tidy")
 	goCommand(t, directory, "mod", "tidy", "-diff")
+	t.Logf("public CLI condition consumer:\n%s", goCommand(t, directory, "test", "-race", "-count=1", "-mod=readonly", "-v", "."))
 	goCommand(t, directory, "build", "-mod=readonly", "-buildvcs=false", "-o", binary, ".")
+	var queryBaseline []byte
+	for _, locale := range []string{"en_US.UTF-8", "zh_CN.UTF-8"} {
+		query := exec.Command(binary, "--lang=invalid", "new", "must-not-be-created")
+		query.Dir = directory
+		query.Env = append(os.Environ(), "FATHOMRY_ATLAS_QUERY=1", "LANG="+locale, "LC_ALL="+locale)
+		var diagnostic bytes.Buffer
+		query.Stderr = &diagnostic
+		inventory, err := query.Output()
+		if err != nil || diagnostic.Len() != 0 || !bytes.Contains(inventory, []byte("fathomry.cli.project.source_unusable")) {
+			t.Fatal("query-only subprocess", err, diagnostic.String())
+		}
+		if queryBaseline != nil && !bytes.Equal(queryBaseline, inventory) {
+			t.Fatal("locale/argv changed machine inventory")
+		}
+		queryBaseline = inventory
+		if _, err := os.Stat(filepath.Join(directory, "must-not-be-created")); !errors.Is(err, os.ErrNotExist) {
+			t.Fatal("query executed command")
+		}
+	}
 	for _, prefix := range [][]string{nil, {"run"}} {
 		for _, test := range []struct {
 			args     []string
@@ -128,6 +155,18 @@ func TestUnrelatedModulePublicEntries(t *testing.T) {
 		"example.org/unrelated-cli-consumer":                         true,
 		"github.com/frost-leo/fathomry/cli":                          true,
 		"github.com/frost-leo/fathomry/cli/internal/command/project": true,
+		"github.com/frost-leo/fathomry/failure/v1":                   true,
+		"github.com/frost-leo/fathomry/i18n/v1":                      true,
+		"golang.org/x/text/internal/tag":                             true,
+		"golang.org/x/text/internal/language":                        true,
+		"golang.org/x/text/internal/language/compact":                true,
+		"golang.org/x/text/language":                                 true,
+		"golang.org/x/text/internal/catmsg":                          true,
+		"golang.org/x/text/internal/stringset":                       true,
+		"golang.org/x/text/internal/number":                          true,
+		"golang.org/x/text/internal":                                 true,
+		"golang.org/x/text/message/catalog":                          true,
+		"golang.org/x/text/feature/plural":                           true,
 		"github.com/spf13/cobra":                                     true,
 		"github.com/spf13/pflag":                                     true,
 		"golang.org/x/mod/internal/lazyregexp":                       true,

@@ -26,6 +26,11 @@
 // Capability-owned extensions implement Occurrence and own their typed facts,
 // copying, bounds, presentation and concurrency contracts.
 //
+// Optional PrepareDefinitions builds an immutable, bounded module/condition/fact
+// atlas from explicit owner declarations. Queries inspect definitions, never
+// runtime occurrences. New/Inspect/matching remain independent of registration.
+// There is no mutable global registry, discovery, localization or schema codec.
+//
 // Error owns immutable condition and cause-slice storage. Foreign cause objects
 // are retained, not cloned. Package-owned diagnostics and supported fmt/slog output never
 // traverse them. Code grammar is not proof of namespace authority or privacy:

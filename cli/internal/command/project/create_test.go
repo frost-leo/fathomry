@@ -33,6 +33,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/frost-leo/fathomry/i18n/v1"
 	"golang.org/x/mod/modfile"
 	"golang.org/x/mod/module"
 )
@@ -119,7 +120,8 @@ func TestCreateRendersExactlyFourFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertAbsent(t, input.directory)
-	effect, err := create(context.Background(), input)
+	creation := create(context.Background(), input)
+	effect, err := creation.observation, creation.err
 	if effect != complete || err != nil {
 		t.Fatalf("create: %v %v", effect, err)
 	}
@@ -171,7 +173,8 @@ func TestRelativePathsAndAliases(t *testing.T) {
 	mustLink(t, repository(t), filepath.Join(root, "source \" alias"))
 	t.Chdir(filepath.Join(root, "invocation"))
 	input := request{"../parent alias/new", "example.org/project/v2", "../source \" alias"}
-	effect, err := create(context.Background(), input)
+	creation := create(context.Background(), input)
+	effect, err := creation.observation, creation.err
 	if effect != complete || err != nil {
 		t.Fatalf("create: %v %v", effect, err)
 	}
@@ -206,7 +209,8 @@ func TestInvalidInputNeverCreates(t *testing.T) {
 			input := inputFor(t)
 			target := input.directory
 			change(&input)
-			effect, err := create(context.Background(), input)
+			creation := create(context.Background(), input)
+			effect, err := creation.observation, creation.err
 			if effect != untouched || err == nil {
 				t.Fatalf("accepted: %v %v", effect, err)
 			}
@@ -248,7 +252,8 @@ func TestExistingTargetsNeverChange(t *testing.T) {
 				t.Fatal(err)
 			}
 			for range 2 {
-				effect, err := create(context.Background(), input)
+				creation := create(context.Background(), input)
+				effect, err := creation.observation, creation.err
 				if effect != untouched || !errors.Is(err, os.ErrExist) {
 					t.Fatalf("wrong refusal: %v %v", effect, err)
 				}
@@ -326,7 +331,8 @@ func TestSourceProfile(t *testing.T) {
 					mustWrite(t, filepath.Join(input.source, "cli"), "not a directory")
 				}
 			}
-			effect, err := create(context.Background(), input)
+			creation := create(context.Background(), input)
+			effect, err := creation.observation, creation.err
 			if effect != untouched || err == nil {
 				t.Fatalf("accepted: %v %v", effect, err)
 			}
@@ -350,7 +356,8 @@ func TestSourceOverlapAndUnrenderablePath(t *testing.T) {
 		{alias, filepath.Join(alias, "new")},
 	} {
 		input := request{pair[1], "example.org/collector", pair[0]}
-		effect, err := create(context.Background(), input)
+		creation := create(context.Background(), input)
+		effect, err := creation.observation, creation.err
 		if effect != untouched || !errors.Is(err, errOverlap) {
 			t.Fatalf("overlap accepted: %v %v", effect, err)
 		}
@@ -360,7 +367,8 @@ func TestSourceOverlapAndUnrenderablePath(t *testing.T) {
 	sourceAlias := filepath.Join(t.TempDir(), "source\\name")
 	mustLink(t, input.source, sourceAlias)
 	input.source = sourceAlias
-	effect, err := create(context.Background(), input)
+	creation := create(context.Background(), input)
+	effect, err := creation.observation, creation.err
 	if effect != untouched || err == nil {
 		t.Fatalf("unparseable replacement accepted: %v %v", effect, err)
 	}
@@ -390,7 +398,8 @@ func TestSameTargetCompetition(t *testing.T) {
 	for index, plan := range plans {
 		group.Go(func() {
 			<-start
-			effect, err := plan.write(context.Background(), exclusiveFile)
+			creation := plan.write(context.Background(), exclusiveFile)
+			effect, err := creation.observation, creation.err
 			results <- result{index, effect, err}
 		})
 	}
@@ -496,7 +505,8 @@ func TestPartialFailuresPreserveFilesAndCauses(t *testing.T) {
 				}
 				return wrapped, nil
 			}
-			effect, err := plan.write(ctx, open)
+			creation := plan.write(ctx, open)
+			effect, err := creation.observation, creation.err
 			if kind == "late-cancel" {
 				if effect != complete || !errors.Is(err, context.Canceled) || calls != 4 || closes != 4 {
 					t.Fatalf("late cancel: %v %v calls=%d closes=%d", effect, err, calls, closes)
@@ -544,7 +554,8 @@ func TestPartialFailuresPreserveFilesAndCauses(t *testing.T) {
 				}
 			}
 			before := readFiles(t, plan.directory)
-			retryEffect, retryErr := create(context.Background(), input)
+			retryCreation := create(context.Background(), input)
+			retryEffect, retryErr := retryCreation.observation, retryCreation.err
 			if retryEffect != untouched || !errors.Is(retryErr, os.ErrExist) {
 				t.Fatal("retry not refused", retryEffect, retryErr)
 			}
@@ -566,7 +577,8 @@ func TestPreCanceledDoesNotInspectOrCreate(t *testing.T) {
 	cause := errors.New("caller cause")
 	ctx, cancel := context.WithCancelCause(context.Background())
 	cancel(cause)
-	effect, err := create(ctx, input)
+	creation := create(ctx, input)
+	effect, err := creation.observation, creation.err
 	if effect != untouched || !errors.Is(err, context.Canceled) || !errors.Is(err, cause) || errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("wrong cancellation: %v %v", effect, err)
 	}
@@ -574,7 +586,18 @@ func TestPreCanceledDoesNotInspectOrCreate(t *testing.T) {
 }
 
 func TestStaticValidationAndResources(t *testing.T) {
-	command := New()
+	sources, err := Sources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := i18n.Prepare(sources...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command, err := New(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(command.Aliases) != 0 || command.HasSubCommands() {
 		t.Fatal("new must remain a project-only leaf")
 	}
@@ -587,10 +610,12 @@ func TestStaticValidationAndResources(t *testing.T) {
 	if err := command.ValidateArgs([]string{"/missing/parent/app"}); err != nil {
 		t.Fatal("static validation inspected paths", err)
 	}
-	words := loadProse()
 	for _, key := range []string{"new", "module", "source", "created", "notStarted", "partial", "completeDelivery"} {
-		if words.english[key] == "" || words.chinese[key] == "" {
-			t.Errorf("missing resource %s", key)
+		for _, locale := range []string{"en", "zh-CN"} {
+			found, err := catalog.Lookup("fathomry.cli.project:"+key, locale)
+			if err != nil || !found.TranslationExists {
+				t.Errorf("missing resource %s %s: %v", key, locale, err)
+			}
 		}
 	}
 }

@@ -84,8 +84,7 @@ func TestCheckedOutputAndSafeDiagnostics(t *testing.T) {
 				t.Fatalf("retried output: %d", test.output.calls)
 			}
 			if test.name == "usage-diagnostic" {
-				var usage usageError
-				if !errors.As(err, &usage) {
+				if !errors.Is(err, ErrUsage) {
 					t.Fatal("lost invocation error")
 				}
 			}
@@ -226,8 +225,7 @@ func TestCancellationDuringDiagnosticRetained(t *testing.T) {
 			case <-time.After(3 * time.Second):
 				t.Fatal("diagnostic did not finish")
 			}
-			var usage usageError
-			if status != test.status || writer.calls != 1 || !errors.As(err, &usage) {
+			if status != test.status || writer.calls != 1 || !errors.Is(err, ErrUsage) {
 				t.Errorf("status=%d error=%v writes=%d", status, err, writer.calls)
 			}
 			if errors.Is(err, context.Canceled) != test.cancel {

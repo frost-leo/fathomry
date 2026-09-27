@@ -41,6 +41,15 @@ creates a four-file Go executable using the public CLI, not a workflow applicati
 There is no public domain API, production service Provider, application loader or
 complete runtime yet.
 
+The public [i18n/v1 catalog](docs/reference/i18n/v1/interface.md) prepares,
+inspects, selects and renders bounded feature-owned resources. Root and project
+CLI text use it, with explicit locale and unchanged machine output. It uses the
+localization-independent [failure/v1 contract](docs/reference/failure/v1/interface.md)
+for its own failures; neither package is a durable message/error protocol.
+Optional immutable module/error definition catalogs and checked message bindings
+provide orderly feature-owned discovery. `cli.Catalogs()` queries the built-in
+root/project inventories without executing a command or starting services.
+
 An internal Nacos v2 configuration integration supplies raw reads, bounded
 invalidation subscriptions and owned protocol sessions. Its explicit compatibility
 profile has local and isolated single-server verification, not production or

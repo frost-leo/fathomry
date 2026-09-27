@@ -52,6 +52,32 @@ public promotion without implementing a production Adapter.
 An already suitable error need not be wrapped merely to identify a layer. No
 converter registry, shared generic kernel or automatic business policy is required.
 
+Each semantic owner maintains stable condition meanings and any necessary typed
+fact contract. This is a design constraint, not a requirement for one new Error
+struct per package or layer. Use values of the shared `failure.Condition` type;
+interchangeable Adapters implement the same public capability semantics even when
+their private representations differ. Owner-specific facts require explicit units,
+known/absent/unknown states, bounds, copying, lifetime and supported access.
+Private layout may evolve while its public behavior remains compatible; public Go
+contracts and durable schemas are separate version axes.
+
+Choose facts from actual producer/consumer needs, including programmatic recovery,
+not merely template parameters. Facts useful on both success and failure may
+belong in operation-specific results/evidence rather than only in errors.
+Localization consumes an approved projection from the same selected occurrence or
+operation binding; it does not define the domain data schema. Do not invent a
+universal Details map, freeze every private field, or require runtime errors to
+become persistent DTOs. The current CLI owns semantic conditions and private
+completion/effect observations, not a new public recovery/result protocol.
+
+Definition discovery is a separate shared mechanism. Explicit owner module trees
+and condition/fact declarations prepare into failure's immutable definition catalog;
+i18n groups exact resource owners and compiles checked presentation bindings.
+CLI exposes its root/project inventories without executing commands. This does
+not register runtime errors, require registration for valid conditions, introduce
+global mutable state or make failure depend on localization. Public versus
+owner-only fact access remains explicit; metadata is not an automatic accessor.
+
 Keep these responsibilities separate:
 
 | Concern | Owner and contract |

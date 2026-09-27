@@ -28,37 +28,77 @@ import (
 )
 
 func commands(words *text) *cobra.Command {
-	root := &cobra.Command{Use: "fathomry", Short: words.english["root"], Args: cobra.NoArgs}
-	root.Annotations = map[string]string{"fathomry.short.zh-CN": words.chinese["root"]}
-	root.AddCommand(project.New())
+	root := &cobra.Command{Use: "fathomry", Short: words.english("root"), Args: cobra.NoArgs}
+	root.Annotations = map[string]string{"fathomry.short.id": "fathomry.cli:root"}
+	command, err := project.New(words.catalog)
+	if err != nil {
+		words.retain(err)
+	} else {
+		root.AddCommand(command)
+	}
 	return root
 }
 
 func prepare(root *cobra.Command, words *text) error {
+	if err := words.validate(); err != nil {
+		return err
+	}
 	if root == nil || root.RunE != nil || pflag.CommandLine.HasFlags() {
-		return errDefinition
+		return hostFailure(ErrDefinition)
 	}
 	language := &languageValue{words: words}
 	persistent := root.PersistentFlags()
 	if persistent.Lookup("lang") != nil || persistent.GetNormalizeFunc()(persistent, "lang") != "lang" ||
 		persistent.GetNormalizeFunc()(persistent, "help") != "help" {
-		return errDefinition
+		return hostFailure(ErrDefinition)
 	}
-	persistent.Var(language, "lang", words.english["language"])
+	persistent.Var(language, "lang", words.english("language"))
 	persistent.Lookup("lang").Annotations = map[string][]string{
-		"fathomry.usage.zh-CN": {words.chinese["language"]},
+		"fathomry.usage.id": {"fathomry.cli:language"},
 	}
 	if err := prepareCommand(root, nil, nil); err != nil {
 		return err
 	}
-	help := &cobra.Command{Use: "help", Short: words.english["help"], Args: cobra.ArbitraryArgs,
-		Annotations: map[string]string{"fathomry.short.zh-CN": words.chinese["help"]}}
+	help := &cobra.Command{Use: "help", Short: words.english("help"), Args: cobra.ArbitraryArgs,
+		Annotations: map[string]string{"fathomry.short.id": "fathomry.cli:help"}}
 	if err := prepareCommand(help, nil, nil); err != nil {
 		return err
 	}
 	root.AddCommand(help)
-	persistent.BoolP("help", "h", false, "")
-	return nil
+	persistent.BoolP("help", "h", false, words.english("helpFlag"))
+	persistent.Lookup("help").Annotations = map[string][]string{
+		"fathomry.usage.id": {"fathomry.cli:helpFlag"},
+	}
+	return validateBindings(root, words)
+}
+
+func validateBindings(command *cobra.Command, words *text) error {
+	if id, exists := command.Annotations["fathomry.short.id"]; exists {
+		if _, err := words.render(id, "en"); err != nil {
+			return err
+		}
+	}
+	var bindingErr error
+	check := func(flag *pflag.Flag) {
+		if ids, exists := flag.Annotations["fathomry.usage.id"]; exists && bindingErr == nil {
+			if len(ids) != 1 || ids[0] == "" {
+				bindingErr = hostFailure(ErrDefinition)
+				return
+			}
+			_, bindingErr = words.render(ids[0], "en")
+		}
+	}
+	command.PersistentFlags().VisitAll(check)
+	command.Flags().VisitAll(check)
+	if bindingErr != nil {
+		return bindingErr
+	}
+	for _, child := range command.Commands() {
+		if err := validateBindings(child, words); err != nil {
+			return err
+		}
+	}
+	return words.failure()
 }
 
 func prepareCommand(command *cobra.Command, inheritedNames, inheritedShorts map[string]*pflag.Flag) error {
@@ -68,12 +108,12 @@ func prepareCommand(command *cobra.Command, inheritedNames, inheritedShorts map[
 		command.PostRunE != nil || command.PersistentPreRun != nil || command.PersistentPreRunE != nil ||
 		command.PersistentPostRun != nil || command.PersistentPostRunE != nil ||
 		command.FParseErrWhitelist.UnknownFlags || command.Deprecated != "" {
-		return errDefinition
+		return hostFailure(ErrDefinition)
 	}
 	flags := command.Flags()
 	if flags.Parsed() || command.PersistentFlags().Parsed() ||
 		flags.ParseErrorsWhitelist.UnknownFlags || flags.ParseErrorsAllowlist.UnknownFlags {
-		return errDefinition
+		return hostFailure(ErrDefinition)
 	}
 	// Native helper sets reuse the saved global normalizer and mutate shared Flag.Name.
 	normalize, globalNormalize := flags.GetNormalizeFunc(), command.GlobalNormalizationFunc()
@@ -119,7 +159,7 @@ func prepareCommand(command *cobra.Command, inheritedNames, inheritedShorts map[
 	}
 	visit(flags)
 	if invalid {
-		return errDefinition
+		return hostFailure(ErrDefinition)
 	}
 	command.SilenceErrors, command.SilenceUsage = true, true
 	command.DisableSuggestions = true
@@ -128,7 +168,7 @@ func prepareCommand(command *cobra.Command, inheritedNames, inheritedShorts map[
 	for _, child := range command.Commands() {
 		for _, name := range append([]string{child.Name()}, child.Aliases...) {
 			if name == "" || strings.ContainsAny(name, " \t\r\n") || siblings[name] || reserved(name) {
-				return errDefinition
+				return hostFailure(ErrDefinition)
 			}
 			siblings[name] = true
 		}

@@ -23,7 +23,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 **Audience:** Fathomry maintainers implementing an approved command feature.
 **Status:** executable maintainer procedure for the first-party CLI.
-No custom-command, plugin or public registration API is provided.
+No custom-command or plugin registration API is provided. Definition catalogs
+are explicit metadata composition, not command registration.
 
 ## Place the feature with its owner
 
@@ -109,21 +110,63 @@ invocation. Flag aliases are interpreted by the node at their argument position.
 
 ## Keep presentation and operation facts separate
 
-Resources travel with the family, as the fixture demonstrates. Bind complete English
-prose to native `Short` and flag `Usage`. Bind optional Chinese text to command
-annotation `fathomry.short.zh-CN` and flag annotation `fathomry.usage.zh-CN` (first
-entry). Missing Chinese text falls back to those English fields.
+Resources travel with the family. Compose its named resource bytes through
+[`i18n/v1`](../reference/i18n/v1/interface.md), retaining every supplied locale.
+Follow the [project command](../../cli/internal/command/project/command.go):
+validate its required English IDs, argument/count contracts and message versions
+before returning a runnable command. Bind English text from that same catalog to
+native `Short` and flag `Usage`, plus the resource ID to command annotation
+`fathomry.short.id` or the single flag annotation entry `fathomry.usage.id`.
+The host resolves metadata at help-render time, using the invocation's currently
+parsed locale. Missing auxiliary entries use explicit English fallback.
+
+Each feature supplies its own module/condition/fact declarations and checked
+message bindings. Compose those explicitly in [the CLI catalog](../../cli/catalog.go),
+with the feature's resources; do not add a global registry or make error construction
+consult it. [Project definitions](../../cli/internal/command/project/definitions.go)
+keep condition ownership beside the producer. The public `Catalogs` entry supports
+query-only consumers without constructing Cobra commands.
+
+Keep lifecycle in Run, independent error slots/status in completion, resources
+and declaration composition in catalog, per-call rendering in text, native locale
+selection in locale, and help layout in help. Project creation/result and
+presentation stay within project. Add fields from actual producer/consumer needs,
+not a universal context/details structure or a package per helper.
 
 These annotations are a private first-party convention, not a public catalog API.
+The older raw English/Chinese annotation convention remains only as compatibility
+for private/test-only families, not a second production translator.
 The renderer consumes `Use`/command paths, `Short`, native flags, shorthands and
 types; it does not mirror flag definitions or display values/defaults automatically.
 Maintain localized prose in resource files, not handler literals or parser-message
 substring substitutions. Machine schemas and literal machine bytes remain stable.
 
+Current CLI resources are control-free literals with no arguments/cardinals.
+Keep channel validation separate from the public renderer's plain-text contract.
+Retain hard presentation errors even through ignored Cobra Help/Usage returns,
+independently of the usage classification. If ordinary host diagnostic rendering fails,
+attempt only the fixed safe host identifier; never retranslate that failure,
+retry a business effect, or call an already failed underlying writer again.
+
 Use `command.Context()`, `InOrStdin()`, `OutOrStdout()` and `ErrOrStderr()`:
 the host binds them to explicit borrowed inputs and checked writers. Do not replace
 them with process globals or close them. Raw, finite and incremental output are
 allowed; a stream's prefix must be visible before its source finishes.
+
+Define code-owned `failure.Condition` values at the boundary that knows the real
+failure meaning; use the shared core directly when no extra typed facts are needed.
+Keep required operation facts typed and owned, with explicit unknown/bounds/lifetime
+semantics. A private implementation can expose selected condition values through
+the existing public CLI without exposing its runtime type or adding a registry.
+See [error ownership](../architecture/errors-and-evidence.md).
+
+The host records usage classification where it is detected, separately from the
+semantic return value. Do not create public conditions from an exit status or
+recursively find a preferred cause. Preserve a sole selected semantic error,
+including its own multi-cause tree; join independently captured failures without
+flattening foreign graphs. Known returned checked-writer/presentation latches are
+identified only by their exact owned core/output-occurrence pointers, not error text, equal codes
+or foreign matching hooks.
 
 Return causes without embedding them in ordinary diagnostics. Preserve both
 operation and cleanup errors. Never retry because output failed, and never describe

@@ -1,0 +1,105 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "example.inventory",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "example.inventory:items",
+      "contract": "v1",
+      "context": "Available items at an approved public location.",
+      "args": {
+        "place": {
+          "kind": "string",
+          "meaning": "Public display label, never credentials."
+        }
+      },
+      "cardinal": true,
+      "forms": {
+        "one": "{count} item at {place}",
+        "other": "{count} items at {place}"
+      }
+    },
+    {
+      "id": "example.inventory:english",
+      "contract": "v1",
+      "context": "Deliberately untranslated integer message.",
+      "args": {},
+      "cardinal": true,
+      "forms": {
+        "one": "{count} source item",
+        "other": "{count} source items"
+      }
+    },
+    {
+      "id": "example.inventory:identity",
+      "contract": "v1",
+      "context": "Real text equal to its exact message identity.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "example.inventory:identity"
+      }
+    },
+    {
+      "id": "example.inventory:field",
+      "contract": "v1",
+      "context": "An approved field name from one selected failure occurrence.",
+      "args": {
+        "field": {
+          "kind": "string",
+          "meaning": "Public field identifier."
+        }
+      },
+      "cardinal": false,
+      "forms": {
+        "other": "Invalid field: {field}."
+      }
+    },
+    {
+      "id": "example.inventory:scalars",
+      "contract": "v1",
+      "context": "Exact scalar formatting without locale conversion.",
+      "args": {
+        "s": {
+          "kind": "string",
+          "meaning": "Literal data."
+        },
+        "i": {
+          "kind": "int64",
+          "meaning": "Signed integer."
+        },
+        "u": {
+          "kind": "uint64",
+          "meaning": "Unsigned integer."
+        },
+        "b": {
+          "kind": "bool",
+          "meaning": "Boolean."
+        }
+      },
+      "cardinal": false,
+      "forms": {
+        "other": "{{{s}}} {i} {u} {b} 100%"
+      }
+    }
+  ]
+}

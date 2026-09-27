@@ -21,12 +21,27 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 
 	"github.com/frost-leo/fathomry/cli"
 )
 
 func main() {
+	if os.Getenv("FATHOMRY_ATLAS_QUERY") == "1" {
+		catalogs, err := cli.Catalogs()
+		if err != nil {
+			os.Exit(1)
+		}
+		definitions, err := catalogs.Errors.Inspect()
+		if err != nil {
+			os.Exit(1)
+		}
+		if err := json.NewEncoder(os.Stdout).Encode(definitions); err != nil {
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "run" {
 		status, _ := cli.Run(context.Background(), os.Args[2:], cli.Streams{Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 		os.Exit(status)

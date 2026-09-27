@@ -20,82 +20,82 @@
 package project
 
 import (
-	"embed"
-	"encoding/json"
-	"errors"
 	"io"
 
+	"github.com/frost-leo/fathomry/failure/v1"
+	"github.com/frost-leo/fathomry/i18n/v1"
 	"github.com/spf13/cobra"
 )
 
-//go:embed resources/*.json
-var resources embed.FS
-
-type prose struct{ english, chinese map[string]string }
-
-func loadProse() prose {
-	load := func(path string) map[string]string {
-		data, err := resources.ReadFile(path)
+// New constructs invocation-local metadata from an explicitly shared catalog.
+// All required English contracts are checked before returning a runnable command.
+// Source and filesystem inspection occur only during validated execution.
+func New(catalog *i18n.Catalog) (*cobra.Command, error) {
+	definitions, err := failure.PrepareDefinitions(Definition())
+	if err != nil {
+		return nil, err
+	}
+	bindings, err := i18n.PrepareBindings(definitions, catalog, Bindings()...)
+	if err != nil {
+		return nil, err
+	}
+	english := make(map[string]string, len(requiredText))
+	for _, key := range requiredText {
+		found, err := catalog.Lookup("fathomry.cli.project:"+key, "en")
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
-		var resource struct{ Messages map[string]string }
-		if err := json.Unmarshal(data, &resource); err != nil {
-			panic(err)
+		if !found.TranslationExists || found.Definition.Contract != "v1" ||
+			found.Definition.Cardinal || len(found.Definition.Arguments) != 0 {
+			return nil, failed(ErrPresentation)
 		}
-		return resource.Messages
+		value, err := renderText(bindings, "en", key)
+		if err != nil {
+			return nil, err
+		}
+		english[key] = value
 	}
-	return prose{load("resources/en.json"), load("resources/zh-cn.json")}
-}
-
-func (words prose) get(command *cobra.Command, key string) string {
-	if flag := command.Flag("lang"); flag != nil && flag.Value.String() == "zh-CN" {
-		if translated := words.chinese[key]; translated != "" {
-			return translated
-		}
-	}
-	return words.english[key]
-}
-
-// New constructs invocation-local metadata. Source and filesystem inspection
-// occur only when the host executes the validated command.
-func New() *cobra.Command {
-	words := loadProse()
 	var input request
 	command := &cobra.Command{
-		Use: "new <directory>", Short: words.english["new"],
-		Annotations: map[string]string{"fathomry.short.zh-CN": words.chinese["new"]},
+		Use: "new <directory>", Short: english["new"],
+		Annotations: map[string]string{"fathomry.short.id": "fathomry.cli.project:new"},
 	}
 	command.Args = func(_ *cobra.Command, args []string) error {
 		if len(args) != 1 {
-			return errArguments
+			return failed(ErrArguments)
 		}
 		input.directory = args[0]
 		return input.validate()
 	}
 	flags := command.Flags()
-	flags.StringVar(&input.module, "module", "", words.english["module"])
-	flags.StringVar(&input.source, "fathomry-source", "", words.english["source"])
+	flags.StringVar(&input.module, "module", "", english["module"])
+	flags.StringVar(&input.source, "fathomry-source", "", english["source"])
 	for name, key := range map[string]string{"module": "module", "fathomry-source": "source"} {
-		flags.Lookup(name).Annotations = map[string][]string{"fathomry.usage.zh-CN": {words.chinese[key]}}
+		flags.Lookup(name).Annotations = map[string][]string{"fathomry.usage.id": {"fathomry.cli.project:" + key}}
 		if err := command.MarkFlagRequired(name); err != nil {
-			panic(err)
+			return nil, err
 		}
 	}
 	command.RunE = func(command *cobra.Command, _ []string) error {
-		effect, err := create(command.Context(), input)
-		if err != nil {
-			key := "notStarted"
-			if effect == partial {
-				key = "partial"
-			} else if effect == complete {
-				key = "completeDelivery"
-			}
-			_, diagnosticErr := io.WriteString(command.ErrOrStderr(), words.get(command, key)+"\n")
-			return errors.Join(err, diagnosticErr)
+		result := create(command.Context(), input)
+		locale := "en"
+		if flag := command.Flag("lang"); flag != nil {
+			locale = flag.Value.String()
 		}
-		_, err = io.WriteString(command.OutOrStdout(), words.get(command, "created")+"\n")
-		return err
+		key, selectionErr := result.presentationKey()
+		if selectionErr != nil {
+			return combine(result.err, selectionErr)
+		}
+		writer := command.OutOrStdout()
+		if result.err != nil {
+			writer = command.ErrOrStderr()
+		}
+		message, renderErr := renderText(bindings, locale, key)
+		if renderErr != nil {
+			return combine(result.err, renderErr)
+		}
+		_, writeErr := io.WriteString(writer, message+"\n")
+		return combine(result.err, writeErr)
 	}
-	return command
+	return command, nil
 }

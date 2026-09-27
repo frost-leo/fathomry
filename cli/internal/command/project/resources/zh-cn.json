@@ -17,13 +17,73 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "messages": {
-    "new": "使用明确指定的本地 Fathomry 源码创建 Go 项目",
-    "module": "新项目的 Go 模块路径（必填）",
-    "source": "本地 Fathomry 源码根目录（必填）",
-    "created": "项目文件已创建。请参阅 README.md，显式执行依赖解析和构建步骤。",
-    "notStarted": "项目创建未能开始。请检查参数、目标路径和所选源码。",
-    "partial": "项目创建未完成；可能保留部分文件。请检查目标后再重试。",
-    "completeDelivery": "项目文件已完整写入，但命令交付未完成。请检查目标后再重试。"
-  }
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.cli.project",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.cli.project:new",
+      "source": "83b85118465d95d94ef6b9bf523cb2a135e6e502b08b30795af1464bf5a3da3f",
+      "forms": {
+        "other": "使用明确指定的本地 Fathomry 源码创建 Go 项目"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:module",
+      "source": "e458c39d0589200b1fa4b6870acc0d8cf64d5c14683d4aa28f1686e0e946cadc",
+      "forms": {
+        "other": "新项目的 Go 模块路径（必填）"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:source",
+      "source": "0cae85472dd506d227852253717399c5d16a71db8cb4f472169cb425d54a65b0",
+      "forms": {
+        "other": "本地 Fathomry 源码根目录（必填）"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:created",
+      "source": "d4f34060fd3684387a4931e485d6c7556096600e826dffff971cff957dbf7074",
+      "forms": {
+        "other": "项目文件已创建。请参阅 README.md，显式执行依赖解析和构建步骤。"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:notStarted",
+      "source": "6cd676af1771b1eba57691768ef4bc71a345e1035d54f7798b4acc95e92b55b3",
+      "forms": {
+        "other": "项目创建未能开始。请检查参数、目标路径和所选源码。"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:partial",
+      "source": "8b5e045ddd7f75a22b11ea271d738215d8a98114c7b98aa7b362eee5553cb440",
+      "forms": {
+        "other": "项目创建未完成；可能保留部分文件。请检查目标后再重试。"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:completeDelivery",
+      "source": "f8cdf539cb926f35c3fb21c60dda65bf883133f138582900f621481a83a5afa5",
+      "forms": {
+        "other": "项目文件已完整写入，但命令交付未完成。请检查目标后再重试。"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:sourceUnavailable",
+      "source": "6ea2cd27524eb30c6e0263c0fb08dd8e7f0949a653afc40d2e79f2fb070cf3e7",
+      "forms": {
+        "other": "所选 Fathomry 源码不可用或不受支持。项目创建尚未开始。"
+      }
+    },
+    {
+      "id": "fathomry.cli.project:destinationExists",
+      "source": "be11a63064c83ace3c4cd799f94abf40c8e6efdbdfdcaa3766c2564545c43a19",
+      "forms": {
+        "other": "目标已存在。本次调用未创建或覆盖项目文件。"
+      }
+    }
+  ]
 }

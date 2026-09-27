@@ -28,8 +28,10 @@ targets Go 1.27.0 on Linux/amd64. No domain commands or complete runtime.
 
 ## Responsibilities and use
 
-The public surface is `Run`, `Main` and `Streams`. It exposes usage, not command
-registration. Native Cobra objects, construction and composition remain private.
+The public surface is `Run`, `Main`, `Streams`, `Catalogs`/`CatalogSet` and the
+documented host/project condition values below. It exposes usage and definition
+inspection, not command registration. Native Cobra
+objects, construction and composition remain private.
 Root/help and [`new <directory>`](new.md) ship; test command families never enter
 the executable.
 
@@ -63,6 +65,28 @@ error without changing signal policy or exiting. See the
   required-flag and group checks precede selected operation acquisition. Commands
   own their actual resources and structured cleanup.
 
+## Query definitions without executing commands
+
+`Catalogs()` returns fresh handles for shared immutable `Errors`, `Messages`
+and `Bindings`. It prepares embedded owner declarations/resources once, without
+reading argv/environment, project paths or input streams, choosing a locale,
+starting services or executing Run. No new CLI query command is added.
+
+The error/module inventory includes `fathomry.cli`, its direct
+`fathomry.cli.project` child, and the separate `fathomry.i18n` dependency
+conditions. The 14 CLI host/project conditions, 33 presentation bindings and all
+38 English/Chinese resource entries remain inspectable independent of language.
+Use exact error/module/binding queries and resource `Lookup`, rather than
+inferring translation existence from fallback text. Queries return owned snapshots.
+
+The private output occurrence records its core and the observed stream. Project
+creation returns one private `creationResult` containing observation and error:
+unknown zero, not-started, completion-unconfirmed, or completed writes/closes.
+The definition catalog marks these contracts owner-only; it does not invent a
+public progress accessor or claim operation observations are fields of every
+output/rendering failure. Conditions and presentation are registered explicitly
+by their owning feature, not discovered from previously encountered errors.
+
 ## Commands, help and language
 
 ```text
@@ -90,6 +114,18 @@ default and fallback; no environment locale, configuration or remote lookup occu
 The last successfully parsed valid selector before a parsing error controls the
 diagnostic. Thus `--lang zh-CN --bad` differs from `--bad --lang zh-CN`.
 `--` ends flag interpretation; it is not a locale-selection escape hatch.
+
+Root and project text use one explicitly shared immutable
+[`i18n/v1` catalog](../i18n/v1/interface.md), prepared from feature-owned
+resources. English contracts and control-free literal text are checked before
+effects; metadata is resolved at help-render time, not frozen to a construction
+locale. Public catalog locale support does not widen this CLI allowlist.
+The first hard presentation failure is retained even when native Help/Usage
+callbacks discard errors. It is an independent failure (status 1), not invalid
+usage or authorized English fallback. Original causes and completed effects remain.
+If the host generic diagnostic cannot render, one fixed
+`fathomry.cli.presentation_failed` line is attempted; a failed writer is never
+called again. Raw errors and joined trees are not searched for a primary to translate.
 
 Help reads native command and flag metadata with resource-backed human labels.
 Parsed values and defaults are not displayed. Command/flag names, machine keys,
@@ -139,8 +175,55 @@ not retracted. A handler ignoring an output error cannot turn it into success.
 Normal diagnostics are bounded resource-backed projections, never raw parser or
 operation `Error()` strings. A command may add owned explanatory text; the host's
 failure summary is attempted once without recursive reporting.
-Returned errors retain known primary, output, cancellation and cleanup causes for
-`errors.Is/As`; they may contain sensitive data and must not be printed blindly.
+Host and project failures use values of the shared
+[`failure.Condition`](../failure/v1/interface.md) type. A sole suitable semantic
+occurrence is preserved, including its own deliberately retained cause tree.
+Multiple independent failures are explicitly joined; a raw join has no implicit
+primary and need not be directly inspectable. There is no universal invocation
+wrapper or condition derived from the numeric exit status. Success returns nil.
+
+| Public condition | Meaning established by its owner |
+| --- | --- |
+| `ErrInputs` | Required Go context/stream inputs are absent, including typed nils |
+| `ErrDefinition` | The first-party command/metadata or root presentation definition is invalid |
+| `ErrUsage` | CLI parsing, command/operand selection or required/group argument checks refused the invocation |
+| `ErrLanguage` | Native parsing reached an unsupported value of the host's language selector |
+| `ErrOutput` | A supplied output/diagnostic writer failed or did not accept the complete write |
+| `ErrProjectArguments` | The project command's required/static inputs are invalid |
+| `ErrProjectIdentity` | The requested project module conflicts with the framework's reserved identity |
+| `ErrProjectSource` | The selected local source could not be resolved/read or does not satisfy the supported source profile |
+| `ErrProjectDestination` | Destination preparation/admission failed, except the specific existence/overlap cases |
+| `ErrProjectExists` | Destination existence was observed or exclusive directory creation refused it as existing |
+| `ErrProjectOverlap` | Resolved destination is inside the selected source |
+| `ErrProjectPreparation` | Other pre-creation preparation, such as working-directory resolution or file rendering, failed |
+| `ErrProjectCreation` | After directory admission, a file open/write/close failure prevented establishing complete creation |
+| `ErrProjectPresentation` | Required command-owned presentation definitions violate the command's contract |
+
+Exact code values are in [the declarations](../../../cli/error.go). Project
+conditions are declared with the feature and exposed through cli as constant
+values, not aliases of private runtime types. Conditions identify supported
+semantics, not namespace authenticity, retry safety or a complete effect receipt.
+Standard context cancellation/deadline causes remain supported; a semantic
+occurrence does not become pure cancellation merely because its causes include it.
+
+The host keeps origin-known usage classification and its first presentation/
+writer/cancellation observations separate from the semantic errors. It composes
+the final return from current slots rather than repeatedly appending the same
+snapshot. Repeated direct observations of the same valid core pointer are retained
+once, as are repeated exact owned output-occurrence pointers; distinct stream failures get distinct occurrences even if their native
+cause/code is identical. No foreign equality/matching/accessor hooks or graph
+traversal are used for this bookkeeping. Opaque returned graphs remain intact:
+if one already contains a retained writer failure, it may expose that cause again.
+Cause edges are not a count of physical failure events. No flattening or global
+deduplication is promised.
+
+Native `errors.Is/As` cause promises remain. Inspect the explicitly selected
+occurrence for its condition and approved facts; generic recursive membership does
+not choose a primary or authorize borrowing another same-code occurrence's facts.
+Owned core output is code-only and refuses runtime JSON as documented by failure/v1.
+That protection does not make arbitrary raw aggregates, native causes or foreign
+wrappers safe to print/serialize. Diagnostics use resources, not returned Error
+text. No public project progress/recovery DTO or durable error protocol is added.
 Cancellation is observed again after a diagnostic write completes, so cancellation
 or a caller cause arriving during blocked diagnostic delivery is retained. Final
 status is recomputed without another diagnostic or an operation retry. Cancellation
@@ -157,8 +240,9 @@ racing after the final observation is not an atomic return-time guarantee.
 Independent failures outrank cancellation. Usage plus failed stderr delivery is 1
 with both causes retained. TERM plus EPIPE or an independent cleanup/operation error
 stays 1. A custom non-cancellation `context.Cause` is retained and counts as an
-independent failure; wrapping `context.Canceled` alone is pure cancellation.
-Output failures remain failures even when their cause is `context.Canceled`.
+independent failure; an ordinary context-only wrapper remains pure cancellation.
+A semantic failure occurrence remains independent even when its only native cause
+is `context.Canceled`. Output and hard presentation failures likewise remain failures.
 
 No operation is automatically retried. Cancellation, a failed response, broken pipe
 or unsuccessful status does not prove no effect, rollback or remote termination.
@@ -187,8 +271,9 @@ subprocesses, including full stdout/stderr pipes and subsequent forced terminati
 ## Dependencies and qualification
 
 The production package graph contains the CLI, its private project command, native
-Cobra/pflag, x/mod's modfile/module/semver/internal-lazyregexp packages and the
-standard library on Linux. Linking the CLI includes the generator's dependencies;
+Cobra/pflag, x/mod's modfile/module/semver/internal-lazyregexp packages,
+`i18n/v1`, `failure/v1`, the ten selected x/text language/plural dependency
+packages and the standard library on Linux. Linking the CLI includes these dependencies;
 file-level separation does not make them optional. It does not import Fathomry's
 technical SDK integrations.
 An unrelated module actually builds and runs both public entries with `GOWORK=off`
@@ -201,6 +286,8 @@ discovery of future project code, or another OS's runtime behavior.
 
 [Issue #88](https://github.com/frost-leo/fathomry/issues/88) defines the entry foundation;
 [issue #90](https://github.com/frost-leo/fathomry/issues/90) adds local-source creation.
+[Issue #93](https://github.com/frost-leo/fathomry/issues/93) adds shared resource
+preparation and rendering without changing the CLI's operation/exit policy.
 [Adjacent tests](../../../cli/run_test.go),
 [independent consumption](../../../cli/consumer_test.go) and
 [Linux process acceptance](../../../cli/process_linux_test.go) provide executable

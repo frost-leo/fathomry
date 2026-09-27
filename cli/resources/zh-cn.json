@@ -17,16 +17,80 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "messages": {
-    "root": "Fathomry 命令行",
-    "help": "显示命令帮助",
-    "helpFlag": "显示帮助",
-    "language": "人类文本语言：en 或 zh-CN",
-    "usage": "用法",
-    "commands": "命令",
-    "flags": "选项",
-    "invalid": "命令或参数无效。",
-    "failed": "命令交付失败；操作可能已生效。",
-    "canceled": "命令已取消；操作可能已生效。"
-  }
+  "schema": "fathomry.i18n-resource/v1",
+  "profile": "scalar-cardinal/v1",
+  "owner": "fathomry.cli",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.cli:root",
+      "source": "1fcc7061fdbab8a2a4c4cc93a1b220275b72c49b5bd727045a055cca6f6b11b3",
+      "forms": {
+        "other": "Fathomry 命令行"
+      }
+    },
+    {
+      "id": "fathomry.cli:help",
+      "source": "f57f8162cb317545e5f07db2cdf6520d00d67f41dba3d40b16cff4dbc0ff7c07",
+      "forms": {
+        "other": "显示命令帮助"
+      }
+    },
+    {
+      "id": "fathomry.cli:helpFlag",
+      "source": "3131f4b72eacc2986bd6c2dd77321ab6ebdbcbef6dad3e90c7a1c7e0a12f63b0",
+      "forms": {
+        "other": "显示帮助"
+      }
+    },
+    {
+      "id": "fathomry.cli:language",
+      "source": "239a54969ae69ec9c00516944fe05d543107e1e3778d6af059e7b35006ae6e04",
+      "forms": {
+        "other": "人类文本语言：en 或 zh-CN"
+      }
+    },
+    {
+      "id": "fathomry.cli:usage",
+      "source": "a2570c01ad87289bb4ee7b5514516fcdb1464de7c2b424897488086d04274ea1",
+      "forms": {
+        "other": "用法"
+      }
+    },
+    {
+      "id": "fathomry.cli:commands",
+      "source": "55f136a69b8bcc0c9b7095ffe3531bc549935ff72c2d040539de60f81c7d4ea7",
+      "forms": {
+        "other": "命令"
+      }
+    },
+    {
+      "id": "fathomry.cli:flags",
+      "source": "e10df21a3190513e14f1f7d5afad206c46bbaf87ca572e46abda9338ba5e1da8",
+      "forms": {
+        "other": "选项"
+      }
+    },
+    {
+      "id": "fathomry.cli:invalid",
+      "source": "beb52590027598ac7749e1a64edc2d03a16b348c7a036a13f364f7836943a8d9",
+      "forms": {
+        "other": "命令或参数无效。"
+      }
+    },
+    {
+      "id": "fathomry.cli:failed",
+      "source": "ef8cfee0aedeb87018f28b6bdab3f043aad7b910e8f915026eb1582659daac82",
+      "forms": {
+        "other": "命令交付失败；操作可能已生效。"
+      }
+    },
+    {
+      "id": "fathomry.cli:canceled",
+      "source": "cc91cdce7ef238039f2c8cc19e1b4f92911cb1f1b636324b0266b85787460c19",
+      "forms": {
+        "other": "命令已取消；操作可能已生效。"
+      }
+    }
+  ]
 }
