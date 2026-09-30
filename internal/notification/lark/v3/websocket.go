@@ -265,13 +265,20 @@ type socketRead struct {
 func (run *socketRun) serve(conn *websocket.Conn, configuration *socketConfiguration) (resultErr error) {
 	reads := make(chan socketRead, 1)
 	done := make(chan struct{})
+	var terminalReadErr error
 	work, cancel := context.WithCancel(run.ctx)
 	go func() {
 		defer close(done)
 		for {
 			kind, data, err := conn.ReadMessage()
+			if errors.Is(err, websocket.ErrReadLimit) {
+				err = failure(ErrLimit, "websocket-frame", err)
+			}
 			if err == nil && kind != websocket.BinaryMessage {
 				err = failure(ErrProtocol, "websocket-message-type")
+			}
+			if err != nil && !socketRetryable(err) {
+				terminalReadErr = err
 			}
 			select {
 			case reads <- socketRead{data, err}:
@@ -292,6 +299,11 @@ func (run *socketRun) serve(conn *websocket.Conn, configuration *socketConfigura
 			run.cleanup = errors.Join(run.cleanup, failure(ErrCleanup, "websocket-close", err))
 		}
 		<-done
+		// A reader-sent close can fail a concurrent write before reads is consumed.
+		// Join first so terminal evidence survives without retaining shutdown noise.
+		if terminalReadErr != nil && !errors.Is(resultErr, terminalReadErr) {
+			resultErr = errors.Join(resultErr, terminalReadErr)
+		}
 		run.abandonPending(failure(ErrAcknowledgement, "websocket-generation-ended", resultErr, run.ctx.Err(), context.Cause(run.ctx)))
 	}()
 	fragments := fragmentStore{options: run.options, items: map[string]*fragmentedMessage{}}
@@ -351,9 +363,6 @@ func (run *socketRun) serve(conn *websocket.Conn, configuration *socketConfigura
 			return work.Err()
 		case read := <-reads:
 			if read.err != nil {
-				if errors.Is(read.err, websocket.ErrReadLimit) {
-					return failure(ErrLimit, "websocket-frame", read.err)
-				}
 				return read.err
 			}
 			run.stats.Frames++

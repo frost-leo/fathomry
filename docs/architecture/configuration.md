@@ -80,11 +80,52 @@ must not acquire an implied cross-source transaction guarantee.
 
 ## Configuration ownership and revisions
 
+The public [settings data holder](../reference/settings/v1/interface.md) stores
+project-defined complete values and provides atomic publication/captured views.
+It does not acquire sources, validate every component, own Watch loops or construct
+SDK clients. Producers validate and order updates before publishing; component
+consumers copy only their own typed sections. An explicitly installed application
+reader and independent business readers use the same storage mechanism without
+sharing default-selection or source ownership.
+[Framework configuration](../reference/framework/configuration/v1/interface.md)
+now provides application and independent-business Load/Watch. Stored data is not a
+claim of client readiness. [I18n presentation](../reference/i18n/v1/interface.md)
+reads the default's language preference without adding a locale parameter to every
+operation. Internal Providers
+still receive resolved explicit inputs rather than consulting that process default.
+
+Public [Viper](../reference/adapters/configsource/viper/v1/interface.md) and
+[Nacos](../reference/adapters/configsource/nacos/v1/interface.md) Adapters now
+expose complete supported native capabilities to both independent developers and
+Framework consumers. Their selected raw Source profile does not replace or narrow
+those provider APIs. Nacos observations consume already-acquired native batches;
+Viper consumes native invalidations and explicitly reacquires original files.
+Neither adds another native polling/recovery engine. Resource-backed Nacos capture
+retains one generation across a complete explicit-key batch.
+
+[Public strict preparation](../reference/adapters/configsource/v1/interface.md)
+independently validates original layers, overlays them and produces isolated
+accepted values. It does not wrap Internal preparation, transcode native Viper
+maps, publish settings or infer instance adoption. Framework scenario ownership
+of input authorization, update ordering and publication remains a separate boundary.
+Its one source ingress and serial validation worker fence obsolete results before
+whole-value publication. Invalid updates retain last-good; shutdown fences publishing
+before joining actual work. Explicit environment values freeze once at admission.
+
+The public [resource holder](../reference/resource/v1/interface.md) independently
+owns typed component instances. Each binding selects its configuration and chooses
+fixed or following adoption. An accepted settings view can be handed to Apply or
+an owned channel receiver; this does not add source observation to settings.Store.
+Candidate construction, active generations, borrowed uses and cleanup remain
+separate states. New configuration does not retarget an existing lease, prove
+service readiness or migrate a control database. Native instance implementations
+remain responsible for their protocol-specific adoption and retirement behavior.
+
 Framework-supplied composition owns configuration input authorization, precedence,
 recursive overlays, secret resolution, and provenance. Base configuration,
 environment-specific YAML, local overrides, and environment variables must have a documented precedence;
-nested overrides retain unrelated sibling fields. A future Viper or configuration-
-center integration such as Nacos does not move loading/SDK management to business
+nested overrides retain unrelated sibling fields. Viper and configuration-center
+integration such as Nacos do not move loading/SDK management to business
 code. Loaders must preserve authorized layer distinctions and use the established
 preparation/merge once, not create a second precedence or null policy. Providers
 receive explicit, resolved typed settings. They must not
@@ -123,13 +164,12 @@ list/null/empty/duplicate/unknown-key rules, revision identity and freezing beha
 The [Viper v1 technical integration](../reference/internal/configsource/viper/v1/interface.md)
 implements a bounded local acquisition profile with explicitly bound live environment
 queries. It is not an assembled business-resource Provider or frozen preparation.
-The [public configuration API](../reference/framework/configuration/v1/interface.md)
-now provides typed Core/project Load and explicit Watch. Source Adapters own the
-single acquisition/recovery loop; Framework recomputes from original defaults and
-publishes checked immutable snapshots. Instance construction/credential activation
-and client rotation remain separate, unimplemented application boundaries.
-A replacement or reload must not retroactively relabel settings already used by
-in-flight work or weaken its execution constraints.
+Public strict preparation and Framework configuration now implement typed loading
+and last-good observation. Explicit resource adoption remains distinct from
+publication; arbitrary SDK/session/database migration is not implemented.
+A replacement or reload
+must not retroactively relabel settings
+already used by in-flight work or weaken its execution constraints.
 
 ## Implementation references
 

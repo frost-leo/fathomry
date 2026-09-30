@@ -130,6 +130,9 @@ continuous input cannot postpone them by repeatedly rearming a timer. Bootstrap,
 event and timing fields reject case-folded aliases of their native JSON names.
 A zero server reconnect count prevents reconnection. There is no background work
 after Listen returns.
+Terminal read-limit/protocol failures remain non-retryable even if a concurrent
+write fails first. Reader shutdown preserves that terminal evidence alongside the
+write error; ordinary socket errors caused by cleanup do not replace the cause.
 
 Session attempts count intercepted bootstrap/Upgrade and application-protocol
 heartbeat writes; ACK attempts belong to their own nested results. These are not

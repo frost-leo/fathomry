@@ -17,8 +17,20 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package configsource defines explicit raw configuration selections and coherent
-// observations. Concrete Adapters own acquisition, recovery and cleanup; Framework
-// policy is not required. Only the documented first-party implementations are
-// qualified. Interfaces are consumer boundaries, not a global provider registry.
+// Package configsource owns strict, bounded configuration preparation independent
+// of native acquisition and Internal mechanisms. Prepare checks every original
+// layer, overlays defaults/base/environment/local/variables, then validates a
+// detached candidate. Prepared values provide isolated copies and public settings
+// snapshots. Native Viper Decode is a different, deliberately weak profile.
+// Source/Observer define a selected complete raw acquisition profile; immutable
+// batches preserve missing/empty/failure distinctions without importing providers.
+//
+// Documents are explicit UTF-8 JSON or restricted YAML. Fields use exact json
+// names; objects/maps overlay, lists replace, absence inherits, and null clears
+// only pointers/maps/lists. Preparation performs no I/O, discovery, publication,
+// polling, instance reconstruction or process-environment mutation.
+//
+// Schema callbacks must be bounded, concurrency-safe and non-panicking. Context
+// cancellation is cooperative and cannot forcibly stop user validation. Error
+// causes are explicit sensitive inspection data; ordinary diagnostics are safe.
 package configsource

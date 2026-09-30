@@ -19,36 +19,111 @@
 
 package configsource
 
-import "github.com/frost-leo/fathomry/failure/v1"
-
-// Phase identifies the public source operation, not an inferred native retry or
-// effect verdict. It is independent of SDK/protocol execution phase names.
-type Phase string
-
-const (
-	SelectPhase  Phase = "select"
-	CapturePhase Phase = "capture"
-	ObservePhase Phase = "observe"
-	ClosePhase   Phase = "close"
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"slices"
+	"unicode/utf8"
 )
 
-// AcquisitionInfo is a detached safe projection from one occurrence. Source and
-// Document are explicitly declared non-secret aliases, never native selectors.
-// Empty Document means no failing slot was identified; it is not a missing
-// document or an empty document name. Phase is always a known public operation.
-// An identified slot describes the attempted acquisition, not the scope of a
-// server outage/permission refusal or proof that only that document is invalid.
-type AcquisitionInfo struct {
-	Source   string
-	Document string
-	Phase    Phase
+const (
+	MaxDocuments  = 16
+	MaxBatchBytes = 4 << 20
+)
+
+// Source is a selected original-document profile, not a universal provider API.
+// Capture returns a whole batch or none; failedIndex=-1 means unknown/success.
+// Concurrent captures are independent, not common-time transactions. Observe's
+// context owns its lifetime, and the returned owner must remain reachable through
+// cancellation and timed-out Close. Implementations must expose no usable prefix.
+type Source interface {
+	Capture(context.Context) (Batch, int, error)
+	Observe(context.Context) (Observer, error)
 }
 
-// AcquisitionFailure binds these facts to the directly supplied occurrence.
-// Acquisition returns false for invalid/nil values. For presentation use a direct
-// type assertion together with failure.Inspect, not errors.As traversal that can
-// select another occurrence's facts. Arbitrary cause graphs remain sensitive.
-type AcquisitionFailure interface {
-	failure.Occurrence
-	Acquisition() (AcquisitionInfo, bool)
+// Observer owns a source observation path. Next cancellation affects only that
+// wait/acquisition. Close stops and joins its work; a timeout retains ownership.
+type Observer interface {
+	Next(context.Context) (Observation, error)
+	Close(context.Context) error
 }
+
+// Raw is deliberate sensitive data. Missing is positive absence, never a failed
+// read. Content must be empty when Missing; present-empty is a distinct valid case.
+type Raw struct {
+	Content []byte
+	Missing bool
+}
+
+// Batch retains immutable complete data. A zero Batch is invalid, not empty data.
+// DocumentsCopy makes fresh bytes and containers on every call.
+type Batch struct{ state *batchState }
+type batchState struct{ documents []Raw }
+
+// NewBatch checks count, UTF-8 and original-byte bounds before retaining copies.
+// Input is borrowed only for the call; up to 16 documents, 1 MiB each/4 MiB total.
+func NewBatch(documents []Raw) (Batch, error) {
+	if len(documents) == 0 || len(documents) > MaxDocuments {
+		return Batch{}, fail(ErrInput, "batch")
+	}
+	total := 0
+	for _, document := range documents {
+		if len(document.Content) > MaxDocumentBytes {
+			return Batch{}, fail(ErrLimit, "batch")
+		}
+		if document.Missing && len(document.Content) != 0 || !utf8.Valid(document.Content) {
+			return Batch{}, fail(ErrInput, "batch")
+		}
+		total += len(document.Content)
+		if total > MaxBatchBytes {
+			return Batch{}, fail(ErrLimit, "batch")
+		}
+	}
+	result := make([]Raw, len(documents))
+	for index, document := range documents {
+		result[index] = Raw{Content: slices.Clone(document.Content), Missing: document.Missing}
+	}
+	return Batch{state: &batchState{documents: result}}, nil
+}
+func (value Batch) Valid() bool { return value.state != nil }
+func (value Batch) Len() int {
+	if value.state == nil {
+		return 0
+	}
+	return len(value.state.documents)
+}
+func (value Batch) DocumentsCopy() ([]Raw, error) {
+	if value.state == nil {
+		return nil, fail(ErrInput, "batch")
+	}
+	result := make([]Raw, len(value.state.documents))
+	for index, document := range value.state.documents {
+		result[index] = Raw{Content: slices.Clone(document.Content), Missing: document.Missing}
+	}
+	return result, nil
+}
+
+// Observation describes source acquisition, not accepted settings. Err means no
+// usable Batch; FailedIndex is -1 when unknown/success. Gap requires considering
+// the entire selected set; the complete Batch already contains that reacquisition.
+// A zero observation is invalid. Consumers must check Batch validity and count.
+type Observation struct {
+	Batch       Batch
+	FailedIndex int
+	Err         error
+	Gap         bool
+}
+
+func (Raw) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("configsource.Raw[restricted]"))
+}
+func (Raw) LogValue() slog.Value             { return slog.StringValue("configsource.Raw[restricted]") }
+func (Batch) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("configsource.Batch")) }
+func (Batch) LogValue() slog.Value           { return slog.StringValue("configsource.Batch") }
+func (Batch) MarshalJSON() ([]byte, error)   { return nil, fail(ErrSerialization, "marshal") }
+func (*Batch) UnmarshalJSON([]byte) error    { return fail(ErrSerialization, "unmarshal") }
+func (Observation) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("configsource.Observation"))
+}
+func (Observation) LogValue() slog.Value { return slog.StringValue("configsource.Observation") }

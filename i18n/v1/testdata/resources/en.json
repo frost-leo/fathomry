@@ -17,88 +17,51 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "example.inventory",
+  "module": "example",
+  "component": "source",
   "locale": "en",
   "messages": [
     {
-      "id": "example.inventory:items",
+      "id": "example.source.failed",
       "contract": "v1",
-      "context": "Available items at an approved public location.",
+      "context": "Static error explanation.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The source failed."
+      }
+    },
+    {
+      "id": "example.source.details",
+      "contract": "v1",
+      "context": "One safe public label.",
       "args": {
-        "place": {
+        "label": {
           "kind": "string",
-          "meaning": "Public display label, never credentials."
+          "meaning": "Approved public label, not credentials."
+        }
+      },
+      "cardinal": false,
+      "forms": {
+        "other": "Failure at {label}."
+      }
+    },
+    {
+      "id": "example.source.items",
+      "contract": "v1",
+      "context": "Count of items at a public label.",
+      "args": {
+        "label": {
+          "kind": "string",
+          "meaning": "Approved public label, not credentials."
         }
       },
       "cardinal": true,
       "forms": {
-        "one": "{count} item at {place}",
-        "other": "{count} items at {place}"
-      }
-    },
-    {
-      "id": "example.inventory:english",
-      "contract": "v1",
-      "context": "Deliberately untranslated integer message.",
-      "args": {},
-      "cardinal": true,
-      "forms": {
-        "one": "{count} source item",
-        "other": "{count} source items"
-      }
-    },
-    {
-      "id": "example.inventory:identity",
-      "contract": "v1",
-      "context": "Real text equal to its exact message identity.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "example.inventory:identity"
-      }
-    },
-    {
-      "id": "example.inventory:field",
-      "contract": "v1",
-      "context": "An approved field name from one selected failure occurrence.",
-      "args": {
-        "field": {
-          "kind": "string",
-          "meaning": "Public field identifier."
-        }
-      },
-      "cardinal": false,
-      "forms": {
-        "other": "Invalid field: {field}."
-      }
-    },
-    {
-      "id": "example.inventory:scalars",
-      "contract": "v1",
-      "context": "Exact scalar formatting without locale conversion.",
-      "args": {
-        "s": {
-          "kind": "string",
-          "meaning": "Literal data."
-        },
-        "i": {
-          "kind": "int64",
-          "meaning": "Signed integer."
-        },
-        "u": {
-          "kind": "uint64",
-          "meaning": "Unsigned integer."
-        },
-        "b": {
-          "kind": "bool",
-          "meaning": "Boolean."
-        }
-      },
-      "cardinal": false,
-      "forms": {
-        "other": "{{{s}}} {i} {u} {b} 100%"
+        "one": "{count} item at {label}",
+        "other": "{count} items at {label}"
       }
     }
   ]

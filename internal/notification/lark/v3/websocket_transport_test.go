@@ -22,6 +22,7 @@ package lark
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -30,6 +31,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/frost-leo/fathomry/internal/fault"
+	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/gorilla/websocket"
 )
 
@@ -100,26 +103,85 @@ func TestWebSocketConcurrentDecisionIsOneShot(t *testing.T) {
 	drainSocketResults(t, fixture)
 }
 func TestWebSocketFrameReadLimit(t *testing.T) {
-	peer := newSocketPeer(t, false, nil)
-	options := socketTestOptions(peer)
-	options.WebSocket.MaxFrameBytes = 1024
-	fixture := bindReceiverTest(t, options, 8, 2)
-	cancel, done := startReceiver(t, fixture)
-	socket := nextSocket(t, peer)
-	socket.mu.Lock()
-	_ = socket.conn.WriteMessage(websocket.BinaryMessage, []byte(strings.Repeat("x", 2048)))
-	socket.mu.Unlock()
-	select {
-	case result := <-done:
-		got := awaitSocketResult(t, result.receipt)
-		if got.Err() == nil || got.Outcome.Value.Stats().Delivered != 0 || peer.bootstraps.Load() != 1 {
-			t.Fatal("oversized message not contained")
+	t.Run("session", func(t *testing.T) {
+		peer := newSocketPeer(t, false, nil)
+		options := socketTestOptions(peer)
+		options.WebSocket.MaxFrameBytes = 1024
+		fixture := bindReceiverTest(t, options, 8, 2)
+		cancel, done := startReceiver(t, fixture)
+		socket := nextSocket(t, peer)
+		socket.mu.Lock()
+		err := socket.conn.WriteMessage(websocket.BinaryMessage, []byte(strings.Repeat("x", 2048)))
+		socket.mu.Unlock()
+		if err != nil {
+			t.Fatal(err)
 		}
-	case <-time.After(time.Second):
-		cancel(context.Canceled)
-		t.Fatal("read limit did not stop")
-	}
-	drainSocketResults(t, fixture)
+		select {
+		case result := <-done:
+			if result.err != nil {
+				t.Fatal(result.err)
+			}
+			got := awaitSocketResult(t, result.receipt)
+			if !errors.Is(got.Err(), ErrLimit) || !errors.Is(got.Err(), websocket.ErrReadLimit) || got.Outcome.Value.Stats().Delivered != 0 || peer.bootstraps.Load() != 1 {
+				t.Fatal("oversized message not contained")
+			}
+		case <-time.After(time.Second):
+			cancel(context.Canceled)
+			t.Fatal("read limit did not stop")
+		}
+		drainSocketResults(t, fixture)
+	})
+	t.Run("write-error-keeps-terminal-read", func(t *testing.T) {
+		peer := newSocketPeer(t, false, nil)
+		options := socketTestOptions(peer)
+		options.WebSocket.MaxFrameBytes = 1024
+		fixture := bindReceiverTest(t, options, 8, 2)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		call, err := invocation.Begin(ctx, fixture.receiver.access, invocation.Request{
+			Name: "websocket-listen", Correlation: fault.Correlation{Call: "read-limit"}, Shape: invocation.Session,
+			Bytes: fixture.receiver.owner.settings.reservation(), EvidenceBytes: socketEvidenceBytes,
+			Admission: invocation.Budget{Limit: time.Second}, AttemptsKnown: true, MaxAttempts: 3,
+		}, fixture.results, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			call.Complete(invocation.Outcome[WebSocketResult]{})
+			drainSocketResults(t, fixture)
+		}()
+		run := &socketRun{receiver: fixture.receiver, ctx: ctx, call: call, options: fixture.receiver.owner.settings.WebSocket}
+		conn, configuration, err := run.connect()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		socket := nextSocket(t, peer)
+		socket.mu.Lock()
+		err = socket.conn.WriteMessage(websocket.BinaryMessage, []byte(strings.Repeat("x", 2048)))
+		socket.mu.Unlock()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		// Establish the native terminal state before ping so the write failure
+		// deterministically wins instead of relying on goroutine scheduling.
+		if _, _, err := conn.ReadMessage(); !errors.Is(err, websocket.ErrReadLimit) {
+			t.Fatalf("read-limit precondition: %v", err)
+		}
+		err = run.serve(conn, &configuration)
+		if !errors.Is(err, websocket.ErrCloseSent) {
+			t.Fatalf("simultaneous write failure was lost: %v", err)
+		}
+		if !errors.Is(err, ErrLimit) || !errors.Is(err, websocket.ErrReadLimit) || socketRetryable(err) {
+			t.Fatalf("terminal read failure was lost or became retryable: %v", err)
+		}
+		if run.cleanup != nil {
+			t.Fatal(run.cleanup)
+		}
+	})
 }
 func TestWebSocketSnapshotDoesNotAlias(t *testing.T) {
 	peer := newSocketPeer(t, false, nil)

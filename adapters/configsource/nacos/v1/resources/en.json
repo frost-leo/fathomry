@@ -17,114 +17,150 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.adapters.configsource.nacos",
+  "module": "fathomry",
+  "component": "configsource_nacos",
   "locale": "en",
   "messages": [
     {
-      "id": "fathomry.adapters.configsource.nacos:invalid_settings",
+      "id": "fathomry.configsource_nacos.invalid_input",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configsource_nacos.invalid_input.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Invalid remote configuration source settings."
+        "other": "The configuration input or declaration is invalid."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:read",
+      "id": "fathomry.configsource_nacos.limit_exceeded",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_nacos.limit_exceeded.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Remote configuration acquisition failed. Source: {source}; phase: {phase}."
+        "other": "A configuration capability bound was exceeded."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:denied",
+      "id": "fathomry.configsource_nacos.read_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_nacos.read_failed.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Remote configuration access was denied. Source: {source}; phase: {phase}."
+        "other": "Configuration acquisition or inspection failed."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:protocol",
+      "id": "fathomry.configsource_nacos.decode_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_nacos.decode_failed.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "The remote configuration response is unsupported or invalid. Source: {source}; phase: {phase}."
+        "other": "Configuration decoding or preparation failed."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:limit",
+      "id": "fathomry.configsource_nacos.cleanup_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_nacos.cleanup_failed.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Remote configuration exceeds a supported limit. Source: {source}; phase: {phase}."
+        "other": "Configuration resource cleanup reported a failure."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:cleanup",
+      "id": "fathomry.configsource_nacos.closed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_nacos.closed.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Remote configuration cleanup failed. Source: {source}; phase: {phase}."
+        "other": "The configuration owner is closing or closed."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.completion_unconfirmed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.completion_unconfirmed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration cleanup completion has not been confirmed."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration runtime handle serialization is unsupported."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.access_denied",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.access_denied.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configuration service refused access."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.document_missing",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.document_missing.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A required configuration document is missing."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.document_empty",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.document_empty.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A required configuration document is empty."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.service_unavailable",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.service_unavailable.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configuration service could not complete the request."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.unsupported_profile",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.unsupported_profile.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The selected configuration protocol profile is unsupported."
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.write_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_nacos.write_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configuration mutation reported a failure; inspect its effect evidence."
       }
     }
   ]

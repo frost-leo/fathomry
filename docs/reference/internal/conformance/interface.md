@@ -34,12 +34,26 @@ shared across the private fault/resource/invocation/compatibility foundations
 rather than owned by one runtime package. Making it a public testing SDK would
 expose an unnecessary API and misstate that scope.
 
-Independent business projects cannot consume a public Fathomry package yet: the
-framework/capability/error API is deferred. They do not import this internal tool.
-The [import boundary test](../../../../internal/conformance/imports_test.go) smoke-compiles
-an independent module, rejects all five internal packages and all four withdrawn
-public packages, and audits the private production dependency graph. The smoke
-compile is not execution of a public error contract. The
+Independent projects can consume the rebuilt
+[failure/v1 contract](../../failure/v1/interface.md), but cannot import this
+internal tool. [Settings/v1](../../settings/v1/interface.md) also supplies independent
+data storage/access, and [i18n/v1](../../i18n/v1/interface.md) supplies independent
+resource/code presentation. Public configsource Adapters and Framework
+configuration are rebuilt; the former CLI Go API remains withdrawn, while the
+[official executable](../../cmd/fathomry/interface.md) provides offline catalog
+commands with private implementation packages. The
+[public resource owner](../../resource/v1/interface.md) independently supplies
+runtime generations and typed leases. Its optional
+[native service composition](fixtures.md#public-owner-and-native-service-composition)
+lives here as maintainer-only tests, not a public-to-Internal dependency. The
+[import boundary test](../../../../internal/conformance/imports_test.go) smoke-compiles
+the public foundations, rejects private and withdrawn entry points, and audits
+the private production dependency graph. The
+[independent failure consumer](../../../../failure/v1/integration_test.go) executes
+the error contract; the [independent settings consumer](../../../../settings/v1/integration_test.go)
+checks project/component data access and read-only/type boundaries. The
+[native boundary test](../../../../internal/conformance/failure_v1_test.go)
+separately checks preservation of a real private Viper parser error. The
 [internal composition fixture](../../../../internal/conformance/composition_test.go)
 retains the complete preparation/assembly/call/evidence path. Dynamic receipt/stream
 field/method checks supplement import rejection in maintainer fixtures.

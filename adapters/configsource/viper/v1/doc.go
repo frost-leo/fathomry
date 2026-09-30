@@ -17,8 +17,17 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package viper supplies explicit UTF-8 YAML/JSON file selections, finite raw
-// Capture and owned periodic Observe without Framework startup. Raw capture does
-// not assert native Viper parsing. Stable regular files and atomic replacement on
-// qualified filesystems are the coherent-writer profile; in-place writes are not.
+// Package viper exposes the supported native Viper configuration profile to
+// independent applications and Framework consumers. New binds caller-owned public
+// operation admission and evidence once. Load uses explicit files or borrowed
+// readers; no discovery, merging or process mutation is implicit.
+//
+// Documents preserve original bytes separately from live native queries.
+// Capture freezes native values; Decode uses native weak conversions. Strict
+// original-document layering belongs to adapters/configsource/v1, not Decode.
+//
+// Watch retains one native subscription until actual cleanup. Canceling Next
+// ends only that wait. A timed-out Close retains the same reachable owner.
+// The common runtime and evidence Inbox remain caller-owned. Evidence reception
+// never repeats source operations. This is not deterministic Workflow code.
 package viper

@@ -40,6 +40,8 @@ const (
 	// ErrRead marks failed acquisition or its cooperative budget/lifetime handling.
 	// Inspect the cause chain for more specific transport and cancellation evidence.
 	ErrRead fault.Kind = "fathomry." + ProviderID + ".read"
+	// ErrWrite retains mutation failures; inspect MutationResult for effect evidence.
+	ErrWrite fault.Kind = "fathomry." + ProviderID + ".write"
 	// ErrDecode marks malformed, inconsistent or unexpected protocol data.
 	ErrDecode fault.Kind = "fathomry." + ProviderID + ".decode"
 	// ErrDenied marks an observed authentication or authorization refusal.

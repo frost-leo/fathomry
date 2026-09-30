@@ -36,6 +36,129 @@ type testNested struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
 }
+
+func TestSharedTypeDAGAdmission(t *testing.T) {
+	kind := reflect.TypeFor[admissionDAG28]()
+	if !plainType(kind, make(map[reflect.Type]bool)) {
+		t.Fatal("bounded shared plain-data type rejected")
+	}
+}
+
+type admissionDAG0 struct {
+	Value string `json:"value"`
+}
+type admissionDAG1 struct {
+	Left  *admissionDAG0 `json:"left"`
+	Right *admissionDAG0 `json:"right"`
+}
+type admissionDAG2 struct {
+	Left  *admissionDAG1 `json:"left"`
+	Right *admissionDAG1 `json:"right"`
+}
+type admissionDAG3 struct {
+	Left  *admissionDAG2 `json:"left"`
+	Right *admissionDAG2 `json:"right"`
+}
+type admissionDAG4 struct {
+	Left  *admissionDAG3 `json:"left"`
+	Right *admissionDAG3 `json:"right"`
+}
+type admissionDAG5 struct {
+	Left  *admissionDAG4 `json:"left"`
+	Right *admissionDAG4 `json:"right"`
+}
+type admissionDAG6 struct {
+	Left  *admissionDAG5 `json:"left"`
+	Right *admissionDAG5 `json:"right"`
+}
+type admissionDAG7 struct {
+	Left  *admissionDAG6 `json:"left"`
+	Right *admissionDAG6 `json:"right"`
+}
+type admissionDAG8 struct {
+	Left  *admissionDAG7 `json:"left"`
+	Right *admissionDAG7 `json:"right"`
+}
+type admissionDAG9 struct {
+	Left  *admissionDAG8 `json:"left"`
+	Right *admissionDAG8 `json:"right"`
+}
+type admissionDAG10 struct {
+	Left  *admissionDAG9 `json:"left"`
+	Right *admissionDAG9 `json:"right"`
+}
+type admissionDAG11 struct {
+	Left  *admissionDAG10 `json:"left"`
+	Right *admissionDAG10 `json:"right"`
+}
+type admissionDAG12 struct {
+	Left  *admissionDAG11 `json:"left"`
+	Right *admissionDAG11 `json:"right"`
+}
+type admissionDAG13 struct {
+	Left  *admissionDAG12 `json:"left"`
+	Right *admissionDAG12 `json:"right"`
+}
+type admissionDAG14 struct {
+	Left  *admissionDAG13 `json:"left"`
+	Right *admissionDAG13 `json:"right"`
+}
+type admissionDAG15 struct {
+	Left  *admissionDAG14 `json:"left"`
+	Right *admissionDAG14 `json:"right"`
+}
+type admissionDAG16 struct {
+	Left  *admissionDAG15 `json:"left"`
+	Right *admissionDAG15 `json:"right"`
+}
+type admissionDAG17 struct {
+	Left  *admissionDAG16 `json:"left"`
+	Right *admissionDAG16 `json:"right"`
+}
+type admissionDAG18 struct {
+	Left  *admissionDAG17 `json:"left"`
+	Right *admissionDAG17 `json:"right"`
+}
+type admissionDAG19 struct {
+	Left  *admissionDAG18 `json:"left"`
+	Right *admissionDAG18 `json:"right"`
+}
+type admissionDAG20 struct {
+	Left  *admissionDAG19 `json:"left"`
+	Right *admissionDAG19 `json:"right"`
+}
+type admissionDAG21 struct {
+	Left  *admissionDAG20 `json:"left"`
+	Right *admissionDAG20 `json:"right"`
+}
+type admissionDAG22 struct {
+	Left  *admissionDAG21 `json:"left"`
+	Right *admissionDAG21 `json:"right"`
+}
+type admissionDAG23 struct {
+	Left  *admissionDAG22 `json:"left"`
+	Right *admissionDAG22 `json:"right"`
+}
+type admissionDAG24 struct {
+	Left  *admissionDAG23 `json:"left"`
+	Right *admissionDAG23 `json:"right"`
+}
+type admissionDAG25 struct {
+	Left  *admissionDAG24 `json:"left"`
+	Right *admissionDAG24 `json:"right"`
+}
+type admissionDAG26 struct {
+	Left  *admissionDAG25 `json:"left"`
+	Right *admissionDAG25 `json:"right"`
+}
+type admissionDAG27 struct {
+	Left  *admissionDAG26 `json:"left"`
+	Right *admissionDAG26 `json:"right"`
+}
+type admissionDAG28 struct {
+	Left  *admissionDAG27 `json:"left"`
+	Right *admissionDAG27 `json:"right"`
+}
 type testSettings struct {
 	Connection testNested        `json:"connection"`
 	Headers    map[string]string `json:"headers"`

@@ -19,60 +19,48 @@
 
 package configsource
 
-import (
-	"embed"
-	adapters "github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/failure/v1"
-	"github.com/frost-leo/fathomry/i18n/v1"
-)
+import "github.com/frost-leo/fathomry/failure/v1"
 
-// ModuleID is a static implementation identity, never an instance label.
-const ModuleID = "fathomry.adapters.configsource"
-
-// Conditions are usable without catalogs; presentation never performs source I/O.
+// Stable configuration-capability errors do not imply retry or effect policy.
 const (
-	ErrValue   failure.Condition = ModuleID + ".invalid_value"
-	ErrLimit   failure.Condition = ModuleID + ".limit"
-	ErrCursor  failure.Condition = ModuleID + ".invalid_cursor"
-	ErrBusy    failure.Condition = ModuleID + ".concurrent_wait"
-	ErrClosed  failure.Condition = ModuleID + ".closed"
-	ErrWait    failure.Condition = ModuleID + ".wait"
-	ErrCleanup failure.Condition = ModuleID + ".cleanup"
+	ErrInput  failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfigurationData)<<16 | 0x0001
+	ErrLimit  failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfigurationData)<<16 | 0x0002
+	ErrRead   failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfigurationData)<<16 | 0x0003
+	ErrDecode failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfigurationData)<<16 | 0x0004
+	// 0x0005..0x0007 remain reserved; preparation owns no lifecycle.
+	ErrSerialization failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfigurationData)<<16 | 0x0008
 )
 
-//go:embed resources/*.json
-var resources embed.FS
-
-// Definition returns owned static condition declarations.
-func Definition() failure.ModuleDefinition {
-	result := failure.ModuleDefinition{ID: ModuleID, Source: "configsource.v1"}
-	for _, condition := range []failure.Condition{ErrValue, ErrLimit, ErrCursor, ErrBusy, ErrClosed, ErrWait, ErrCleanup} {
-		result.Conditions = append(result.Conditions, failure.ConditionDefinition{Condition: condition, Contract: "v1"})
+// Definitions supplies detached declarations for explicit offline composition.
+func Definitions() []failure.Definition {
+	return []failure.Definition{
+		definition(ErrInput),
+		definition(ErrLimit),
+		definition(ErrRead),
+		definition(ErrDecode),
+		definition(ErrSerialization),
 	}
-	return result
 }
-
-// Sources returns original embedded resources with caller-owned bytes.
-func Sources() []i18n.Source {
-	var result []i18n.Source
-	for _, locale := range []string{"en", "zh-CN"} {
-		data, _ := resources.ReadFile("resources/" + locale + ".json")
-		result = append(result, i18n.Source{Name: ModuleID + "." + locale, Data: data})
+func definition(code failure.Code) failure.Definition {
+	var identifier, message string
+	switch code {
+	case ErrInput:
+		identifier, message = "invalid_input", "The configuration input or declaration is invalid."
+	case ErrLimit:
+		identifier, message = "limit_exceeded", "A configuration capability bound was exceeded."
+	case ErrRead:
+		identifier, message = "read_failed", "Configuration acquisition or inspection failed."
+	case ErrDecode:
+		identifier, message = "decode_failed", "Configuration decoding or preparation failed."
+	case ErrSerialization:
+		identifier, message = "runtime_serialization", "Configuration runtime handle serialization is unsupported."
 	}
-	return result
+	return failure.Definition{Code: code, Identifier: failure.Identifier("fathomry.configuration_data." + identifier), Module: "fathomry", Component: "configuration_data", Revision: 1, Message: message}
 }
-
-// Bindings returns fact-free, same-condition presentation associations.
-func Bindings() []i18n.Binding {
-	var result []i18n.Binding
-	for _, definition := range Definition().Conditions {
-		key := string(definition.Condition)[len(ModuleID)+1:]
-		result = append(result, i18n.Binding{ID: ModuleID + ":" + key, Condition: definition.Condition, ConditionContract: "v1", Surface: "configuration", Role: "explanation", Message: ModuleID + ":" + key, MessageContract: "v1"})
+func fail(code failure.Code, operation string, causes ...error) error {
+	value, err := failure.New(definition(code), failure.Location{Operation: operation}, causes...)
+	if err != nil {
+		return err
 	}
-	return result
-}
-
-// Module supplies static contributions without constructing a source.
-func Module() adapters.Module {
-	return adapters.Module{Definition: Definition(), Messages: Sources(), Grouping: i18n.Module{ID: ModuleID, Owners: []string{ModuleID}}, Bindings: Bindings()}
+	return value
 }

@@ -19,51 +19,59 @@
 
 package framework
 
-import (
-	"embed"
-	"github.com/frost-leo/fathomry/failure/v1"
-	"github.com/frost-leo/fathomry/i18n/v1"
-)
+import "github.com/frost-leo/fathomry/failure/v1"
 
-// ModuleID owns this layer's catalog admission failures.
-const ModuleID = "fathomry.framework"
+// Stable identities describe composition, not service retry or effect policy.
 const (
-	ErrCatalog failure.Condition = ModuleID + ".invalid_catalog"
-	ErrLimit   failure.Condition = ModuleID + ".limit"
+	ErrOptions       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0001
+	ErrHandle        failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0002
+	ErrClosed        failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0003
+	ErrWait          failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0004
+	ErrClose         failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0005
+	ErrDelivery      failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0006
+	ErrPending       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0007
+	ErrSerialization failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityAssembly)<<16 | 0x0008
 )
 
-//go:embed resources/*.json
-var resources embed.FS
-
-// Definition returns owned declarations without feature or service startup.
-func Definition() failure.ModuleDefinition {
-	return failure.ModuleDefinition{ID: ModuleID, Source: "framework.v1", Conditions: []failure.ConditionDefinition{
-		{Condition: ErrCatalog, Contract: "v1"}, {Condition: ErrLimit, Contract: "v1"},
-	}}
-}
-
-// Sources returns named original resources; bytes belong to the caller.
-func Sources() []i18n.Source {
-	var result []i18n.Source
-	for _, locale := range []string{"en", "zh-CN"} {
-		data, _ := resources.ReadFile("resources/" + locale + ".json")
-		result = append(result, i18n.Source{Name: ModuleID + "." + locale, Data: data})
+// Definitions supplies explicit assembly declarations for offline composition.
+func Definitions() []failure.Definition {
+	return []failure.Definition{
+		definition(ErrOptions),
+		definition(ErrHandle),
+		definition(ErrClosed),
+		definition(ErrWait),
+		definition(ErrClose),
+		definition(ErrDelivery),
+		definition(ErrPending),
+		definition(ErrSerialization),
 	}
-	return result
 }
-
-// Bindings returns owned static associations without inspecting occurrences.
-func Bindings() []i18n.Binding {
-	var result []i18n.Binding
-	for _, item := range Definition().Conditions {
-		key := string(item.Condition)[len(ModuleID)+1:]
-		result = append(result, i18n.Binding{ID: ModuleID + ":" + key, Condition: item.Condition, ConditionContract: "v1", Surface: "catalog", Role: "explanation", Message: ModuleID + ":" + key, MessageContract: "v1"})
+func definition(code failure.Code) failure.Definition {
+	var identifier, message string
+	switch code {
+	case ErrOptions:
+		identifier, message = "invalid_options", "The runtime composition or reception options are invalid."
+	case ErrHandle:
+		identifier, message = "invalid_handle", "The runtime composition handle is not initialized."
+	case ErrClosed:
+		identifier, message = "closed", "The runtime composition or receiver is closing or closed."
+	case ErrWait:
+		identifier, message = "wait_interrupted", "Waiting ended without confirming actual completion."
+	case ErrClose:
+		identifier, message = "cleanup_failed", "Runtime composition cleanup reported a failure."
+	case ErrDelivery:
+		identifier, message = "delivery_failed", "Required evidence reception failed; custody is retained."
+	case ErrPending:
+		identifier, message = "evidence_pending", "Required evidence remains unacknowledged."
+	case ErrSerialization:
+		identifier, message = "runtime_serialization", "Runtime composition handle serialization is unsupported."
 	}
-	return result
+	return failure.Definition{Code: code, Identifier: failure.Identifier("fathomry.assembly." + identifier), Module: "fathomry", Component: "assembly", Revision: 1, Message: message}
 }
-
-// ModuleContribution returns the built-in layer module, included by Catalogs.
-// Explicitly supplying it again is a duplicate, not an override.
-func ModuleContribution() Module {
-	return Module{Definition: Definition(), Messages: Sources(), Grouping: i18n.Module{ID: ModuleID, Owners: []string{ModuleID}}, Bindings: Bindings()}
+func fail(code failure.Code, operation string, causes ...error) error {
+	value, err := failure.New(definition(code), failure.Location{Operation: operation}, causes...)
+	if err != nil {
+		return err
+	}
+	return value
 }

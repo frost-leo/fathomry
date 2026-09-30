@@ -20,381 +20,366 @@
 package configuration
 
 import (
-	"bytes"
 	"context"
-	"sync"
+	"math"
 
-	source "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	"github.com/frost-leo/fathomry/adapters/v1"
+	"github.com/frost-leo/fathomry/settings/v1"
 )
 
-// Status associates the last accepted snapshot with current preparation status.
-// Pending means initial/replacement preparation is outstanding; an earlier
-// snapshot may remain readable. Ready is accepted, not service/client readiness.
-type Status uint8
-
-const (
-	Pending Status = iota + 1
-	Ready
-	Degraded
-	Closing
-	Closed
-)
-
-type position struct{ marker byte }
-
-// Cursor is opaque, owner-bound, ephemeral and not serializable. Zero requests
-// current state immediately. Positions are not source generations or revisions.
-type Cursor struct {
+// Event reports one acceptance/rejection or obsolete validation. Notifications
+// are bounded; Gap means notification/input history was coalesced. State.Reader
+// remains the authoritative accepted data, not this optional event queue.
+type Event struct {
 	private
-	owner    any
-	position *position
+	Sequence   uint64
+	Accepted   bool
+	Superseded bool
+	Gap        bool
+	Err        error
+	Status     Status
 }
 
-// State is one atomic value/status observation. Snapshot is invalid until the
-// first acceptance. Failures and closure never mutate an already returned value.
-type State[T any] struct {
+// Watcher owns source observation, ingress and serial validation. Its Reader is
+// initially unconfigured; successful construction is not configuration readiness.
+type Watcher[T any] struct {
 	private
-	Snapshot Snapshot[T]
-	Status   Status
-	Failure  error
-	Cursor   Cursor
-	_        typeIdentity[T]
+	state *watchState[T]
+	_     typeIdentity[T]
+}
+type pending struct {
+	observation configsource.Observation
+	sequence    uint64
+}
+type watchState[T any] struct {
+	data             *State[T]
+	plan             plan[T]
+	dependencies     Dependencies
+	ctx              context.Context
+	cancel           context.CancelCauseFunc
+	work             context.Context
+	receipt          *adapters.Receipt[Evidence]
+	capacity         int
+	events           []Event
+	eventsChanged    chan struct{}
+	eventsGap        bool
+	input            *pending
+	inputChanged     chan struct{}
+	ingressStopped   bool
+	validationCancel context.CancelFunc
+	terminal         error
 }
 
-// Live owns its source observers and one serial preparation worker. Do not copy.
-// Current supports concurrent readers; at most one Next waiter is admitted.
-// Canceling a wait never cancels ownership. A timed-out Close retains this owner.
-type Live[T any] struct {
-	private
-	mu                       sync.Mutex
-	state                    State[T]
-	changed, done            chan struct{}
-	parent, ctx              context.Context
-	cancel                   context.CancelFunc
-	stop                     func() bool
-	closing, closed, waiting bool
-	cleanup                  error
-	_                        typeIdentity[T]
-}
-
-// Watch admits/copies schema, defaults, declarations and environment before
-// creating ownership. Initial acquisition/preparation is asynchronous: success
-// returns an owner, not a ready configuration. No Framework source poller exists.
-func Watch[T any](ctx context.Context, schema Schema[T], plan Plan) (*Live[T], error) {
-	if nilValue(ctx) {
-		return nil, fail(ErrValue)
+// Watch freezes declarations/environment once, then starts one owned producer.
+// It never polls independently of Source.Observe or creates a validator per update.
+func Watch[T any](ctx context.Context, declaration Declaration[T], dependencies Dependencies, options WatchOptions) (*Watcher[T], error) {
+	if ctx == nil {
+		return nil, fail(ErrDeclaration, "watch")
 	}
-	admitted, err := admit(schema, plan, true)
+	capacity := options.QueueCapacity
+	if capacity == 0 {
+		capacity = 16
+	}
+	if capacity < 1 || capacity > 64 {
+		return nil, fail(ErrDeclaration, "watch")
+	}
+	endpoint, err := bind(dependencies)
 	if err != nil {
 		return nil, err
 	}
-	lifetime, cancel := context.WithCancel(ctx)
-	live := &Live[T]{state: State[T]{Status: Pending}, changed: make(chan struct{}), done: make(chan struct{}), parent: ctx, ctx: lifetime, cancel: cancel}
-	live.state.Cursor = Cursor{owner: live, position: &position{}}
-	live.stop = context.AfterFunc(lifetime, live.beginClose)
-	go live.coordinate(admitted)
-	return live, nil
+	selected, err := freeze(ctx, declaration, true)
+	if err != nil {
+		return nil, err
+	}
+	lifetime, cancel := context.WithCancelCause(ctx)
+	state := &watchState[T]{data: newState[T](), plan: selected, dependencies: dependencies, ctx: lifetime, cancel: cancel, capacity: capacity, eventsChanged: make(chan struct{}), inputChanged: make(chan struct{}, 1)}
+	receipt, err := endpoint.Run(lifetime, request("watch"), func(call *adapters.Call[Evidence]) {
+		guard, err := call.Hold()
+		if err != nil {
+			_ = call.Resolve(adapters.Outcome[Evidence]{Primary: err})
+			return
+		}
+		state.data.state.mu.Lock()
+		state.work = call.Context()
+		state.data.state.mu.Unlock()
+		go func() {
+			defer guard.Release()
+			state.run(call)
+		}()
+	})
+	if err != nil {
+		cancel(nil)
+		return nil, err
+	}
+	if state.work == nil {
+		cancel(nil)
+		value, _ := receipt.Snapshot()
+		return nil, value.Err()
+	}
+	state.receipt = receipt
+	return &Watcher[T]{state: state}, nil
 }
-func (live *Live[T]) signal() {
-	live.state.Cursor = Cursor{owner: live, position: &position{}}
-	close(live.changed)
-	live.changed = make(chan struct{})
-}
-func (live *Live[T]) publish(snapshot Snapshot[T], status Status, err error) {
-	live.mu.Lock()
-	defer live.mu.Unlock()
-	if live.closing || live.ctx.Err() != nil {
+func (state *watchState[T]) run(call *adapters.Call[Evidence]) {
+	defer state.cancel(nil)
+	data := state.data.state
+	observer, openError := state.plan.source.Observe(call.Context())
+	if nilInterface(observer) && openError == nil {
+		openError = fail(ErrObservation, "observe")
+	}
+	if openError != nil {
+		problem := fail(ErrSource, "observe", openError)
+		if call.Context().Err() != nil {
+			problem = nil
+		}
+		data.mu.Lock()
+		data.status.SourceError = problem
+		data.status.Observed = 1
+		data.status.Rejected = 1
+		state.eventLocked(Event{Sequence: 1, Err: problem})
+		data.mu.Unlock()
+		var cleanup error
+		if !nilInterface(observer) {
+			cleanup = observer.Close(context.Background())
+		}
+		state.finish(call, problem, cleanup)
 		return
 	}
-	if snapshot.state == nil {
-		snapshot = live.state.Snapshot
+	ingressDone := make(chan struct{})
+	go func() {
+		defer close(ingressDone)
+		for call.Context().Err() == nil {
+			observation, err := observer.Next(call.Context())
+			if err != nil {
+				if call.Context().Err() == nil {
+					state.ingest(configsource.Observation{FailedIndex: -1, Err: err, Gap: true}, call.Context(), true)
+				}
+				break
+			}
+			state.ingest(observation, call.Context(), false)
+		}
+		data.mu.Lock()
+		state.ingressStopped = true
+		data.mu.Unlock()
+		state.wake()
+	}()
+	for call.Context().Err() == nil {
+		data.mu.Lock()
+		input := state.input
+		if input == nil {
+			stopped := state.ingressStopped
+			data.mu.Unlock()
+			if stopped {
+				break
+			}
+			select {
+			case <-state.inputChanged:
+			case <-call.Context().Done():
+			}
+			continue
+		}
+		state.input = nil
+		validation, cancel := context.WithCancel(call.Context())
+		state.validationCancel = cancel
+		data.mu.Unlock()
+
+		prepared, err := prepare(validation, state.plan, input.observation)
+		var snapshot settings.Snapshot[T]
+		if err == nil {
+			snapshot, err = prepared.Snapshot()
+		}
+		cancel()
+		data.mu.Lock()
+		state.validationCancel = nil
+		if data.status.Closed || call.Context().Err() != nil {
+			data.mu.Unlock()
+			break
+		}
+		if input.sequence != data.status.Observed {
+			data.status.Superseded++
+			data.status.Gap = true
+			state.eventLocked(Event{Sequence: input.sequence, Superseded: true, Gap: true})
+			data.mu.Unlock()
+			continue
+		}
+		if err != nil {
+			data.status.Rejected++
+			data.status.PreparationError = err
+			state.eventLocked(Event{Sequence: input.sequence, Err: err, Gap: input.observation.Gap})
+			data.mu.Unlock()
+			continue
+		}
+		err = data.publish(call.Context(), input.sequence, prepared, snapshot)
+		if err != nil {
+			data.status.Rejected++
+			data.status.PreparationError = err
+			state.eventLocked(Event{Sequence: input.sequence, Err: err})
+			data.mu.Unlock()
+			continue
+		}
+		data.mu.Unlock()
+		state.data.adopt(call.Context(), state.dependencies.Resources)
+		data.mu.Lock()
+		state.eventLocked(Event{Sequence: input.sequence, Accepted: true, Gap: input.observation.Gap})
+		data.mu.Unlock()
 	}
-	if err == nil && live.state.Failure == nil && live.state.Status == status && live.state.Snapshot.state == snapshot.state {
-		return
-	}
-	live.state.Snapshot = snapshot
-	live.state.Status = status
-	live.state.Failure = err
-	live.signal()
+	cleanup := observer.Close(context.Background())
+	<-ingressDone
+	data.mu.Lock()
+	terminal := state.terminal
+	data.mu.Unlock()
+	state.finish(call, terminal, cleanup)
 }
-func (live *Live[T]) beginClose() {
-	live.mu.Lock()
-	if !live.closing {
-		live.closing = true
-		live.state.Status = Closing
-		if live.parent.Err() != nil {
-			live.state.Failure = fail(ErrClosed, live.state.Failure, live.parent.Err(), context.Cause(live.parent))
-		}
-		live.signal()
-		live.cancel()
-	}
-	live.mu.Unlock()
-}
-func (live *Live[T]) Current() (State[T], error) {
-	if live == nil || live.cancel == nil {
-		return State[T]{}, fail(ErrValue)
-	}
-	live.mu.Lock()
-	defer live.mu.Unlock()
-	return live.state, nil
-}
-func (live *Live[T]) Next(ctx context.Context, after Cursor) (State[T], error) {
-	if live == nil || live.cancel == nil || nilValue(ctx) {
-		return State[T]{}, fail(ErrValue)
-	}
-	live.mu.Lock()
-	if after.owner != nil && (after.owner != live || after.position == nil) || after.owner == nil && after.position != nil {
-		live.mu.Unlock()
-		return State[T]{}, fail(ErrCursor)
-	}
-	if live.waiting {
-		live.mu.Unlock()
-		return State[T]{}, fail(ErrBusy)
-	}
-	live.waiting = true
-	defer func() { live.mu.Lock(); live.waiting = false; live.mu.Unlock() }()
-	for {
-		if ctx.Err() != nil {
-			live.mu.Unlock()
-			return State[T]{}, fail(ErrWait, ctx.Err(), context.Cause(ctx))
-		}
-		if live.state.Cursor.position != after.position {
-			state := live.state
-			live.mu.Unlock()
-			return state, nil
-		}
-		if live.closed {
-			live.mu.Unlock()
-			return State[T]{}, fail(ErrClosed)
-		}
-		changed := live.changed
-		live.mu.Unlock()
-		select {
-		case <-changed:
-		case <-ctx.Done():
-		}
-		live.mu.Lock()
-	}
-}
-func (live *Live[T]) Close(ctx context.Context) error {
-	if live == nil || live.cancel == nil || nilValue(ctx) {
-		return fail(ErrValue)
-	}
-	live.beginClose()
+func (state *watchState[T]) wake() {
 	select {
-	case <-live.done:
-		return live.cleanup
+	case state.inputChanged <- struct{}{}:
 	default:
 	}
-	select {
-	case <-live.done:
-		return live.cleanup
-	case <-ctx.Done():
-		return fail(ErrWait, ctx.Err(), context.Cause(ctx))
+}
+func (state *watchState[T]) ingest(observation configsource.Observation, ctx context.Context, terminal bool) {
+	data := state.data.state
+	data.mu.Lock()
+	if data.status.Closed || ctx.Err() != nil {
+		data.mu.Unlock()
+		return
 	}
+	if data.status.Observed == math.MaxUint64 {
+		state.terminal = fail(ErrLimit, "observation_sequence")
+		data.mu.Unlock()
+		state.cancel(state.terminal)
+		return
+	}
+	data.status.Observed++
+	if state.input != nil {
+		data.status.Superseded++
+		data.status.Gap = true
+	}
+	data.status.Gap = data.status.Gap || observation.Gap
+	data.status.SourceError = nil
+	if observation.Err != nil {
+		data.status.SourceError = at(ErrSource, "observe", observation.FailedIndex, observation.Err)
+	}
+	if terminal {
+		state.terminal = data.status.SourceError
+	}
+	state.input = &pending{observation: observation, sequence: data.status.Observed}
+	cancel := state.validationCancel
+	data.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	state.wake()
+}
+func (state *watchState[T]) eventLocked(event Event) {
+	if len(state.events) == state.capacity {
+		copy(state.events, state.events[1:])
+		state.events[len(state.events)-1] = Event{}
+		state.events = state.events[:len(state.events)-1]
+		state.eventsGap = true
+		state.data.state.status.Gap = true
+	}
+	event.Status = state.data.state.status
+	state.events = append(state.events, event)
+	close(state.eventsChanged)
+	state.eventsChanged = make(chan struct{})
+}
+func (state *watchState[T]) finish(call *adapters.Call[Evidence], primary, cleanup error) {
+	data := state.data.state
+	data.mu.Lock()
+	data.status.Closed = true
+	evidence := data.status.Evidence
+	state.input = nil
+	clear(state.events)
+	state.events = nil
+	state.plan = plan[T]{}
+	state.dependencies = Dependencies{}
+	close(state.eventsChanged)
+	data.mu.Unlock()
+	_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: primary, Cleanup: cleanup})
+}
+func (watch *Watcher[T]) Reader() settings.Reader {
+	if watch == nil || watch.state == nil {
+		return settings.Reader{}
+	}
+	return watch.state.data.Reader()
+}
+func (watch *Watcher[T]) Capture() (Accepted[T], error) {
+	if watch == nil || watch.state == nil {
+		return Accepted[T]{}, fail(ErrHandle, "capture")
+	}
+	return watch.state.data.Capture()
+}
+func (watch *Watcher[T]) Status() (Status, error) {
+	if watch == nil || watch.state == nil {
+		return Status{}, fail(ErrHandle, "status")
+	}
+	status, err := watch.state.data.Status()
+	value, _ := watch.state.receipt.Snapshot()
+	status.Closed = status.Closed || value.Info().Released
+	if status.Observed == 0 && value.Info().Released {
+		status.SourceError = value.Primary()
+	}
+	return status, err
 }
 
-type sourceEvent struct {
-	index int
-	state source.State
-	err   error
-}
-type candidate struct {
-	batches []source.Batch
-	epoch   *position
-}
-type outcome[T any] struct {
-	candidate
-	snapshot Snapshot[T]
-	err      error
-}
-
-func (live *Live[T]) coordinate(input *admitted[T]) {
-	var observers []source.Observer
-	var readers, worker sync.WaitGroup
-	updates := make(chan sourceEvent, len(input.inputs))
-	jobs := make(chan candidate)
-	results := make(chan outcome[T], 1)
-	worker.Go(func() {
-		for task := range jobs {
-			snapshot, err := input.prepare(task.batches)
-			results <- outcome[T]{candidate: task, snapshot: snapshot, err: err}
-		}
-	})
-	defer func() {
-		live.beginClose()
-		close(jobs)
-		var cleanup []error
-		for _, observer := range observers {
-			if err := observer.Close(context.Background()); err != nil {
-				cleanup = append(cleanup, err)
-			}
-		}
-		readers.Wait()
-		worker.Wait()
-		var err error
-		if len(cleanup) > 0 {
-			err = fail(ErrCleanup, cleanup...)
-		}
-		live.mu.Lock()
-		live.closed = true
-		live.cleanup = err
-		live.state.Status = Closed
-		if err != nil {
-			if live.state.Failure == nil {
-				live.state.Failure = err
-			} else {
-				live.state.Failure = fail(ErrCleanup, live.state.Failure, err)
-			}
-		}
-		live.signal()
-		close(live.done)
-		live.mu.Unlock()
-		live.stop()
-	}()
-	for index, selected := range input.inputs {
-		if live.ctx.Err() != nil {
-			return
-		}
-		observer, err := selected.source.Observe(live.ctx)
-		if !nilValue(observer) {
-			observers = append(observers, observer)
-		}
-		if err != nil {
-			live.publish(Snapshot[T]{}, Degraded, err)
-			return
-		}
-		if nilValue(observer) {
-			live.publish(Snapshot[T]{}, Degraded, fail(ErrValue))
-			return
-		}
-		readers.Go(func() {
-			state, err := observer.Current()
-			for {
-				select {
-				case updates <- sourceEvent{index: index, state: state, err: err}:
-				case <-live.ctx.Done():
-					return
-				}
-				if err != nil || state.Status == source.Closed {
-					return
-				}
-				state, err = observer.Next(live.ctx, state.Cursor)
-				if live.ctx.Err() != nil {
-					return
-				}
-			}
-		})
+// Next consumes bounded decision notifications. Cancellation ends only this wait.
+// Closed producers have no new deliveries; Capture still exposes last-good data.
+func (watch *Watcher[T]) Next(ctx context.Context) (Event, error) {
+	if watch == nil || watch.state == nil || ctx == nil {
+		return Event{}, fail(ErrHandle, "next")
 	}
-	latest := make([]source.State, len(input.inputs))
-	epoch := &position{}
-	var accepted, rejected []source.Batch
-	var acceptedSnapshot Snapshot[T]
-	var rejectedError error
-	working := false
+	state := watch.state
+	data := state.data.state
 	for {
-		batches := make([]source.Batch, len(latest))
-		eligible := true
-		var failures []error
-		for index, state := range latest {
-			batches[index] = state.Batch
-			if !available(state) {
-				eligible = false
-			}
-			if state.Failure != nil {
-				failures = append(failures, state.Failure)
-			} else if state.Status == source.Closed || state.Status == source.Closing {
-				failures = append(failures, fail(ErrPreparation, source.ErrClosed))
-			}
+		if ctx.Err() != nil {
+			return Event{}, fail(ErrWait, "next", ctx.Err(), context.Cause(ctx))
 		}
-		if !eligible {
-			if len(failures) > 0 {
-				err := failures[0]
-				if len(failures) > 1 {
-					err = fail(ErrPreparation, failures...)
-				}
-				live.publish(Snapshot[T]{}, Degraded, err)
-			} else {
-				live.publish(Snapshot[T]{}, Pending, nil)
-			}
-		} else if equalVector(accepted, batches) {
-			live.publish(acceptedSnapshot, Ready, nil)
-		} else if equalVector(rejected, batches) {
-			live.publish(Snapshot[T]{}, Degraded, rejectedError)
-		} else {
-			live.publish(Snapshot[T]{}, Pending, nil)
-			if !working {
-				select {
-				case jobs <- candidate{batches: batches, epoch: epoch}:
-					working = true
-				case <-live.ctx.Done():
-					return
-				}
-			}
+		receipt, _ := state.receipt.Snapshot()
+		data.mu.Lock()
+		if data.status.Closed || state.ctx.Err() != nil || state.work != nil && state.work.Err() != nil || receipt.Info().Released {
+			sourceError := data.status.SourceError
+			data.mu.Unlock()
+			return Event{}, fail(ErrClosed, "next", receipt.Primary(), sourceError, state.work.Err(), context.Cause(state.work))
 		}
+		if len(state.events) > 0 {
+			event := state.events[0]
+			copy(state.events, state.events[1:])
+			state.events[len(state.events)-1] = Event{}
+			state.events = state.events[:len(state.events)-1]
+			event.Gap = event.Gap || state.eventsGap
+			state.eventsGap = false
+			data.mu.Unlock()
+			return event, nil
+		}
+		changed := state.eventsChanged
+		data.mu.Unlock()
 		select {
-		case <-live.ctx.Done():
-			return
-		case event := <-updates:
-			next := event.state
-			if event.err != nil {
-				next = latest[event.index]
-				next.Status = source.Degraded
-				next.Failure = event.err
-			}
-			old := latest[event.index]
-			if available(old) != available(next) || !equalBatch(old.Batch, next.Batch) {
-				epoch = &position{}
-			}
-			latest[event.index] = next
-		case result := <-results:
-			working = false
-			if result.epoch != epoch {
-				continue
-			}
-			if result.err != nil {
-				rejected = result.batches
-				rejectedError = result.err
-			} else {
-				accepted = result.batches
-				acceptedSnapshot = result.snapshot
-				rejected = nil
-				rejectedError = nil
-			}
+		case <-changed:
+		case <-state.ctx.Done():
+		case <-state.work.Done():
+		case <-ctx.Done():
+			return Event{}, fail(ErrWait, "next", ctx.Err(), context.Cause(ctx))
 		}
 	}
 }
-func available(state source.State) bool {
-	return state.Status == source.Available && !nilValue(state.Batch)
-}
-func equalVector(left, right []source.Batch) bool {
-	if left == nil || len(left) != len(right) {
-		return false
+
+// Close fences publication before requesting cancellation, then joins the actual
+// producer, source owner and validation. Expiration retains the same Watcher.
+func (watch *Watcher[T]) Close(ctx context.Context) error {
+	if watch == nil || watch.state == nil {
+		return fail(ErrHandle, "close")
 	}
-	for index := range left {
-		if !equalBatch(left[index], right[index]) {
-			return false
-		}
+	if ctx == nil {
+		return fail(ErrDeclaration, "close")
 	}
-	return true
-}
-func equalBatch(left, right source.Batch) bool {
-	if nilValue(left) || nilValue(right) {
-		return nilValue(left) && nilValue(right)
+	data := watch.state.data.state
+	data.mu.Lock()
+	data.status.Closed = true
+	data.mu.Unlock()
+	watch.state.cancel(nil)
+	value, err := watch.state.receipt.WaitReleased(ctx)
+	if err != nil {
+		return fail(ErrWait, "close", err)
 	}
-	leftInfo, rightInfo := left.Documents(), right.Documents()
-	if len(leftInfo) != len(rightInfo) {
-		return false
-	}
-	for index, entry := range leftInfo {
-		if entry != rightInfo[index] {
-			return false
-		}
-		raw, _, err := left.RawCopy(entry.Name)
-		other, _, otherErr := right.RawCopy(entry.Name)
-		if err != nil || otherErr != nil || !bytes.Equal(raw, other) {
-			return false
-		}
-	}
-	return true
+	return value.Err()
 }

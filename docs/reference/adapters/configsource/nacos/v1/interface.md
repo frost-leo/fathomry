@@ -17,104 +17,109 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 
-# Nacos configuration Adapter
+# Public Nacos configuration Adapter
 
 [Documentation](../../../../../README.md) / Public package reference
 
-**Audience:** independent projects selecting an authorized Nacos cluster.
-**Status:** implemented; loopback protocol/TLS tests and opt-in isolated service qualification.
+**Audience:** independent Go consumers and Framework scenario authors.
+**Status:** implemented with loopback native-protocol/HTTP, resource-composition
+and independent-module checks. This is not new production/TLS/HA certification.
 **Package:** `github.com/frost-leo/fathomry/adapters/configsource/nacos/v1`.
+Public API v1 is distinct from the selected Internal SDK-v2 integration.
 
-Public API v1 is independent of the private integration's SDK-major v2 and its
-selected Nacos Go SDK v2.3.5. No SDK upgrade or high-level cached client is introduced.
+## Explicit settings and ownership
 
-## Explicit bootstrap
+Settings is loadable data, separate from runtime dependencies. Bootstrap credentials
+must exist before fetching the remote application document. Validate performs no
+service I/O. Open borrows an explicit public Runtime/Inbox and returns an Owner;
+local construction is not readiness. Any non-nil Owner remains cleanup responsibility,
+including partial initialization. Owner.Client provides direct operations.
 
-`Select(Settings)` validates/copies data without constructing a Client, connecting,
-reading environment or discovering endpoints. Settings, Server and Document are
-ordinary exact-tagged sensitive DTOs, admitted inside project T. Runtime Selection
-is separate and guarded.
+Every supported native field is mapped: Name, Namespace, AppName, both server
+endpoints, default Keys, DynamicKeys, Writable, Username/Password, RootCAPEM,
+AllowInsecure, RequestTimeout, RetryDelay, ReconcileInterval, ConcurrentRequests,
+QueuedRequests, Subscriptions and QueueCapacity. JSON/mapstructure names and
+nanosecond units are defined in Settings. Zero values select native defaults:
+10s request, 100ms retry, 30s reconciliation, 4 active requests, 1 subscription and
+16 invalidations; queued_requests=0 disables waiting.
 
-Select 1–8 authorized `Server` members with explicit HTTPURL (including the chosen
-root or /nacos context) and GRPCAddress. No gRPC port offset is inferred.
-Select 1–16 `Document` slots with unique non-secret Name and native Group/DataID;
-an empty Group means DEFAULT_GROUP. Namespace is explicit; empty requests the
-native default form. Namespace aliases are not automatically rewritten.
+Both endpoints are explicit. TLS verification is default; plaintext must be
+selected. Empty trust uses system roots; supplied roots replace them. Dynamic
+selection and write permission are independent, and neither overrides service ACLs.
+No implicit namespace rewriting, environment lookup or peer discovery occurs.
 
-TLS verifies each channel unless AllowInsecure explicitly selects plaintext for
-an isolated target. RootCAPEM replaces system roots when present (maximum 64 KiB).
-Username and Password must both be present or absent. Bootstrap sizes, identifiers
-and protocol modes retain the [private profile](../../../../internal/configsource/nacos/v2/interface.md).
-No ambient HTTP proxy or global SDK client is used.
+Owner.Handle is opaque and has no Close or native-client authority. A
+resource.Instance[Handle] can use Owner.Release as its cleanup callback.
+Using(ref, dependencies) constructs a public resource-backed Client. Each operation
+captures one generation; guards retain subscription leases through actual cleanup.
+Reconstruction changes future borrows, never retargets an existing subscription.
 
-Durations use nanoseconds:
+## Complete native capability routes
 
-| Setting | Zero default | Accepted nonzero range |
-| --- | --- | --- |
-| RequestTimeout | 10 seconds | 1 millisecond–1 minute |
-| RetryDelay | 100 milliseconds | 1 millisecond–1 minute |
-| ReconcileInterval | 30 seconds | 1 second–5 minutes |
+| Route | Preserved facts and limits |
+| --- | --- |
+| Read / ReadAll | Required-document reads, input order, fresh native sessions, no cached fallback or usable prefix |
+| ReadRaw / ReadRawAll | Missing versus present-empty; failed batch index (-1 when unknown/success) |
+| Document accessors | Detached raw bytes, requested key/namespace, MD5, content-type hint and Unix-millisecond modification observation |
+| Watch / WatchKeys | Default or frozen explicit key set, native invalidations, initial/recovery/overflow Resync |
+| ObserveRaw / ObserveRawKeys | Already-acquired complete batches/errors, bounded handoff; no second native refetch/recovery engine |
+| Publish / CAS / Delete | Explicit permission, native metadata and NotIssued/Unknown/Acknowledged/Rejected even with an error |
+| Search | Bounded v1 search and v3 metadata-only fallback only for an unsupported endpoint, never auth failure |
+| Client.Source | Shared raw capture/observation selection without hiding any provider-specific operation |
 
-These are inherited operational bounds, not measured latency recommendations.
-Limits are per actual operation/owner; equal selections do not imply shared clients.
+Empty CASMD5 means unconditional publication, not create-only. No dispatched mutation
+is retried by the Adapter. Acknowledgement does not prove immediate cache/replica
+visibility. Search content absence is not a successful empty Read. Pagination and
+multi-key reads do not establish a common-time transaction.
 
-## Fresh raw capture and one live loop
+Source Capture uses ReadRawAll for defaults. Explicit selections use ordered raw
+reads while retaining one resource generation for the entire batch. Layer role,
+decoding format and required/optional policy remain the consumer's responsibility.
 
-Use the [common source contract](../../v1/interface.md). Capture opens finite
-ownership, reads every selected key and joins cleanup before returning.
-It never uses stale Current/cache/backup data. Observe returns an owner first,
-then uses one native push/registration/reconciliation/recovery loop.
-Framework consumes the complete bytes already acquired by that loop.
+The native bounds remain 16 keys per selection, 8 servers, 1 MiB documents,
+4 MiB aggregate content and 8 MiB wire bodies. Native permission, endpoint,
+identifier, duration and queue validation remains authoritative for that profile.
+See the [native contract](../../../../internal/configsource/nacos/v2/interface.md)
+for protocol support limits.
 
-Native code-300 absence is Missing. Successful empty content is Present, even
-though the existing private required-document Read refuses it. Raw capture preserves
-decoded protocol UTF-8 content, not surrounding wire bytes. Encrypted/invalid
-protocol data, denied requests and size failures yield no new batch.
-Invalid Unicode escape sequences are refused before native decoding; valid
-surrogate pairs and genuine replacement characters are preserved, not repaired.
-The raw 1-MiB/document and 4-MiB/batch ceilings apply before retained publication;
-native receive-wire messages remain bounded at 8 MiB. MD5/type/mtime are neither
-authentication, ordered revisions nor application acceptance.
+## Observation, custody and shutdown
 
-Push loss/coalescing, disconnect and failed acquisition remain dirty until successful
-complete reconciliation. A second event is not required. Nacos registration is
-re-established after a lost session; one completed multi-key batch is still not a
-transaction. Native callbacks do not execute caller business callbacks.
+ObserveOptions queue_capacity defaults to 2 and accepts 1..16 complete batches.
+Overflow drops oldest and makes Gap sticky for the next delivery. Sequence is local
+observation order, not a remote revision. Batch.Err is acquisition failure, separate
+from an interrupted Next wait. Batch.DocumentsCopy returns fresh wrappers and bytes
+remain explicit RawCopy access. Successful shared-source observations already carry
+the complete batch; do not reread them.
 
-A validated ChangedConfigs response also requests another pass after RetryDelay,
-without waiting for a new push or the periodic interval. This happens in the same
-raw observation loop/session. The earlier complete point-in-time capture can be
-published before that follow-up; Available is not a claim of current remote truth.
-Metadata-only private Watch retains its original acquisition behavior.
+Owner/Watch/Observe each retain a lifecycle evidence reservation. Finite operations
+reserve separately before native dispatch. Evidence records preserve mutation
+state on failure. Redelivery invokes only the receiver, never Publish/Delete again.
+Custody capacity includes live lifecycle claims; do not await a live owner on the
+only finite-record reception path. Runtime/Inbox ownership remains with the caller.
 
-Failures expose stable Adapter conditions and deliberate standard/context causes,
-including RPC DeadlineExceeded observed before the caller context expires.
-Each failed native RPC attempt preserves its own standard cancellation/deadline
-evidence before aggregation. Typed authentication/permission denials invalidate
-only the cached token used by that request; the owned retry loop reauthenticates.
-Native protocol/parser text and private fault graphs are not automatically retained
-as public causes. Explicit context causes can still be sensitive.
-AcquisitionFailure additionally supplies the safe source alias, known selected
-document slot and public operation phase. A separate private raw-result index
-provides slot evidence; authentication/session/listener/cleanup failures without such evidence
-report an unknown slot rather than searching native text or caller cause graphs.
-Multi-attempt aggregates have no unique slot. An aggregate-limit index identifies
-the slot where the batch crossed its bound, not a per-document-size verdict.
+Next cancellation does not cancel its subscription. Close stops and joins actual
+local work; retry after an expired wait. Owner.ShutdownComplete and Release.Complete
+separate release evidence from retained cleanup errors. Native cleanup can be
+complete despite an error. Remote instantaneous unsubscribe and rollback are not
+promised. Common-runtime work/byte admission is independent of native quotas;
+raw observation reserves 16 MiB plus 4 MiB per public queue slot.
 
-Static declarations use `fathomry.adapters.configsource.nacos` and require no
-constructed selection/client. Local-only and pure Framework graphs exclude Nacos.
+## Errors, presentation and tests
 
-## Qualification and non-goals
+InspectError projects supported RPC result/error codes, HTTP status and explicit
+sensitive server text without requiring an Internal import. Original errors remain
+available for Go traversal. Ordinary formatting, slog and localization never print
+that server text or payloads. Settings serialization, explicit metadata/raw access
+and native-cause inspection are sensitive. Runtime handles reject reconstruction.
 
-The [independent protocol consumer](../../../../../../framework/configuration/v1/testdata/consumer/remote_test.go)
-covers raw Capture/Observe and Framework Load/Watch, TLS/password authentication,
-bounds, denial, push, re-registration and recovery without another event.
-The [opt-in service consumer](../../../../../../framework/configuration/v1/testdata/consumer/service_test.go)
-uses only explicitly authorized, previously absent generated keys, verified cleanup
-and an owned local relay for its own disconnects. See [verification](../../../../../development/configuration-testing.md)
-for invocation, exact-profile distinctions and limits.
+Definitions and Resources compose with the public atlas/presenter at the logging
+boundary, without implicit locale/settings lookup during operations.
 
-No configuration publish/delete/search API, namespace/account administration,
-native handle export, distributed transaction, production deployment attestation,
-automatic credential activation or business-client reconstruction is provided.
-The fixture's narrow admin operations are test code, not public Adapter features.
+[Native-protocol fixture](../../../../../../adapters/configsource/nacos/v1/client_test.go),
+[reads/ownership](../../../../../../adapters/configsource/nacos/v1/read_test.go),
+[management/search](../../../../../../adapters/configsource/nacos/v1/management_test.go),
+[observation](../../../../../../adapters/configsource/nacos/v1/watch_test.go),
+[resource replacement](../../../../../../adapters/configsource/nacos/v1/integration_test.go) and the
+[independent consumer](../../../../../../adapters/configsource/nacos/v1/testdata/consumer/consumer_test.go)
+are executable evidence. Existing Internal service qualification is not a claim
+that every public service/deployment scenario has been exercised.

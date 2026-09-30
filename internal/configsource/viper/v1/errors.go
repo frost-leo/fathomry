@@ -34,6 +34,8 @@ const (
 	ErrRead   fault.Kind = errorNamespace + ".read"
 	ErrDecode fault.Kind = errorNamespace + ".decode"
 	ErrClose  fault.Kind = errorNamespace + ".close"
+	ErrClosed fault.Kind = errorNamespace + ".closed"
+	ErrState  fault.Kind = errorNamespace + ".state"
 )
 
 // ProviderID identifies the configsource/Viper/SDK-v1 technical implementation. It is
@@ -48,17 +50,33 @@ func fail(kind fault.Kind, operation string, causes ...error) error {
 
 type private struct{}
 
+// Pointer Format methods shadow value promotion; keep ordinary value formatting
+// redacted through String/GoString as well.
+func (private) String() string   { return "viper[redacted]" }
+func (private) GoString() string { return "viper[redacted]" }
+
 func (private) Format(state fmt.State, _ rune) {
 	_, _ = io.WriteString(state, "viper[redacted]")
 }
 
 // Outer pointer methods avoid the nil dereference in promoted method wrappers.
 // Value forms retain fmt redaction and the JSON serialization refusal below.
-func (*Document) LogValue() slog.Value  { return redactedLogValue() }
-func (*OptionsV1) LogValue() slog.Value { return redactedLogValue() }
-func (*LoadInput) LogValue() slog.Value { return redactedLogValue() }
-func (*Default) LogValue() slog.Value   { return redactedLogValue() }
-func (*Binding) LogValue() slog.Value   { return redactedLogValue() }
+func (*Document) LogValue() slog.Value       { return redactedLogValue() }
+func (*OptionsV1) LogValue() slog.Value      { return redactedLogValue() }
+func (*LoadInput) LogValue() slog.Value      { return redactedLogValue() }
+func (*Default) LogValue() slog.Value        { return redactedLogValue() }
+func (*Binding) LogValue() slog.Value        { return redactedLogValue() }
+func (*Replacement) LogValue() slog.Value    { return redactedLogValue() }
+func (*Snapshot) LogValue() slog.Value       { return redactedLogValue() }
+func (*WatchOptionsV1) LogValue() slog.Value { return redactedLogValue() }
+func (*Subscription) LogValue() slog.Value   { return redactedLogValue() }
+func (*Change) LogValue() slog.Value         { return redactedLogValue() }
+
+func (*Replacement) Format(state fmt.State, verb rune)    { private{}.Format(state, verb) }
+func (*Snapshot) Format(state fmt.State, verb rune)       { private{}.Format(state, verb) }
+func (*WatchOptionsV1) Format(state fmt.State, verb rune) { private{}.Format(state, verb) }
+func (*Subscription) Format(state fmt.State, verb rune)   { private{}.Format(state, verb) }
+func (*Change) Format(state fmt.State, verb rune)         { private{}.Format(state, verb) }
 
 func redactedLogValue() slog.Value {
 	return slog.StringValue("viper[redacted]")

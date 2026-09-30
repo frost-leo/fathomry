@@ -26,8 +26,8 @@ import (
 )
 
 // OptionsV1 is revision 1 of this integration's process-local option contract,
-// independent of the SDK major in its import path. Encoding is required ("yaml"
-// or "json"); the zero value is invalid. Defaults and Environment are ordered,
+// independent of the SDK major in its import path. Encoding is required: yaml,
+// yml, json, toml, dotenv or env; the zero value is invalid. Defaults and Environment are ordered,
 // bounded lists; empty lists disable those native sources. AllowEmptyEnv defaults
 // to false. No file/reader, callback, schema or business-layer policy belongs here.
 //
@@ -41,6 +41,19 @@ type OptionsV1 struct {
 	Defaults      []Default
 	Environment   []Binding
 	AllowEmptyEnv bool
+	// AutomaticEnv enables live native environment lookup for queried keys.
+	AutomaticEnv bool
+	// EnvPrefix and EnvKeyReplacements configure native name derivation. They do
+	// not load a dotenv file into os.Environ or enumerate arbitrary process keys.
+	EnvPrefix          string
+	EnvKeyReplacements []Replacement
+}
+
+// Replacement is one ordered native environment-name substitution.
+type Replacement struct {
+	private
+	Old string
+	New string
 }
 
 // Default supplies a native SetDefault scalar: nil, string, bool, a built-in
@@ -54,7 +67,8 @@ type Default struct {
 
 // Binding supplies both a Viper key and an exact case-sensitive environment name.
 // Repeated keys append names in caller order, as native BindEnv does. Values are
-// live, not captured by Load. No prefix, replacer or AutomaticEnv is enabled.
+// live, not captured by Load. EnvPrefix does not prefix explicit names, but the
+// native EnvKeyReplacements still apply. AutomaticEnv, when enabled, takes priority.
 type Binding struct {
 	private
 	Key  string

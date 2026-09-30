@@ -19,77 +19,59 @@
 
 package viper
 
-import (
-	"embed"
-	source "github.com/frost-leo/fathomry/adapters/configsource/v1"
-	adapters "github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/failure/v1"
-	"github.com/frost-leo/fathomry/i18n/v1"
-)
+import "github.com/frost-leo/fathomry/failure/v1"
 
-// ModuleID is a static implementation identity, never an instance label.
-const ModuleID = "fathomry.adapters.configsource.viper"
-
-// Conditions are usable without catalogs; presentation never performs source I/O.
+// Stable configuration-capability errors do not imply retry or effect policy.
 const (
-	ErrSettings failure.Condition = ModuleID + ".invalid_settings"
-	ErrRead     failure.Condition = ModuleID + ".read"
-	ErrLimit    failure.Condition = ModuleID + ".limit"
-	ErrEncoding failure.Condition = ModuleID + ".encoding"
-	ErrClose    failure.Condition = ModuleID + ".cleanup"
+	ErrInput         failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0001
+	ErrLimit         failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0002
+	ErrRead          failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0003
+	ErrDecode        failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0004
+	ErrClose         failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0005
+	ErrClosed        failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0006
+	ErrState         failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0007
+	ErrSerialization failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityViper)<<16 | 0x0008
 )
 
-//go:embed resources/*.json
-var resources embed.FS
-
-// Definition returns owned static condition declarations.
-func Definition() failure.ModuleDefinition {
-	result := failure.ModuleDefinition{ID: ModuleID, Source: "viper.v1"}
-	for _, condition := range []failure.Condition{ErrSettings, ErrRead, ErrLimit, ErrEncoding, ErrClose} {
-		declaration := failure.ConditionDefinition{Condition: condition, Contract: "v1"}
-		if condition != ErrSettings {
-			declaration.Facts = ModuleID + ":acquisition"
-		}
-		result.Conditions = append(result.Conditions, declaration)
+// Definitions supplies detached declarations for explicit offline composition.
+func Definitions() []failure.Definition {
+	return []failure.Definition{
+		definition(ErrInput),
+		definition(ErrLimit),
+		definition(ErrRead),
+		definition(ErrDecode),
+		definition(ErrClose),
+		definition(ErrClosed),
+		definition(ErrState),
+		definition(ErrSerialization),
 	}
-	result.Contracts = []failure.FactContract{{
-		ID: ModuleID + ":acquisition", Revision: "v1", Use: failure.ErrorFacts, Access: failure.PublicFacts,
-		Fields: []failure.FactField{
-			{Name: "source", Kind: failure.StringFact, Required: true},
-			{Name: "document", Kind: failure.StringFact, UnknownAllowed: true},
-			{Name: "phase", Kind: failure.EnumFact, Required: true, Values: []string{string(source.SelectPhase), string(source.CapturePhase), string(source.ObservePhase), string(source.ClosePhase)}},
-		},
-	}}
-	return result
 }
-
-// Sources returns original embedded resources with caller-owned bytes.
-func Sources() []i18n.Source {
-	var result []i18n.Source
-	for _, locale := range []string{"en", "zh-CN"} {
-		data, _ := resources.ReadFile("resources/" + locale + ".json")
-		result = append(result, i18n.Source{Name: ModuleID + "." + locale, Data: data})
+func definition(code failure.Code) failure.Definition {
+	var identifier, message string
+	switch code {
+	case ErrInput:
+		identifier, message = "invalid_input", "The configuration input or declaration is invalid."
+	case ErrLimit:
+		identifier, message = "limit_exceeded", "A configuration capability bound was exceeded."
+	case ErrRead:
+		identifier, message = "read_failed", "Configuration acquisition or inspection failed."
+	case ErrDecode:
+		identifier, message = "decode_failed", "Configuration decoding or preparation failed."
+	case ErrClose:
+		identifier, message = "cleanup_failed", "Configuration resource cleanup reported a failure."
+	case ErrClosed:
+		identifier, message = "closed", "The configuration owner is closing or closed."
+	case ErrState:
+		identifier, message = "completion_unconfirmed", "Configuration cleanup completion has not been confirmed."
+	case ErrSerialization:
+		identifier, message = "runtime_serialization", "Configuration runtime handle serialization is unsupported."
 	}
-	return result
+	return failure.Definition{Code: code, Identifier: failure.Identifier("fathomry.configsource_viper." + identifier), Module: "fathomry", Component: "configsource_viper", Revision: 1, Message: message}
 }
-
-// Bindings uses known source/phase facts from the same acquisition occurrence.
-// Optional document identity is available through direct Acquisition inspection.
-func Bindings() []i18n.Binding {
-	var result []i18n.Binding
-	for _, definition := range Definition().Conditions {
-		key := string(definition.Condition)[len(ModuleID)+1:]
-		binding := i18n.Binding{ID: ModuleID + ":" + key, Condition: definition.Condition, ConditionContract: "v1", Surface: "configuration", Role: "explanation", Message: ModuleID + ":" + key, MessageContract: "v1"}
-		if definition.Facts != "" {
-			binding.Input, binding.InputRevision = definition.Facts, "v1"
-			binding.Arguments = []i18n.ArgumentBinding{{Argument: "source", Fact: "source"}, {Argument: "phase", Fact: "phase"}}
-		}
-		result = append(result, binding)
+func fail(code failure.Code, operation string, causes ...error) error {
+	value, err := failure.New(definition(code), failure.Location{Operation: operation}, causes...)
+	if err != nil {
+		return err
 	}
-	return result
-}
-
-// Module supplies static contributions without constructing a source.
-func Module() adapters.Module {
-	return adapters.Module{Definition: Definition(), Messages: Sources(), Grouping: i18n.Module{ID: ModuleID, Owners: []string{ModuleID}}, Bindings: Bindings()}
+	return value
 }

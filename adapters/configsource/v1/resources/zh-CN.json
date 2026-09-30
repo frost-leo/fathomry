@@ -17,58 +17,45 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.adapters.configsource",
+  "module": "fathomry",
+  "component": "configuration_data",
   "locale": "zh-CN",
   "messages": [
     {
-      "id": "fathomry.adapters.configsource:invalid_value",
-      "source": "44ec51ed120d9db68cc686abbc05590a30e547cab66984fefb396e81ef60d926",
+      "id": "fathomry.configuration_data.invalid_input",
+      "source": "98b1dd521c0a199eaa06a20cce2b9c8969349e58fa3277ff42595786c6fccc43",
       "forms": {
-        "other": "配置来源值无效。"
+        "other": "配置输入或声明无效。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource:limit",
-      "source": "1a7b0ec3260a49c82031cccd00520a8f01dd27cbf6a577f13d22bae6b28efd1a",
+      "id": "fathomry.configuration_data.limit_exceeded",
+      "source": "8920732373ba6304412c739f180f9885422953a8606b46783872eebddb3c988b",
       "forms": {
-        "other": "超出配置来源限制。"
+        "other": "超出配置能力的限制。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource:invalid_cursor",
-      "source": "4ad9d645c479f8d306d890252a3e69fbb8e1d7c333e32d23617dbb0601a2f680",
+      "id": "fathomry.configuration_data.read_failed",
+      "source": "7fe0f7ad4570a3b975b529d6e7f7a12a39d0f30af12f62c0c281d11aeebb2774",
       "forms": {
-        "other": "游标不属于此观察器。"
+        "other": "配置获取或检查失败。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource:concurrent_wait",
-      "source": "31e7502eb6e162bfa76b3e95c4582bded42ec641991b5a880c1af67a76711690",
+      "id": "fathomry.configuration_data.decode_failed",
+      "source": "d106dcd16ea2bd02ee044af14490d467963d7a6dc1180d748691e78341b7457a",
       "forms": {
-        "other": "已有配置等待正在进行。"
+        "other": "配置解码或准备失败。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource:closed",
-      "source": "9b87c79756c19be8251af9a6d80b24332237f307dc49754e86cdb47f85123485",
+      "id": "fathomry.configuration_data.runtime_serialization",
+      "source": "d2765f723f583e1c4e62eec65704303405f0b8db55daeb0d4725e1f88e9e22bf",
       "forms": {
-        "other": "配置观察器已关闭。"
-      }
-    },
-    {
-      "id": "fathomry.adapters.configsource:wait",
-      "source": "a04773e2c8fcb4d99a3b218f8c04c5c1515766cab6511d01721679e0ea8f5c22",
-      "forms": {
-        "other": "配置等待未完成。"
-      }
-    },
-    {
-      "id": "fathomry.adapters.configsource:cleanup",
-      "source": "54f95cd938d7efbde57d9c38b4002e46abd2813621dcf7526d22df0a434d4799",
-      "forms": {
-        "other": "配置来源清理失败。"
+        "other": "不支持配置运行时句柄序列化。"
       }
     }
   ]

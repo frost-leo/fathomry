@@ -20,37 +20,62 @@
 package failure_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
 	"github.com/frost-leo/fathomry/failure/v1"
 )
 
-func ExampleNew() {
-	const unavailable failure.Condition = "example.inventory.unavailable"
-	err, rejected := failure.New(unavailable, context.DeadlineExceeded)
-	if rejected != nil {
-		panic(rejected)
+func ExampleNewDetailed() {
+	const denied failure.Code = failure.ErrorPrefix | failure.Code(0x442)<<16 | 0x0001
+	type AccessDetails struct {
+		Document string
+		Phase    string
 	}
-	fmt.Println(err)
-	fmt.Println(errors.Is(err, unavailable), errors.Is(err, context.DeadlineExceeded))
+	definition := failure.Definition{
+		Code: denied, Identifier: "example.configsource.denied", Module: "example", Component: "configsource",
+		Revision: 1, Message: "Remote configuration access was denied.",
+		Details: failure.Contract{ID: "example.configsource.access_details", Version: 1},
+	}
+	native := errors.New("private server detail")
+	occurrence, err := failure.NewDetailed(definition,
+		failure.Location{Operation: "read", Instance: "primary"},
+		AccessDetails{Document: "business", Phase: "capture"}, func(value AccessDetails) AccessDetails { return value }, native)
+	if err != nil {
+		panic(err)
+	}
+	core, ok := failure.Inspect(occurrence)
+	if !ok {
+		panic("missing occurrence")
+	}
+	details, _ := occurrence.Details()
+	fmt.Println(core.Diagnostic().Definition.Code)
+	fmt.Println(core.Diagnostic().Definition.Identifier)
+	fmt.Println(details.Document)
+	fmt.Println(errors.Is(occurrence, denied), errors.Is(occurrence, native))
 	// Output:
-	// example.inventory.unavailable
+	// 0xA4420001
+	// example.configsource.denied
+	// business
 	// true true
 }
 
-func ExampleInspect() {
-	primary, _ := failure.New("example.source.absent")
-	cleanup, _ := failure.New("example.source.cleanup_failed")
-	combined := errors.Join(primary, cleanup)
-	_, direct := failure.Inspect(combined)
-	fmt.Println("direct:", direct)
-	fmt.Println("absence is a member:", errors.Is(combined, failure.Condition("example.source.absent")))
-	selected, _ := failure.Inspect(cleanup)
-	fmt.Println("explicitly selected cleanup:", selected.Diagnostic().Condition)
+func ExamplePrepare() {
+	catalog, err := failure.Prepare(failure.Definitions()...)
+	if err != nil {
+		panic(err)
+	}
+	code, err := failure.ParseCode("0xA0010001")
+	if err != nil {
+		panic(err)
+	}
+	definition, found, err := catalog.Lookup(code)
+	if err != nil || !found {
+		panic("definition not found")
+	}
+	fmt.Println(definition.Identifier)
+	fmt.Println(definition.Message)
 	// Output:
-	// direct: false
-	// absence is a member: true
-	// explicitly selected cleanup: example.source.cleanup_failed
+	// fathomry.failure.invalid_code
+	// The public error code is invalid.
 }

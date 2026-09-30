@@ -17,256 +17,174 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 
-# Public in-process failure interface
+# Numeric public failure contract
 
 [Documentation](../../../README.md) / Public package reference
 
-**Audience:** capability, Adapter and independent business-project authors.
-**Status:** implemented v1 Go contract; CLI/i18n use the core, with no durable conversion.
-**Package:** `github.com/frost-leo/fathomry/failure/v1` (package name `failure`).
+**Audience:** component authors and callers of public Adapter/Framework capabilities.
+**Status:** implemented public error foundation. Shared settings and i18n are also
+available; public Adapters/Framework and CLI code lookup are not implemented yet.
+**Package:** `github.com/frost-leo/fathomry/failure/v1`.
 
-## Responsibilities and call sequence
+## Identity and definition ownership
 
-Declare a code-owned `Condition`, call `New` with explicitly public causes, and
-check its separate construction error. Use `Inspect` for the directly supplied
-occurrence; use ordinary `errors.Is/As` for intentional recursive membership.
-See the [executable examples](../../../../failure/v1/example_test.go) and
-[Go declarations](../../../../failure/v1/error.go).
+`Code` is an explicitly allocated uint32 identity. `Identifier` is a
+separate readable symbol. Neither is a localized message or a native SDK status.
+The [code allocation contract](code-allocation.md) defines the customer-failure
+flags, 11-bit subsystem Facility, 16-bit local Number and capability-domain bands.
+Database, cache, object storage and other domains are independent of public code
+layers. `Code.Domain` decodes the capability using the explicit range manifest;
+extensions follow mirrored capability bands rather than a single third-party category.
+Published codes must never be reassigned to another meaning. First-party ownership
+and catalog facility conflicts are checked; this is not namespace authentication.
 
-The production dependency closure is standard-library-only. There is no nested
-module, unversioned facade, ambient registry, native-error translation, optional annotation
-bag, resource acquisition, logging, locale selection or retry policy.
-`internal/fault` remains private and unchanged. The
-[CLI boundary](../../cli/interface.md#output-causes-and-effects) uses host- and
-command-owned conditions, preserving a sole suitable occurrence and explicitly
-joining independent failures. This is consumer-owned meaning, not automatic
-primary selection: raw joins and ordinary wrappers remain directly uninspectable.
+`Code.String` and text/JSON encoding use eight uppercase hexadecimal digits with
+a `0x` prefix. JSON numbers and null are refused to keep one explicit representation.
+`ParseCode` also accepts unsigned decimal query spellings, without signs,
+whitespace, separators or implicit octal. Invalid flags, fields, overflow and
+legacy 64-bit spellings reject without narrowing. The native
+encoding/json parser can reject malformed JSON before calling a Code hook.
 
-## Identity, absence and bounds
+Each component supplies `Definition` data: Code, Identifier, Module, Component,
+Revision, Message, Description and an optional Details contract reference.
+Identifier is exactly `Module.Component.reason`. These namespace components are
+lowercase ASCII names with letters, digits, underscores and hyphens; each name
+starts with a letter. Metadata is code-owned, non-sensitive data.
 
-`Condition` is a comparable string type. Its exact ASCII grammar is
-`[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+`, at most 128 bytes. The prefix before
-the final dot identifies the owner's namespace; the last component identifies
-its condition. There is no normalization, namespace authentication or required registration.
-A valid unfamiliar code is preserved. Grammar does not establish privacy,
-authenticity or safe metric cardinality: never derive codes from secrets,
-request IDs, payloads or untrusted dynamic labels.
+Message is a static developer explanation, not native text or an interpolation
+template. Description adds definition-level meaning without requiring a runtime
+occurrence. An [i18n binding](../../i18n/v1/interface.md) can explain the same numeric code in another
+language without changing the error identity. Definition Revision and detail
+Contract Version are semantic axes independent of Go-package and SDK versions.
 
-`New` returns `(nil, ErrCondition)` for invalid required identity, or
-`(nil, ErrCauses)` for more than 32 supplied direct cause slots, including nil
-slots. Identity validation takes precedence. Rejected inputs remain caller-owned
-and are not retained; no accepted cause or semantic detail is silently truncated.
-There are no optional diagnostics whose rejection could replace valid identity.
+## Construct, compose and inspect
 
-Literal nil causes are omitted. Non-nil typed-nil interfaces, duplicate causes
-and caller-supplied SDK objects are retained exactly. Counts describe direct
-retained interfaces, not tree size. A large/cyclic foreign graph is not cloned,
-normalized or bounded by this package.
+`New` constructs the shared core from a definition, an optional Location and
+deliberately retained native/public causes. It does not require a catalog, settings,
+a formatter or a global registry. It also accepts definitions with a Details
+reference so a component can build its own error representation.
 
-| Supplied value | Direct `Inspect` |
+`NewDetailed[T]` is the convenience composition:
+
+```go
+occurrence, err := failure.NewDetailed(
+    definition, location, componentData, cloneComponentData, nativeCause,
+)
+```
+
+T is not constrained to a reflected schema, public fields or plain scalar types.
+Components may use time.Time, interfaces, private fields, recursive models or
+non-struct types. The component supplies its typed copy function once beside its
+data contract. It runs at construction and on explicit `Details` reads.
+
+The copy function must not mutate its input. It owns isolation, immutable sharing,
+borrowed-reference lifetimes, bounds and concurrency; it must be synchronous and
+non-panicking. The kernel cannot verify arbitrary copying logic and does not hide
+callbacks in goroutines or impose a universal detail-size/type policy. Reference
+sharing must be deliberate, not an implicit shallow-copy default. Captured
+dependencies remain retained as long as the occurrence retains the function.
+Formatting, logging, atlas lookup and runtime serialization guards never call it.
+
+A component may instead implement `Occurrence` on its own type and compose a
+`*Error` core. It owns its additional accessors, formatting, copying and lifetime.
+The independent consumer exercises this without using `Detailed`. The generic
+helper exists to avoid repeating forwarding methods, not to prohibit custom types.
+
+`Inspect` selects only the directly supplied occurrence and returns its exact core.
+It never searches through a wrapper or join for a preferred error. Take identity
+and details from the same selected occurrence. A Details contract reference is a
+declaration, not proof that any arbitrary error value implements that accessor.
+
+`errors.Is` matches a public Code and also traverses intentionally exposed causes.
+`errors.As` retains access to exact native objects. Those standard traversals can
+find descendants and do not select a primary semantic occurrence. A caught error
+does not erase native effect evidence or authorize retries.
+
+## Location, diagnostics and native evidence
+
+Definition identifies the owning module/component. Location supplies an optional
+public operation and non-secret logical instance. Empty labels mean unspecified.
+Operation uses bounded lowercase qualified names; Instance permits bounded ASCII
+letters, digits, dots, underscores and hyphens. Neither is discovered from a stack,
+URL, database name or a native error string.
+
+`Error` owns cloned definition/location strings and cause-slot storage. Native
+error objects are borrowed unchanged, not copied or normalized. `Unwrap` returns
+fresh slots with the original objects, including deliberately supplied typed nils
+and duplicate causes. Their mutation, liveness and traversal follow their owners'
+Go contracts. Even one cause uses `Unwrap() []error`, supported by errors.Is/As but
+not by errors.Unwrap.
+
+`Error()` includes numeric code, Identifier and the static developer explanation.
+Supported fmt/slog diagnostics do not print detail values or call native Error
+methods. Structured logging reports those identities, location and direct cause
+count. Raw cause inspection and explicit Details access remain sensitive.
+
+Runtime Error/Detailed values refuse JSON encoding and reconstruction; nil pointers
+may still encode as null under encoding/json's ordinary absent-pointer rule.
+Scalar metadata and catalog definitions are inspectable data, not an implicit
+durable error bridge. Arbitrary foreign wrappers, codecs, malformed fmt directives,
+reflection and unsafe access are outside the package's diagnostic contract.
+
+## Offline definition atlas
+
+`Prepare` atomically admits an explicit set without opening sources or creating
+clients. Duplicate codes and duplicate Identifiers reject, including identical
+declarations. There is no override order and no package-init registration.
+
+- `Lookup(code)` retrieves the exact numeric definition.
+- `LookupIdentifier(identifier)` retrieves the same definition by symbol.
+- `Inspect` returns every definition in numeric order.
+- `Components` lists declared capability domains, module/component owners, facilities and codes.
+- `InComponent` returns one exact owner's definitions.
+
+Each facility identifies one owner and each owner uses one facility in the selected
+catalog. Conflicting extension allocations reject even with disjoint local numbers.
+Unknown valid keys report absence separately from invalid input. Query containers
+are caller-owned; editing them cannot change a catalog. Prepared catalogs support
+concurrent reads. Component lookup concerns declarations, not deployed resource
+instances. `Definitions()` supplies failure's own seven numeric admission errors
+for explicit composition; built-ins are not silently added to every catalog.
+
+## Admission and bounds
+
+| Boundary | Limit |
 | --- | --- |
-| Valid `*Error` | The same pointer and `true` |
-| Conforming non-nil `Occurrence` extension | Its directly exposed valid `*Error` |
-| Ordinary percent-w wrapper, raw join, foreign error or bare Condition | `nil, false`; no primary is inferred |
-| Nil interface, typed-nil core/extension, nil or zero extension result | `nil, false`; no descendant fallback |
-| Non-nil zero `*Error` | Invalid, not success or a fabricated condition |
+| Identifier | 192 ASCII bytes |
+| Definition module / component | 128 / 64 bytes |
+| Reason token | 64 bytes |
+| Static developer message | 512 UTF-8 bytes, one line |
+| Definition description | 4096 UTF-8 bytes; newline/tab allowed |
+| Operation / instance | 64 / 128 bytes |
+| Direct supplied cause slots | 32, including literal nil slots before filtering |
+| Definitions | 4096 |
+| Catalog metadata charge | 4 MiB; strings plus 64 bytes per definition |
 
-Only a nil error interface means no error. A typed-nil interface stays non-nil.
-`*Error` is the canonical runtime error; `Error` values do not implement
-`error`. Nil pointer methods report absence; a zero value reports invalid
-occurrence. Both produce a zero `Diagnostic`, which is not a success result.
+These bounds do not limit arbitrary reachable native error graphs or component
+details. Components own their data and copy-work limits. Invalid inputs reject
+without publishing a partial occurrence/catalog; the caller retains rejected inputs.
+Admission failures themselves have numeric Codes, definitions and safe occurrences.
 
-`errors.Is(occurrence, condition)` matches its exact valid condition and then
-searches deliberate causes. A separately constructed occurrence with the same code
-does not match as an occurrence target; pointer identity still follows Go rules.
-`errors.As` reaches declared core/extension/foreign types through their supported
-method sets. Bare Condition targets are comparable errors, so comparing two equal
-invalid Conditions directly with `errors.Is` still follows ordinary Go equality;
-this does not construct or validate an occurrence.
+Zero Error/Detailed/Catalog handles are not valid initialized objects. A deliberately
+prepared empty catalog is valid. Do not overwrite shared handles or mutate borrowed
+constructor inputs concurrently. Typed-detail generic identity cannot be changed
+by a tag-only ordinary Go conversion; genuine Go aliases retain their identity.
 
-`Unwrap() []error` always uses Go's multi-cause contract, even with one cause.
-The singular `errors.Unwrap` helper does not traverse it. Traversal order is
-not a primary/cleanup policy. Exposing another cause can change control flow and
-is an API commitment, not necessarily a compatible extension.
+## Verification and remaining boundaries
 
-## Ownership and safe output
+[Examples](../../../../failure/v1/example_test.go) and the
+[independent module](../../../../failure/v1/testdata/consumer/consumer_test.go)
+exercise numeric/symbolic queries, custom and generic composition, copying,
+runtime guards and native cause identity without any Internal import.
 
-Construction clones the condition's backing storage and copies the bounded cause
-slice. `Unwrap` returns fresh slice storage; `Diagnostic` returns the condition
-and direct `CauseCount` as a comparable value-only projection. Supported
-projection construction is zero or keyed literals, not positional literals.
-Error copies share immutable state; their comparability is state identity, not
-semantic-code equality. Do not overwrite shared Errors. Cause objects remain
-borrowed; the owner must govern lifetime, mutation and concurrent inspection.
+The [native boundary fixture](../../../../internal/conformance/failure_v1_test.go)
+uses the actual private Viper parser and preserves its fault and JSON syntax error
+through two public semantic layers. It does not implement a public Adapter.
 
-Owned construction, direct core inspection, formatting and projection never invoke
-cause formatting, matching or unwrap hooks. They neither traverse arbitrary graphs
-nor create goroutines, clocks, global registrations or correlation IDs. Concurrent
-owned reads are supported, provided callers do not mutate the occurrence.
-Foreign matching may panic, block or cycle; arbitrary `errors.Is/As` is not
-a safe or bounded traversal API.
-
-| Surface | Supported behavior |
-| --- | --- |
-| `(*Error).Error`, `(*Error).LogValue` | Code-only baseline; nil is absence and zero is invalid |
-| Valid `fmt` directives dispatched to Format for Error value/non-nil pointer | Same baseline; q quotes, flags/width/precision do not expand that output |
-| `fmt` for nil pointer | Standard fmt nil presentation; do not directly call a promoted value-receiver method on nil |
-| Standard slog handlers for `*Error` | Code-only LogValue, including nil |
-| Standard slog handlers for Error value | Text uses safe Format; JSON reports serialization refusal; use `*Error` for normal logs |
-| `encoding/json` for non-nil pointer/value | Explicit `ErrSerialization`; no accidental empty-object protocol |
-| JSON nil pointer | Standard `null`, meaning absence, not a serialized occurrence |
-
-JSON reconstruction into an Error is refused without modifying it. This is not an
-interception promise for every foreign codec, formatter or embedding method set.
-Go's fmt owns `%T`/`%p`, width padding on those paths and malformed-format
-diagnostics; these can bypass Format entirely. In particular, an invalid Condition
-passed to `%p` or Sprintf's unsupported `%w` can expose its raw rejected string.
-Those operations, raw cause inspection, foreign wrappers, reflection/debuggers and
-deliberate casts are outside the output safety boundary. Use valid Formatter-
-dispatched directives such as `%v`, `%+v`, `%#v`, `%s` and `%q`.
-Scalar codes and diagnostics are not
-automatically durable error schemas. Do not parse human Error text.
-
-## Capability-owned facts and presentation
-
-An extension explicitly implements `Occurrence` and returns its stable current
-core through `Failure() *Error`. Interface assertion discovers the extension;
-reflection is used only to reject typed-nil values before invoking its accessor.
-No accessor or overriding foreign method is sandboxed.
-
-The owner defines detail fields, units, absence/unknown semantics, bounds, copying,
-lifetime and concurrent-read rules. The core does not deep-copy or automatically
-print them. Test pointer/value/nil forms, exact method sets, Go matching, fmt,
-slog and serialization; simply embedding an Error pointer does not certify a
-safe extension. A value-receiver extension's methods cannot be called directly
-on a nil pointer. fmt and encoding/json have special nil handling; slog may instead
-recover a promoted LogValue panic into a stack diagnostic. The fixture therefore
-defines nil-safe LogValue on explicit pointer receivers. Populated pointer forms
-log code-only output; value forms use safe Format for text and JSON serialization
-refusal for JSON logs. Nil or zero-core pointers log absence and remain uninspectable.
-
-The [independent consumer fixture](../../../../failure/v1/testdata/consumer/consumer_test.go)
-contains two unrelated detail owners, copying/accessor controls and explicit
-forwarding methods and definition composition. It demonstrates owner responsibilities,
-not an SDK for extending arbitrary runtime objects.
-
-A presenter must take identity and safe typed facts from the **same supplied
-extension**, or from an explicitly owner-selected occurrence-and-facts binding.
-Never combine outer `Inspect` with a recursive `errors.As` lookup for
-interpolation: same-code, same-type descendants can describe different facts.
-A deliberate cleanup/cause selection takes both its identity and its facts.
-
-A test-owned display map demonstrates changed wording with unchanged identity.
-Missing presentation preserves the original failure and falls back to its safe
-code; an unselected aggregate uses the host's generic safe fallback. A condition
-is not a message resource ID: title, explanation and remedy may be separate
-resources. No translation catalog or mandatory locale/template fields are supplied.
-
-Partial outputs, effect uncertainty, cleanup obligations, credential generations
-and normal empty/filtered/superseded outcomes stay with their operation owners,
-not in a universal Error/result model. A timeout does not prove no external effect.
-
-## Explicit module and condition atlas
-
-`PrepareDefinitions` admits caller-supplied `ModuleDefinition` roots and their
-immediate children. Registration means explicitly supplying declarations, not
-`init` discovery or recording encountered errors. For example,
-`fathomry.cli` contains `fathomry.cli.project` without requiring an invented
-`fathomry` root. Roots cannot overlap. Children must match exact namespace
-segments; a condition's owner must exactly equal its declaring module.
-Duplicates reject even when identical; no registration-order overrides.
-
-The immutable `DefinitionCatalog` supplies complete sorted `Modules`, `Inspect`
-and `Contracts`, exact `Module`/`Lookup`/`Contract`, and explicit direct/subtree
-`Definitions`. Missing bounded identities report absence, not a synthesized
-definition. A prepared empty catalog is valid; nil/zero catalogs return
-`ErrDefinitionCatalog`. Invalid declarations return `ErrDefinitions`; admission
-or query bounds return `ErrDefinitionLimit`. These static construction errors
-retain no rejected data. No runtime API consults the catalog: unfamiliar valid
-conditions still construct, inspect and match normally.
-
-Condition semantic revisions and optional fact-contract references are explicit.
-Fact contracts distinguish occurrence facts from presentation inputs and owner-only
-from separately supported public access. They describe approved scalar/enum
-projections, not arbitrary Go objects, accessors or a reflection/serialization
-schema. Required presence and allowed unknown are independent. Unknown is never
-implicitly zero/false/empty; the owner defines its representation. A declaration
-does not prove that a producer obeys it or expose a private field at runtime.
-Human explanations remain in feature resources, not this package.
-
-Inclusive admission bounds are 64 modules, depth 8, 512 conditions, 256 fact
-contracts, 16 fields per contract and 16 values per enum. Module IDs use the
-condition-owner grammar up to 126 bytes; contract IDs are `module:name` up to
-128 bytes, with local names up to 64. Source labels are at most 128 bytes;
-revisions/field names/enum tokens are at most 64 and units at most 32. These
-machine tokens use nonempty ASCII letters/digits/underscore/hyphen/dot/slash.
-Source labels identify declarations, not files read or authenticated publishers.
-
-Aggregate admitted string bytes are at most 524,288. A separate 4,194,304-byte
-complete inspection envelope charges six times admitted string bytes, 256 bytes
-per module/condition/contract, 192 per field and 32 per enum value. This is a
-conservative projection bound, not exact heap accounting or a durable JSON schema.
-Counts, remaining-capacity arithmetic and duplicate identities are checked before
-descending potentially cyclic child slices or cloning declarations. Complete
-validation precedes publication. Every query owns mutable slice layers; prepared
-strings are detached from caller backing storage. Shared catalogs support
-concurrent queries, provided callers do not overwrite shared handles.
-
-See [definition tests](../../../../failure/v1/definitions_test.go) and the genuine
-independent consumer above. The optional
-[i18n binding layer](../../i18n/v1/interface.md#explicit-modules-and-checked-bindings)
-consumes these declarations; failure itself never imports i18n.
-
-## Versions and compatibility
-
-The `/v1` path versions the complete public Go contract: behavior, method sets,
-construction, zero semantics, matching, comparability, ownership and safe output,
-not merely struct layout. Supported behavior changes can be breaking without
-changing a field type. Additions must preserve old callers, including supported
-literal construction and zero values. Never repurpose a condition; its capability
-owner governs meaning, fields and newly exposed causes. Replacing an operation's
-condition with a more specific code is not automatically compatible.
-
-This directory is an ordinary package under the existing root module, not an
-independently released Go module or stable product-release claim. Consumers pin one
-root-module revision. The Go contract, root build, condition identity, capability
-detail contract and future durable schema are separate version axes.
-
-A future incompatible contract may use a sibling `failure/v2` while supported
-v1 remains. No automatic cross-version assignment, matching, conversion or
-latest-version alias is promised. Creating v2 would not authorize removing v1.
-
-## Native boundary evidence and limits
-
-[Boundary tests](../../../../internal/conformance/failure_v1_test.go) exercise
-malformed JSON through the selected private Viper integration, asserting the native
-`decode` phase and actual parser types, with valid-input control. A test-owned
-receipt retains private evidence after the mapper returns; it is not a production
-Adapter or diagnostic store. Boundary tests live outside the public package so
-external `go mod tidy` need not load their native test graph.
-
-On the selected Temporal v1.49.0 local replacement, fresh conversion of actual v1
-occurrences with distinct conditions yields the same native ApplicationFailure type
-`Error`. Code text survives only as Message, with no structured Details and no
-multi-cause graph. Decoding does not restore v1 identity or matching. The converter's
-`NonRetryable=false` is not a retry authorization or executed server retry.
-
-A bounded SDK-local Activity test confirms that returning 7 plus an error does not
-deliver the ordinary 7, while 7 plus nil does; explicit native failure Details have
-a separate successful control. Both actual v1 and native failures are exercised.
-No server, dispatch, history replay or durable bridge is qualified.
-
-Go matching deliberately sees independent cleanup cancellation. The selected
-[poller](../../../../third_party/temporal-sdk/internal/internal_task_pollers.go)
-conditionally uses recursive cancellation matching when `cancelAllowed` is true.
-That routing hazard is source evidence, not an executed dispatch witness.
-Operation-owned conversion, native control compatibility and replay remain future
-work; do not return arbitrary v1 trees across Temporal as a lossless protocol.
-
-Run `go test -race ./failure/v1` and
-`go test -race ./internal/conformance -run '^TestPublicFailure'` from the root
-using the selected toolchain. The first includes an offline unrelated module,
-private-import rejection and a stdlib-only production-closure check. The native
-checks use the root's real selected replacements.
-
-Scope: [Issue #92](https://github.com/frost-leo/fathomry/issues/92).
+Tests cover the 32-bit layout, allocations, collisions, invalid metadata, concurrent reads,
+time.Time/private/interface/cyclic data, a deliberately broken shallow-copy
+control and same-occurrence attribution. [Settings](../../settings/v1/interface.md)
+provides data storage/access and [i18n](../../i18n/v1/interface.md) separately owns
+localized presentation. Other public layers remain withdrawn.
+No automatic localization in Error(), CLI lookup command, SDK error mapping, retry policy,
+HTTP/RPC protocol or Temporal failure/replay bridge is supplied by this module.

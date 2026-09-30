@@ -17,95 +17,90 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.adapters.configsource.viper",
+  "module": "fathomry",
+  "component": "configsource_viper",
   "locale": "en",
   "messages": [
     {
-      "id": "fathomry.adapters.configsource.viper:invalid_settings",
+      "id": "fathomry.configsource_viper.invalid_input",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configsource_viper.invalid_input.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Invalid local configuration source settings."
+        "other": "The configuration input or declaration is invalid."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:read",
+      "id": "fathomry.configsource_viper.limit_exceeded",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_viper.limit_exceeded.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Local configuration could not be read. Source: {source}; phase: {phase}."
+        "other": "A configuration capability bound was exceeded."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:limit",
+      "id": "fathomry.configsource_viper.read_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_viper.read_failed.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Local configuration exceeds a supported limit. Source: {source}; phase: {phase}."
+        "other": "Configuration acquisition or inspection failed."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:encoding",
+      "id": "fathomry.configsource_viper.decode_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_viper.decode_failed.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Local configuration is not valid UTF-8. Source: {source}; phase: {phase}."
+        "other": "Configuration decoding or preparation failed."
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:cleanup",
+      "id": "fathomry.configsource_viper.cleanup_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {
-        "source": {
-          "kind": "string",
-          "meaning": "Declared non-secret logical source alias."
-        },
-        "phase": {
-          "kind": "string",
-          "meaning": "Known public source operation."
-        }
-      },
+      "context": "Static explanation for fathomry.configsource_viper.cleanup_failed.",
+      "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Local configuration cleanup failed. Source: {source}; phase: {phase}."
+        "other": "Configuration resource cleanup reported a failure."
+      }
+    },
+    {
+      "id": "fathomry.configsource_viper.closed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_viper.closed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The configuration owner is closing or closed."
+      }
+    },
+    {
+      "id": "fathomry.configsource_viper.completion_unconfirmed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_viper.completion_unconfirmed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration cleanup completion has not been confirmed."
+      }
+    },
+    {
+      "id": "fathomry.configsource_viper.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configsource_viper.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration runtime handle serialization is unsupported."
       }
     }
   ]

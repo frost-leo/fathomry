@@ -33,7 +33,7 @@ import (
 )
 
 const (
-	// MaxKeys bounds the distinct configuration identities selected by one client.
+	// MaxKeys bounds a default key set or one explicit subscription's selection.
 	MaxKeys = 16
 	// MaxServers bounds the explicitly authorized members of one cluster.
 	MaxServers = 8
@@ -41,7 +41,7 @@ const (
 	MaxDocumentBytes = 1 << 20
 	// MaxTotalBytes bounds the sum of raw content returned by one ReadAll call.
 	MaxTotalBytes = 4 << 20
-	// MaxWireBytes bounds an incoming gRPC message and its protocol JSON body.
+	// MaxWireBytes bounds gRPC messages, HTTP search replies and protocol JSON bodies.
 	MaxWireBytes = 8 << 20
 	// A session may hold a unary response and one incoming stream message together.
 	reservationBytes = 2 * MaxWireBytes
@@ -59,7 +59,7 @@ type ServerV1 struct {
 	GRPCAddress string
 }
 
-// KeyV1 identifies a preselected configuration in the client's namespace.
+// KeyV1 identifies a configuration in the client's namespace.
 // An omitted group means DEFAULT_GROUP. Names are not diagnostic labels.
 type KeyV1 struct {
 	private
@@ -89,9 +89,15 @@ type OptionsV1 struct {
 	// Servers contains 1–MaxServers members of one cluster in initial failover
 	// order. Open copies the slice and retained strings; it does not discover peers.
 	Servers []ServerV1
-	// Keys selects 1–MaxKeys distinct identities in this Namespace. ReadAll uses
-	// this order and Watch observes this fixed set; Open copies retained storage.
+	// Keys selects up to MaxKeys distinct default identities in this Namespace.
+	// ReadAll uses this order and Watch observes this set. Empty is valid only with
+	// DynamicKeys; default-set operations then refuse. Open copies retained storage.
 	Keys []KeyV1
+	// DynamicKeys permits explicit per-call keys and namespace-local searches.
+	// False retains the preselected-key boundary. It does not change service ACLs.
+	DynamicKeys bool
+	// Writable explicitly enables Publish/Delete, still subject to key scope/ACLs.
+	Writable bool
 	// Username and Password select password-token authentication together.
 	// Both empty select no login; Username is limited to 256 UTF-8 bytes.
 	Username string
@@ -113,7 +119,7 @@ type OptionsV1 struct {
 	// ReconcileInterval schedules native hash/presence comparisons when no push
 	// wakes the observer. Zero defaults to 30 s; valid values are 1 s–5 min.
 	ReconcileInterval time.Duration
-	// ConcurrentRequests bounds admitted reads/batches and persistent subscriptions.
+	// ConcurrentRequests bounds admitted finite reads/writes/searches and subscriptions.
 	// Zero defaults to 4; valid values are 2–16. The same count separately bounds
 	// concurrent native dial/TLS phases; neither reservation is a process RSS limit.
 	ConcurrentRequests int
@@ -145,6 +151,8 @@ type settings struct {
 	AppName       string        `json:"app_name"`
 	Servers       []endpoint    `json:"servers"`
 	Keys          []key         `json:"keys"`
+	Dynamic       bool          `json:"dynamic_keys"`
+	Writable      bool          `json:"writable"`
 	Username      string        `json:"username"`
 	Password      string        `json:"password"`
 	RootCAPEM     string        `json:"roots"`
@@ -169,13 +177,14 @@ func ValidateOptions(input OptionsV1) error {
 func prepareOptions(input OptionsV1) (settings, *tls.Config, error) {
 	if len(input.Name) > 64 || len(input.Namespace) > 128 || len(input.AppName) > 128 ||
 		len(input.Username) > 256 || len(input.Password) > 4096 || len(input.RootCAPEM) > 64<<10 ||
-		len(input.Servers) < 1 || len(input.Servers) > MaxServers || len(input.Keys) < 1 || len(input.Keys) > MaxKeys {
+		len(input.Servers) < 1 || len(input.Servers) > MaxServers || len(input.Keys) == 0 && !input.DynamicKeys || len(input.Keys) > MaxKeys {
 		return settings{}, nil, fail(ErrInput, "options")
 	}
 	value := settings{Name: strings.Clone(input.Name), Namespace: strings.Clone(input.Namespace), AppName: strings.Clone(input.AppName),
 		Username: strings.Clone(input.Username), Password: strings.Clone(input.Password), RootCAPEM: strings.Clone(input.RootCAPEM),
 		Plaintext: input.AllowInsecure, Timeout: input.RequestTimeout, Retry: input.RetryDelay, Reconcile: input.ReconcileInterval,
-		Active: input.ConcurrentRequests, Queued: input.QueuedRequests, Subscriptions: input.Subscriptions, Queue: input.QueueCapacity}
+		Active: input.ConcurrentRequests, Queued: input.QueuedRequests, Subscriptions: input.Subscriptions, Queue: input.QueueCapacity,
+		Dynamic: input.DynamicKeys, Writable: input.Writable}
 	if value.AppName == "" {
 		value.AppName = "fathomry"
 	}

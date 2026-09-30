@@ -17,23 +17,31 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "example.inventory",
+  "module": "example",
+  "component": "source",
   "locale": "zh-CN",
   "messages": [
     {
-      "id": "example.inventory:items",
-      "source": "ccb22f014b18fea2316205041ce07388d04cf600b8a4bd7deb2117337af4470b",
+      "id": "example.source.failed",
+      "source": "c98801d5c7be0ce5e749ba3671040d66b6ba9d63230509aa6c918a31db868233",
       "forms": {
-        "other": "{place} 有 {count} 个项目"
+        "other": "配置源发生错误。"
       }
     },
     {
-      "id": "example.inventory:field",
-      "source": "d58e14e97d689474207647d8fc2288cb643a5ea06630b2ab8edcad6c1ceabf95",
+      "id": "example.source.details",
+      "source": "f6b6b24beb33aff38fe4d0da44d7798a94900e87a1843d5fa2da7e34f4328f3d",
       "forms": {
-        "other": "字段无效：{field}。"
+        "other": "位置 {label} 发生错误。"
+      }
+    },
+    {
+      "id": "example.source.items",
+      "source": "7c3419ef0257250a7fe2e0df42fdb76a1df028d724098fed4a824d358e3d4a31",
+      "forms": {
+        "other": "{label}：{count} 项"
       }
     }
   ]

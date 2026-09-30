@@ -1,0 +1,237 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "command_line",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.command_line.invalid_options",
+      "source": "ba1780d2d648a9ac2448bde23492a9e703f8c9d77f1e97ed7b524274560b4547",
+      "forms": {
+        "other": "命令调用所需的依赖无效。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.invalid_usage",
+      "source": "27a62511778f2d6d84caaf1ca07f5448ca3eb88ec584697e6ac191698bd8bd5f",
+      "forms": {
+        "other": "命令或参数无效，请查看命令帮助。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.not_found",
+      "source": "c2736fcf7a30175244b45588797f7a5ab0e7b417e3fa8eb39a7dc1f039442a62",
+      "forms": {
+        "other": "请求的图鉴条目未注册。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.execution_failed",
+      "source": "2034b362e3476ffe1b12fb397b98390b6869c0e8a8d0a7634b7979e800acc2bf",
+      "forms": {
+        "other": "命令执行失败，原生详情未公开。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.output_failed",
+      "source": "b8a96966c2bdbe2895ba24239479b139de3978a8cbe318aa053657cd7dce959d",
+      "forms": {
+        "other": "命令输出写入失败，可能只传送了部分内容。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.cleanup_failed",
+      "source": "00a91dbd4723dcae688d722ebb094816f4250b4815d47cf215eb3fa8d3c39eaf",
+      "forms": {
+        "other": "命令资源清理失败或未在等待期限内完成。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.canceled",
+      "source": "a0a8b4496afaef7fc6e93b5837874c7796ced7db3d8080947eef9eac23494835",
+      "forms": {
+        "other": "命令已取消；取消不代表外部操作没有产生效果。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.limit_exceeded",
+      "source": "9afacbc4965cbc0df14230e4041524ad3e6c0589ecd3b37cd0c1485abdf10f41",
+      "forms": {
+        "other": "命令输入或输出超出限制。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.root",
+      "source": "97869f6bdbc6421f2b55214a6e6b2a1f0d1ca9f93eb072ecce3f0fe1b1ae2393",
+      "forms": {
+        "other": "Fathomry 命令行工具。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.help_command",
+      "source": "0967bdaeedfc1c6b862771d6cffeef824eb6937985ca2d998df8a21af05b93dc",
+      "forms": {
+        "other": "查看命令帮助。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_help",
+      "source": "7b350441de54c22de52b8c25d3fba2d4bd8357e6dc11268545b6e8b0ced5d16d",
+      "forms": {
+        "other": "显示命令帮助。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_language",
+      "source": "0c2a373528db61faef0531b3dc7ed7e2c14d846001b638b638b5789d08dbbe78",
+      "forms": {
+        "other": "显示语言（覆盖 FATHOMRY_LANG）。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_output",
+      "source": "9f523d7e80ec368a6ae35fd80121a7635a8fe8e57413d5c99ad009f305330dd5",
+      "forms": {
+        "other": "输出格式：text 或 json。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_module",
+      "source": "11691a04ea838df4338745a59ebe5ed702a5248a5ca092e0296d2915bcb0e358",
+      "forms": {
+        "other": "错误所属模块，须与 --component 一起使用。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_component",
+      "source": "11e53c308dbd6a91025ea09266cb202d81dcdee9531a12f37e7229e8887fe4a6",
+      "forms": {
+        "other": "错误所属组件，须与 --module 一起使用。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_locale",
+      "source": "cfd1105a92c3968071418f74ee69bd1238d53693543a28d65399424a01ac3e5b",
+      "forms": {
+        "other": "精确查询的翻译语言，默认使用显示语言。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.usage",
+      "source": "da9bf02246ea143388ecd3a6b29faa9d9dea217ed78b1d4e453f9b5d268cfcf5",
+      "forms": {
+        "other": "用法："
+      }
+    },
+    {
+      "id": "fathomry.command_line.commands",
+      "source": "e40fc23eb855ad27129b7b6bc2bdfa9f4ceebc8ba0cb7637b3f547cf85658c19",
+      "forms": {
+        "other": "命令："
+      }
+    },
+    {
+      "id": "fathomry.command_line.options",
+      "source": "0c2d9b2002a82bd3b9f5b5261d3ceb660be4bcef1a45ebe617d5fc102d17a48f",
+      "forms": {
+        "other": "选项："
+      }
+    },
+    {
+      "id": "fathomry.command_line.locale",
+      "source": "92ad1b656eebdcc181d4664c8dda1f06498a48019e1c906e49f5db4ac49579b8",
+      "forms": {
+        "other": "语言"
+      }
+    },
+    {
+      "id": "fathomry.command_line.missing",
+      "source": "1bd6e9554a4112ceca21d9b3c92a6144cde4d28be8395e8a4b566d52ca35d8de",
+      "forms": {
+        "other": "缺失翻译"
+      }
+    },
+    {
+      "id": "fathomry.command_line.missing_translation",
+      "source": "1e0122a3a83eea7c85f7ea8cb927c9bd0091d4b0a8885dceda09c616a0f6e8dc",
+      "forms": {
+        "other": "消息已存在，但缺少该语言的精确翻译。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_group",
+      "source": "1aa4237bb7a139562521d9767accef56897f6585df9046c556ffe3f62cf6954a",
+      "forms": {
+        "other": "查询已注册的错误定义，不启动应用。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_list",
+      "source": "9dacb0f2270cd9fbd532e251e766c1305300e56d74ce5541902370209b1e665a",
+      "forms": {
+        "other": "列出错误定义，可按模块与组件筛选。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_explain",
+      "source": "a226f052327ff75ac26679a46f57ead3f6e2ab5f274ae57d11adb7ef4cc9183a",
+      "forms": {
+        "other": "按显示语言解释错误码或错误标识符。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_components",
+      "source": "72a3682316fea6e842b494ddd4c14e5d5582445c7e1d8b7a651018dc52e2da24",
+      "forms": {
+        "other": "列出错误所属组件、分类编号及错误码数量。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_group",
+      "source": "ffa7de38af3d7919b9ceb4b081ff57f66b1d339f80ff0f183a58161768a0c1a8",
+      "forms": {
+        "other": "查询已注册的翻译资源，不读取应用设置。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_list",
+      "source": "7a7f116c50194a285bb306594ef6bfa15fded0c0234de603005a77115b5320c1",
+      "forms": {
+        "other": "列出已注册的消息标识及精确资源语言。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_show",
+      "source": "6c231408b70ad3765d0664e6fd95b585efa9039fd568883cd9762ee866833f91",
+      "forms": {
+        "other": "查询一条消息的精确翻译，不进行语言回退。"
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_coverage",
+      "source": "96d28ca6f6182b769fea7b65ab342b60741643078a0cdf90a96800634ad459e9",
+      "forms": {
+        "other": "按组件列出精确缺失的翻译。"
+      }
+    }
+  ]
+}

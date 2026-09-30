@@ -1,0 +1,327 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "command_line",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.command_line.invalid_options",
+      "contract": "v1",
+      "context": "Command interface: invalid_options.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The command invocation dependencies are invalid."
+      }
+    },
+    {
+      "id": "fathomry.command_line.invalid_usage",
+      "contract": "v1",
+      "context": "Command interface: invalid_usage.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The command or its arguments are invalid. Consult the command help."
+      }
+    },
+    {
+      "id": "fathomry.command_line.not_found",
+      "contract": "v1",
+      "context": "Command interface: not_found.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested catalog entry is not registered."
+      }
+    },
+    {
+      "id": "fathomry.command_line.execution_failed",
+      "contract": "v1",
+      "context": "Command interface: execution_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The command failed; native details are withheld."
+      }
+    },
+    {
+      "id": "fathomry.command_line.output_failed",
+      "contract": "v1",
+      "context": "Command interface: output_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Writing command output failed; delivery may be partial."
+      }
+    },
+    {
+      "id": "fathomry.command_line.cleanup_failed",
+      "contract": "v1",
+      "context": "Command interface: cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Command resource cleanup failed or did not finish within the waiting budget."
+      }
+    },
+    {
+      "id": "fathomry.command_line.canceled",
+      "contract": "v1",
+      "context": "Command interface: canceled.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The command was canceled; cancellation does not establish absence of effects."
+      }
+    },
+    {
+      "id": "fathomry.command_line.limit_exceeded",
+      "contract": "v1",
+      "context": "Command interface: limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A command invocation or output limit was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.command_line.root",
+      "contract": "v1",
+      "context": "Command interface: root.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Fathomry command-line tools."
+      }
+    },
+    {
+      "id": "fathomry.command_line.help_command",
+      "contract": "v1",
+      "context": "Command interface: help_command.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Show help for a command."
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_help",
+      "contract": "v1",
+      "context": "Command interface: flag_help.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Show command help."
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_language",
+      "contract": "v1",
+      "context": "Command interface: flag_language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Display language (overrides FATHOMRY_LANG)."
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_output",
+      "contract": "v1",
+      "context": "Command interface: flag_output.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Output format: text or json."
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_module",
+      "contract": "v1",
+      "context": "Command interface: flag_module.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Error owner module; use together with --component."
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_component",
+      "contract": "v1",
+      "context": "Command interface: flag_component.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Error owner component; use together with --module."
+      }
+    },
+    {
+      "id": "fathomry.command_line.flag_locale",
+      "contract": "v1",
+      "context": "Command interface: flag_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Exact translation locale; defaults to the display language."
+      }
+    },
+    {
+      "id": "fathomry.command_line.usage",
+      "contract": "v1",
+      "context": "Command interface: usage.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Usage:"
+      }
+    },
+    {
+      "id": "fathomry.command_line.commands",
+      "contract": "v1",
+      "context": "Command interface: commands.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Commands:"
+      }
+    },
+    {
+      "id": "fathomry.command_line.options",
+      "contract": "v1",
+      "context": "Command interface: options.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Options:"
+      }
+    },
+    {
+      "id": "fathomry.command_line.locale",
+      "contract": "v1",
+      "context": "Command interface: locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Language"
+      }
+    },
+    {
+      "id": "fathomry.command_line.missing",
+      "contract": "v1",
+      "context": "Command interface: missing.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Missing translations"
+      }
+    },
+    {
+      "id": "fathomry.command_line.missing_translation",
+      "contract": "v1",
+      "context": "Command interface: missing_translation.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The message exists, but this exact translation is absent."
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_group",
+      "contract": "v1",
+      "context": "Command interface: error_group.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Inspect registered error definitions without starting an application."
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_list",
+      "contract": "v1",
+      "context": "Command interface: error_list.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List error definitions; optionally select a module/component pair."
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_explain",
+      "contract": "v1",
+      "context": "Command interface: error_explain.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Explain an error code or identifier in the display language."
+      }
+    },
+    {
+      "id": "fathomry.command_line.error_components",
+      "contract": "v1",
+      "context": "Command interface: error_components.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List registered error owners, facilities and code counts."
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_group",
+      "contract": "v1",
+      "context": "Command interface: i18n_group.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Inspect registered translation resources without application settings."
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_list",
+      "contract": "v1",
+      "context": "Command interface: i18n_list.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List registered message identities and exact resource languages."
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_show",
+      "contract": "v1",
+      "context": "Command interface: i18n_show.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Inspect one exact message translation without fallback."
+      }
+    },
+    {
+      "id": "fathomry.command_line.i18n_coverage",
+      "contract": "v1",
+      "context": "Command interface: i18n_coverage.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List exact missing translations by component."
+      }
+    }
+  ]
+}

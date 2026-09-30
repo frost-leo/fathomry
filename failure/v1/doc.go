@@ -17,31 +17,29 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package failure defines version 1 of a public, in-process error contract.
-// It depends only on the standard library, not private mechanisms or SDKs.
+// Package failure defines numeric, component-owned public failures.
 //
-// Declare code-owned Conditions, construct an Error with New and explicitly
-// select its public causes. Inspect selects only the supplied occurrence;
-// errors.Is and errors.As separately traverse deliberately exposed causes.
-// Capability-owned extensions implement Occurrence and own their typed facts,
-// copying, bounds, presentation and concurrency contracts.
+// Code is a uint32 customer-failure identity with an allocated subsystem Facility
+// and local Number. Domains classify capability bands such as database, cache and
+// object storage, independently of code layers. Before adding error numbers, read
+// the allocation rules on Code, Facility and Domains; do not infer numbering from
+// package layout. Identifier is a readable symbol. Declare Definition values in
+// the owning component, then use New or NewDetailed to
+// construct an occurrence with an operation/instance Location and original causes.
+// Catalog preparation is explicit and is not required for construction or matching.
 //
-// Optional PrepareDefinitions builds an immutable, bounded module/condition/fact
-// atlas from explicit owner declarations. Queries inspect definitions, never
-// runtime occurrences. New/Inspect/matching remain independent of registration.
-// There is no mutable global registry, discovery, localization or schema codec.
+// Error owns frozen metadata; Detailed uses a component-owned copy contract for
+// its extensible data rather than restricting Go field types. Native causes
+// remain the exact borrowed Go objects: errors.Is/As can inspect them, but ordinary
+// diagnostics never format them. Inspect selects only a directly supplied
+// occurrence; it does not guess a primary error inside wrappers or joins.
 //
-// Error owns immutable condition and cause-slice storage. Foreign cause objects
-// are retained, not cloned. Package-owned diagnostics and supported fmt/slog output never
-// traverse them. Code grammar is not proof of namespace authority or privacy:
-// conditions must never be built from secrets or per-request identifiers.
+// Prepare builds an immutable, collision-checked definition atlas with numeric,
+// symbolic and component queries. Definitions contain safe developer explanations,
+// not per-call payloads or localized text. Code text/JSON is lossless hexadecimal.
+// Runtime errors refuse JSON; a native error graph is not a durable wire schema.
 //
-// Runtime errors are not wire DTOs. JSON encoding/reconstruction is refused;
-// arbitrary foreign codecs, wrappers and raw inspection are outside this safety
-// boundary. In particular, Temporal's default failure converter is not a v1
-// bridge. This package supplies no retry, effect, localization or durable policy.
-//
-// The entire Go contract is versioned, including ownership, zero semantics,
-// matching and extension method sets. Conditions, capability details, root-module
-// builds and future durable schemas have independent compatibility responsibilities.
+// This package imports only the standard library. It performs no SDK work,
+// settings lookup, localization, retry, logging, discovery or global registration.
+// Component contracts own detail meanings, native-cause exposure and recovery.
 package failure

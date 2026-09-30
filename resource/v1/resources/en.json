@@ -1,0 +1,157 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "resource",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.resource.invalid_options",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.invalid_options.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The resource declaration or options are invalid."
+      }
+    },
+    {
+      "id": "fathomry.resource.invalid_scope",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.invalid_scope.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The resource scope or handle is not initialized."
+      }
+    },
+    {
+      "id": "fathomry.resource.closed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.closed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The resource scope or observation is closing or closed."
+      }
+    },
+    {
+      "id": "fathomry.resource.declarations_sealed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.declarations_sealed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Resource declarations are already sealed."
+      }
+    },
+    {
+      "id": "fathomry.resource.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A resource ownership or admission bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.resource.selection_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.selection_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The component configuration could not be selected."
+      }
+    },
+    {
+      "id": "fathomry.resource.construction_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.construction_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The resource candidate could not be constructed or adopted."
+      }
+    },
+    {
+      "id": "fathomry.resource.not_available",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.not_available.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "No active resource generation is available."
+      }
+    },
+    {
+      "id": "fathomry.resource.invalid_lease",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.invalid_lease.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The resource lease is invalid or has already been released."
+      }
+    },
+    {
+      "id": "fathomry.resource.superseded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.superseded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The resource configuration target was superseded before adoption."
+      }
+    },
+    {
+      "id": "fathomry.resource.wait_interrupted",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.wait_interrupted.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Waiting ended without confirming completion."
+      }
+    },
+    {
+      "id": "fathomry.resource.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Resource cleanup reported a failure or remains incomplete."
+      }
+    },
+    {
+      "id": "fathomry.resource.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.resource.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Resource runtime handle serialization is unsupported."
+      }
+    }
+  ]
+}

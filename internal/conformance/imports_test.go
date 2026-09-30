@@ -22,9 +22,14 @@ package conformance_test
 import (
 	"context"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +53,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatal(err)
 	}
 	notice := "/**\n * " + strings.ReplaceAll(strings.TrimSpace(string(header)), "\n", "\n * ") + "\n */\n"
-	write("consumer.go", []byte(notice+"package consumer\n"))
+	write("consumer.go", []byte(notice+"package consumer\nimport (\n failure \"github.com/frost-leo/fathomry/failure/v1\"\n settings \"github.com/frost-leo/fathomry/settings/v1\"\n i18n \"github.com/frost-leo/fathomry/i18n/v1\"\n resource \"github.com/frost-leo/fathomry/resource/v1\"\n adapters \"github.com/frost-leo/fathomry/adapters/v1\"\n configsource \"github.com/frost-leo/fathomry/adapters/configsource/v1\"\n viper \"github.com/frost-leo/fathomry/adapters/configsource/viper/v1\"\n nacos \"github.com/frost-leo/fathomry/adapters/configsource/nacos/v1\"\n framework \"github.com/frost-leo/fathomry/framework/v1\"\n configuration \"github.com/frost-leo/fathomry/framework/configuration/v1\"\n)\nvar _ error = failure.ErrCode\nvar _ = settings.NewStore[int]()\nvar _ = i18n.CoreComponents()\nvar _ = resource.Fixed\nvar _ = adapters.ErrOptions\nvar _ = configsource.ErrDecode\nvar _ = viper.Settings{}\nvar _ = nacos.Settings{}\nvar _ = framework.Options{}\nvar _ = configuration.ErrDeclaration\n"))
 	run := func(workdir string, args ...string) ([]byte, error) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -66,7 +71,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("independent module smoke compilation failed: %v\n%s", err, output)
 	}
-	t.Logf("independent module smoke compilation (no public API):\n%s", output)
+	t.Logf("independent module public-failure/settings smoke compilation:\n%s", output)
 	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1", "configsource/nacos/v2", "database/pgx/v5", "database/mysql/v1"} {
 		t.Run("reject-internal-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/internal/" + name
@@ -77,7 +82,10 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			}
 		})
 	}
-	for _, name := range []string{"source", "operation", "compatibility", "failure"} {
+	for _, name := range []string{
+		"source", "operation", "compatibility", "failure",
+		"cli",
+	} {
 		t.Run("withdrawn-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/" + name
 			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
@@ -87,31 +95,22 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			}
 		})
 	}
-	t.Run("reject-adapter-private-state", func(t *testing.T) {
-		path := "github.com/frost-leo/fathomry/adapters/configsource/internal/owned"
-		write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
-		output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
-		if err == nil || !strings.Contains(string(output), "use of internal package "+path+" not allowed") {
-			t.Fatalf("wrong Adapter-private import rejection: %v\n%s", err, output)
-		}
-	})
 	output, err = run(root, "list", "./...")
 	if err != nil {
 		t.Fatal("package inventory could not be inspected")
 	}
+	cliPackages := map[string]bool{
+		"github.com/frost-leo/fathomry/cmd/fathomry":                               true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":                  true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command":              true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog": true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages":     true,
+	}
 	for _, path := range strings.Fields(string(output)) {
-		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") &&
-			path != "github.com/frost-leo/fathomry/failure/v1" &&
-			path != "github.com/frost-leo/fathomry/i18n/v1" &&
-			path != "github.com/frost-leo/fathomry/adapters/v1" &&
-			path != "github.com/frost-leo/fathomry/framework/v1" &&
-			path != "github.com/frost-leo/fathomry/adapters/configsource/v1" &&
-			path != "github.com/frost-leo/fathomry/adapters/configsource/viper/v1" &&
-			path != "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1" &&
-			path != "github.com/frost-leo/fathomry/adapters/configsource/internal/owned" &&
-			path != "github.com/frost-leo/fathomry/framework/configuration/v1" &&
-			path != "github.com/frost-leo/fathomry/cli/internal/command/project" &&
-			path != "github.com/frost-leo/fathomry/cli" && path != "github.com/frost-leo/fathomry/cmd/fathomry" {
+		if cliPackages[path] {
+			continue
+		}
+		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") && path != "github.com/frost-leo/fathomry/failure/v1" && path != "github.com/frost-leo/fathomry/settings/v1" && path != "github.com/frost-leo/fathomry/i18n/v1" && path != "github.com/frost-leo/fathomry/resource/v1" && path != "github.com/frost-leo/fathomry/adapters/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/viper/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1" && path != "github.com/frost-leo/fathomry/framework/v1" && path != "github.com/frost-leo/fathomry/framework/configuration/v1" {
 			t.Errorf("unexpected public package: %s", path)
 		}
 	}
@@ -127,14 +126,90 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			t.Errorf("technical mechanisms depend on framework errors or test support: %s", path)
 		}
 	}
-	output, err = run(root, "list", "-deps", "./internal/configsource/...")
+}
+
+func TestCLIConsumesPublicCapabilities(t *testing.T) {
+	root, err := filepath.Abs("../../cmd/fathomry")
 	if err != nil {
-		t.Fatal("configuration mechanism dependency check failed")
+		t.Fatal(err)
 	}
-	for _, path := range strings.Fields(string(output)) {
-		if strings.HasPrefix(path, "github.com/frost-leo/fathomry/adapters/") ||
-			strings.HasPrefix(path, "github.com/frost-leo/fathomry/framework/") {
-			t.Errorf("internal acquisition depends back on a public layer: %s", path)
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return err
+		}
+		for _, item := range file.Imports {
+			imported, err := strconv.Unquote(item.Path.Value)
+			if err != nil {
+				return err
+			}
+			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/internal/") {
+				t.Errorf("CLI bypasses public capabilities: %s: %s", path, imported)
+			}
+			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/framework/") {
+				relative, err := filepath.Rel(root, path)
+				if err != nil {
+					return err
+				}
+				if filepath.ToSlash(relative) != "internal/app/catalog.go" || item.Name == nil {
+					t.Errorf("CLI execution depends on Framework: %s: %s", path, imported)
+					continue
+				}
+				name := item.Name.Name
+				ast.Inspect(file, func(node ast.Node) bool {
+					selector, ok := node.(*ast.SelectorExpr)
+					if !ok {
+						return true
+					}
+					owner, ok := selector.X.(*ast.Ident)
+					if ok && owner.Name == name && selector.Sel.Name != "Components" && selector.Sel.Name != "Definitions" && selector.Sel.Name != "Resources" {
+						t.Errorf("metadata composition calls Framework runtime: %s: %s", path, selector.Sel.Name)
+					}
+					return true
+				})
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFrameworkHasNoDirectInternalImports(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = filepath.WalkDir(filepath.Join(root, "framework"), func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			return err
+		}
+		for _, item := range file.Imports {
+			imported, err := strconv.Unquote(item.Path.Value)
+			if err != nil {
+				return err
+			}
+			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/internal/") {
+				t.Errorf("Framework bypasses public Adapters: %s: %s", path, imported)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

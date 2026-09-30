@@ -28,13 +28,14 @@
 // HTTP authentication and gRPC configuration endpoints independently. Successful
 // construction does not prove reachability, authentication or session readiness.
 //
-// [Client.Read] and [Client.ReadAll] acquire original UTF-8 documents for preselected
-// [KeyV1] values. Each finite read/batch owns a fresh Nacos session, and no required
+// [Client.Read] and [Client.ReadAll] acquire original UTF-8 documents for permitted
+// [KeyV1] values. DynamicKeys explicitly permits per-call selections; otherwise
+// only preselected keys are admitted. Each finite read/batch owns a fresh session, and no required
 // failure exposes a usable prefix or substitutes an earlier cached value.
 // [Document.RawCopy] feeds existing resource preparation after composition assigns
 // layer identity and precedence. Native MD5/time fields are observations, not
 // authenticity, preparation revisions or a common-time snapshot.
-// [Client.ReadRawAll] shares the finite path but preserves present-empty content
+// [Client.ReadRaw] and [Client.ReadRawAll] share the finite path but preserve present-empty content
 // and positive Missing slots for Adapter-owned required/optional policy.
 //
 // # Observation and shutdown
@@ -47,6 +48,17 @@
 // [Client.ObserveRaw] reuses that same owned loop and hands complete bounded raw
 // acquisitions to the Adapter without a second refetch. Its internal callback
 // must remain bounded and synchronous; it is not a business callback surface.
+// [Client.WatchKeys] and [Client.ObserveRawKeys] freeze an explicit permitted set
+// for that subscription, independently of the client's default selection.
+//
+// # Management and effect evidence
+//
+// Writable opts into [Client.Publish] (including CAS MD5) and [Client.Delete].
+// [MutationResult] distinguishes not-issued, unknown, acknowledged and native
+// rejection evidence even on error. No mutation is retried after dispatch; a
+// timeout or generic server error is not proof of rollback. [Client.Search] admits
+// bounded namespace-local pages only with DynamicKeys. Native v3 search can return
+// metadata without content; [SearchItem.ContentPresent] makes that distinction.
 //
 // [Subscription.Close] and [Client.Close] cancel owned work and wait for local
 // completion. A timed-out close retains responsibility and must be retried.
@@ -59,8 +71,8 @@
 // This is a selected native protocol-component profile, not a transparent facade
 // over the high-level SDK. The upstream-upgrade TODO is tracked at the SDK pin in
 // go.mod and GH-21; safeguards are retired only after the relevant native fixes
-// and regression/service gates pass. The package exposes no management writes,
-// service discovery, public application loader or automatic configuration reload.
+// and regression/service gates pass. The package exposes no naming/service discovery,
+// public application loader, encrypted-content plugin or automatic configuration reload.
 //
 // Runtime formatting and JSON reconstruction are restricted. [RemoteError.Message],
 // document copies and explicit identity getters deliberately expose potentially

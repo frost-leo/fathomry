@@ -107,8 +107,10 @@ type Argument struct {
 // Rendered contains complete plain text or is zero on error. Category is the
 // actual-resource rule result; Variant is the authored form used. Noncardinal
 // messages use Other. FormFallback is separate from whole-message fallback.
+// Locale is the actual resource language, not the requested locale or matched tag.
 type Rendered struct {
 	Text         string
+	Locale       string
 	Category     Form
 	Variant      Form
 	FormFallback bool
@@ -193,7 +195,7 @@ func (selection Selection) Render(arguments []Argument, count *uint64) (Rendered
 			output.WriteString(segment.literal)
 		}
 	}
-	return Rendered{Text: output.String(), Category: category, Variant: variant, FormFallback: category != variant}, nil
+	return Rendered{Text: output.String(), Locale: definition.Locale, Category: category, Variant: variant, FormFallback: category != variant}, nil
 }
 
 func scalar(value any, kind string) (string, error) {

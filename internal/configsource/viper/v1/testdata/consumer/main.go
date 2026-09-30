@@ -76,9 +76,39 @@ func main() {
 	if err != nil || validations != 1 || prepared.Description().Revision == "" {
 		panic("consumer preparation failed")
 	}
+	if err := os.Setenv("FATHOMRY_CONSUMER_SERVICE_PORT", "8100"); err != nil {
+		panic("consumer environment fixture failed")
+	}
+	expanded, err := viper.Load(context.Background(), []viper.LoadInput{{
+		Options: viper.OptionsV1{Encoding: "toml", AutomaticEnv: true, EnvPrefix: "FATHOMRY_CONSUMER",
+			EnvKeyReplacements: []viper.Replacement{{Old: ".", New: "_"}}},
+		Reader: strings.NewReader("number=9007199254740993"),
+	}})
+	if err != nil {
+		panic("consumer TOML load failed")
+	}
+	type nativeSettings struct {
+		Number  int64
+		Service struct{ Port int }
+	}
+	native, err := viper.Decode[nativeSettings](context.Background(), expanded[0])
+	if err != nil || native.Number != 9007199254740993 || native.Service.Port != 8100 {
+		panic("consumer typed TOML/automatic environment failed")
+	}
+	snapshot, err := expanded[0].Capture(context.Background(), "service.port")
+	if err != nil {
+		panic("consumer snapshot failed")
+	}
+	if err := os.Setenv("FATHOMRY_CONSUMER_SERVICE_PORT", "8200"); err != nil {
+		panic("consumer environment update failed")
+	}
+	if value, err := snapshot.ValueCopy("service.port"); err != nil || value != "8100" {
+		panic("consumer snapshot was not frozen")
+	}
 	build, err := compatibility.Inspect(compatibility.BuildRequest{SDKModules: []string{
 		"github.com/spf13/viper", "go.yaml.in/yaml/v3", "github.com/spf13/afero",
 		"github.com/spf13/cast", "github.com/go-viper/mapstructure/v2",
+		"github.com/pelletier/go-toml/v2", "github.com/subosito/gotenv",
 	}})
 	if err != nil {
 		panic("consumer build inspection failed")

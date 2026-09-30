@@ -17,56 +17,91 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 
-# Local configuration Adapter
+# Public Viper configuration Adapter
 
 [Documentation](../../../../../README.md) / Public package reference
 
-**Audience:** independent Go projects selecting explicit files.
-**Status:** implemented and tested with stable regular files/atomic replacement on Linux.
+**Audience:** independent Go consumers and Framework scenario authors.
+**Status:** implemented; local files/readers, native decoding and owned observation
+are verified. No application loader or process-environment watcher is implied.
 **Package:** `github.com/frost-leo/fathomry/adapters/configsource/viper/v1`.
 
-`Select(Settings)` accepts one non-secret source name and 1–16 uniquely named
-`File` slots. Each file uses an explicit literal absolute `Path` (at most 4096
-bytes) and `Encoding` of `yaml` or `json`. No CWD/HOME search, environment
-expansion, implicit bindings or extension inference is performed. Bootstrap paths
-and labels collectively fit the private integration's 64-KiB budget.
+## Bind once, select explicitly
 
-Settings/File are normal exact-tagged sensitive DTOs suitable inside project T.
-Select validates and copies their data without stat/open. It returns the common
-[Selection contract](../../v1/interface.md), not native Viper state.
+New borrows an explicit public operation Runtime and required Inbox[Evidence].
+Neither transfers ownership. Finite acquisition reserves evidence before native
+dispatch. The caller owns shutdown and custody; retrying a failed evidence receiver
+never rereads a file. Evidence is bounded metadata with original errors, not a copy
+of configuration payloads.
 
-Capture uses a narrow bounded raw seam in the existing private integration.
-Original UTF-8 bytes survive even for present-empty/whitespace or invalid syntax.
-Encoding is an admitted selection hint, not proof of native parsing.
-No Viper AllSettings normalization, query map or ErrEmpty reconstruction is used.
-The existing private parsed Load behavior is unchanged.
+Load accepts 1..16 ordered Inputs, each selecting exactly one literal absolute File
+or borrowed Reader and loadable Settings. It returns the whole batch or no usable
+prefix. Files close before return; borrowed Readers are never closed. No file
+discovery, automatic dotenv loading, merge or environment mutation occurs.
 
-`ReconcileInterval` is in nanoseconds. Zero selects Capture-only; Observe requires
-an explicit 1 second through 5 minutes. Observe owns initial acquisition and paced
-periodic literal-path reads. All later attempts, including failures, wait at least
-that interval after the preceding capture; there is no catch-up concurrency.
-No fsnotify event driver, Viper WatchConfig or Framework poller is involved.
+Settings maps all supported native fields: encoding, defaults, explicit environment
+bindings, allow_empty_env, automatic_env, env_prefix and ordered replacements.
+Formats are yaml/yml/json/toml/dotenv/env. Defaults are ordered Scalar {kind,text}
+records, not interface values. Kinds preserve native nil/string/bool and each
+builtin integer/finite floating type. Integer text uses JSON decimal grammar
+without fractions/exponents; fixed widths reject overflow. int/uint are
+architecture-dependent; use fixed-width kinds for portable declarations.
+Null requires empty text; absent Kind rejects. Duration observation settings use
+nanoseconds, with native zero/default behavior.
 
-Subsequent reads observe delete/recreate, parent/target replacement and normal OS
-symlink resolution. Coherent writer publication requires stable regular files or
-qualified same-filesystem atomic replacement. In-place writes can expose valid
-intermediate data; a read/tick is not writer completion. No symlink sandbox,
-cross-file transaction, Windows or network-filesystem qualification is implied.
-Blocked native stat/open/read/close cannot be forcibly interrupted.
+## Different data profiles
 
-Read/close errors retain source, known file-slot alias and public operation phase
-through the common AcquisitionFailure contract; these are not native paths.
-Read/close errors are Adapter conditions. Deliberate `errors.As` can expose the
-first native `*os.PathError`; context cancellation/deadline and caller cancellation
-causes retain intentional matching. These cause paths may disclose sensitive
-selectors; ordinary diagnostics never print them. Parser/private fault graphs
-are not exported. Positive OS absence becomes Missing, not a read error.
+- Document.RawCopy preserves original bytes. Keys and ValueCopy preserve native
+  case/path/null/default behavior and live environment lookup.
+- Capture freezes registered plus explicit native keys. ValuesCopy is an owned
+  effective native map, not original syntax. Sources/environment must remain
+  stable for a coherent capture; this is not a process-wide transaction.
+- Decode[T] includes schema-derived mapstructure keys and explicit dynamic keys,
+  then uses native weak conversion/duration/slice hooks. It does not replace
+  [strict original-layer preparation](../../v1/interface.md).
+- RawFile retains positive absence and present-empty separately, with no syntax
+  parsing. The explicit byte limit is 0..1 MiB.
+- Client.Source freezes explicit file paths into the shared complete-batch profile.
+  Capture uses one bounded batch operation. Observe consumes native invalidations
+  in an owned acquisition/handoff worker, without another timer or poller. It keeps
+  one latest complete observation and marks overwritten observations with Gap.
 
-Static `Definition`, `Sources`, `Bindings`, `Module` functions participate in
-layer catalogs without constructing a source. The public module namespace is
-`fathomry.adapters.configsource.viper`; it is independent of instance names.
+Limits preserve the native profile: 16 sources, 1 MiB per document, 4 MiB aggregate,
+64 KiB bootstrap declarations, 64 defaults/bindings/replacements each, 256-byte
+keys, 64-depth/32,768-node structural bounds. Raw and native formats retain their
+separate contracts; dotenv expansion remains refused.
 
-Executable controls are in the unrelated-module
-[finite tests](../../../../../../framework/configuration/v1/testdata/consumer/local_test.go)
-and [live/raw tests](../../../../../../framework/configuration/v1/testdata/consumer/local_live_test.go).
-These test the actual public API, not only the historical private integration.
+## Watch and actual work
+
+WatchSettings has explicit Paths, interval_ns (zero=1s; 10ms..5min) and queue_capacity
+(zero=16; 1..64). Watch observes files only. Change.Index preserves the original
+path position; -1 means whole-set synchronization. Resync covers initial observation,
+failures and overflow. Consumers must not infer a complete change history.
+
+Next cancellation affects only its wait. Close cancels and joins the actual native
+worker; the same owner remains reachable after timeout. A shared Source Observer
+retains its acquisition worker under a 24 MiB declared work reservation. Next only
+waits for its bounded handoff; canceling that wait cannot cancel acquisition or
+consume a native invalidation without completing its owned handoff. Runtime.Close
+requests cancellation and waits for retained work, not merely expired waits.
+Blocked OS calls and arbitrary Readers cannot be forcibly interrupted.
+
+Watch retains one common-runtime slot and evidence reservation for its lifetime.
+Its evidence resolves on actual cleanup, not successful Watch return. Do not block
+all finite evidence reception behind one live lifecycle claim; retain that bounded
+claim and receive other records independently. Close subscriptions before final
+runtime shutdown; drain/ack evidence according to the application's sink policy.
+
+## Errors, privacy and consumption
+
+Definitions/Resources support offline code explanations and explicit localization.
+No operation reads global settings or selects a locale. Runtime formatting/slog is
+restricted; handles refuse JSON reconstruction. Settings is intentionally
+serializable data: serializing it can disclose secrets. Explicit raw/native value
+access and original causes are also sensitive.
+
+[Load/query/ownership tests](../../../../../../adapters/configsource/viper/v1/load_test.go),
+[Watch and privacy tests](../../../../../../adapters/configsource/viper/v1/watch_test.go),
+[raw Source tests](../../../../../../adapters/configsource/viper/v1/source_test.go) and the
+[independent consumer](../../../../../../adapters/configsource/viper/v1/testdata/consumer/consumer_test.go)
+exercise both native and strict use. Selecting Viper does not import Nacos.

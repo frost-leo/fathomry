@@ -17,103 +17,91 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 
-# Raw configuration-source contract
+# Configuration acquisition and strict preparation
 
 [Documentation](../../../../README.md) / Public package reference
 
-**Audience:** direct Adapter consumers and Framework configuration authors.
-**Status:** implemented immutable raw capture and owned observation.
+**Audience:** application authors and Framework configuration consumers.
+**Status:** implemented public contracts, independent of Internal preparation.
 **Package:** `github.com/frost-leo/fathomry/adapters/configsource/v1`.
 
-## Select, then explicitly capture or observe
+## Responsibilities
 
-Concrete [local](../viper/v1/interface.md) and [Nacos](../nacos/v1/interface.md)
-`Select(Settings)` functions validate/copy bootstrap without I/O. Settings are
-ordinary sensitive DTOs; `Selection` is a separate guarded runtime interface.
-Its safe `Description` contains a module ID, non-secret source/slot aliases and
-observation capability, never paths, endpoints, credentials or hashes.
+Selected provider Sources supply complete original documents. This package owns
+their immutable Batch contract and independent strict preparation. It does not
+select services, own native polling/recovery, publish settings or reconstruct
+instances. The complete provider APIs remain independently available:
+[Viper](../viper/v1/interface.md) and [Nacos](../nacos/v1/interface.md).
 
-`Capture(ctx)` acquires a fresh complete batch or returns no batch and an error.
-It never substitutes an observer's old value. All finite transient ownership joins
-before return; cancellation is cooperative and not a hard return-time guarantee.
+`Source.Capture` returns a complete Batch, failed slot index (-1 if unknown/success)
+and error. `Source.Observe` returns an owned Observer; Next separates a failed wait
+from an Observation carrying a source error or a complete batch. Check Batch
+validity and expected document count before consuming it. A zero Batch is invalid.
+Missing, present-empty and acquisition failure are different facts.
 
-`Observe(lifetime)` returns reachable ownership before asynchronous acquisition.
-Success means owner-created, not ready. One Adapter loop owns acquisition,
-registration/reconciliation and recovery. A failed acquisition stays pending for
-retry even without another event. Framework must not perform a second capture loop.
+`NewBatch` admits at most 16 UTF-8 documents, 1 MiB each and 4 MiB total.
+It copies bytes; `DocumentsCopy` copies again. Missing slots cannot contain bytes.
+Source observations may coalesce or drop events with an explicit Gap; a delivered
+successful Batch is already a complete reacquisition, not a request to refetch it.
 
-Only the first-party implementations are qualified. These small interfaces are
-consumer boundaries, not a generic provider registry or a security sandbox.
+BindVariables[T] admits at most 64 explicitly captured struct-field bindings.
+It performs no environment I/O. Unset differs from empty; literal text is for
+strings, while explicit JSON preserves typed values/null/maps/lists. Duplicate
+or ancestor-overlapping paths and map-key/list-index addressing reject. The
+result is one bounded Variables layer consumed by the same preparation engine.
 
-## Raw values and coherent state
+## Prepare original layers
 
-`Batch.Documents()` returns owned ordered slot metadata. `RawCopy(slot)`
-returns detached sensitive UTF-8 bytes and a `Presence`, or `ErrValue` for an
-unknown slot. `Present` includes empty and whitespace content; `Missing` means
-positive absence, not an unreadable, denied, malformed or empty document.
-Acquisition does not promise that application parsing will succeed.
-A nil batch is invalid; no usable prefix escapes on failure.
+`Prepare(ctx, Schema[T], layers)` supports complete nonrecursive struct schemas
+with explicit ASCII `json` field names (letters, digits, underscore, hyphen).
+Fields may contain named/builtin scalars, pointers, nested structs, string-keyed
+maps and slices. Anonymous/private fields, tag options, interfaces, arrays, byte
+slices and custom JSON/text codecs are refused. This decoder profile does not
+restrict the separate settings package's arbitrary owner-defined copy contract.
 
-Limits per operation/observer: 1–16 slots, 1 MiB per decoded document, 4 MiB total
-raw batch. Aggregate bounds are checked before retaining a new complete batch.
-These are not process RSS or fleet quotas, nor limits on caller-retained copies.
+Schema Version is nonzero, naming the selected schema, not inferred from source
+bytes or SDK/module versions. Each layer explicitly selects JSON or restricted
+YAML. No in-band version header, file discovery, environment scan or transcoding
+is inferred. TOML/dotenv native decoding belongs to Viper, not this strict profile.
 
-`Observer.Current()` returns one coherent `State`:
+| Concern | Contract |
+| --- | --- |
+| Order | Typed defaults < Base < Environment < Local < Variables, independent of slice order; duplicate kinds reject |
+| Validation | Every layer must have exact known struct fields and compatible types, even if later overwritten |
+| Objects/maps | Recursive overlay; empty objects preserve inherited children; dynamic map keys remain case-sensitive |
+| Lists | Whole replacement, never concatenation |
+| Absent/empty | Absence inherits; zero, false, empty string and empty list explicitly override |
+| Null | Clears pointers/maps/slices; refuses non-nullable fields; not a map-key deletion operator |
+| Numbers | Lexical precision and target-width range checks; integer fractions/exponents reject |
+| Syntax | Duplicate decoded keys, invalid Unicode, multiple documents, YAML anchors/aliases/merge keys/explicit tags/timestamps reject |
+| Bounds | UTF-8 only; 1 MiB per document and resolved JSON, 64 child-depth steps, 32,768 structural nodes; bounded schema traversal |
 
-- optional last complete `Batch`;
-- `Generation`, advancing only for different ordered slot/presence/raw data;
-- `Status`: Pending, Available, Degraded, Closing or Closed;
-- latest bounded `Failure` and owner-bound `Cursor`.
+New nested objects start from Go zero values for missing fields. The validator
+receives a separate final candidate; mutations are discarded. Cancellation is
+checked between bounded phases and after validation. User validation must be
+bounded, non-panicking and cooperative; it cannot be forcibly interrupted.
 
-Available is raw acquisition success, including Missing slots, not application
-validity or proof of current remote truth. Failure retains the last complete batch.
-Status-only recovery can advance Cursor without changing Generation.
-Neither field is a preparation revision or native MD5. Batch completion is not a
-transaction or common-time distributed snapshot.
+## Accepted values and evidence
 
-## Waiting, cancellation and cleanup
+A successful Prepared owns canonical bytes; ValueCopy isolates every mutable
+container. Snapshot supplies a public settings snapshot without publishing it.
+Initial failure returns no usable Prepared or default-looking zero value.
 
-`Next(waitContext, after)` returns the latest newer coalesced state, not event
-history. A nil cursor requests current state immediately, including Pending/Closed.
-Foreign or typed-nil cursor implementations reject. One Next caller is admitted
-per owner; overlapping calls return `ErrBusy`. Current permits concurrent readers.
-There is no Current-to-Next lost-wakeup window. After the terminal cursor,
-Next returns `ErrClosed` instead of waiting forever.
+Description contains schema Version, random opaque Revision and declared struct
+field provenance. Revisions are neither sortable nor secret-content fingerprints.
+Paths, environment names, dynamic map keys and values are excluded. Descriptions
+are detached. Runtime handles refuse JSON reconstruction/serialization; deliberate
+Raw/ValueCopy inspection is sensitive.
 
-Lifetime cancellation or `Close(cleanupContext)` begins Closing and fences new
-accepted data. Cleanup/status transitions can continue. Closed means local owned
-work has joined/accounted cleanup, not instantaneous remote unsubscription.
-A timed-out Close retains the same owner. Its wait failure is not accumulated as a
-permanent cleanup error; a later successful join can return nil. Actual cleanup
-errors remain available. Returned batches remain usable after closure.
-Terminal State preserves a bounded aggregate of the preceding operation/closing
-failure and actual cleanup failure, rather than overwriting the reason startup or
-acquisition failed. Close's return remains the actual cleanup result only.
+Component Definitions and Resources compose explicitly with failure/i18n.
+They install no locale or catalog. Original parser/validator/cancellation errors
+remain causes; default diagnostics do not format them.
 
-Caller cancellation causes remain borrowed and deliberately inspectable. Native
-acquisition receives cancellation/deadline signals and ordinary context values,
-but not that arbitrary cause graph. Public error production appends the original
-cause after classifying native evidence; it does not invoke the cause's
-`Is`, `As`, `Unwrap`, `Error` or RPC-status hooks as an acquisition verdict.
+## Executable contracts
 
-Selections, batches, observers, states and cursors redact supported fmt/slog output
-and refuse JSON reconstruction. Go still encodes typed nil pointers as `null`;
-that does not reconstruct a usable runtime value. Arbitrary reflection/encoders,
-explicit raw copies and deliberate cause inspection are outside safe diagnostics.
-Logical aliases are caller-declared non-secret labels, not automatic sanitization.
+- [Preparation, bounds, isolation and fuzz tests](../../../../../adapters/configsource/v1/prepare_test.go).
+- [Raw batch contracts](../../../../../adapters/configsource/v1/acquisition_test.go).
+- [Independent provider consumers and dependency/authority checks](../../../../../adapters/configsource/v1/integration_test.go).
 
-`Module()` contributes this shared contract to
-[Adapter-level catalogs](../../v1/interface.md); it constructs no source.
-Conditions are usable without a catalog. See the concrete interfaces for deliberate
-native/context cause exposure and their qualified service/filesystem profiles.
-
-Acquisition refusals implement `AcquisitionFailure`: its direct
-`failure.Occurrence` and `Acquisition()` facts describe the same event.
-`AcquisitionInfo` contains the non-secret Source alias, an identified Document
-slot (empty means unknown, not Missing), and a known public operation Phase.
-Select/Capture/Observe/Close phases do not claim a native retry/effect verdict.
-Concrete modules declare public ErrorFacts and bind required source/phase values;
-optional document identity remains explicitly inspectable. Use a direct type
-assertion on the occurrence for presentation, never recursive errors.As to borrow
-another failure's facts, even when conditions are equal. Unknown native slots are
-not inferred from diagnostic text or retained caller cause graphs.
+These are process-local contracts, not durable Workflow execution or a complete
+Framework loading/Watch scenario.

@@ -68,10 +68,30 @@ jobs:
             echo "No application module yet; Go application checks are not applicable." >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: go
         if: steps.module.outputs.present == 'true'
         with:
           go-version-file: go.mod
           cache: false
+      - name: Locate Go caches
+        id: go-cache-paths
+        if: steps.module.outputs.present == 'true'
+        shell: bash
+        run: |
+          echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+      - name: Restore Go caches
+        id: go-cache
+        if: steps.module.outputs.present == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-paths.outputs.modules }}
+            ${{ steps.go-cache-paths.outputs.build }}
+          key: ${{ runner.os }}-${{ runner.arch }}-go-v1-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-go-v1-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
+            ${{ runner.os }}-${{ runner.arch }}-go-v1-${{ steps.go.outputs.go-version }}-
       - name: Verify application
         if: steps.module.outputs.present == 'true'
         shell: bash
@@ -95,3 +115,11 @@ jobs:
         run: |
           go vet ./internal/notification/lark/v3/testdata/showcase
           go test -race -count=1 -timeout=2m ./internal/notification/lark/v3/testdata/showcase
+      - name: Save Go caches after checks
+        if: ${{ !cancelled() && steps.go-cache.outcome == 'success' && steps.go-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ steps.go-cache-paths.outputs.modules }}
+            ${{ steps.go-cache-paths.outputs.build }}
+          key: ${{ steps.go-cache.outputs.cache-primary-key }}

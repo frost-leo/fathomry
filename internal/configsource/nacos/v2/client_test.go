@@ -62,6 +62,10 @@ type fixtureServer struct {
 	unregistered     bool
 	entered          chan struct{}
 	queries          atomic.Int32
+	mutations        atomic.Int32
+	mutationError    error
+	mutationReply    *wire.Payload
+	mutationBlock    bool
 	setups           atomic.Int32
 	listens          atomic.Int32
 	acknowledgements atomic.Int32
@@ -199,6 +203,40 @@ func (fixture *fixtureServer) Request(ctx context.Context, payload *wire.Payload
 			return encoded(&response.ConfigQueryResponse{Response: &response.Response{ResultCode: 500, ErrorCode: 300, RequestId: correlation.ID}}), nil
 		}
 		return encoded(&response.ConfigQueryResponse{Response: base, Content: content, Md5: checksum(content), ContentType: "yaml", LastModified: 1}), nil
+	}
+	if payload.Metadata.Type == "ConfigPublishRequest" || payload.Metadata.Type == "ConfigRemoveRequest" {
+		fixture.mutations.Add(1)
+		fixture.mu.Lock()
+		defer fixture.mu.Unlock()
+		if fixture.mutationBlock {
+			fixture.entered <- struct{}{}
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		if fixture.mutationError != nil {
+			return nil, fixture.mutationError
+		}
+		if fixture.mutationReply != nil {
+			return fixture.mutationReply, nil
+		}
+		if payload.Metadata.Type == "ConfigPublishRequest" {
+			var value request.ConfigPublishRequest
+			if err := json.Unmarshal(payload.Body.Value, &value); err != nil {
+				return nil, err
+			}
+			selected := key{value.Group, value.DataId}
+			if value.CasMd5 != "" && checksum(fixture.values[selected]) != value.CasMd5 {
+				return encoded(&response.ErrorResponse{Response: &response.Response{ResultCode: 500, ErrorCode: 409}}), nil
+			}
+			fixture.values[selected] = value.Content
+			return encoded(&response.ConfigPublishResponse{Response: base}), nil
+		}
+		var value request.ConfigRemoveRequest
+		if err := json.Unmarshal(payload.Body.Value, &value); err != nil {
+			return nil, err
+		}
+		delete(fixture.values, key{value.Group, value.DataId})
+		return encoded(&response.ConfigRemoveResponse{Response: base}), nil
 	}
 	if payload.Metadata.Type == "ConfigBatchListenRequest" {
 		fixture.listens.Add(1)
@@ -361,5 +399,39 @@ func TestCloseTimeoutRetainsOwnership(t *testing.T) {
 	release()
 	if err := client.Close(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestShutdownComplete(t *testing.T) {
+	if (*Client)(nil).ShutdownComplete() || new(Client).ShutdownComplete() {
+		t.Fatal("uninitialized ownership appeared released")
+	}
+	fixture := newFixture(t, false)
+	client, err := Open(context.Background(), fixture.options())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.ShutdownComplete() {
+		t.Fatal("open ownership appeared released")
+	}
+	_, finish, err := client.enter(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := client.Close(ctx); !errors.Is(err, context.Canceled) || client.ShutdownComplete() {
+		t.Fatal("timed-out cleanup appeared complete", err)
+	}
+	marker := errors.New("native-close-evidence")
+	client.mu.Lock()
+	client.closeErrors = append(client.closeErrors, marker)
+	client.mu.Unlock()
+	finish()
+	if err := client.Close(context.Background()); !errors.Is(err, marker) || !client.ShutdownComplete() {
+		t.Fatal("terminal cleanup error obscured completion", err)
+	}
+	if err := client.Close(context.Background()); !errors.Is(err, marker) || !client.ShutdownComplete() {
+		t.Fatal("repeated observation lost cleanup evidence", err)
 	}
 }

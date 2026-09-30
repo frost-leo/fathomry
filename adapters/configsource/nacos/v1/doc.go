@@ -17,8 +17,20 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package nacos provides deferred Nacos selections, fresh finite raw Capture and
-// explicitly owned Observe. It reuses the private SDK-v2 protocol integration;
-// this public API is v1. Native push, registration and reconciliation share one
-// loop. Neither a raw batch nor service reachability implies configuration validity.
+// Package nacos exposes the supported Nacos configuration profile through public
+// operation/evidence and resource-ownership contracts. Validate admits loadable
+// Settings without I/O. Open returns an Owner, not readiness. Owner.Client supplies
+// direct operations; Using binds a resource.Ref[Handle] without exposing native
+// ownership or Close authority through borrowed resource values.
+//
+// Reads, invalidations, complete raw observations, Publish/CAS/Delete and bounded
+// native v1/v3 Search remain independently usable, without Framework. No native
+// cache fallback, extra retry/refetch loop, naming service or plugin is added.
+//
+// Owner.Close and subscription Close retain responsibility after wait expiry.
+// Resource-backed subscriptions retain their selected generation until actual
+// cleanup. Evidence admission precedes dispatch and its redelivery never repeats
+// mutations. InspectError deliberately exposes native evidence; ordinary formatting
+// never prints server text or configuration payloads. No operation chooses locale,
+// process-default settings or a global instance. This is not Workflow code.
 package nacos

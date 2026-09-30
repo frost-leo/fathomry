@@ -21,8 +21,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 [Documentation](../../../../../README.md) / Internal package reference
 
-**Audience:** framework configuration and integration maintainers.
-**Status:** implemented private parsed/raw file profiles; the public Adapter is separate.
+**Audience:** integration maintainers and public Adapter authors.
+**Status:** implemented private parsing, native typed decoding and file observation;
+the [public Adapter](../../../../adapters/configsource/viper/v1/interface.md)
+now consumes this native boundary.
 **Package:** `github.com/frost-leo/fathomry/internal/configsource/viper/v1` (Go name `viper`).
 
 ## Responsibilities and call sequence
@@ -39,10 +41,14 @@ package imports Viper; shared foundations do not depend back on it.
    documents in input order or a nil batch, never a successful prefix.
 3. `Document.ValueCopy(key)` makes a native query and copies any returned
    collections. This is sensitive, potentially live inspection, not preparation.
-4. For framework preparation, composition retains each original `RawCopy()`,
+4. For strict YAML/JSON framework preparation, composition retains each original `RawCopy()`,
    assigns its authorized `resource.LayerKind`, and calls
    [`resource.Prepare`](../../../resource/configuration.md) once. It does not
    reconstruct input from normalized native values.
+5. For native typed consumption, `Decode[T]` discovers struct keys, captures values
+   and runs Viper Unmarshal; the caller validates `T` before publishing it.
+6. Optional `Watch` invalidates explicitly selected files. Reload and validate on
+   changes/resync, then close the subscription with a caller-owned cleanup context.
 
 The [executable example and preparation proof](../../../../../../internal/configsource/viper/v1/integration_test.go)
 show this separate composition. An explicitly bound environment string supplies
@@ -50,28 +56,33 @@ a variables document in that fixture; this is not a published environment-value
 format or a public loader. Optional-file selection also remains test-owned
 composition policy. Business code is not expected to assemble this internal API.
 
-`RawFile(ctx, path, limit)` is the narrow Adapter acquisition seam. It uses the
+`RawFile(ctx, path, limit)` is a narrow internal acquisition seam. It uses the
 same owned stat/open/read/close and byte limits without native parsing, validates
 UTF-8, and distinguishes present-empty bytes from positive OS absence and failure.
 It does not assert that Viper decoding succeeded. The
 [public local Adapter](../../../../adapters/configsource/viper/v1/interface.md)
-owns complete batches, public errors and periodic observation; the private parsed
-Load/Document query contract above is unchanged.
+provides independent batch/error/observation contracts over this selected boundary.
+The raw seam and the native typed route have different semantics; neither silently
+converts TOML/dotenv into the strict preparation layer's YAML/JSON format.
 
 ## Supported native profile
 
 | Operation or setting | Meaning and limits |
 | --- | --- |
-| Explicit acquisition | Exactly one literal absolute file path or caller-owned reader per input; encoding is explicitly `yaml` or `json`, never inferred from a filename |
+| Explicit acquisition | Exactly one literal absolute file path or caller-owned reader per input; encoding is explicitly `yaml`, `yml`, `json`, `toml`, `dotenv` or `env`, never inferred from a filename |
 | Files | Stable regular files; normal OS symlink resolution, with stat before opening and again on the owned descriptor; no directory/home/environment expansion, search, source substitution or writeback |
 | `ReadConfig` | One independent SDK document per input, not SDK merge; original bytes are retained before native normalization |
 | Scalar `SetDefault` | Ordered entries, last assignment to a case-folded key wins; allowed types are documented on `Default`; no caller maps, slices, callbacks or custom types |
 | Explicit `BindEnv` | Both key and exact case-sensitive name required; repeated keys append names in order; values are read live on query, not captured by binding |
 | `AllowEmptyEnv` | False by default; true accepts an explicitly empty environment string instead of falling back |
-| Native `Get` | Case-insensitive keys and `.` paths; bound environment > document > native default; explicit null may fall back to default; nested parent queries are not a merged enumeration of child environment bindings |
+| `AutomaticEnv` | Opt-in live lookup; `EnvPrefix` and ordered `EnvKeyReplacements` derive names without scanning all process variables |
+| Native `Get` | Case-insensitive keys and `.` paths; automatic environment > bound environment > document > native default; explicit null may fall back to default; nested parent queries are not a merged enumeration of child environment bindings |
 | Native types | YAML's native scalar types are retained, including timestamps and non-finite floats where the native codec accepts them; JSON numbers remain native `float64`, including rounding |
 | Explicit copies | `ValueCopy` returns owned maps/slices; `RawCopy` returns original owned bytes for admitted input, preserving case, numeric lexemes, null, native JSON duplicates and document boundaries |
 | Technical syntax restrictions | Bounded structural preflight before SDK decoding; YAML anchors/aliases, duplicate keys and multiple documents are rejected; no application field/type/null/schema policy is added |
+| TOML | Native integer/date/time/array/table values; dotted keys, inline tables and array-table nesting participate in structural admission |
+| dotenv / env | UTF-8 file parsing, never `os.Setenv` or automatic `.env` discovery; native process/local variable expansion is refused; single-quoted and escaped dollar literals remain supported |
+| Captured decoding | `Keys`, `Capture`, `Snapshot.ValueCopy`/`ValuesCopy` and `Decode[T]`; copied native values, not a raw-syntax or business-validation result |
 
 A YAML preflight parser failure retains its own YAML cause. Duplicate YAML keys
 are refused with ErrInput and no invented native cause: the pinned decoder would
@@ -83,10 +94,48 @@ does not replace native syntax-error interpretation. Native JSON duplicate-key
 last-wins behavior remains observable; the original bytes still let preparation
 reject duplicates. A native query pass is not a preparation pass.
 
-No AutomaticEnv, implicit prefix/name derivation, key replacer, flags, custom
-codec/decode hook, type-by-default conversion, remote provider, watcher, reload,
-Set, AllSettings, MergeConfig/Map, write or raw SDK handle is exposed. Selected
+Explicit binding names are not prefixed, but native key replacements still apply.
+Prefix/replacer/automatic lookup are off unless selected. No flags, custom
+codec/decode hook, type-by-default conversion, remote provider, automatic reload,
+mutable Set, unchecked MergeConfig/Map, write or raw SDK handle is exposed. Selected
 SDK paths use its per-instance discard logger and do not call the process logger.
+
+### Captured values and typed environment-only fields
+
+Native `AutomaticEnv` makes Get see an undeclared key but does not put that key
+in native AllKeys/default Unmarshal. `Decode[T]` discovers exported struct fields
+using `mapstructure` names and squash tags, then captures those keys together with
+the registered inventory. Map/interface keys require explicit extra keys; no
+arbitrary environment enumeration occurs. Recursive struct-key traversal is refused.
+
+Each selected native query runs once during Capture. The frozen Snapshot contains
+no live environment bindings and permits concurrent reads/copies. Later environment
+changes affect Document queries, not that Snapshot. Sources/environment must remain
+stable if a common preparation epoch matters: this is not an OS-wide transaction.
+Capture bounds key/value retention to 4 MiB and 32,768 nodes; individual strings
+remain at most 1 MiB. Registered/explicit query keys use the same safe query rules.
+
+Decode retains native weak conversions and duration/slice hooks. In particular,
+JSON numbers can already be rounded in native values; this route does not replace
+strict original-byte preparation, strong validation, layer checks or publication.
+TOML/dotenv typed consumption works here, but `resource.Prepare` still accepts its
+existing YAML/JSON profiles only. Unknown fields are not rejected by native Unmarshal.
+
+### Owned local file observation
+
+`WatchOptionsV1` selects 1–16 distinct literal absolute UTF-8 paths; files may be
+initially absent. One worker periodically performs bounded content-hash reads.
+Interval defaults to 1 s (10 ms–5 min); queue capacity defaults to 16 (1–64).
+Each pass allows 1 MiB per file and 4 MiB total, with one extra EOF-witness byte.
+There is no environment watcher or unjoinable native `WatchConfig` worker.
+
+An initial resync uses index -1; other indices select the original Paths entry.
+Create/write/atomic replacement/delete can invalidate content. Read failures and
+queue overflow require full resync; the queue drops oldest events and preserves
+the gap flag. Multiple Next waiters compete for events, not separate broadcasts.
+Polling can miss transient intermediate writes and does not certify every revision.
+Next cancellation ends only that wait. Close cancels and joins the worker; a timeout
+retains the same owner because an OS-blocked file call cannot be forcibly joined.
 
 ### Why not expose native merge?
 
@@ -120,16 +169,18 @@ SDK expansion, not process RSS or every caller-owned allocation.
 | Raw document | 1 MiB each; file size is checked before reading, and every reader is limited during reading |
 | Aggregate raw documents | 4 MiB; remaining allowance is applied before each acquisition |
 | EOF witness | At most one extra byte on the failing acquisition, to reject oversize rather than certify a truncated prefix |
-| Bootstrap entries | At most 64 defaults and 64 environment bindings per input |
-| Bootstrap content | 64 KiB total paths, keys, names and default values; scalar accounting reserves up to eight bytes each; checked before acquisition |
+| Bootstrap entries | At most 64 defaults, 64 environment bindings and 64 replacement pairs per input |
+| Bootstrap content | 64 KiB total paths, keys, names, prefixes, replacement strings and default values; scalar accounting reserves up to eight bytes each; checked before acquisition |
 | Keys / environment names | 256 UTF-8 bytes each; explicit nonempty names, no NUL or environment `=`; query path at most 64 parts |
 | Paths | At most 4096 bytes, absolute and literal |
 | YAML structure | At most 32,768 nodes, depth 64 from the document node; no anchor/alias expansion; checked before native value decoding |
 | JSON structure | At most 32,768 tokens and nesting 64; checked before native value decoding |
+| TOML structure | At most 32,768 AST nodes and depth 64 with dotted-key/array-table accounting; parsed before native value decoding |
+| dotenv structure | At most 16,384 assignment records; the pinned codec also limits each physical scanner line to its native 64-KiB buffer |
 | Live environment result | At most 1 MiB per query; oversize fails, without truncation or default fallback |
 | Nonprogressing reader | 100 consecutive `(0, nil)` reads produce inspectable `io.ErrNoProgress` |
 
-YAML's public parser builds a bounded-input node tree before the node/depth check.
+YAML/TOML preflight parsers build bounded-input node trees before node/depth checks.
 Thus the node limit is **not** a cap on that preflight tree's allocation. Raw byte
 caps apply before that allocation; native decoding cannot expand aliases afterward.
 Duplicate checking happens before SDK decoding, avoiding the native duplicate-pair
@@ -150,8 +201,8 @@ concurrently with native decoding.
 The integration closes owned file descriptors on success and failure, before
 returning; a close failure invalidates the batch and retains a separate ErrClose
 cause. Borrowed readers are never closed and must obey io.Reader, including
-accountable blocking, panic-free callbacks and caller-owned cleanup. No background
-goroutine, stream, watcher, Close method or artificial managed resource is created.
+accountable blocking, panic-free callbacks and caller-owned cleanup. Load and Decode
+create no persistent worker or managed resource; only explicit Watch owns a worker.
 
 Context cancellation is checked between synchronous phases and reads. It cannot
 hard-interrupt blocked Stat/Open/Read/Close or a parser. A timeout does not prove an
@@ -163,7 +214,8 @@ the result does not establish an atomic common-time snapshot across sources.
 
 `ProviderID` is `configsource.viper.v1`. The same code-owned implementation identity
 qualifies both `fault.Context.Provider` and the `fathomry.configsource.viper.v1.*`
-technical error namespace: ErrInput, ErrLimit, ErrRead, ErrDecode and ErrClose.
+technical error namespace: ErrInput, ErrLimit, ErrRead, ErrDecode, ErrClose,
+ErrClosed and ErrState (unfinished Watch cleanup).
 Different capabilities, providers and SDK majors must not share these identities.
 Composition owns its own errors; it does not manufacture a Viper failure when the
 integration was not responsible. The common fault package does not depend on, or
@@ -172,7 +224,7 @@ credentials, payloads and native messages. Intentional `errors.Is/As` inspection
 retains original read/parse/OS/cancellation and close causes and is not redacted.
 Arbitrary reader causes are retained, not deep-copied or universally bounded.
 
-LoadInput, OptionsV1, Default, Binding and Document have safe ordinary formatting and
+Options, bindings/replacements, documents, snapshots, subscriptions and changes have safe ordinary formatting and
 refuse JSON encoding/reconstruction. RawCopy and ValueCopy deliberately expose
 sensitive input; their returned bytes/values are not safe diagnostics. This is not
 a claim to sanitize arbitrary caller logging, reflection or unsafe access.
@@ -198,8 +250,8 @@ ValueCopy; a successful native empty YAML document is distinct from prepared dat
 | SDK major | `internal/configsource/viper/v1`; a capability/SDK-major import boundary, not an independently released Go module or blanket support for all Viper 1.x |
 | Logical implementation | `configsource.viper.v1` in diagnostics and error kinds, aligned with the capability/SDK/SDK-major layout; not a resource name or an exact module version |
 | Bootstrap settings | `OptionsV1` in `options.go`; independently versioned Go contract, with no reader handle, serialized format, unknown-version coercion or automatic migration |
-| Actual SDK/build | Required Viper v1.21.0 and YAML v3.0.5; consumer builds may select different versions/replacements, so requirements and go.sum are not an exact lock |
-| Document encoding | YAML or JSON, not a business schema version |
+| Actual SDK/build | Required Viper v1.21.0, YAML v3.0.5, TOML v2.3.1 and gotenv v1.6.0; consumer builds may select different versions/replacements, so requirements and go.sum are not an exact lock |
+| Document encoding | YAML/JSON/TOML/dotenv, not a business schema version |
 | Preparation format/revision | Existing Schema.Format/Input.Format and the opaque Prepared revision; never inferred from SDK or bootstrap versions |
 
 The [actual consumer executable](../../../../../../internal/configsource/viper/v1/testdata/consumer/main.go)
@@ -213,8 +265,8 @@ and migration-or-refusal contract before support is claimed.
 
 Issue #34's OTLP dependency graph requires mapstructure v2.5.0 through
 grpc-gateway v2.30.0. The existing native/preparation/privacy tests and consuming
-binary check were requalified with that selected version. This adds no Viper
-Unmarshal/DecodeHook surface and does not alter configuration precedence.
+binary check were requalified with that selected version. The native typed route
+uses this decoder; no caller-supplied DecodeHook surface is introduced.
 
 Applicable standard sections are S01–S11 at the accepted
 [c0c6bf0 baseline](https://github.com/frost-leo/fathomry/blob/c0c6bf05a46a70470c5686d64ef8865e10f0875c/docs/architecture/internal-sdk-integration.md).
@@ -236,6 +288,9 @@ without converting every technical input into a managed resource or prepared DTO
 
 - [Loading, options, versioned faults, resource bounds and input fuzzing](../../../../../../internal/configsource/viper/v1/load_test.go).
 - [Native queries, live bindings, copies, concurrency and query fuzzing](../../../../../../internal/configsource/viper/v1/query_test.go).
+- [TOML/dotenv guards and fuzzing](../../../../../../internal/configsource/viper/v1/formats_test.go),
+  [native capture/typed environment decoding](../../../../../../internal/configsource/viper/v1/snapshot_test.go)
+  and [owned file observation](../../../../../../internal/configsource/viper/v1/watch_test.go).
 - [Real-file preparation, independent negative controls and the consuming build](../../../../../../internal/configsource/viper/v1/integration_test.go).
 - [Linux filesystem/resource observations](../../../../../../internal/configsource/viper/v1/load_linux_test.go).
 - [Controlled benchmarks](../../../../../../internal/configsource/viper/v1/load_bench_test.go):

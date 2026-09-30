@@ -17,22 +17,22 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package i18n prepares immutable, explicit catalogs of feature-owned resources.
-// Prepare validates the complete English/translation set atomically. Inspect and
-// Lookup return owned definitions; Resolve selects an opaque resource for Render.
-// Locale is explicit per call, never ambient. Callers may share catalogs and
-// selections concurrently but must not overwrite handles or mutate inputs during
-// calls. Render arguments are not retained.
+// Package i18n gathers component-owned message resources and error definitions into
+// immutable, explicit catalogs. Prepare reads only supplied filesystems; components
+// choose their base locale. Adding a locale file needs no engine-language switch.
 //
-// Optional WithModules groups exact resource owners explicitly. PrepareBindings
-// checks owner-declared failure/input contracts against message contracts;
-// BoundSelection renders approved scalar projections without extracting errors.
-// Neither plain resource use nor failure construction requires registration.
+// Catalog queries, coverage and Explain use an explicit locale without settings or
+// runtime details. Presenter reads typed preferences from settings, or uses a bound
+// override, without changing business function signatures. Present freezes text,
+// retains the exact original error, and reports localization failures separately.
 //
-// Version 1 supports strict UTF-8 JSON scalar-cardinal/v1 resources, named builtin
-// scalars and one optional uint64 count. It uses pinned x/text language/cardinal
-// rules, not native message formatting. Plain text needs channel-owned escaping.
-// Failures are locale-independent failure/v1 occurrences with no input payloads.
-// Resources, message semantics, engine/data revisions and the Go API have
-// independent versions. No durable protocol or ambient global registry is provided.
+// Detail types remain component-owned. Optional projectors explicitly select safe
+// builtin scalar arguments; the engine never reflects arbitrary error fields or
+// formats native causes. Output is plain text requiring channel-owned escaping.
+//
+// The bounded scalar-cardinal/v1 profile is qualified against x/text v0.41.0 and
+// CLDR 32. Resource/API/detail revisions are separate. No global catalog, implicit
+// filesystem discovery, locale environment lookup, SDK client or Watch is installed.
+// Runtime handles are not a durable error protocol. Do not consult mutable process
+// preferences in deterministic Temporal Workflow code.
 package i18n

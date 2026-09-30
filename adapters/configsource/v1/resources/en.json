@@ -17,79 +17,60 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.adapters.configsource",
+  "module": "fathomry",
+  "component": "configuration_data",
   "locale": "en",
   "messages": [
     {
-      "id": "fathomry.adapters.configsource:invalid_value",
+      "id": "fathomry.configuration_data.invalid_input",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration_data.invalid_input.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Invalid configuration source value."
+        "other": "The configuration input or declaration is invalid."
       }
     },
     {
-      "id": "fathomry.adapters.configsource:limit",
+      "id": "fathomry.configuration_data.limit_exceeded",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration_data.limit_exceeded.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Configuration source limit exceeded."
+        "other": "A configuration capability bound was exceeded."
       }
     },
     {
-      "id": "fathomry.adapters.configsource:invalid_cursor",
+      "id": "fathomry.configuration_data.read_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration_data.read_failed.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "The cursor belongs to a different observer."
+        "other": "Configuration acquisition or inspection failed."
       }
     },
     {
-      "id": "fathomry.adapters.configsource:concurrent_wait",
+      "id": "fathomry.configuration_data.decode_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration_data.decode_failed.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "A configuration wait is already active."
+        "other": "Configuration decoding or preparation failed."
       }
     },
     {
-      "id": "fathomry.adapters.configsource:closed",
+      "id": "fathomry.configuration_data.runtime_serialization",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration_data.runtime_serialization.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "The configuration observer is closed."
-      }
-    },
-    {
-      "id": "fathomry.adapters.configsource:wait",
-      "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "The configuration wait did not complete."
-      }
-    },
-    {
-      "id": "fathomry.adapters.configsource:cleanup",
-      "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Configuration source cleanup failed."
+        "other": "Configuration runtime handle serialization is unsupported."
       }
     }
   ]

@@ -255,8 +255,21 @@ func validStrings(value reflect.Value) bool {
 }
 
 func plainType(kind reflect.Type, visiting map[reflect.Type]bool) bool {
+	return plainTypeAt(kind, visiting, make(map[typeDepth]bool))
+}
+
+type typeDepth struct {
+	kind  reflect.Type
+	depth int
+}
+
+func plainTypeAt(kind reflect.Type, visiting map[reflect.Type]bool, admitted map[typeDepth]bool) (valid bool) {
 	if visiting[kind] || len(visiting) > 64 {
 		return false
+	}
+	position := typeDepth{kind: kind, depth: len(visiting)}
+	if admitted[position] {
+		return true
 	}
 	for _, contract := range []reflect.Type{reflect.TypeFor[json.Marshaler](), reflect.TypeFor[json.Unmarshaler](),
 		reflect.TypeFor[encoding.TextMarshaler](), reflect.TypeFor[encoding.TextUnmarshaler]()} {
@@ -265,21 +278,26 @@ func plainType(kind reflect.Type, visiting map[reflect.Type]bool) bool {
 		}
 	}
 	visiting[kind] = true
-	defer delete(visiting, kind)
+	defer func() {
+		delete(visiting, kind)
+		if valid {
+			admitted[position] = true
+		}
+	}()
 	switch kind.Kind() {
 	case reflect.Bool, reflect.String, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
 		return true
 	case reflect.Pointer, reflect.Slice:
-		return !(kind.Kind() == reflect.Slice && kind.Elem().Kind() == reflect.Uint8) && plainType(kind.Elem(), visiting)
+		return !(kind.Kind() == reflect.Slice && kind.Elem().Kind() == reflect.Uint8) && plainTypeAt(kind.Elem(), visiting, admitted)
 	case reflect.Map:
-		return kind.Key() == reflect.TypeFor[string]() && plainType(kind.Elem(), visiting)
+		return kind.Key() == reflect.TypeFor[string]() && plainTypeAt(kind.Elem(), visiting, admitted)
 	case reflect.Struct:
 		names := make(map[string]bool)
 		for index := 0; index < kind.NumField(); index++ {
 			field := kind.Field(index)
 			name := fieldName(field)
-			if !field.IsExported() || field.Anonymous || !validID(name) || name == "-" || names[name] || !plainType(field.Type, visiting) {
+			if !field.IsExported() || field.Anonymous || !validID(name) || name == "-" || names[name] || !plainTypeAt(field.Type, visiting, admitted) {
 				return false
 			}
 			names[name] = true

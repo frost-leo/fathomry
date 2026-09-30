@@ -22,7 +22,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../README.md) / Internal package reference
 
 **Audience:** integration test and evidence maintainers.
-**Status:** executed local fixtures, not production SDK/service support.
+**Status:** executed local fixtures and an opt-in isolated resource-service profile,
+not production SDK/service certification.
 **Package:** `github.com/frost-leo/fathomry/internal/conformance`.
 
 Start with the [conformance interface](interface.md). These examples explain
@@ -93,7 +94,7 @@ current metadata.
 | Capability contract | Local transfer vocabulary and independent lifetime/output oracles across pull, async, session and finite shapes; no real transaction/delivery guarantee |
 | Fixed native dependency | YAML v3.0.5, checksum `h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=`; source configuration suite plus [the native YAML boundary test](../../../../internal/resource/yaml_test.go). Upstream decoder option differences are executed, not equated with Fathomry semantics |
 | Synthetic module execution | `TestIndependentConsumerBuildSelectionAndBehavior` builds an independent application with file-proxy SDK/provider fixtures. MVS, retry-default changes, versioned/local replacement, local modification and workspace cases execute without network |
-| Real service | None selected/authorized/run. The record's skipped service entry does not represent a passing service test |
+| Real service | None in this historical record. Its skipped entry does not represent the separate resource-service profile below |
 | Temporal/replay | Not applicable: no Temporal runtime dependency, Workflow command, converter or serialized history/payload format changed |
 
 The fixed YAML library is configuration evidence, **not** an async/stream service
@@ -109,6 +110,122 @@ including a queued caller. Background tests own one 4,096-byte payload buffer an
 a channel of one message, and drain 32 child results. These are tracked fixture
 payloads/declarations, not heap/RSS/native-library hard caps or throughput claims.
 
+## Public owner and native service composition
+
+[`resource_service_test.go`](../../../../internal/conformance/resource_service_test.go)
+is excluded from ordinary tests by the `resource_service` build tag. It composes
+the public settings/resource packages with existing Internal Nacos and PostgreSQL
+capabilities, without requiring or introducing an Adapter. Native assembly and
+receipt handling are test-only integration details; the public holder still
+depends only on public failure/settings and the standard library.
+
+Run only against explicitly authorized development services, from the repository root:
+
+```sh
+FATHOMRY_RESOURCE_TEST_CONFIG=/absolute/path/private-fixture.json \
+  go test -race -tags=resource_service ./internal/conformance \
+  -run '^TestResourceService$' -count=1 -timeout=6m -v
+```
+
+The private JSON schema is the test's `resourceServiceFixture` declaration. The
+file must be regular, at most 128 KiB, and inaccessible to group/other users
+(normally mode 0600). Both top-level and Nacos `allow_writes` must be true.
+Inputs explicitly supply Nacos HTTP/gRPC endpoints, namespace, reader/admin
+credentials and transport choice, plus the selected PostgreSQL address, port,
+database, credentials and TLS/plaintext choice. Do not commit this file, put
+credentials in command arguments, or copy deployment inventories into evidence.
+Plaintext flags authorize only isolated development checks, never a production
+default or proof of TLS behavior.
+
+The tests establish absence before creating random unique Nacos keys, then delete
+them and verify absence during cleanup. PostgreSQL requires CONNECT and TEMP
+permission in the selected database; writes use a random session-local temporary
+table with ON COMMIT DROP. No existing keys, permanent tables, database migration,
+server restart or deployment modification is part of the test.
+
+Observed obligations include:
+
+- real Nacos invalidations, explicit reread/validation, coherent accepted settings
+  publication and the public accepted-view Watch handoff;
+- malformed/invalid data not replacing accepted settings, a real native SQL
+  readiness failure retained through the public construction error, and last-good
+  availability while a failed candidate's native ownership is cleaned;
+- separate Fixed/Follow adoption, new connections on a replacement pool, and the
+  old transaction retaining its original backend and temporary session state;
+- interrupted Close retaining the borrowed transaction until commit/release,
+  confirmed temporary-table removal, native cleanup and evidence-inbox draining;
+- independently registered old/new Nacos subscriptions, whose client generations
+  remain borrowed until explicit subscription close and lease release.
+
+The owner-authorized #98 audit executed these scenarios against development
+services, including repeated race runs. Native reconnection/CAS/denial tests remain
+owned by the [Nacos package](../configsource/nacos/v2/interface.md). The profile does
+not certify all SDKs, HA/TLS, control-store migration or automatic subscription
+transfer. Nacos's error-only Close is translated conservatively: an error retains
+ownership unless completion is separately established; this profile does not
+prove recovery from every terminal native cleanup error.
+
+## Live Framework configuration path
+
+[`configuration_service_test.go`](../../../../internal/conformance/configuration_service_test.go)
+uses the same opt-in `resource_service` build tag, but consumes public Nacos,
+Framework configuration, settings and resource contracts. Only the database
+factory reuses the existing maintainer-only Internal pgx bridge; this is not a
+public database Adapter or a production bootstrap recipe.
+
+From the repository root, first run the synthetic preparation check without
+services or credentials:
+
+```sh
+go test -race -tags=resource_service ./internal/conformance \
+  -run '^TestConfigurationServicePreparation$' -count=1
+```
+
+For the live check, an explicitly authorized launcher must supply these process
+environment variables without putting values in shell history, logs or fixtures:
+
+| Variable suffix (all prefixed `FATHOMRY_LIVE_`) | Input |
+| --- | --- |
+| `NACOS_SERVERS` | JSON array of explicit `http_url` / `grpc_address` server objects |
+| `NACOS_NAMESPACE` | Explicit namespace; empty selects the native default |
+| `NACOS_READER_USERNAME`, `NACOS_READER_PASSWORD` | Authorized configuration reader credentials |
+| `NACOS_WRITER_USERNAME`, `NACOS_WRITER_PASSWORD` | Authorized isolated-key publisher/deleter credentials |
+| `NACOS_ALLOW_INSECURE` | JSON boolean; plaintext requires explicit development authorization |
+| `DB_ADDRESS`, `DB_PORT` | Literal PostgreSQL IP and JSON integer port |
+| `DB_USER`, `DB_PASSWORD`, `DB_DATABASE` | Authorized PostgreSQL connection with CONNECT/TEMP permissions |
+| `DB_PLAINTEXT` | JSON boolean; this environment fixture supports the explicit plaintext development profile, not a TLS qualification |
+| `ALLOW_WRITES` | Exactly `1`; absent authorization skips the live test |
+
+Inherited nonempty `PG*` variables are outside the explicit native connection
+profile. The initial pool size is one; a watched update changes it to four.
+Run only the named test, not the separate file-based service suite:
+
+```sh
+go test -race -tags=resource_service ./internal/conformance \
+  -run '^TestConfigurationService$' -count=1 -timeout=5m -v
+```
+
+The test loads Nacos bootstrap through Framework environment bindings, publishes
+only a random owned key after confirming absence, and loads the resulting
+application document through the public Source. The database password is absent
+from that document and enters accepted settings through a separate environment
+binding. Resource factories receive only the selected accepted database subsection,
+never captured inventory values or process-global settings.
+
+Assertions cover real temporary-table CRUD, Watch updates, unrelated-field reuse,
+malformed/invalid/missing-source last-good retention, native readiness failure,
+Fixed/Follow replacement and preserved old transaction/session state. A bounded
+Close must retain a borrowed transaction. Successful completion verifies temporary
+table removal in both original sessions, pool cleanup, released-evidence draining,
+and Nacos deletion/positive absence using a fresh cleanup owner. The evidence sink
+is in-process acknowledgement, not a durable ledger.
+
+The owner-authorized #98 development-service run passed this path with the race
+detector. This is a single-server functional check, not load, TLS/HA, credential
+rotation, production certification or deployed-artifact attestation. The Nacos
+reconciliation interval exceeds the live test deadline, so accepted updates do
+not rely on a periodic reconciliation cycle.
+
 ## Consuming-binary fixture
 
 The independent build test seeds an isolated local module proxy with synthetic
@@ -117,8 +234,8 @@ network/sumdb access and owns a writable temporary module cache for cleanup.
 The consuming probe explicitly imports/executes YAML, declares its selected version
 and executes SDK behavior. The parent inspects that same built executable via
 `debug/buildinfo.ReadFile` and private `FromBuildInfo`. Fathomry is an intentionally
-unused requirement there, with absent Framework metadata: no public package is
-retained just to link it. The in-module probe executes `Inspect` with real
+unused requirement there, with absent Framework metadata: this particular probe
+deliberately imports no public package. The in-module probe executes `Inspect` with real
 Fathomry-as-main/VCS facts; synthetic BuildInfo tests cover dependency normalization,
 not real external framework consumption. The probes' selected JSON output is private
 test transport, not a public serialization contract. The independent import checks
