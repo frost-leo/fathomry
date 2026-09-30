@@ -17,29 +17,90 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.framework",
+  "module": "fathomry",
+  "component": "assembly",
   "locale": "en",
   "messages": [
     {
-      "id": "fathomry.framework:invalid_catalog",
+      "id": "fathomry.assembly.invalid_options",
       "contract": "v1",
-      "context": "Static catalog admission refusal.",
+      "context": "Static explanation for fathomry.assembly.invalid_options.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Static module declarations could not be composed."
+        "other": "The runtime composition or reception options are invalid."
       }
     },
     {
-      "id": "fathomry.framework:limit",
+      "id": "fathomry.assembly.invalid_handle",
       "contract": "v1",
-      "context": "Static catalog admission refusal.",
+      "context": "Static explanation for fathomry.assembly.invalid_handle.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Static module declarations exceed a supported limit."
+        "other": "The runtime composition handle is not initialized."
+      }
+    },
+    {
+      "id": "fathomry.assembly.closed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.assembly.closed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The runtime composition or receiver is closing or closed."
+      }
+    },
+    {
+      "id": "fathomry.assembly.wait_interrupted",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.assembly.wait_interrupted.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Waiting ended without confirming actual completion."
+      }
+    },
+    {
+      "id": "fathomry.assembly.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.assembly.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Runtime composition cleanup reported a failure."
+      }
+    },
+    {
+      "id": "fathomry.assembly.delivery_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.assembly.delivery_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Required evidence reception failed; custody is retained."
+      }
+    },
+    {
+      "id": "fathomry.assembly.evidence_pending",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.assembly.evidence_pending.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Required evidence remains unacknowledged."
+      }
+    },
+    {
+      "id": "fathomry.assembly.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.assembly.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Runtime composition handle serialization is unsupported."
       }
     }
   ]

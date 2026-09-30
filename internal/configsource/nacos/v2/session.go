@@ -54,6 +54,7 @@ type session struct {
 	// received is nil until the receiver starts, then closes after its actual exit.
 	received chan struct{}
 	notify   func(key)
+	keys     []key
 	once     sync.Once
 	// A second transport dial would lose Nacos registration and must retire this epoch.
 	dialed atomic.Bool
@@ -63,15 +64,19 @@ type session struct {
 // It validates ServerCheck, opens the stream, sends setup, then requires a native
 // HealthCheck response; sending setup alone is not registration evidence.
 func (client *Client) newSession(ctx context.Context, index int, notify func(key)) (*session, error) {
+	return client.newSessionKeys(ctx, index, notify, client.settings.Keys)
+}
+
+func (client *Client) newSessionKeys(ctx context.Context, index int, notify func(key), keys []key) (*session, error) {
 	work, cancel := context.WithCancelCause(ctx)
-	current := &session{owner: client, index: index, ctx: work, cancel: cancel, notify: notify}
+	current := &session{owner: client, index: index, ctx: work, cancel: cancel, notify: notify, keys: slices.Clone(keys)}
 	transport := grpc.WithTransportCredentials(insecure.NewCredentials())
 	if !client.settings.Plaintext {
 		transport = grpc.WithTransportCredentials(&sessionCredentials{current})
 	}
 	conn, err := grpc.NewClient("passthrough:///"+client.settings.Servers[index].GRPCAddress,
 		transport, grpc.WithDisableRetry(), grpc.WithDisableServiceConfig(),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxWireBytes), grpc.MaxCallSendMsgSize(64<<10)),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MaxWireBytes), grpc.MaxCallSendMsgSize(MaxWireBytes)),
 		grpc.WithInitialWindowSize(64<<10), grpc.WithInitialConnWindowSize(1<<20),
 		grpc.WithMaxHeaderListSize(32<<10),
 		grpc.WithContextDialer(func(native context.Context, address string) (net.Conn, error) {
@@ -310,7 +315,7 @@ func (current *session) receive() {
 				return
 			}
 			selected := key{*fields.Group, *fields.DataID}
-			if !slices.Contains(current.owner.settings.Keys, selected) {
+			if !slices.Contains(current.keys, selected) {
 				current.cancel(fail(ErrDecode, "push-key"))
 				return
 			}

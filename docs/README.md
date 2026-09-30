@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Project overview](../README.md)
 
 **Audience:** readers evaluating Fathomry and maintainers of its technical foundation.
-**Status:** early development; public CLI and in-process failure contracts, private mechanisms and accepted architecture.
+**Status:** early development; private mechanisms and accepted architecture.
 
 Architecture explains cross-package decisions; package references specify calling
 contracts; development guides explain tasks. Choose a reading path below.
@@ -33,9 +33,12 @@ Configuration preparation, resource ownership/admission, controlled calls and
 evidence handoff, technical errors, build/compatibility assessment and maintainer
 testing support are implemented as internal foundations. A bounded Viper v1
 integration is implemented under `internal/configsource/viper/v1`, with separately
-versioned `OptionsV1` bootstrap settings and a raw-input preparation proof.
+versioned `OptionsV1` bootstrap settings, YAML/JSON/TOML/dotenv parsing, opt-in
+automatic environment lookup, captured native typed decoding and owned file Watch.
+The strict raw-input preparation proof remains a separate YAML/JSON path.
 The Nacos v2 integration adds explicit native gRPC sessions, raw configuration
-reads and bounded invalidations with a separate preparation proof. Its
+reads and bounded invalidations with a separate preparation proof. Explicit opt-ins
+enable dynamic keys, publication/CAS/removal and bounded v1/v3 search. Its
 [contract](reference/internal/configsource/nacos/v2/interface.md) distinguishes
 the implemented compatibility profile and single-server checks from production
 TLS or multi-node support.
@@ -92,38 +95,37 @@ native HTTP/protobuf export and independent evidence. Separate Zap/zerolog bridg
 preserve existing local sinks and ownership. Export is explicitly scheduled;
 local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 
-The public [CLI package](reference/cli/interface.md) and thin executable provide
-root/help, [local-source project creation](reference/cli/new.md), explicit borrowed
-I/O, resource-backed language and process signal policy.
-Command extension is private and first-party only; see
-[Adding commands](development/cli-commands.md).
-
-There is no public domain package, production-qualified application runtime or
-Run/Item execution model yet. The
-four-file `fathomry new` bootstrap is not a workflow application. The public
-[`failure/v1`](reference/failure/v1/interface.md) contract supplies independent
-in-process identity, deliberate causes and safe diagnostics, not a restored legacy
-API or a durable error codec. Business authors are not expected to
-recreate private assembly machinery as startup boilerplate.
-
-The public [`i18n/v1`](reference/i18n/v1/interface.md) catalog supplies strict
-resource preparation, complete owned inspection, exact presence, explicit locale
-selection and bounded scalar/cardinal rendering. Existing CLI root/project text
-uses this mechanism with feature-owned resources and invocation-local language.
-Explicit failure module/condition/fact catalogs and checked i18n bindings support
-definition discovery without runtime registration. `cli.Catalogs()` exposes the
-built-in root/project inventories without command execution or service startup.
-
-The [Adapter-layer](reference/adapters/v1/interface.md) and
-[Framework-layer](reference/framework/v1/interface.md) catalog entries compose
-feature-owned complete condition/resource/binding identities explicitly, independently
-of runtime instances. They do not import concrete SDKs or start configuration.
-The [configuration API](reference/framework/configuration/v1/interface.md) supplies
-typed Core/project Load and explicit Watch with immutable snapshots. Independently
-usable [local](reference/adapters/configsource/viper/v1/interface.md) and
-[Nacos](reference/adapters/configsource/nacos/v1/interface.md) sources own raw
-acquisition and live recovery. Loading settings does not activate credentials,
-reconstruct clients, start a workflow or rewrite frozen execution facts.
+The pre-release public layers were withdrawn for redesign. The rebuilt
+[failure/v1](reference/failure/v1/interface.md) now supplies
+[capability-classified 32-bit Code](reference/failure/v1/code-allocation.md) and readable
+Identifier contracts, extensible component-owned error data, native-cause retention
+and offline definition queries. [Settings/v1](reference/settings/v1/interface.md)
+provides typed snapshots, atomic publication, selected-section reads and an explicit
+process default without source/client ownership. [I18n/v1](reference/i18n/v1/interface.md)
+adds component-owned resources, coverage/code queries and settings-backed error
+presentation with original causes retained. [Resource/v1](reference/resource/v1/interface.md)
+provides typed runtime scopes, fixed/following instances, explicit settings Watch
+handoff, generation leases and retained cleanup continuation without Internal
+dependencies. Its local component tests do not qualify arbitrary SDK migration.
+[Adapters/v1](reference/adapters/v1/interface.md) now supplies independent public
+operation admission, actual-work ownership, typed results and required evidence
+custody, with explicit resource and localized-log composition.
+[Viper](reference/adapters/configsource/viper/v1/interface.md) and
+[Nacos](reference/adapters/configsource/nacos/v1/interface.md) now provide complete
+supported public configuration capabilities, selected raw sources and
+[independent strict preparation](reference/adapters/configsource/v1/interface.md).
+[Framework common composition](reference/framework/v1/interface.md) now supplies
+explicit runtime coordination, released-evidence reception and a safe logging
+boundary. [Framework configuration](reference/framework/configuration/v1/interface.md)
+adds strict typed Load/Watch, captured explicit variables, atomic independent data
+domains and optional resource-adoption handoff. The official
+[CLI](reference/cmd/fathomry/interface.md) now provides offline help, error and
+translation catalogs; its former public Go API stays withdrawn. There is no
+project generator, production-qualified application runtime or
+Run/Item execution model. The intended `fathomry new <project>` entry is not runnable.
+Internal raw acquisition, strict JSON preparation and type-admission improvements
+remain implemented. Business authors are not expected to recreate private
+assembly machinery as startup boilerplate.
 
 The [Temporal integration](reference/internal/orchestration/temporal/v1/interface.md)
 adds named Namespace Clients, native execution handles, managed Worker registration
@@ -234,9 +236,11 @@ current internal safeguards and their limits.
 
 | Your task | Start here |
 | --- | --- |
-| Use the CLI or add a first-party command | [CLI interface](reference/cli/interface.md) and [command maintenance](development/cli-commands.md) |
-| Create a Go project using a local Fathomry checkout | [Local-source project creation](reference/cli/new.md) |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
+| Declare, inspect or extend a public error | [Numeric failure contract](reference/failure/v1/interface.md) |
+| Publish or read extensible project configuration data | [Shared settings contract](reference/settings/v1/interface.md) |
+| Hold component instances and follow selected configuration changes | [Runtime resource ownership](reference/resource/v1/interface.md) |
+| Add translations or explain an error code in another language | [Internationalization contract](reference/i18n/v1/interface.md) |
 | Work on one internal package | Its [interface.md](#internal-package-reference), then the package's topics and source/examples |
 | Prepare an approved integration or upgrade | [Integration workflow](development/sdk-integration.md) and [integration architecture](architecture/sdk-integration.md) |
 | Reproduce a test or verify a change | [Testing](development/testing.md) and the affected package contract |
@@ -262,17 +266,18 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 
 ## Public package reference
 
-| Package contract | Scope |
+| Package contract | Responsibility |
 | --- | --- |
-| [`cli`](reference/cli/interface.md) | First-party root/help and local-source project creation; no public command registration |
-| [`failure/v1`](reference/failure/v1/interface.md) | Stdlib-only in-process identity, direct occurrences, intentional causes and safe owned diagnostics |
-| [`i18n/v1`](reference/i18n/v1/interface.md) | Immutable resource catalogs, exact lookup, explicit fallback and bounded scalar/cardinal rendering |
-| [`adapters/v1`](reference/adapters/v1/interface.md) | Explicit static Adapter registration and existing error/resource/binding queries |
-| [`framework/v1`](reference/framework/v1/interface.md) | Framework feature registration and selected Adapter catalog composition |
-| [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Immutable raw batches, coherent observations and explicit lifetime contracts |
-| [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Literal UTF-8 file Capture and paced periodic Observe |
-| [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Fresh remote Capture and one native push/reconciliation/recovery loop |
-| [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Core plus typed project configuration, explicit Load/Watch and presentation binding |
+| [`failure/v1`](reference/failure/v1/interface.md) | Numeric/symbolic identities, component-owned extensible occurrences, native causes and explicit definition atlas |
+| [`settings/v1`](reference/settings/v1/interface.md) | Project-owned typed snapshots, atomic data publication, section reads and an explicit application default |
+| [`i18n/v1`](reference/i18n/v1/interface.md) | Component resources/coverage, explicit code explanations and settings-backed safe error presentation |
+| [`resource/v1`](reference/resource/v1/interface.md) | Typed runtime instance ownership, fixed/follow adoption, generation borrowing and cleanup continuation |
+| [`adapters/v1`](reference/adapters/v1/interface.md) | Independent public operation admission/ownership, typed outcomes, required evidence custody and optional diagnostics |
+| [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Complete raw batch/source contracts and independent strict layered preparation |
+| [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Explicit local acquisition, native live/captured queries, weak Decode and owned file Watch |
+| [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Complete supported remote reads/observations/management/search, effect evidence and resource-backed borrowing |
+| [`framework/v1`](reference/framework/v1/interface.md) | Public runtime composition, released-evidence reception and once-bound safe localized logging |
+| [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Strict application/business configuration acceptance, last-good Watch and explicit resource-adoption handoff |
 
 ## Internal package reference
 
@@ -312,10 +317,8 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 
 ## Development guides
 
-- [Add first-party CLI commands](development/cli-commands.md).
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
-- [Verify public configuration](development/configuration-testing.md), including independent consumers and opt-in isolated Nacos tests.
 - [Write documentation](development/documentation.md), the canonical writing policy.
 - [Contribution policy](../.github/CONTRIBUTING.md), the canonical branch/signing/review rules.
 

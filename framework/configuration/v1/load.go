@@ -21,104 +21,94 @@ package configuration
 
 import (
 	"context"
-	"sort"
 
-	source "github.com/frost-leo/fathomry/adapters/configsource/v1"
-	"github.com/frost-leo/fathomry/internal/resource"
+	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	"github.com/frost-leo/fathomry/adapters/v1"
 )
 
-// Load admits all declarations before finite I/O and starts no observers.
-// Capture owners join before return even if cooperative acquisition is canceled.
-func Load[T any](ctx context.Context, schema Schema[T], plan Plan) (Snapshot[T], error) {
-	if nilValue(ctx) {
-		return Snapshot[T]{}, fail(ErrValue)
-	}
-	prepared, err := admit(schema, plan, false)
+// Load acquires, strictly prepares and publishes one whole typed data domain.
+// Source/bootstrap/read/schema failure returns no usable State. Optional adoption
+// is reported separately by Status; success never claims all instances ready.
+func Load[T any](ctx context.Context, declaration Declaration[T], dependencies Dependencies) (*State[T], error) {
+	endpoint, err := bind(dependencies)
 	if err != nil {
-		return Snapshot[T]{}, err
+		return nil, err
 	}
-	batches := make([]source.Batch, len(prepared.inputs))
-	for index, input := range prepared.inputs {
-		if ctx.Err() != nil {
-			return Snapshot[T]{}, fail(ErrPreparation, ctx.Err(), context.Cause(ctx))
-		}
-		batch, err := input.source.Capture(ctx)
+	var result *State[T]
+	receipt, err := endpoint.Run(ctx, request("load"), func(call *adapters.Call[Evidence]) {
+		evidence := Evidence{Observed: 1}
+		plan, err := freeze(call.Context(), declaration, false)
 		if err != nil {
-			return Snapshot[T]{}, err
+			_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: err})
+			return
 		}
-		batches[index] = batch
-	}
-	if ctx.Err() != nil {
-		return Snapshot[T]{}, fail(ErrPreparation, ctx.Err(), context.Cause(ctx))
-	}
-	snapshot, err := prepared.prepare(batches)
-	if ctx.Err() != nil {
-		return Snapshot[T]{}, fail(ErrPreparation, err, ctx.Err(), context.Cause(ctx))
-	}
-	return snapshot, err
-}
-func (input *admitted[T]) prepare(batches []source.Batch) (Snapshot[T], error) {
-	if len(batches) != len(input.inputs) {
-		return Snapshot[T]{}, fail(ErrValue)
-	}
-	layers := append([]resource.Layer(nil), input.variables...)
-	var supplied []SuppliedLayer
-	for index, selected := range input.inputs {
-		if nilValue(batches[index]) {
-			return Snapshot[T]{}, fail(ErrValue)
+		observed := configsource.Observation{FailedIndex: -1}
+		if plan.source != nil {
+			observed.Batch, observed.FailedIndex, observed.Err = plan.source.Capture(call.Context())
 		}
-		metadata := batches[index].Documents()
-		if len(metadata) != len(selected.documents) {
-			return Snapshot[T]{}, fail(ErrPlan)
+		prepared, err := prepare(call.Context(), plan, observed)
+		if err != nil {
+			evidence.Rejected = 1
+			_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: err})
+			return
 		}
-		for _, document := range selected.documents {
-			raw, presence, err := batches[index].RawCopy(document.Document)
-			if err != nil {
-				return Snapshot[T]{}, err
-			}
-			supplied = append(supplied, SuppliedLayer{Source: selected.description.Name, Document: document.Document, Layer: document.Layer, Presence: presence})
-			switch presence {
-			case source.Missing:
-				if !document.Optional {
-					return Snapshot[T]{}, fail(ErrMissing)
-				}
-			case source.Present:
-				if err := resource.CheckDocumentFormat(raw, input.version); err != nil {
-					return Snapshot[T]{}, fail(ErrFormat)
-				}
-				layers = append(layers, resource.Layer{Kind: resource.LayerKind(document.Layer) + resource.Defaults, Content: raw})
-			default:
-				return Snapshot[T]{}, fail(ErrValue)
-			}
+		snapshot, err := prepared.Snapshot()
+		if err != nil {
+			_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: err})
+			return
 		}
-	}
-	sort.Slice(supplied, func(left, right int) bool { return supplied[left].Layer < supplied[right].Layer })
-	var validationError error
-	prepared, err := resource.PrepareData(resource.Schema[envelope[T]]{Format: input.version, Defaults: input.defaults, Validate: func(value envelope[T]) error {
-		// Validate Core before arbitrary validator mutation of its isolated copy.
-		if err := validateCore(value.Framework); err != nil {
-			return err
+		state := newState[T]()
+		state.state.status.Observed = 1
+		state.state.mu.Lock()
+		err = state.state.publish(call.Context(), 1, prepared, snapshot)
+		state.state.mu.Unlock()
+		if err != nil {
+			_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: err})
+			return
 		}
-		if input.validate != nil {
-			validationError = input.validate(Settings[T]{Framework: value.Framework, Project: value.Project})
-			return validationError
-		}
-		return nil
-	}}, layers)
+		state.adopt(call.Context(), dependencies.Resources)
+		state.state.mu.Lock()
+		state.state.status.Closed = true
+		evidence = state.state.status.Evidence
+		state.state.mu.Unlock()
+		result = state
+		_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true})
+	})
 	if err != nil {
-		return Snapshot[T]{}, fail(ErrPreparation, validationError)
+		return nil, err
 	}
-	description := prepared.Description()
-	result := Description{FormatVersion: input.version, Revision: description.Revision, Sources: supplied}
-	names := map[resource.LayerKind]string{resource.Defaults: "defaults", resource.Base: "base", resource.Environment: "environment", resource.Local: "local", resource.Variables: "variables"}
-	for _, layer := range description.Provenance {
-		info := Provenance{Layer: names[layer.Kind]}
-		for _, field := range layer.Fields {
-			if field != "/format" {
-				info.Fields = append(info.Fields, field)
-			}
+	value, _ := receipt.Snapshot()
+	if err := value.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+func prepare[T any](ctx context.Context, plan plan[T], observation configsource.Observation) (configsource.Prepared[T], error) {
+	if observation.Err != nil {
+		return configsource.Prepared[T]{}, at(ErrSource, "acquire", observation.FailedIndex, observation.Err)
+	}
+	var layers []configsource.Layer
+	if len(plan.layers) > 0 {
+		if !observation.Batch.Valid() || observation.Batch.Len() != len(plan.layers) {
+			return configsource.Prepared[T]{}, fail(ErrObservation, "acquire")
 		}
-		result.Provenance = append(result.Provenance, info)
+		documents, err := observation.Batch.DocumentsCopy()
+		if err != nil {
+			return configsource.Prepared[T]{}, err
+		}
+		for index, declared := range plan.layers {
+			document := documents[index]
+			if document.Missing {
+				if declared.Optional {
+					continue
+				}
+				return configsource.Prepared[T]{}, at(ErrMissing, "prepare", index)
+			}
+			layers = append(layers, configsource.Layer{Kind: declared.Kind, Encoding: declared.Encoding, Content: document.Content})
+		}
 	}
-	return Snapshot[T]{state: &snapshotState[T]{prepared: prepared, description: result}}, nil
+	if plan.variables != nil {
+		layers = append(layers, *plan.variables)
+	}
+	return configsource.Prepare(ctx, plan.schema, layers)
 }

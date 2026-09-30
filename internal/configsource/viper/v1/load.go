@@ -105,6 +105,17 @@ func Load(ctx context.Context, inputs []LoadInput) ([]*Document, error) {
 		encoding := strings.Clone(input.Options.Encoding)
 		native.SetConfigType(encoding)
 		native.AllowEmptyEnv(input.Options.AllowEmptyEnv)
+		native.SetEnvPrefix(strings.Clone(input.Options.EnvPrefix))
+		if len(input.Options.EnvKeyReplacements) > 0 {
+			pairs := make([]string, 0, len(input.Options.EnvKeyReplacements)*2)
+			for _, replacement := range input.Options.EnvKeyReplacements {
+				pairs = append(pairs, strings.Clone(replacement.Old), strings.Clone(replacement.New))
+			}
+			native.SetEnvKeyReplacer(strings.NewReplacer(pairs...))
+		}
+		if input.Options.AutomaticEnv {
+			native.AutomaticEnv()
+		}
 		for _, entry := range input.Options.Defaults {
 			value := entry.Value
 			if text, ok := value.(string); ok {
@@ -134,13 +145,24 @@ func validateInputs(inputs []LoadInput) error {
 	}
 	budget := MaxBootstrapBytes
 	for _, input := range inputs {
-		if input.Options.Encoding != "yaml" && input.Options.Encoding != "json" ||
+		if !supportedEncoding(input.Options.Encoding) ||
 			(input.File == "") == nilReader(input.Reader) ||
 			input.File != "" && (!validPath(input.File) || strings.ContainsRune(input.File, 0)) ||
-			len(input.Options.Defaults) > MaxEntries || len(input.Options.Environment) > MaxEntries {
+			len(input.Options.Defaults) > MaxEntries || len(input.Options.Environment) > MaxEntries || len(input.Options.EnvKeyReplacements) > MaxEntries {
 			return fail(ErrInput, "setup")
 		}
 		budget -= len(input.File)
+		if len(input.Options.EnvPrefix) > MaxKeyBytes || !utf8.ValidString(input.Options.EnvPrefix) || strings.ContainsAny(input.Options.EnvPrefix, "=\x00") {
+			return fail(ErrInput, "environment")
+		}
+		budget -= len(input.Options.EnvPrefix)
+		for _, replacement := range input.Options.EnvKeyReplacements {
+			if replacement.Old == "" || len(replacement.Old) > MaxKeyBytes || len(replacement.New) > MaxKeyBytes ||
+				!utf8.ValidString(replacement.Old) || !utf8.ValidString(replacement.New) || strings.ContainsAny(replacement.Old+replacement.New, "=\x00") {
+				return fail(ErrInput, "environment")
+			}
+			budget -= len(replacement.Old) + len(replacement.New)
+		}
 		for _, entry := range input.Options.Defaults {
 			size, ok := scalarSize(entry.Value)
 			if !validKey(entry.Key) || !ok {
@@ -260,6 +282,12 @@ func validPath(path string) bool {
 // Preflight bounds decoder expansion, not business schema, field names, null,
 // numeric conversion, or precedence. Only the original bytes reach the SDK.
 func checkStructure(raw []byte, encoding string) error {
+	if encoding == "toml" {
+		return checkTOML(raw)
+	}
+	if encoding == "dotenv" || encoding == "env" {
+		return checkDotenv(raw)
+	}
 	if encoding == "json" {
 		decoder := json.NewDecoder(bytes.NewReader(raw))
 		decoder.UseNumber()

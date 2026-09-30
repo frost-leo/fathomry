@@ -17,100 +17,80 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.framework.configuration",
+  "module": "fathomry",
+  "component": "configuration",
   "locale": "zh-CN",
   "messages": [
     {
-      "id": "fathomry.framework.configuration:invalid_schema",
-      "source": "7a998db23bddc1ddec7530eb1e2d2a77acc1763026360bf6baf0750149fcacde",
+      "id": "fathomry.configuration.invalid_declaration",
+      "source": "112c550c04684c433b3e0d42ea864d0cf8e1d345c290a44fba8bde9e0c5e1271",
       "forms": {
-        "other": "配置结构或默认值无效。"
+        "other": "配置声明或绑定无效。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:invalid_plan",
-      "source": "ecbccec31976ec93cb6fd75e35ccf0e0d1f0a55db712b99a8bccf0e7e034a0d7",
+      "id": "fathomry.configuration.source_failed",
+      "source": "660594bc736969096131e40f021b7e018a3e6ac4dff2f6d8345487f4d19a2942",
       "forms": {
-        "other": "配置输入计划无效。"
+        "other": "所选来源未能提供完整配置观测。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:limit",
-      "source": "d2ae6988568bbe1a24333c9a2c9d6f9881e2397462ee396ce68d572b877c79ea",
-      "forms": {
-        "other": "配置超出支持的限制。"
-      }
-    },
-    {
-      "id": "fathomry.framework.configuration:missing",
-      "source": "a1958fa0ca95ede2639583b4daf458a0b6d632d0e5a3f81b94180acb2ca04fc4",
+      "id": "fathomry.configuration.required_document_missing",
+      "source": "ae721a1df27676e8c9df0439b49e66f41242900083c11543de50ba2f9000186e",
       "forms": {
         "other": "缺少必需的配置文档。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:format",
-      "source": "53610696a2ef0e9e1b43f699f47ee24fb5be84d0b6c3b474a8df6578881988a0",
+      "id": "fathomry.configuration.invalid_observation",
+      "source": "d387e151a2ea99aa4ddc4c2617810e37d6722565808eaf74eba823c53fd8ada2",
       "forms": {
-        "other": "配置文档格式无效。"
+        "other": "来源观测与声明的文档选择不符。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:preparation",
-      "source": "46e49c6b8f2a46981ca5ac99d97e09cb8d85238f6cbaf1203bb92a89657bfe7f",
+      "id": "fathomry.configuration.invalid_handle",
+      "source": "3c254a2ea6b792e336bd1e71b87d66de3a16f04a2138ba2dcf592e61e225383c",
       "forms": {
-        "other": "配置不满足声明的契约。"
+        "other": "配置状态或生产者尚未初始化。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:invalid_value",
-      "source": "25f0f4ace4f5ef4aa09cd68a3ce8d9a88c55bf1cee2713fadfd5724048172bc6",
+      "id": "fathomry.configuration.closed",
+      "source": "f4748734c1e9b6773a170fc28b3cec7675ce027da3e07a02d4397a065da366c5",
       "forms": {
-        "other": "配置运行时值无效。"
+        "other": "配置生产者正在关闭或已关闭。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:invalid_cursor",
-      "source": "05fee527a4fbfa230fdb3e2c1ea608f1170409c1f3dfa7a3ff870761c10df0cf",
+      "id": "fathomry.configuration.wait_interrupted",
+      "source": "2a83cb8e24d598a28d93b3ee3db816c081029f688a1928326b07239c5dfeba86",
       "forms": {
-        "other": "游标不属于此配置所有者。"
+        "other": "等待已结束，但尚未确认配置生产者完成。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:concurrent_wait",
-      "source": "9afe30fa23d9520f18f122ca73b9013780735170f5d7b9ad171bdc28e8c99dde",
+      "id": "fathomry.configuration.publication_failed",
+      "source": "d3a4530eb0ba9311fc898cda41467e75f7b138a4c353142935b9199054951f75",
       "forms": {
-        "other": "已有配置等待正在进行。"
+        "other": "已接受的配置未能发布。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:closed",
-      "source": "84d7a9f5592de2dcbcafe301cb3f850137e3168923fbcfdc0cab7065efaef47d",
+      "id": "fathomry.configuration.limit_exceeded",
+      "source": "e36eec6eb0cdc9fdb67fadc668730a6603210c3aea5fd9ffd477354070e44592",
       "forms": {
-        "other": "实时配置已关闭。"
+        "other": "超出配置编排限制。"
       }
     },
     {
-      "id": "fathomry.framework.configuration:wait",
-      "source": "ae31271257e91efa145612bd05595b5296fabcea63109a18ba1f5dbf2a4f906a",
+      "id": "fathomry.configuration.runtime_serialization",
+      "source": "1c4208bdfdd8b2a7e18be296d9478d1a47c7870d9cf65cbb48194402be54f0c9",
       "forms": {
-        "other": "配置等待未完成。"
-      }
-    },
-    {
-      "id": "fathomry.framework.configuration:presentation",
-      "source": "cee3cc04b39841b165d2af26ad946c86c3764a92abbe00e20fbe486bc4ccdf2b",
-      "forms": {
-        "other": "无法绑定配置的显示时区。"
-      }
-    },
-    {
-      "id": "fathomry.framework.configuration:cleanup",
-      "source": "c22951de25389ce1cf2a016ad47069ecd4f31f4be8bd50d58acb0f212ef05736",
-      "forms": {
-        "other": "配置观察器清理失败。"
+        "other": "不支持配置生产者句柄序列化。"
       }
     }
   ]

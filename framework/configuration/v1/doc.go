@@ -17,8 +17,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package configuration loads a Framework Core plus a project-owned plain DTO.
-// Schema/Plan admission is offline; Load performs finite captures, whereas Watch
-// owns source observers and publishes immutable typed snapshots. Acquisition,
-// data acceptance and explicit platform-timezone binding are separate operations.
+// Package configuration composes public raw Sources and strict preparation into
+// typed accepted-data domains. Load returns a published State after complete
+// acceptance. Watch owns one source ingress and one serial validation path;
+// obsolete/invalid observations preserve last-good data and Close fences publishing.
+//
+// The project owns T, defaults, strong validation, selected sources/layer policy
+// and explicit environment bindings. Bootstrap is resolved before acquisition.
+// Application and business-variable declarations use independent stores/readers;
+// no mandatory application envelope, all-SDK settings union or implicit default
+// installation is introduced. Optional public resource adoption is separate from
+// acceptance and readiness. The package imports no root Internal or concrete SDK.
+//
+// Callbacks must be bounded, concurrency-safe and non-panicking. Cancellation
+// requests stop but never substitutes for actual cleanup/validation completion.
+// This process-local code must not execute inside deterministic Workflows.
 package configuration

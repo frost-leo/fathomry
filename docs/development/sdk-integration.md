@@ -45,10 +45,10 @@ lives in `internal/invocation`; build/compatibility mechanisms remain private to
 Their errors use `internal/fault`, never public framework attribution. Examples
 importing them are in-module maintainer fixtures.
 Business authors declare allowed configuration/capabilities and write business
-logic. Future loaders (including configuration-center SDKs), resource assembly,
-admission and evidence loops remain framework responsibilities. The public
-[CLI entry](../reference/cli/interface.md) supplies root/help; `fathomry new`,
-the application loader and full execution entry remain unimplemented.
+logic. Public configuration loading, resource assembly, admission and evidence
+reception now have independent public mechanisms; their loops remain framework
+responsibilities, not project-owned copies of these private engines. The CLI,
+`fathomry new` and full execution entry are not implemented here.
 
 ## 2. Implement and test the guarantees
 

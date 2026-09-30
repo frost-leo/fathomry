@@ -34,21 +34,43 @@ The project is in early development. Configuration preparation, resource ownersh
 controlled calls, technical errors, compatibility assessment and testing support
 are implemented as private foundations. A bounded internal Viper v1 integration
 supports explicit local acquisition and a separate preparation proof, not an
-application-wide loading path. The public [CLI entry](docs/reference/cli/interface.md)
-provides root/help and [local-source project creation](docs/reference/cli/new.md)
-with explicit in-process and process-owned usage. `fathomry new <directory>`
-creates a four-file Go executable using the public CLI, not a workflow application.
-There is no public domain API, production service Provider, application loader or
-complete runtime yet.
+application-wide loading path. The public [failure contract](docs/reference/failure/v1/interface.md)
+provides [capability-classified 32-bit codes](docs/reference/failure/v1/code-allocation.md),
+extensible typed composition, native-cause inspection and an explicit definition atlas.
+[Settings](docs/reference/settings/v1/interface.md) provides project-owned typed
+snapshots, atomic publication, subsection reads and an explicit application default.
+[Internationalization](docs/reference/i18n/v1/interface.md) gathers component-owned
+resources, explains numeric errors in an explicit language and presents errors
+using settings preferences without rewriting native causes.
+The public [resource holder](docs/reference/resource/v1/interface.md) adds typed
+instance scopes, fixed/following configuration adoption, generation borrowing and
+cleanup continuation, independently of Internal mechanisms.
+The public [Adapter operation mechanisms](docs/reference/adapters/v1/interface.md)
+add bounded admission, callback/session ownership, typed results and independent
+evidence custody, without reusing Internal engines or requiring localization.
+Public [Viper](docs/reference/adapters/configsource/viper/v1/interface.md) and
+[Nacos](docs/reference/adapters/configsource/nacos/v1/interface.md) configuration
+Adapters now provide independently usable native capabilities and selected raw
+sources, with [independent strict preparation](docs/reference/adapters/configsource/v1/interface.md).
+[Framework common composition](docs/reference/framework/v1/interface.md) coordinates
+public operation/resource shutdown, released-evidence reception and once-bound
+safe localized logs. [Framework configuration](docs/reference/framework/configuration/v1/interface.md)
+loads and watches project-owned application settings and independent business
+values, preserving last-good data and separating publication from instance adoption.
+The official [CLI](docs/reference/cmd/fathomry/interface.md) supplies offline help,
+error explanations and translation-resource/coverage queries with shared failure
+identity, explicit language selection and bounded invocation/cleanup behavior.
+There is no version command, project generator or complete application runtime yet.
+The intended `fathomry new <project>` path remains future framework work, not
+business-owned assembly boilerplate.
 
-The public [i18n/v1 catalog](docs/reference/i18n/v1/interface.md) prepares,
-inspects, selects and renders bounded feature-owned resources. Root and project
-CLI text use it, with explicit locale and unchanged machine output. It uses the
-localization-independent [failure/v1 contract](docs/reference/failure/v1/interface.md)
-for its own failures; neither package is a durable message/error protocol.
-Optional immutable module/error definition catalogs and checked message bindings
-provide orderly feature-owned discovery. `cli.Catalogs()` queries the built-in
-root/project inventories without executing a command or starting services.
+The earlier pre-release Adapter, failure, i18n, Framework, settings and CLI
+surfaces were withdrawn for redesign; failure/v1, settings/v1 and i18n/v1 are rebuilt,
+resource/v1 supplies public instance ownership, and adapters/v1 supplies shared
+operation mechanisms. Configsource Adapters are rebuilt over those public foundations,
+without a string-Condition compatibility facade. Internal configuration acquisition and
+preparation improvements remain; removing the public layers does not revert
+their native protocol, cancellation, authentication or type-admission corrections.
 
 An internal Nacos v2 configuration integration supplies raw reads, bounded
 invalidation subscriptions and owned protocol sessions. Its explicit compatibility

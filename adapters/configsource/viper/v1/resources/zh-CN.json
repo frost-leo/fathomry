@@ -17,44 +17,66 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.adapters.configsource.viper",
+  "module": "fathomry",
+  "component": "configsource_viper",
   "locale": "zh-CN",
   "messages": [
     {
-      "id": "fathomry.adapters.configsource.viper:invalid_settings",
-      "source": "6dfb7928e43783b0fd5e76bb1c3dfaf7ff1b5e008c708b1337e0c48de5a71576",
+      "id": "fathomry.configsource_viper.invalid_input",
+      "source": "40b42f19d9cc5ebc1f400207958f9c3945ad298baac3f053f9bf3d47b34d7740",
       "forms": {
-        "other": "本地配置来源设置无效。"
+        "other": "配置输入或声明无效。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:read",
-      "source": "df4bbe2f1fa1bdf8554a5e2762ca20a04a31a88e360c9fc6e6c786504ce6c280",
+      "id": "fathomry.configsource_viper.limit_exceeded",
+      "source": "4b68e4bc03c98096a5fe5f418b24d474abcfccea229e6e34bf6e78b005acdf15",
       "forms": {
-        "other": "无法读取本地配置。 来源：{source}；阶段：{phase}。"
+        "other": "超出配置能力的限制。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:limit",
-      "source": "042f6149e9c932fb6805a3c7ba7f8ebb5f730d6a313941cf0eb37bdba43fd366",
+      "id": "fathomry.configsource_viper.read_failed",
+      "source": "160d8aafdd43f5da5e9daf5ed559c17e0f5dca1ac14f907219a67d658a0ec8e4",
       "forms": {
-        "other": "本地配置超出支持的限制。 来源：{source}；阶段：{phase}。"
+        "other": "配置获取或检查失败。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:encoding",
-      "source": "2928c776efbb16e559c488d10c49b5a4dfe974ac6f8086bca4e930ae850aadfa",
+      "id": "fathomry.configsource_viper.decode_failed",
+      "source": "8ed92abd4d30b8bd66d7a22c5958b0715c87dc452d50559d092e106c0e9d1a4f",
       "forms": {
-        "other": "本地配置不是有效的 UTF-8。 来源：{source}；阶段：{phase}。"
+        "other": "配置解码或准备失败。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.viper:cleanup",
-      "source": "aac0428dc1a2a1c639bc855662e84d78a7caae64a3a596c73c36978260ae051f",
+      "id": "fathomry.configsource_viper.cleanup_failed",
+      "source": "c704c625b6e605167d0835687f52f20d414a5dc5199ca02690cd40290a063e32",
       "forms": {
-        "other": "本地配置清理失败。 来源：{source}；阶段：{phase}。"
+        "other": "配置资源清理报告失败。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_viper.closed",
+      "source": "06464f2a5e7b7e6c1fba08d01fe6d9795128551d9d7795894f11c8cb8a3e172a",
+      "forms": {
+        "other": "配置所有者正在关闭或已关闭。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_viper.completion_unconfirmed",
+      "source": "18bbb5c8bfbd9e31c9dd9b2635319140880038918caefe0b98a82838674dd040",
+      "forms": {
+        "other": "尚未确认配置清理已完成。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_viper.runtime_serialization",
+      "source": "392631474e282457559b9975484ad8e552ec9cc3ac9e3ad5100e425de1438f33",
+      "forms": {
+        "other": "不支持配置运行时句柄序列化。"
       }
     }
   ]

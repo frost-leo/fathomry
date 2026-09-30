@@ -17,8 +17,16 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package framework supplies Framework-layer static error/resource registration
-// and offline queries. Features explicitly contribute Modules. Composition reuses
-// the Adapter-layer bounded catalog assembly and failure/i18n validators without
-// constructing sources, importing concrete Adapters or starting an application.
+// Package framework composes public operation and resource ownership for supported
+// Framework scenarios. New creates no service clients or global settings. Bind
+// selected resources explicitly through Resources and operation evidence through
+// Operations; Close stops work before joining resource cleanup.
+//
+// StartReceiver delivers released evidence without blocking behind live owners.
+// Sink failures retain custody and retry only delivery. ErrorLog binds presentation
+// once at an explicit slog boundary; technical calls never select a locale.
+//
+// This is neither an application host nor a service locator, SDK registry, second
+// resource engine or durable Workflow runtime. Caller-owned source declarations,
+// bounded callbacks and shutdown responsibilities remain explicit.
 package framework

@@ -17,23 +17,108 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.adapters",
+  "module": "fathomry",
+  "component": "operation",
   "locale": "zh-CN",
   "messages": [
     {
-      "id": "fathomry.adapters:invalid_catalog",
-      "source": "968acbea6d76e2a30603885350dfd0f936c5adf6fa462e86d3b1ca9c3a13c63e",
+      "id": "fathomry.operation.invalid_options",
+      "source": "46895403d1ba25735c70b794b45c693b6325902a0384cb36399de967c715b216",
       "forms": {
-        "other": "无法组合静态模块声明。"
+        "other": "操作运行时选项或声明无效。"
       }
     },
     {
-      "id": "fathomry.adapters:limit",
-      "source": "c62b1c2e6b76d26af45197370325232e0546018543fcecf3cd3e4bce46a46ee4",
+      "id": "fathomry.operation.invalid_handle",
+      "source": "00323e95bcd046944ea0a124678b0ff06c2ea9fdb5e6d37aba37628e98698771",
       "forms": {
-        "other": "静态模块声明超出支持的限制。"
+        "other": "操作运行时或句柄未初始化。"
+      }
+    },
+    {
+      "id": "fathomry.operation.closed",
+      "source": "46be6b20f5e7a68473bdabfaccd2ac2c5e150d84f265f851429d69fcbe2868f5",
+      "forms": {
+        "other": "操作运行时或接收器正在关闭或已关闭。"
+      }
+    },
+    {
+      "id": "fathomry.operation.limit_exceeded",
+      "source": "2388dfc620c276ebea22088682466d4bf01eb6578a3e6044311c339ab5eee030",
+      "forms": {
+        "other": "操作准入或所有权数量超出限制。"
+      }
+    },
+    {
+      "id": "fathomry.operation.wait_interrupted",
+      "source": "2525e763d47d9207625e5df31ed1d1a532992b796c0239ad17e7343223a18944",
+      "forms": {
+        "other": "等待已中断，尚未确认所请求的完成状态。"
+      }
+    },
+    {
+      "id": "fathomry.operation.invalid_request",
+      "source": "4746786b1326ca63a414332d56c7fac5db28d7a2b871052decdbcbae0b113fcb",
+      "forms": {
+        "other": "操作元数据或预留额度无效。"
+      }
+    },
+    {
+      "id": "fathomry.operation.missing_outcome",
+      "source": "681ea0766b53d36dd53594047d1e302eeba86d06f0184a9e573d2ec425e9f0d8",
+      "forms": {
+        "other": "实际操作工作已结束，但未报告结果。"
+      }
+    },
+    {
+      "id": "fathomry.operation.outcome_settled",
+      "source": "06b43362df4ffeef95177f1bd9c4856a01635ac520f9cf1cfc2cb76021f1735c",
+      "forms": {
+        "other": "操作结果正在发布或已确定。"
+      }
+    },
+    {
+      "id": "fathomry.operation.authority_released",
+      "source": "28daceadd3ab9db7bf6c7243c24811f316c3a7accd9d2e0fdfecbd856caad6aa",
+      "forms": {
+        "other": "该操作或交付权限已释放。"
+      }
+    },
+    {
+      "id": "fathomry.operation.work_pending",
+      "source": "cfa2f390aebc7d969892a9a05afa7021da1468005acccab3f2ab643b24620e03",
+      "forms": {
+        "other": "尚未确认实际操作工作已释放。"
+      }
+    },
+    {
+      "id": "fathomry.operation.evidence_failed",
+      "source": "f500f5eb0918b8c15cf6c80ce8bc64c2ab7fd77a4a546eb0803cb091ff64c806",
+      "forms": {
+        "other": "必要的操作事实无法准入或接收。"
+      }
+    },
+    {
+      "id": "fathomry.operation.operation_failed",
+      "source": "4e0808a5f4a3dcdfd95aa64a49481335608904ffb143967aa3aaffb231226e40",
+      "forms": {
+        "other": "已接受的操作报告了主要失败或清理失败。"
+      }
+    },
+    {
+      "id": "fathomry.operation.source_unavailable",
+      "source": "cd2e6af3393d67aeb043fae29bd7b4d648fc80c6c575ab40360987d67297c644",
+      "forms": {
+        "other": "无法借用显式选择的资源。"
+      }
+    },
+    {
+      "id": "fathomry.operation.runtime_serialization",
+      "source": "774bff5139cf34a787f3a919590e73e1d74c4e2a78c5da15ffecd36630250434",
+      "forms": {
+        "other": "不支持操作运行时句柄的序列化。"
       }
     }
   ]

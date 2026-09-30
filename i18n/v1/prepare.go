@@ -23,188 +23,403 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
+	"io/fs"
+	"path"
+	"reflect"
+	"slices"
 	"sort"
 	"strings"
 
+	"github.com/frost-leo/fathomry/failure/v1"
 	"golang.org/x/text/language"
 )
 
-// Prepare validates all sources before publishing a catalog. English is required
-// for every ID. Duplicates (even identical), malformed or stale translations, and
-// excess aggregate work reject the entire set. Input order never supplies override
-// precedence. Source bytes/names are not borrowed after return.
-func Prepare(sources ...Source) (*Catalog, error) {
-	if len(sources) == 0 {
+type resourceFile struct {
+	name string
+	data []byte
+}
+type admission struct{ documents, bytes, nodes, entries, segments, inspection int }
+
+// Prepare atomically gathers explicit component resources and declarations. No
+// override order, global registration or locale setting is consulted. Malformed,
+// duplicate, stale or over-budget input returns no catalog. Opened files are closed.
+func Prepare(components ...Component) (*Catalog, error) {
+	if len(components) == 0 {
 		return nil, reject(ErrResource)
 	}
-	if len(sources) > MaxSources {
+	if len(components) > MaxComponents {
 		return nil, reject(ErrLimit)
 	}
-	total := 0
-	for _, source := range sources {
-		if len(source.Data) > MaxDocumentBytes || len(source.Data) > MaxInputBytes-total {
-			return nil, reject(ErrLimit)
-		}
-		total += len(source.Data)
-	}
-	catalog := &Catalog{entries: map[string]map[string]*entry{}}
-	names, locales := map[string]bool{}, map[string]language.Tag{}
-	nodes, entries := 0, 0
-	for _, source := range sources {
-		if !identifier(source.Name, 128) || names[source.Name] {
+	state := &catalogState{entries: map[string]map[string]*entry{}, bindings: map[failure.Code]Binding{}}
+	owners := map[owner]*componentState{}
+	var declarations []failure.Definition
+	var bindings []Binding
+	for _, component := range components {
+		key := owner{component.Module, component.Name}
+		if len(key.module) > 128 || len(key.component) > 64 || !failure.Identifier(key.module+"."+key.component+".resource").Valid() || owners[key] != nil {
 			return nil, reject(ErrResource)
 		}
-		names[source.Name] = true
-		document, err := decode(source.Data, &nodes)
+		tag, err := parseLocale(component.BaseLocale, true)
 		if err != nil {
 			return nil, err
 		}
-		if notice, exists := document["license_notice"]; exists {
-			lines, ok := notice.([]any)
-			if !ok || len(lines) > 32 {
-				return nil, reject(ErrResource)
+		current := &componentState{info: ComponentInfo{Module: strings.Clone(component.Module), Name: strings.Clone(component.Name), BaseLocale: tag.String()}}
+		owners[key] = current
+		state.components = append(state.components, current)
+		if len(component.Definitions) > failure.MaxDefinitions-len(declarations) || len(component.Bindings) > MaxMessages-len(bindings) {
+			return nil, reject(ErrLimit)
+		}
+		for _, definition := range component.Definitions {
+			if definition.Module != key.module || definition.Component != key.component {
+				return nil, reject(ErrBinding)
 			}
-			for _, line := range lines {
-				value, ok := line.(string)
-				if !ok || len(value) > 256 {
-					return nil, reject(ErrResource)
+			declarations = append(declarations, definition)
+			current.info.Codes = append(current.info.Codes, definition.Code)
+		}
+		for _, binding := range component.Bindings {
+			if binding.Project == nil || len(binding.Message) > MaxKeyBytes || !identifier(binding.MessageContract, 64) {
+				return nil, reject(ErrBinding)
+			}
+			belongs := false
+			for _, definition := range component.Definitions {
+				if definition.Code == binding.Code {
+					belongs = true
+					break
 				}
 			}
-			delete(document, "license_notice")
+			if !belongs {
+				return nil, reject(ErrBinding)
+			}
+			bindings = append(bindings, binding)
 		}
-		if !fields(document, "schema", "profile", "owner", "locale", "messages") ||
-			document["schema"] != Schema || document["profile"] != Profile {
-			return nil, reject(ErrResource)
-		}
-		owner, ok := textField(document, "owner", 128)
-		if !ok || !identifier(owner, 128) {
-			return nil, reject(ErrResource)
-		}
-		locale, ok := textField(document, "locale", 128)
-		if !ok {
-			return nil, reject(ErrResource)
-		}
-		tag, err := parseLocale(locale, true)
+	}
+	definitions, err := failure.Prepare(declarations...)
+	if err != nil {
+		return nil, err
+	}
+	state.failures = definitions
+	budget := &admission{}
+	locales := map[string]bool{}
+	for _, component := range components {
+		current := owners[owner{component.Module, component.Name}]
+		files, err := load(component.Resources, component.Directory, budget)
 		if err != nil {
 			return nil, err
 		}
-		locale = tag.String()
-		if _, exists := locales[locale]; !exists && len(locales) >= MaxLocales {
-			return nil, reject(ErrLimit)
-		}
-		locales[locale] = tag
-		messages, ok := document["messages"].([]any)
-		if !ok || len(messages) == 0 {
-			return nil, reject(ErrResource)
-		}
-		if len(messages) > MaxEntries-entries {
-			return nil, reject(ErrLimit)
-		}
-		entries += len(messages)
-		documentDigest := digestBytes(source.Data)
-		for _, raw := range messages {
-			message, ok := raw.(map[string]any)
-			if !ok {
-				return nil, reject(ErrResource)
-			}
-			definition, err := parseDefinition(message, owner, locale)
+		seenLocales := map[string]bool{}
+		for _, file := range files {
+			document, err := decode(file.data, &budget.nodes)
 			if err != nil {
 				return nil, err
 			}
-			definition.SourceName = strings.Clone(source.Name)
-			definition.DocumentDigest = documentDigest
-			translations := catalog.entries[definition.ID]
-			if translations == nil {
-				if len(catalog.entries) >= MaxMessages {
-					return nil, reject(ErrLimit)
-				}
-				translations = map[string]*entry{}
-				catalog.entries[definition.ID] = translations
+			if err := removeNotice(document); err != nil {
+				return nil, err
 			}
-			if translations[locale] != nil {
+			if !fields(document, "schema", "profile", "module", "component", "locale", "messages") || document["schema"] != Schema || document["profile"] != Profile ||
+				document["module"] != current.info.Module || document["component"] != current.info.Name {
 				return nil, reject(ErrResource)
 			}
-			translations[locale] = &entry{definition: definition, tag: tag}
-		}
-	}
-	ids := make([]string, 0, len(catalog.entries))
-	for id := range catalog.entries {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	segments, inspection := 0, 0
-	for _, id := range ids {
-		translations := catalog.entries[id]
-		english := translations["en"]
-		if english == nil {
-			return nil, reject(ErrResource)
-		}
-		english.definition.SourceDigest = sourceDigest(english.definition)
-		orderedLocales := make([]string, 0, len(translations))
-		for locale := range translations {
-			if locale != "en" {
-				orderedLocales = append(orderedLocales, locale)
+			locale, ok := textField(document, "locale", 128)
+			if !ok {
+				return nil, reject(ErrLocale)
 			}
-		}
-		sort.Strings(orderedLocales)
-		orderedLocales = append([]string{"en"}, orderedLocales...)
-		for _, locale := range orderedLocales {
-			item := translations[locale]
-			definition := &item.definition
-			if locale != "en" {
-				if definition.SourceDigest != english.definition.SourceDigest {
+			tag, err := parseLocale(locale, true)
+			if err != nil {
+				return nil, err
+			}
+			fileTag, err := parseLocale(strings.TrimSuffix(file.name, ".json"), true)
+			if err != nil {
+				return nil, err
+			}
+			locale = tag.String()
+			if fileTag != tag || seenLocales[locale] {
+				return nil, reject(ErrResource)
+			}
+			seenLocales[locale] = true
+			if !locales[locale] && len(locales) >= MaxLocales {
+				return nil, reject(ErrLimit)
+			}
+			locales[locale] = true
+			messages, ok := document["messages"].([]any)
+			if !ok || len(messages) == 0 {
+				return nil, reject(ErrResource)
+			}
+			if len(messages) > MaxEntries-budget.entries {
+				return nil, reject(ErrLimit)
+			}
+			budget.entries += len(messages)
+			for _, raw := range messages {
+				message, ok := raw.(map[string]any)
+				if !ok {
 					return nil, reject(ErrResource)
 				}
-				definition.Contract, definition.Context = english.definition.Contract, english.definition.Context
-				definition.Cardinal, definition.Arguments = english.definition.Cardinal, english.definition.Arguments
-			}
-			if !definition.Cardinal && (len(definition.Forms) != 1 || definition.Forms[0].Category != Other) {
-				return nil, reject(ErrResource)
-			}
-			item.programs = make(map[Form][]segment, len(definition.Forms))
-			for _, form := range definition.Forms {
-				program, err := compile(form.Pattern, definition.Arguments, definition.Cardinal)
+				definition, err := parseDefinition(message, current.info, locale)
 				if err != nil {
 					return nil, err
 				}
-				if len(program) > MaxTotalSegments-segments {
+				definition.SourceName = strings.Clone(file.name)
+				definition.DocumentDigest = digestBytes(file.data)
+				translations := state.entries[definition.ID]
+				if translations == nil {
+					if len(state.entries) >= MaxMessages {
+						return nil, reject(ErrLimit)
+					}
+					translations = map[string]*entry{}
+					state.entries[definition.ID] = translations
+					current.info.Messages = append(current.info.Messages, definition.ID)
+				}
+				for _, existing := range translations {
+					if existing.owner != current {
+						return nil, reject(ErrResource)
+					}
+					break
+				}
+				if translations[locale] != nil {
+					return nil, reject(ErrResource)
+				}
+				translations[locale] = &entry{definition: definition, tag: tag, owner: current}
+			}
+		}
+		if !seenLocales[current.info.BaseLocale] {
+			return nil, reject(ErrResource)
+		}
+		current.info.Locales = append(current.info.Locales, current.info.BaseLocale)
+		others := make([]string, 0, len(seenLocales)-1)
+		for locale := range seenLocales {
+			if locale != current.info.BaseLocale {
+				others = append(others, locale)
+			}
+		}
+		sort.Strings(others)
+		current.info.Locales = append(current.info.Locales, others...)
+		for _, locale := range current.info.Locales {
+			tag, _ := parseLocale(locale, true)
+			current.tags = append(current.tags, tag)
+		}
+		current.matcher = language.NewMatcher(current.tags, language.PreferSameScript(false))
+		sort.Strings(current.info.Messages)
+		slices.Sort(current.info.Codes)
+	}
+	for _, component := range state.components {
+		for _, id := range component.info.Messages {
+			translations := state.entries[id]
+			base := translations[component.info.BaseLocale]
+			if base == nil {
+				return nil, reject(ErrResource)
+			}
+			base.definition.SourceDigest = sourceDigest(base.definition)
+			for _, locale := range component.info.Locales {
+				item := translations[locale]
+				if item == nil {
+					continue
+				}
+				definition := &item.definition
+				if item != base {
+					if definition.SourceDigest != base.definition.SourceDigest {
+						return nil, reject(ErrResource)
+					}
+					definition.Contract, definition.Context = base.definition.Contract, base.definition.Context
+					definition.Cardinal, definition.Arguments = base.definition.Cardinal, base.definition.Arguments
+				}
+				if !definition.Cardinal && (len(definition.Forms) != 1 || definition.Forms[0].Category != Other) {
+					return nil, reject(ErrResource)
+				}
+				item.programs = map[Form][]segment{}
+				for _, form := range definition.Forms {
+					program, err := compile(form.Pattern, definition.Arguments, definition.Cardinal)
+					if err != nil {
+						return nil, err
+					}
+					if len(program) > MaxTotalSegments-budget.segments {
+						return nil, reject(ErrLimit)
+					}
+					budget.segments += len(program)
+					item.programs[form.Category] = program
+				}
+				charge := inspectionCharge(*definition)
+				if charge > MaxInspectionBytes-budget.inspection {
 					return nil, reject(ErrLimit)
 				}
-				segments += len(program)
-				item.programs[form.Category] = program
+				budget.inspection += charge
+				state.ordered = append(state.ordered, item)
 			}
-			definition.EntryDigest = entryDigest(*definition)
-			charge := inspectionCharge(*definition)
-			if charge > MaxInspectionBytes-inspection {
-				return nil, reject(ErrLimit)
-			}
-			inspection += charge
-			catalog.ordered = append(catalog.ordered, item)
 		}
 	}
-	localeNames := make([]string, 0, len(locales))
-	for locale := range locales {
-		if locale != "en" {
-			localeNames = append(localeNames, locale)
+	for _, definition := range declarations {
+		translations := state.entries[string(definition.Identifier)]
+		component := owners[owner{definition.Module, definition.Component}]
+		base := translations[component.info.BaseLocale]
+		if base == nil || base.owner != component || base.definition.Cardinal || len(base.definition.Arguments) != 0 {
+			return nil, reject(ErrBinding)
+		}
+		text, err := (Selection{item: base}).Render(nil, nil)
+		if err != nil || text.Text != definition.Message {
+			return nil, reject(ErrBinding, err)
 		}
 	}
-	sort.Strings(localeNames)
-	catalog.locales = append(catalog.locales, locales["en"])
-	for _, locale := range localeNames {
-		catalog.locales = append(catalog.locales, locales[locale])
+	for _, binding := range bindings {
+		definition, found, err := definitions.Lookup(binding.Code)
+		if err != nil || !found || definition.Details != binding.Details || state.bindings[binding.Code].Project != nil {
+			return nil, reject(ErrBinding, err)
+		}
+		component := owners[owner{definition.Module, definition.Component}]
+		item := state.entries[binding.Message][component.info.BaseLocale]
+		if item == nil || item.owner != component || item.definition.Contract != binding.MessageContract {
+			return nil, reject(ErrBinding)
+		}
+		binding.Message = strings.Clone(binding.Message)
+		binding.MessageContract = strings.Clone(binding.MessageContract)
+		binding.Details.ID = failure.Identifier(strings.Clone(string(binding.Details.ID)))
+		state.bindings[binding.Code] = binding
 	}
-	catalog.matcher = language.NewMatcher(catalog.locales, language.PreferSameScript(false))
-	return catalog, nil
+	sort.Slice(state.ordered, func(left, right int) bool {
+		first, second := state.ordered[left].definition, state.ordered[right].definition
+		if first.ID != second.ID {
+			return first.ID < second.ID
+		}
+		if first.Locale == second.Locale {
+			return false
+		}
+		if first.Locale == first.BaseLocale {
+			return true
+		}
+		if second.Locale == second.BaseLocale {
+			return false
+		}
+		return first.Locale < second.Locale
+	})
+	sort.Slice(state.components, func(left, right int) bool {
+		first, second := state.components[left].info, state.components[right].info
+		if first.Module != second.Module {
+			return first.Module < second.Module
+		}
+		return first.Name < second.Name
+	})
+	return &Catalog{state: state}, nil
 }
 
-func parseDefinition(message map[string]any, owner, locale string) (Definition, error) {
-	result := Definition{Schema: Schema, Profile: Profile, Engine: Engine, LanguageData: LanguageData, PluralData: PluralData, Owner: owner, Locale: locale}
-	id, ok := textField(message, "id", 256)
-	if !ok || !strings.HasPrefix(id, owner+":") || !identifier(strings.TrimPrefix(id, owner+":"), 127) {
+func nilValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Pointer, reflect.Interface, reflect.Map, reflect.Slice, reflect.Func, reflect.Chan:
+		return reflected.IsNil()
+	}
+	return false
+}
+func load(filesystem fs.FS, directory string, budget *admission) ([]resourceFile, error) {
+	if nilValue(filesystem) || !fs.ValidPath(directory) || len(directory) > MaxKeyBytes {
+		return nil, reject(ErrResource)
+	}
+	opened, err := filesystem.Open(directory)
+	if err != nil {
+		if !nilValue(opened) {
+			return nil, reject(ErrResource, err, opened.Close())
+		}
+		return nil, reject(ErrResource, err)
+	}
+	if nilValue(opened) {
+		return nil, reject(ErrResource)
+	}
+	reader, ok := opened.(fs.ReadDirFile)
+	if !ok {
+		return nil, reject(ErrResource, opened.Close())
+	}
+	var entries []fs.DirEntry
+	var readErr error
+	for len(entries) <= MaxSources {
+		batch, err := reader.ReadDir(MaxSources + 1 - len(entries))
+		entries = append(entries, batch...)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			readErr = err
+			break
+		}
+		if len(batch) == 0 {
+			readErr = io.ErrNoProgress
+			break
+		}
+	}
+	closeErr := opened.Close()
+	if readErr != nil || closeErr != nil {
+		return nil, reject(ErrResource, readErr, closeErr)
+	}
+	if len(entries) > MaxSources {
+		return nil, reject(ErrLimit)
+	}
+	for _, entry := range entries {
+		if nilValue(entry) {
+			return nil, reject(ErrResource)
+		}
+	}
+	sort.Slice(entries, func(left, right int) bool { return entries[left].Name() < entries[right].Name() })
+	var result []resourceFile
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		if entry.IsDir() || !fs.ValidPath(name) || strings.Contains(name, "/") || len(name) > 132 {
+			return nil, reject(ErrResource)
+		}
+		if budget.documents >= MaxSources {
+			return nil, reject(ErrLimit)
+		}
+		budget.documents++
+		file, err := filesystem.Open(path.Join(directory, name))
+		if err != nil {
+			if !nilValue(file) {
+				return nil, reject(ErrResource, err, file.Close())
+			}
+			return nil, reject(ErrResource, err)
+		}
+		if nilValue(file) {
+			return nil, reject(ErrResource)
+		}
+		content, readErr := io.ReadAll(io.LimitReader(file, MaxDocumentBytes+1))
+		closeErr := file.Close()
+		if readErr != nil || closeErr != nil {
+			return nil, reject(ErrResource, readErr, closeErr)
+		}
+		if len(content) > MaxDocumentBytes || len(content) > MaxInputBytes-budget.bytes {
+			return nil, reject(ErrLimit)
+		}
+		budget.bytes += len(content)
+		result = append(result, resourceFile{name: name, data: content})
+	}
+	return result, nil
+}
+func removeNotice(document map[string]any) error {
+	notice, exists := document["license_notice"]
+	if !exists {
+		return nil
+	}
+	lines, ok := notice.([]any)
+	if !ok || len(lines) > 32 {
+		return reject(ErrResource)
+	}
+	for _, line := range lines {
+		text, ok := line.(string)
+		if !ok || len(text) > 256 {
+			return reject(ErrResource)
+		}
+	}
+	delete(document, "license_notice")
+	return nil
+}
+func parseDefinition(message map[string]any, component ComponentInfo, locale string) (Definition, error) {
+	result := Definition{Module: component.Module, Component: component.Name, Locale: locale, BaseLocale: component.BaseLocale}
+	id, ok := textField(message, "id", MaxKeyBytes)
+	if !ok || !strings.HasPrefix(id, component.Module+"."+component.Name+".") || !failure.Identifier(id).Valid() {
 		return Definition{}, reject(ErrResource)
 	}
 	result.ID = id
-	if locale == "en" {
+	if locale == component.BaseLocale {
 		if !fields(message, "id", "contract", "context", "args", "cardinal", "forms") {
 			return Definition{}, reject(ErrResource)
 		}
@@ -227,7 +442,6 @@ func parseDefinition(message map[string]any, owner, locale string) (Definition, 
 		if len(args) > MaxArguments {
 			return Definition{}, reject(ErrLimit)
 		}
-		result.Arguments = make([]Parameter, 0, len(args))
 		for name, raw := range args {
 			parameter, ok := raw.(map[string]any)
 			if !ok || !identifier(name, 64) || name == "count" || !fields(parameter, "kind", "meaning") {
@@ -268,7 +482,6 @@ func parseDefinition(message map[string]any, owner, locale string) (Definition, 
 	if _, exists := forms["other"]; !exists {
 		return Definition{}, reject(ErrResource)
 	}
-	result.Forms = make([]Variant, 0, len(forms))
 	for category := range forms {
 		switch Form(category) {
 		case Zero, One, Two, Few, Many, Other:
@@ -284,43 +497,25 @@ func parseDefinition(message map[string]any, owner, locale string) (Definition, 
 	sort.Slice(result.Forms, func(left, right int) bool { return result.Forms[left].Category < result.Forms[right].Category })
 	return result, nil
 }
-
 func digestBytes(data []byte) string {
 	digest := sha256.Sum256(data)
 	return hex.EncodeToString(digest[:])
 }
-
-func digestJSON(value any) string {
-	data, err := json.Marshal(value)
-	if err != nil {
-		panic(err)
-	} // Only validated package-owned scalar arrays/maps.
-	return digestBytes(data)
-}
-
 func sourceDigest(definition Definition) string {
 	args := make([][3]string, 0, len(definition.Arguments))
+	forms := make([][2]string, 0, len(definition.Forms))
 	for _, arg := range definition.Arguments {
 		args = append(args, [3]string{arg.Name, arg.Kind, arg.Meaning})
 	}
-	forms := make([][2]string, 0, len(definition.Forms))
 	for _, form := range definition.Forms {
 		forms = append(forms, [2]string{string(form.Category), form.Pattern})
 	}
-	return digestJSON([]any{Schema, Profile, definition.Owner, definition.ID, definition.Contract, definition.Context, definition.Cardinal, args, forms})
+	data, _ := json.Marshal([]any{Schema, Profile, definition.Module, definition.Component, definition.ID, definition.BaseLocale, definition.Contract, definition.Context, definition.Cardinal, args, forms})
+	return digestBytes(data)
 }
-
-func entryDigest(definition Definition) string {
-	forms := make(map[string]string, len(definition.Forms))
-	for _, form := range definition.Forms {
-		forms[string(form.Category)] = form.Pattern
-	}
-	return digestJSON([]any{Schema, Profile, definition.Owner, definition.ID, definition.Locale, definition.SourceDigest, forms})
-}
-
 func inspectionCharge(definition Definition) int {
 	charge := 1024
-	for _, value := range []string{definition.Owner, definition.ID, definition.Locale, definition.Contract, definition.Context, definition.SourceDigest, definition.SourceName, definition.DocumentDigest, definition.EntryDigest} {
+	for _, value := range []string{definition.Module, definition.Component, definition.ID, definition.Locale, definition.BaseLocale, definition.Contract, definition.Context, definition.SourceDigest, definition.DocumentDigest, definition.SourceName} {
 		charge += 6 * len(value)
 	}
 	for _, arg := range definition.Arguments {

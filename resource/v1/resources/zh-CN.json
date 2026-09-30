@@ -1,0 +1,118 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "resource",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.resource.invalid_options",
+      "source": "50d3a74358864c5aa038d26d08fecae0bf5a1a70b2b50c7c4c7611962a4a882f",
+      "forms": {
+        "other": "资源声明或选项无效。"
+      }
+    },
+    {
+      "id": "fathomry.resource.invalid_scope",
+      "source": "38d94f050b3e069f8a44ba7019e21a15b1362703836c9dd70a7459dfc4dd7e94",
+      "forms": {
+        "other": "资源作用域或句柄尚未初始化。"
+      }
+    },
+    {
+      "id": "fathomry.resource.closed",
+      "source": "2f23d88a7059f87b293202f6f9a6c2cacd1ff0862f82aa29315a14283d1235b5",
+      "forms": {
+        "other": "资源作用域或观察正在关闭或已经关闭。"
+      }
+    },
+    {
+      "id": "fathomry.resource.declarations_sealed",
+      "source": "29c45cd3ed917ef694ea6b07d2cfc175a8059262fb7d093b87a49d3f2bfb76a1",
+      "forms": {
+        "other": "资源声明已经封闭，不能继续注册。"
+      }
+    },
+    {
+      "id": "fathomry.resource.limit_exceeded",
+      "source": "17c90bb6e9a988e18376d9d2b741c157b10bb0ddecc14f711f12c664d7127d45",
+      "forms": {
+        "other": "资源所有权或准入数量超过限制。"
+      }
+    },
+    {
+      "id": "fathomry.resource.selection_failed",
+      "source": "2e897d4e1deb6291722f93a8cbe9b252b839e9739fe0e21e8ae84edd30411ce3",
+      "forms": {
+        "other": "无法选择组件配置。"
+      }
+    },
+    {
+      "id": "fathomry.resource.construction_failed",
+      "source": "c4bbdaae31d212879260eb24167a19bebcae094fa1c50f7d5e035f8570d43953",
+      "forms": {
+        "other": "无法构造或采用候选资源。"
+      }
+    },
+    {
+      "id": "fathomry.resource.not_available",
+      "source": "9a42e222dc49a820546c3441d5340374919c00aa7a6d5fa637d018a81804c301",
+      "forms": {
+        "other": "当前没有可用的资源实例。"
+      }
+    },
+    {
+      "id": "fathomry.resource.invalid_lease",
+      "source": "28bb148d39169ba02e419c460b8dbeff81a76ffe478c0a94c9595e152a631d59",
+      "forms": {
+        "other": "资源借用句柄无效或已经释放。"
+      }
+    },
+    {
+      "id": "fathomry.resource.superseded",
+      "source": "daf334574b7a1cfe02df1eda34f3aa34db5cdd37787204ea13aa0a59e63f1f0f",
+      "forms": {
+        "other": "资源配置目标在采用前已被后续目标取代。"
+      }
+    },
+    {
+      "id": "fathomry.resource.wait_interrupted",
+      "source": "c72c8bef0ea40fff29c0c097e5d8543bc376a6612d521905512ac5797a81bed0",
+      "forms": {
+        "other": "等待已结束，但尚未确认操作完成。"
+      }
+    },
+    {
+      "id": "fathomry.resource.cleanup_failed",
+      "source": "b6b9ff7ff90ce055bf181aad3ff2413b1feaa880eb43c04b733f2f3dabb9469e",
+      "forms": {
+        "other": "资源清理发生错误或尚未完成。"
+      }
+    },
+    {
+      "id": "fathomry.resource.runtime_serialization",
+      "source": "92b08a24ec1e7404d267aafdea61dbd447e82ea7a2d0925781ff922ecf1676e0",
+      "forms": {
+        "other": "不支持序列化资源运行时句柄。"
+      }
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "settings",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.settings.invalid_snapshot",
+      "source": "49cf6d6b77e44e9a203ffc92317e50a366e7795f0a03b156f34d8e35a048364b",
+      "forms": {
+        "other": "配置快照尚未准备完成。"
+      }
+    },
+    {
+      "id": "fathomry.settings.invalid_copy",
+      "source": "607bddbb6afecc568f47ac7bcd321f098b3c9cfb608523b4d89299909bf46f1e",
+      "forms": {
+        "other": "缺少配置复制函数。"
+      }
+    },
+    {
+      "id": "fathomry.settings.type_mismatch",
+      "source": "d79c54f74a321cdc281c9c27e9d5bb6ba6af8794395c72543a43fa153bcf35ee",
+      "forms": {
+        "other": "所选配置类型不符合请求的操作。"
+      }
+    },
+    {
+      "id": "fathomry.settings.invalid_path",
+      "source": "aff8eccfa6f041989ab6d293424ce6194a180f397de10b5d0a88c9929a2917ca",
+      "forms": {
+        "other": "配置选择路径无效或存在歧义。"
+      }
+    },
+    {
+      "id": "fathomry.settings.invalid_store",
+      "source": "c52cf9495c9e00b9889c22c1b8d6d7e674519f8b1695712e21d1477c4a3826c3",
+      "forms": {
+        "other": "配置存储尚未初始化。"
+      }
+    },
+    {
+      "id": "fathomry.settings.not_configured",
+      "source": "0bb6f5f5acb87d3d874a971042bac19d1401b1cf408c6bc92a82019b3456ad0e",
+      "forms": {
+        "other": "当前没有可用的配置快照。"
+      }
+    },
+    {
+      "id": "fathomry.settings.already_configured",
+      "source": "0d0ae94d42152b2227582807faaf8a8282bf7815e0506cd3b3d162158214c534",
+      "forms": {
+        "other": "应用配置读取器已经绑定。"
+      }
+    },
+    {
+      "id": "fathomry.settings.runtime_serialization",
+      "source": "af7359272735a73a5079862ea27b86f502127bd220629badb313fc2f483efc5f",
+      "forms": {
+        "other": "不支持序列化配置运行时句柄。"
+      }
+    }
+  ]
+}

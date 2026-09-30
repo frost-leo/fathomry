@@ -1,0 +1,76 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "failure",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.failure.invalid_code",
+      "source": "1d394b328f167491f48d12316e6f10ae425ebc94203bffee9019a0f4787e8d3e",
+      "forms": {
+        "other": "公开错误码无效。"
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_definition",
+      "source": "5dfc478ee44c4f9f4c73c976304029761563d7abddb368d8a59e04f4de521cb4",
+      "forms": {
+        "other": "错误定义无效，或与其他定义冲突。"
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_location",
+      "source": "8e8df71355eaf2a5fa7557099c93889f170ad96e67c115b6778514aa4807e9cb",
+      "forms": {
+        "other": "错误发生位置无效。"
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_details",
+      "source": "bb4d8c3c1c22666ec44ad220f36b1c2931c2151439ea10dc9b1af83cb2822711",
+      "forms": {
+        "other": "错误详情契约或复制函数无效。"
+      }
+    },
+    {
+      "id": "fathomry.failure.limit_exceeded",
+      "source": "27c7b61ab0713155703a11ca4d2c171b968c22a29663207148be0c92b6139b61",
+      "forms": {
+        "other": "错误契约超出支持的限制。"
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_catalog",
+      "source": "013a01b7d81f0832777c9600fd1cf53ebe25bf74676386d5ccdce4aa704df563",
+      "forms": {
+        "other": "错误定义图鉴尚未准备完成。"
+      }
+    },
+    {
+      "id": "fathomry.failure.runtime_serialization",
+      "source": "1346b606e5f039a6aebd8943758615c58d92d1a492475a07d20101a3bd130985",
+      "forms": {
+        "other": "不支持序列化运行时错误。"
+      }
+    }
+  ]
+}

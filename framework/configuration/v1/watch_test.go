@@ -23,453 +23,346 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	source "github.com/frost-leo/fathomry/adapters/configsource/v1"
-	local "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
-	adapters "github.com/frost-leo/fathomry/adapters/v1"
+	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	"github.com/frost-leo/fathomry/settings/v1"
 )
 
-type controlledProject struct {
-	Count int `json:"count"`
-}
-type controlledBatch struct {
-	private
-	raw string
+type testSource struct {
+	observer  *testObserver
+	openError error
 }
 
-func (batch *controlledBatch) Documents() []source.Document {
-	return []source.Document{{Name: "document", Presence: source.Present, Bytes: len(batch.raw)}}
+func (source *testSource) Capture(context.Context) (configsource.Batch, int, error) {
+	return configsource.Batch{}, -1, errors.New("capture not selected")
 }
-func (batch *controlledBatch) RawCopy(name string) ([]byte, source.Presence, error) {
-	if name != "document" {
-		return nil, 0, fail(ErrValue)
+func (source *testSource) Observe(context.Context) (configsource.Observer, error) {
+	return source.observer, source.openError
+}
+
+type testObserver struct {
+	input        chan configsource.Observation
+	stopped      chan struct{}
+	once         sync.Once
+	closeEntered chan struct{}
+	closeRelease chan struct{}
+	closeError   error
+}
+
+func newObserver() *testObserver {
+	return &testObserver{input: make(chan configsource.Observation, 16), stopped: make(chan struct{})}
+}
+func (observer *testObserver) Next(ctx context.Context) (configsource.Observation, error) {
+	select {
+	case value := <-observer.input:
+		return value, nil
+	case <-observer.stopped:
+		return configsource.Observation{}, io.EOF
+	case <-ctx.Done():
+		return configsource.Observation{}, ctx.Err()
 	}
-	return []byte(batch.raw), source.Present, nil
 }
-
-type controlledCursor struct {
-	private
-	owner *controlledObserver
-}
-type controlledObserver struct {
-	private
-	mu            sync.Mutex
-	state         source.State
-	changed       chan struct{}
-	cursor        *controlledCursor
-	closeStarted  chan struct{}
-	closeOnce     sync.Once
-	release       <-chan struct{}
-	cleanup       error
-	closed        bool
-	afterTerminal atomic.Int32
-}
-
-func newControlledObserver(count int) *controlledObserver {
-	observer := &controlledObserver{changed: make(chan struct{}), closeStarted: make(chan struct{})}
-	observer.set(count, source.Available, nil)
-	return observer
-}
-func (observer *controlledObserver) set(count int, status source.Status, err error) {
-	observer.mu.Lock()
-	defer observer.mu.Unlock()
-	if observer.closed {
-		return
+func (observer *testObserver) Close(context.Context) error {
+	observer.once.Do(func() {
+		close(observer.stopped)
+		if observer.closeEntered != nil {
+			close(observer.closeEntered)
+		}
+	})
+	if observer.closeRelease != nil {
+		<-observer.closeRelease
 	}
-	observer.cursor = &controlledCursor{owner: observer}
-	observer.state = source.State{Batch: &controlledBatch{raw: fmt.Sprintf("format: 1\nproject: {count: %d}", count)}, Status: status, Failure: err, Cursor: observer.cursor}
-	close(observer.changed)
-	observer.changed = make(chan struct{})
+	return observer.closeError
 }
-func (observer *controlledObserver) Current() (source.State, error) {
-	observer.mu.Lock()
-	defer observer.mu.Unlock()
-	return observer.state, nil
+func observation(t *testing.T, raw string) configsource.Observation {
+	t.Helper()
+	batch, err := configsource.NewBatch([]configsource.Raw{{Content: []byte(raw)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return configsource.Observation{Batch: batch, FailedIndex: -1}
 }
-func (observer *controlledObserver) Next(ctx context.Context, after source.Cursor) (source.State, error) {
+func waitStatus[T any](t *testing.T, watch *Watcher[T], predicate func(Status) bool) Status {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	timer := time.NewTicker(time.Millisecond)
+	defer timer.Stop()
 	for {
-		observer.mu.Lock()
-		if after != observer.cursor {
-			state := observer.state
-			observer.mu.Unlock()
-			return state, nil
-		}
-		changed := observer.changed
-		closed := observer.closed
-		observer.mu.Unlock()
-		if closed {
-			observer.afterTerminal.Add(1)
-			return source.State{}, fail(source.ErrClosed)
-		}
-		select {
-		case <-ctx.Done():
-			return source.State{}, ctx.Err()
-		case <-changed:
-		}
-	}
-}
-func (observer *controlledObserver) Close(ctx context.Context) error {
-	observer.closeOnce.Do(func() { close(observer.closeStarted) })
-	if observer.release != nil {
-		select {
-		case <-observer.release:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-	observer.mu.Lock()
-	defer observer.mu.Unlock()
-	if !observer.closed {
-		observer.closed = true
-		observer.state.Status = source.Closed
-		observer.cursor = &controlledCursor{owner: observer}
-		observer.state.Cursor = observer.cursor
-		close(observer.changed)
-	}
-	return observer.cleanup
-}
-
-type controlledSource struct {
-	private
-	name                   string
-	observer               *controlledObserver
-	startup                error
-	captures, observations atomic.Int32
-}
-
-func (selected *controlledSource) Description() (source.Description, error) {
-	return source.Description{Name: selected.name, Module: local.ModuleID, Documents: []string{"document"}, Observable: true}, nil
-}
-func (selected *controlledSource) Capture(context.Context) (source.Batch, error) {
-	selected.captures.Add(1)
-	state, _ := selected.observer.Current()
-	return state.Batch, nil
-}
-func (selected *controlledSource) Observe(context.Context) (source.Observer, error) {
-	selected.observations.Add(1)
-	return selected.observer, selected.startup
-}
-func controlledPlan(selected *controlledSource) Plan {
-	return Plan{Modules: []adapters.Module{local.Module()}, Inputs: []Input{{Source: selected, Documents: []LayerDocument{{Document: "document", Layer: Base}}}}}
-}
-func controlledSchema() Schema[controlledProject] {
-	return Schema[controlledProject]{FormatVersion: 1, Defaults: DefaultSettings(controlledProject{})}
-}
-func boundedWait(t testing.TB, condition func() bool) {
-	t.Helper()
-	until := time.Now().Add(3 * time.Second)
-	for !condition() {
-		if time.Now().After(until) {
-			t.Fatal("controlled state did not converge")
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-func stateWhere(t testing.TB, live *Live[controlledProject], predicate func(State[controlledProject]) bool) State[controlledProject] {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	state, err := live.Current()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for !predicate(state) {
-		state, err = live.Next(ctx, state.Cursor)
-		if err != nil {
-			t.Fatal("controlled wait", err)
-		}
-	}
-	return state
-}
-func joined(t testing.TB, live *Live[controlledProject]) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	if err := live.Close(ctx); err != nil {
-		t.Error(err)
-	}
-}
-func TestWatchFencesAlreadyObservedVectorsAndEligibility(t *testing.T) {
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	entered, release := make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	t.Cleanup(func() { once.Do(func() { close(release) }) })
-	schema := controlledSchema()
-	var calls atomic.Int32
-	schema.Validate = func(value Settings[controlledProject]) error {
-		calls.Add(1)
-		if value.Project.Count == 1 {
-			close(entered)
-			<-release
-		}
-		return nil
-	}
-	live, err := Watch(context.Background(), schema, controlledPlan(selected))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { once.Do(func() { close(release) }); joined(t, live) })
-	<-entered
-	observer.set(2, source.Degraded, errors.New("source-unavailable"))
-	stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Degraded })
-	observer.set(2, source.Available, nil)
-	stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Pending })
-	once.Do(func() { close(release) })
-	accepted := stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Ready })
-	value, _ := accepted.Snapshot.ValueCopy()
-	if value.Project.Count != 2 || calls.Load() != 2 || selected.captures.Load() != 0 {
-		t.Fatal("stale candidate published or Framework recaptured")
-	}
-}
-func TestDiagnosticCursorDoesNotStarveStablePreparation(t *testing.T) {
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	entered, release := make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	schema := controlledSchema()
-	var calls atomic.Int32
-	schema.Validate = func(value Settings[controlledProject]) error {
-		if calls.Add(1) == 1 {
-			close(entered)
-			<-release
-		}
-		return nil
-	}
-	live, err := Watch(context.Background(), schema, controlledPlan(selected))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { once.Do(func() { close(release) }); joined(t, live) })
-	<-entered
-	for range 100 {
-		observer.set(1, source.Available, nil)
-	}
-	once.Do(func() { close(release) })
-	stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Ready })
-	if calls.Load() != 1 {
-		t.Fatal("diagnostic cursors invalidated stable candidate", calls.Load())
-	}
-}
-func TestCloseTimeoutRetainsBlockedPreparationAndDoesNotPoisonJoin(t *testing.T) {
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	entered, release := make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	schema := controlledSchema()
-	schema.Validate = func(Settings[controlledProject]) error { close(entered); <-release; return nil }
-	live, err := Watch(context.Background(), schema, controlledPlan(selected))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { once.Do(func() { close(release) }); joined(t, live) })
-	<-entered
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-	defer cancel()
-	if err := live.Close(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("Close abandoned or hid pending validation", err)
-	}
-	state, _ := live.Current()
-	if state.Status != Closing || state.Snapshot.state != nil {
-		t.Fatal("publication escaped Closing")
-	}
-	observer.set(2, source.Available, nil)
-	once.Do(func() { close(release) })
-	joined(t, live)
-	terminal, _ := live.Current()
-	if terminal.Status != Closed || terminal.Snapshot.state != nil {
-		t.Fatal("late validator published after Closing")
-	}
-	if _, err := live.Next(context.Background(), terminal.Cursor); !errors.Is(err, ErrClosed) {
-		t.Fatal("terminal cursor did not end wait", err)
-	}
-}
-func TestPartialStartupAndActualCleanupRemainOwned(t *testing.T) {
-	release := make(chan struct{})
-	var once sync.Once
-	t.Cleanup(func() { once.Do(func() { close(release) }) })
-	startup, cleanup := errors.New("startup-canary"), errors.New("cleanup-canary")
-	observer := newControlledObserver(1)
-	observer.release = release
-	observer.cleanup = cleanup
-	selected := &controlledSource{name: "controlled", observer: observer, startup: startup}
-	live, err := Watch(context.Background(), controlledSchema(), controlledPlan(selected))
-	if err != nil || live == nil {
-		t.Fatal("startup escaped unreachable owner", err)
-	}
-	<-observer.closeStarted
-	state, _ := live.Current()
-	if state.Status != Closing || !errors.Is(state.Failure, startup) {
-		t.Fatal("partial startup evidence lost")
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	if err := live.Close(ctx); !errors.Is(err, context.Canceled) {
-		t.Fatal("pending cleanup hidden", err)
-	}
-	once.Do(func() { close(release) })
-	joinedCtx, cancelJoin := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancelJoin()
-	if err := live.Close(joinedCtx); !errors.Is(err, cleanup) || errors.Is(err, context.Canceled) {
-		t.Fatal("actual cleanup mixed with past wait failure", err)
-	}
-	state, _ = live.Current()
-	if state.Status != Closed || !errors.Is(state.Failure, cleanup) || !errors.Is(state.Failure, startup) {
-		t.Fatal("cleanup history missing")
-	}
-	assertPrivate(t, state.Failure)
-}
-func TestOneWaiterNoLostWakeAndRejectedCandidateCache(t *testing.T) {
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	var calls atomic.Int32
-	refusal := errors.New("validator-canary")
-	schema := controlledSchema()
-	schema.Validate = func(Settings[controlledProject]) error { calls.Add(1); return refusal }
-	live, err := Watch(context.Background(), schema, controlledPlan(selected))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { joined(t, live) })
-	rejected := stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Degraded })
-	for range 5 {
-		observer.set(1, source.Available, nil)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		next, err := live.Next(ctx, rejected.Cursor)
-		cancel()
+		status, err := watch.Status()
 		if err != nil {
 			t.Fatal(err)
 		}
-		rejected = next
-	}
-	if calls.Load() != 1 || !errors.Is(rejected.Failure, refusal) {
-		t.Fatal("unchanged pure rejection revalidated")
-	}
-	wait, cancel := context.WithCancel(context.Background())
-	result := make(chan error, 1)
-	go func() { _, err := live.Next(wait, rejected.Cursor); result <- err }()
-	boundedWait(t, func() bool { live.mu.Lock(); defer live.mu.Unlock(); return live.waiting })
-	if _, err := live.Next(context.Background(), rejected.Cursor); !errors.Is(err, ErrBusy) {
-		t.Fatal("second waiter admitted", err)
-	}
-	cancel()
-	if err := <-result; !errors.Is(err, context.Canceled) {
-		t.Fatal(err)
-	}
-	if state, _ := live.Current(); state.Status != Degraded {
-		t.Fatal("wait cancellation canceled owner")
-	}
-	observer.set(2, source.Available, nil)
-	stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Degraded && calls.Load() == 2 })
-	if calls.Load() != 2 {
-		t.Fatal("changed rejected vector ignored")
-	}
-}
-func TestAllPreflightBeforeAnyAcquisition(t *testing.T) {
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	for _, input := range []Plan{
-		{Inputs: controlledPlan(selected).Inputs},
-		{Modules: []adapters.Module{local.Module(), local.Module()}, Inputs: controlledPlan(selected).Inputs},
-		{Modules: []adapters.Module{local.Module()}, Inputs: []Input{{Source: selected, Documents: []LayerDocument{{Document: "wrong", Layer: Base}}}}},
-		{Modules: []adapters.Module{local.Module()}, Inputs: []Input{{Source: selected, Documents: []LayerDocument{{Document: "document", Layer: 0}}}}},
-		{Modules: []adapters.Module{local.Module()}, Inputs: controlledPlan(selected).Inputs, Variables: []Variable{{Name: "X", Field: "/format"}}},
-	} {
-		if _, err := Load(context.Background(), controlledSchema(), input); err == nil {
-			t.Fatal("invalid Load plan admitted")
+		if predicate(status) {
+			return status
 		}
-		if _, err := Watch(context.Background(), controlledSchema(), input); err == nil {
-			t.Fatal("invalid Watch plan admitted")
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			t.Fatal("configuration status did not reach expected state")
 		}
 	}
-	schema := controlledSchema()
-	schema.FormatVersion = 0
-	if _, err := Load(context.Background(), schema, controlledPlan(selected)); !errors.Is(err, ErrSchema) {
-		t.Fatal(err)
-	}
-	if selected.captures.Load() != 0 || selected.observations.Load() != 0 {
-		t.Fatal("preflight performed I/O")
-	}
 }
-
-func TestLoadCancellationPreservesValidatorCause(t *testing.T) {
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	schema := controlledSchema()
-	entered, release := make(chan struct{}), make(chan struct{})
-	validatorCause, cancelCause := errors.New("validator"), errors.New("caller cancellation")
-	schema.Validate = func(Settings[controlledProject]) error { close(entered); <-release; return validatorCause }
-	ctx, cancel := context.WithCancelCause(context.Background())
-	result := make(chan error, 1)
-	go func() { _, err := Load(ctx, schema, controlledPlan(selected)); result <- err }()
-	<-entered
-	cancel(cancelCause)
-	close(release)
-	err := <-result
-	if !errors.Is(err, validatorCause) || !errors.Is(err, cancelCause) || !errors.Is(err, context.Canceled) {
-		t.Fatal("compound cancellation lost deliberate causes")
-	}
-}
-
-func TestLifetimeCancellationRetainsPreviousOperationFailure(t *testing.T) {
-	refusal, cancellation := errors.New("operation-private-canary"), errors.New("cancel-private-canary")
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	schema := controlledSchema()
-	schema.Validate = func(Settings[controlledProject]) error { return refusal }
-	ctx, cancel := context.WithCancelCause(context.Background())
-	live, err := Watch(ctx, schema, controlledPlan(selected))
-	if err != nil {
-		t.Fatal(err)
-	}
-	stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Degraded })
-	cancel(cancellation)
-	joined(t, live)
-	terminal, _ := live.Current()
-	if !errors.Is(terminal.Failure, refusal) || !errors.Is(terminal.Failure, cancellation) || !errors.Is(terminal.Failure, context.Canceled) {
-		t.Fatal("closing discarded observed operation/cancellation facts")
-	}
-	assertPrivate(t, terminal.Failure)
-}
-
-func TestIndependentSourceTerminationRetainsItsFinalFailure(t *testing.T) {
-	operation, cleanup := errors.New("source-operation"), errors.New("source-cleanup")
-	observer := newControlledObserver(1)
-	selected := &controlledSource{name: "controlled", observer: observer}
-	live, err := Watch(context.Background(), controlledSchema(), controlledPlan(selected))
-	if err != nil {
-		t.Fatal(err)
-	}
-	stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Ready })
-	observer.mu.Lock()
-	observer.closed = true
-	observer.state.Status = source.Closed
-	observer.state.Failure = fail(source.ErrCleanup, operation, cleanup)
-	observer.cursor = &controlledCursor{owner: observer}
-	observer.state.Cursor = observer.cursor
-	close(observer.changed)
-	observer.mu.Unlock()
-	state := stateWhere(t, live, func(state State[controlledProject]) bool { return state.Status == Degraded })
-	// Drain any erroneous terminal-sentinel event before joining the reader.
-	wait, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+func nextDecision[T any](t *testing.T, watch *Watcher[T], accepted bool) Event {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	for {
-		next, err := live.Next(wait, state.Cursor)
+		event, err := watch.Next(ctx)
 		if err != nil {
-			if !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatal(err)
-			}
-			break
+			t.Fatal(err)
 		}
-		state = next
+		if event.Accepted == accepted && !event.Superseded {
+			return event
+		}
 	}
-	joined(t, live)
-	final, _ := live.Current()
-	if observer.afterTerminal.Load() != 0 || !errors.Is(state.Failure, operation) || !errors.Is(state.Failure, cleanup) || !errors.Is(final.Failure, operation) || !errors.Is(final.Failure, cleanup) {
-		t.Fatal("Framework replaced the final source occurrence by waiting beyond its terminal cursor")
+}
+func TestWatchOrdering(t *testing.T) {
+	deps, _, _ := dependencies(t)
+	observer := newObserver()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(release) })
+	schema := modelSchema()
+	validate := schema.Validate
+	schema.Validate = func(ctx context.Context, value model) error {
+		if value.Service.Port == 2 {
+			close(entered)
+			<-release
+		}
+		return validate(ctx, value)
+	}
+	t.Setenv("FATHOMRY_WATCH_HOST", "captured")
+	watch, err := Watch(context.Background(), Declaration[model]{
+		Schema: schema, Source: &testSource{observer: observer},
+		Layers:      []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}},
+		Environment: []Environment{{Name: "FATHOMRY_WATCH_HOST", Path: "/service/host"}},
+	}, deps, WatchOptions{QueueCapacity: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		releaseOnce.Do(func() { close(release) })
+		_ = watch.Close(context.Background())
+	}()
+	if _, err := watch.Reader().Capture(); !errors.Is(err, settings.ErrUnconfigured) {
+		t.Fatal("initial zero looked ready", err)
+	}
+	observer.input <- observation(t, `{"service":{"port":1}}`)
+	nextDecision(t, watch, true)
+	first, _ := watch.Capture()
+	observer.input <- observation(t, `{"service":{"port":2}}`)
+	select {
+	case <-entered:
+	case <-time.After(3 * time.Second):
+		t.Fatal("slow validator not entered")
+	}
+	observer.input <- observation(t, `{"service":{"port":3}}`)
+	waitStatus(t, watch, func(value Status) bool { return value.Observed >= 3 })
+	current, _ := watch.Capture()
+	value, _ := current.ValueCopy()
+	if value.Service.Port != 1 {
+		t.Fatal("candidate published before validation")
+	}
+	releaseOnce.Do(func() { close(release) })
+	nextDecision(t, watch, true)
+	current, _ = watch.Capture()
+	value, _ = current.ValueCopy()
+	if value.Service.Port != 3 || current.Sequence() != 3 || current.Description().Revision == first.Description().Revision {
+		t.Fatal("obsolete validation published")
+	}
+	observer.input <- observation(t, `{"service":{"port":0}}`)
+	if event := nextDecision(t, watch, false); event.Err == nil {
+		t.Fatal("invalid update not rejected")
+	}
+	current, _ = watch.Capture()
+	value, _ = current.ValueCopy()
+	if value.Service.Port != 3 {
+		t.Fatal("invalid update replaced last-good")
+	}
+	marker := errors.New("source-private-canary")
+	observer.input <- configsource.Observation{FailedIndex: 0, Err: marker, Gap: true}
+	event := nextDecision(t, watch, false)
+	if !errors.Is(event.Err, marker) || event.Status.SourceError == nil {
+		t.Fatal("source health failure lost")
+	}
+	t.Setenv("FATHOMRY_WATCH_HOST", "later")
+	observer.input <- observation(t, `{"service":{"port":5}}`)
+	nextDecision(t, watch, true)
+	current, _ = watch.Capture()
+	value, _ = current.ValueCopy()
+	if value.Service.Host != "captured" || value.Service.Port != 5 {
+		t.Fatal("environment was reread or recovery failed")
+	}
+	if err := watch.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := watch.Next(context.Background()); !errors.Is(err, ErrClosed) {
+		t.Fatal(err)
+	}
+	last, _ := watch.Capture()
+	if last.Description().Revision != current.Description().Revision {
+		t.Fatal("shutdown rewrote accepted data")
+	}
+}
+func TestWatchCloseRetainsValidation(t *testing.T) {
+	deps, runtime, _ := dependencies(t)
+	observer := newObserver()
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	schema := modelSchema()
+	schema.Validate = func(context.Context, model) error { close(entered); <-release; return nil }
+	watch, err := Watch(context.Background(), Declaration[model]{Schema: schema, Source: &testSource{observer: observer}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}}, deps, WatchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer.input <- observation(t, "{}")
+	<-entered
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if err := watch.Close(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("abandoned validator", err)
+	}
+	if _, err := watch.Reader().Capture(); !errors.Is(err, settings.ErrUnconfigured) {
+		t.Fatal("closed validator published")
+	}
+	stats, _ := runtime.Operations().Inspect()
+	if stats.Active != 1 {
+		t.Fatal("actual validation work released", stats)
+	}
+	close(release)
+	if err := watch.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := watch.Capture(); !errors.Is(err, settings.ErrUnconfigured) {
+		t.Fatal("late publication after Close")
+	}
+}
+func TestWatchPartialInitializationAndCleanup(t *testing.T) {
+	deps, _, _ := dependencies(t)
+	observer := newObserver()
+	observer.closeEntered = make(chan struct{})
+	observer.closeRelease = make(chan struct{})
+	marker := errors.New("partial acquisition")
+	watch, err := Watch(context.Background(), Declaration[model]{Schema: modelSchema(), Source: &testSource{observer: observer, openError: marker}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}}, deps, WatchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-observer.closeEntered
+	if _, err := watch.Reader().Capture(); !errors.Is(err, settings.ErrUnconfigured) {
+		t.Fatal("failed startup published")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	if err := watch.Close(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("partial owner discarded", err)
+	}
+	close(observer.closeRelease)
+	if err := watch.Close(context.Background()); !errors.Is(err, marker) {
+		t.Fatal("initial cause lost", err)
+	}
+}
+func TestWatchMalformedObservationAndOverflow(t *testing.T) {
+	deps, _, _ := dependencies(t)
+	observer := newObserver()
+	watch, err := Watch(context.Background(), Declaration[model]{Schema: modelSchema(), Source: &testSource{observer: observer}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}}, deps, WatchOptions{QueueCapacity: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer watch.Close(context.Background())
+	observer.input <- configsource.Observation{}
+	if event := nextDecision(t, watch, false); !errors.Is(event.Err, ErrObservation) {
+		t.Fatal(err)
+	}
+	for index := uint64(2); index <= 5; index++ {
+		observer.input <- observation(t, `{"service":{"port":9}}`)
+		waitStatus(t, watch, func(value Status) bool { return value.Published == index })
+	}
+	if event := nextDecision(t, watch, true); !event.Gap {
+		t.Fatal("dropped notification did not report gap")
+	}
+}
+
+func TestWatchConcurrentReadersAndSameValue(t *testing.T) {
+	deps, _, _ := dependencies(t)
+	source := newObserver()
+	type pair struct {
+		First  int `json:"first"`
+		Second int `json:"second"`
+	}
+	watch, err := Watch(context.Background(), Declaration[pair]{
+		Schema: configsource.Schema[pair]{Version: 1, Validate: func(_ context.Context, value pair) error {
+			if value.First != value.Second {
+				return errors.New("mixed pair")
+			}
+			return nil
+		}},
+		Source: &testSource{observer: source}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}},
+	}, deps, WatchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer watch.Close(context.Background())
+	stop := make(chan struct{})
+	failures := make(chan error, 4)
+	var readers sync.WaitGroup
+	for range 4 {
+		readers.Go(func() {
+			for {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				view, err := watch.Reader().Capture()
+				if errors.Is(err, settings.ErrUnconfigured) {
+					time.Sleep(time.Millisecond)
+					continue
+				}
+				if err != nil {
+					failures <- err
+					return
+				}
+				snapshot, err := settings.As[pair](view)
+				if err != nil {
+					failures <- err
+					return
+				}
+				value, err := snapshot.ValueCopy()
+				if err != nil {
+					failures <- err
+					return
+				}
+				if value.First != value.Second {
+					failures <- errors.New("reader observed mixed fields")
+					return
+				}
+			}
+		})
+	}
+	defer func() { close(stop); readers.Wait() }()
+	var previous string
+	for index := 0; index < 12; index++ {
+		raw := fmt.Sprintf("{\"first\":%d,\"second\":%d}", index/2, index/2)
+		source.input <- observation(t, raw)
+		nextDecision(t, watch, true)
+		current, err := watch.Capture()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if current.Description().Revision == previous {
+			t.Fatal("fresh acceptance reused a revision")
+		}
+		previous = current.Description().Revision
+	}
+	select {
+	case err := <-failures:
+		t.Fatal(err)
+	default:
 	}
 }

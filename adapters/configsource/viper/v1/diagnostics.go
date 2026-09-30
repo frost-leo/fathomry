@@ -20,10 +20,73 @@
 package viper
 
 import (
+	"errors"
 	"fmt"
-	"github.com/frost-leo/fathomry/adapters/configsource/internal/owned"
 	"log/slog"
+
+	"github.com/frost-leo/fathomry/failure/v1"
+	native "github.com/frost-leo/fathomry/internal/configsource/viper/v1"
 )
 
-func (*selection) Format(state fmt.State, verb rune) { owned.Guard{}.Format(state, verb) }
-func (*selection) LogValue() slog.Value              { return owned.Guard{}.LogValue() }
+func translate(err error, operation string) error {
+	if err == nil {
+		return nil
+	}
+	code := ErrRead
+	if operation == "close" {
+		code = ErrClose
+	}
+	if direct, ok := err.(interface{ Is(error) bool }); ok {
+		for _, entry := range []struct {
+			native error
+			public failure.Code
+		}{
+			{native.ErrInput, ErrInput}, {native.ErrLimit, ErrLimit}, {native.ErrRead, ErrRead},
+			{native.ErrDecode, ErrDecode}, {native.ErrClose, ErrClose}, {native.ErrClosed, ErrClosed}, {native.ErrState, ErrState},
+		} {
+			if direct.Is(entry.native) {
+				code = entry.public
+				break
+			}
+		}
+	} else if errors.Is(err, native.ErrClose) {
+		// Owned file reads can join a read failure and a close failure. Do not
+		// search through an already-classified outer native occurrence.
+		code = ErrClose
+	}
+	return fail(code, operation, err)
+}
+
+type private struct{}
+
+func (private) String() string                 { return "viper[restricted]" }
+func (private) GoString() string               { return "viper[restricted]" }
+func (private) Format(state fmt.State, _ rune) { restricted(state) }
+func (private) MarshalJSON() ([]byte, error)   { return nil, fail(ErrSerialization, "marshal") }
+func (*private) UnmarshalJSON([]byte) error    { return fail(ErrSerialization, "unmarshal") }
+func restricted(state fmt.State)               { _, _ = state.Write([]byte("viper[restricted]")) }
+
+func (*Client) Format(state fmt.State, _ rune)       { restricted(state) }
+func (*Client) LogValue() slog.Value                 { return slog.StringValue("viper[restricted]") }
+func (*Input) Format(state fmt.State, _ rune)        { restricted(state) }
+func (*Input) LogValue() slog.Value                  { return slog.StringValue("viper[restricted]") }
+func (*Document) Format(state fmt.State, _ rune)     { restricted(state) }
+func (*Document) LogValue() slog.Value               { return slog.StringValue("viper[restricted]") }
+func (*Snapshot) Format(state fmt.State, _ rune)     { restricted(state) }
+func (*Snapshot) LogValue() slog.Value               { return slog.StringValue("viper[restricted]") }
+func (*Subscription) Format(state fmt.State, _ rune) { restricted(state) }
+func (*Subscription) LogValue() slog.Value           { return slog.StringValue("viper[restricted]") }
+func (*Change) Format(state fmt.State, _ rune)       { restricted(state) }
+func (*Change) LogValue() slog.Value                 { return slog.StringValue("viper[restricted]") }
+func (Settings) Format(state fmt.State, _ rune)      { restricted(state) }
+func (Settings) LogValue() slog.Value                { return slog.StringValue("viper[restricted]") }
+func (Scalar) Format(state fmt.State, _ rune)        { restricted(state) }
+func (Scalar) LogValue() slog.Value                  { return slog.StringValue("viper[restricted]") }
+func (Default) Format(state fmt.State, _ rune)       { restricted(state) }
+func (Default) LogValue() slog.Value                 { return slog.StringValue("viper[restricted]") }
+func (Binding) Format(state fmt.State, _ rune)       { restricted(state) }
+func (Binding) LogValue() slog.Value                 { return slog.StringValue("viper[restricted]") }
+func (Replacement) Format(state fmt.State, _ rune)   { restricted(state) }
+func (Replacement) LogValue() slog.Value             { return slog.StringValue("viper[restricted]") }
+func (WatchSettings) Format(state fmt.State, _ rune) { restricted(state) }
+func (WatchSettings) LogValue() slog.Value           { return slog.StringValue("viper[restricted]") }

@@ -90,7 +90,7 @@ func TestInvalidBootstrapRejectedBeforeAnyRead(t *testing.T) {
 		{{Options: OptionsV1{Encoding: "yaml"}, File: "/literal", Reader: strings.NewReader("{}")}},
 		{{Options: OptionsV1{Encoding: "yaml"}, File: "relative.yaml"}},
 		{{Options: OptionsV1{Encoding: "yaml"}, File: "/bad\x00path"}},
-		{readerInput("toml", "")}, {readerInput("YAML", "")},
+		{readerInput("xml", "")}, {readerInput("YAML", "")},
 		{{Options: OptionsV1{Encoding: "json", Defaults: []Default{{Key: "", Value: 1}}}, Reader: strings.NewReader("{}")}},
 		{{Options: OptionsV1{Encoding: "json", Defaults: []Default{{Key: "value", Value: map[string]any{}}}}, Reader: strings.NewReader("{}")}},
 		{{Options: OptionsV1{Encoding: "json", Defaults: []Default{{Key: "value", Value: math.NaN()}}}, Reader: strings.NewReader("{}")}},

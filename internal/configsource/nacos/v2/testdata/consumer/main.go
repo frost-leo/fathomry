@@ -41,8 +41,9 @@ import (
 type server struct {
 	wire.UnimplementedRequestServer
 	wire.UnimplementedBiRequestStreamServer
-	mu    sync.Mutex
-	ready map[string]bool
+	mu      sync.Mutex
+	ready   map[string]bool
+	content map[string]string
 }
 
 func (value *server) Request(ctx context.Context, payload *wire.Payload) (*wire.Payload, error) {
@@ -69,7 +70,33 @@ func (value *server) Request(ctx context.Context, payload *wire.Payload) (*wire.
 			kind = "HealthCheckResponse"
 		} else if kind == "ConfigQueryRequest" {
 			kind = "ConfigQueryResponse"
-			result["content"] = `{"labels":{"X-Case":"kept"},"optional":null,"large":18446744073709551615}`
+			var query struct {
+				DataID string `json:"dataId"`
+			}
+			_ = json.Unmarshal(payload.Body.Value, &query)
+			value.mu.Lock()
+			content, found := value.content[query.DataID]
+			value.mu.Unlock()
+			if found {
+				result["content"] = content
+			} else {
+				result["resultCode"], result["errorCode"] = 500, 300
+			}
+		} else if kind == "ConfigPublishRequest" || kind == "ConfigRemoveRequest" {
+			var query struct {
+				DataID  string `json:"dataId"`
+				Content string `json:"content"`
+			}
+			_ = json.Unmarshal(payload.Body.Value, &query)
+			value.mu.Lock()
+			if kind == "ConfigPublishRequest" {
+				value.content[query.DataID] = query.Content
+				kind = "ConfigPublishResponse"
+			} else {
+				delete(value.content, query.DataID)
+				kind = "ConfigRemoveResponse"
+			}
+			value.mu.Unlock()
 		} else {
 			return nil, errors.New("unexpected consumer request")
 		}
@@ -98,7 +125,7 @@ func main() {
 	if err != nil {
 		panic("consumer listener failed")
 	}
-	endpoint := &server{ready: make(map[string]bool)}
+	endpoint := &server{ready: make(map[string]bool), content: map[string]string{"settings.json": `{"labels":{"X-Case":"kept"},"optional":null,"large":18446744073709551615}`}}
 	service := grpc.NewServer()
 	wire.RegisterRequestServer(service, endpoint)
 	wire.RegisterBiRequestStreamServer(service, endpoint)
@@ -106,7 +133,7 @@ func main() {
 	defer service.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	client, err := nacos.Open(ctx, nacos.OptionsV1{Name: "consumer", AllowInsecure: true,
+	client, err := nacos.Open(ctx, nacos.OptionsV1{Name: "consumer", AllowInsecure: true, DynamicKeys: true, Writable: true,
 		Servers: []nacos.ServerV1{{HTTPURL: "http://127.0.0.1:8848/nacos", GRPCAddress: listener.Addr().String()}}, Keys: []nacos.KeyV1{{DataID: "settings.json"}}})
 	if err != nil {
 		panic("consumer construction failed")
@@ -131,6 +158,23 @@ func main() {
 		Layers: []resource.Layer{{Kind: resource.Base, Content: documents[0].RawCopy()}}})
 	if err != nil || calls != 1 || prepared.Description().Revision == "" {
 		panic("consumer preparation failed")
+	}
+	selected := nacos.KeyV1{DataID: "dynamic.toml"}
+	result, err := client.Publish(ctx, nacos.PublishInputV1{Key: selected, Content: "value=1", ContentType: "toml"})
+	if err != nil || result.State() != nacos.MutationAcknowledged {
+		panic("consumer publication failed")
+	}
+	document, err := client.ReadRaw(ctx, selected)
+	if err != nil || document.Missing() || string(document.RawCopy()) != "value=1" {
+		panic("consumer dynamic read failed")
+	}
+	result, err = client.Delete(ctx, selected)
+	if err != nil || result.State() != nacos.MutationAcknowledged {
+		panic("consumer deletion failed")
+	}
+	document, err = client.ReadRaw(ctx, selected)
+	if err != nil || !document.Missing() {
+		panic("consumer dynamic absence failed")
 	}
 	if err := client.Close(context.Background()); err != nil {
 		panic("consumer cleanup failed")

@@ -159,6 +159,18 @@ go build ./...
 External-service tests must be opt-in, use isolated development resources, and
 clean up their own writes. No production credentials are made available to PR CI.
 
+CI restores Go module/build caches by runner OS/architecture, Go version and
+`go.mod`/`go.sum`, with a revision suffix so later commits can save new compiled
+artifacts. Separate restore/save steps retain available cache data even when a
+check fails; canceled jobs do not save, and existing exact keys are not overwritten.
+Cache hits are an optimization, not an acceptance prerequisite or a reason to skip
+checks. A cache save never changes a failed check's result. Race tests keep
+`-count=1` so previous test results cannot replace execution. Independent-consumer fixtures
+first prepare their own module graph using the configured Go proxy/checksum policy,
+then enforce offline tidy-diff, readonly execution and import-boundary checks.
+Cold module caches must work; a developer's previously downloaded dependency-test
+versions are not fixture inputs.
+
 ## Engineering expectations
 
 [AGENTS.md](../AGENTS.md) defines the project's reasoning and Go standards.

@@ -21,161 +21,199 @@ package viper
 
 import (
 	"context"
-	"errors"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
-	"unicode/utf8"
+	"slices"
+	"sync"
 
-	"github.com/frost-leo/fathomry/adapters/configsource/internal/owned"
-	source "github.com/frost-leo/fathomry/adapters/configsource/v1"
-	"github.com/frost-leo/fathomry/failure/v1"
+	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/configsource/viper/v1"
 )
 
-// File is a sensitive bootstrap DTO. Name is a non-secret slot alias; Path is
-// literal/absolute. Encoding is explicitly yaml or json, never filename inference.
-type File struct {
-	Name     string `json:"name"`
-	Path     string `json:"path"`
-	Encoding string `json:"encoding"`
+// Source is an explicitly selected original-file profile. Native defaults and
+// environment queries are deliberately absent; layer policy belongs to callers.
+type Source struct {
+	private
+	client   *Client
+	settings WatchSettings
 }
 
-// Settings is plain, deliberately serializable bootstrap data. A zero interval
-// selects Capture-only; Observe requires 1 second through 5 minutes, in nanoseconds.
-type Settings struct {
-	Name              string        `json:"name"`
-	Documents         []File        `json:"documents"`
-	ReconcileInterval time.Duration `json:"reconcile_interval"`
-}
-type selection struct {
-	owned.Guard
-	settings Settings
+// Source freezes paths/observation options without opening files or starting a
+// worker. Capture/Observe admit their applicable native options when used.
+func (client *Client) Source(settings WatchSettings) (*Source, error) {
+	if client == nil || len(settings.Paths) == 0 || len(settings.Paths) > MaxSources {
+		return nil, fail(ErrInput, "source")
+	}
+	settings.Paths = slices.Clone(settings.Paths)
+	return &Source{client: client, settings: settings}, nil
 }
 
-// Select validates and copies without stat, open, environment reads or watchers.
-// Caller input must not change concurrently during this call.
-func Select(input Settings) (source.Selection, error) {
-	if !owned.Label(input.Name) || len(input.Documents) < 1 || len(input.Documents) > source.MaxDocuments ||
-		input.ReconcileInterval != 0 && (input.ReconcileInterval < time.Second || input.ReconcileInterval > 5*time.Minute) {
-		return nil, owned.Fail(ErrSettings)
+// Capture reads all paths under one public operation/evidence reservation.
+// Missing and empty remain distinct; an error returns no usable prefix.
+func (source *Source) Capture(ctx context.Context) (configsource.Batch, int, error) {
+	if source == nil || source.client == nil {
+		return configsource.Batch{}, -1, fail(ErrInput, "capture")
 	}
-	total := 0
-	seen := make(map[string]bool)
-	for _, file := range input.Documents {
-		if !owned.Label(file.Name) || seen[file.Name] || !filepath.IsAbs(file.Path) || len(file.Path) > 4096 ||
-			!utf8.ValidString(file.Path) || strings.ContainsRune(file.Path, 0) || file.Encoding != "yaml" && file.Encoding != "json" {
-			return nil, owned.Fail(ErrSettings)
-		}
-		seen[file.Name] = true
-		total += len(file.Path) + len(file.Name)
+	var batch configsource.Batch
+	failed := -1
+	err := source.client.run(ctx, "capture", func(ctx context.Context) (Evidence, error) {
+		var err error
+		batch, failed, err = source.capture(ctx)
+		return Evidence{Documents: batch.Len()}, err
+	})
+	if err != nil {
+		return configsource.Batch{}, failed, err
 	}
-	if total > native.MaxBootstrapBytes {
-		return nil, owned.Acquisition(ErrLimit, source.AcquisitionInfo{Source: input.Name, Phase: source.SelectPhase})
-	}
-	value := Settings{Name: strings.Clone(input.Name), ReconcileInterval: input.ReconcileInterval, Documents: make([]File, len(input.Documents))}
-	for index, file := range input.Documents {
-		value.Documents[index] = File{Name: strings.Clone(file.Name), Path: strings.Clone(file.Path), Encoding: strings.Clone(file.Encoding)}
-	}
-	return &selection{settings: value}, nil
+	return batch, failed, nil
 }
-func (selected *selection) Description() (source.Description, error) {
-	if selected == nil {
-		return source.Description{}, owned.Fail(source.ErrValue)
-	}
-	result := source.Description{Name: selected.settings.Name, Module: ModuleID, Observable: selected.settings.ReconcileInterval != 0}
-	for _, file := range selected.settings.Documents {
-		result.Documents = append(result.Documents, file.Name)
-	}
-	return result, nil
-}
-func (selected *selection) Capture(ctx context.Context) (source.Batch, error) {
-	if selected == nil || owned.Nil(ctx) {
-		return nil, owned.Fail(source.ErrValue)
-	}
-	return selected.capture(ctx, source.CapturePhase)
-}
-
-func (selected *selection) capture(ctx context.Context, phase source.Phase) (source.Batch, error) {
-	nativeContext := owned.NativeContext(ctx)
-	remaining := source.MaxBatchBytes
-	entries := make([]owned.Entry, 0, len(selected.settings.Documents))
-	for _, file := range selected.settings.Documents {
-		raw, missing, err := native.RawFile(nativeContext, file.Path, min(source.MaxDocumentBytes, remaining))
+func (source *Source) capture(ctx context.Context) (configsource.Batch, int, error) {
+	values := make([]configsource.Raw, 0, len(source.settings.Paths))
+	remaining := MaxTotalBytes
+	for index, path := range source.settings.Paths {
+		raw, missing, err := native.RawFile(ctx, path, min(MaxDocumentBytes, remaining))
 		if err != nil {
-			return nil, mapError(err, ctx, source.AcquisitionInfo{Source: selected.settings.Name, Document: file.Name, Phase: phase})
+			return configsource.Batch{}, index, translate(err, "capture")
 		}
 		remaining -= len(raw)
-		presence := source.Present
-		if missing {
-			presence = source.Missing
-		}
-		entries = append(entries, owned.Entry{Name: file.Name, Presence: presence, Raw: raw})
+		values = append(values, configsource.Raw{Content: raw, Missing: missing})
 	}
-	if ctx.Err() != nil {
-		return nil, owned.Acquisition(ErrRead, source.AcquisitionInfo{Source: selected.settings.Name, Phase: phase}, ctx.Err(), context.Cause(ctx))
-	}
-	return owned.NewBatch(entries)
-}
-func (selected *selection) Observe(ctx context.Context) (source.Observer, error) {
-	if selected == nil || owned.Nil(ctx) || selected.settings.ReconcileInterval == 0 {
-		return nil, owned.Fail(source.ErrValue)
-	}
-	return observe(ctx, selected.settings.ReconcileInterval, func(lifetime context.Context) (source.Batch, error) {
-		return selected.capture(lifetime, source.ObservePhase)
-	}), nil
+	batch, err := configsource.NewBatch(values)
+	return batch, -1, err
 }
 
-func observe(ctx context.Context, interval time.Duration, capture func(context.Context) (source.Batch, error)) source.Observer {
-	return owned.Observe(ctx, func(lifetime context.Context, publish func(source.Batch, error)) error {
-		for lifetime.Err() == nil {
-			batch, err := capture(lifetime)
-			publish(batch, err)
-			if lifetime.Err() != nil {
-				// Publication is fenced, but an owned file's actual close failure
-				// still belongs to terminal cleanup. A borrowed cause is not proof.
-				if current, ok := failure.Inspect(err); ok && current.Diagnostic().Condition == ErrClose {
-					return err
-				}
-				return nil
-			}
-			timer := time.NewTimer(interval)
-			select {
-			case <-timer.C:
-			case <-lifetime.Done():
-				timer.Stop()
-				return nil
-			}
+// Observe owns one native invalidation worker and one bounded acquisition/handoff
+// worker. It adds no timer or polling/recovery engine. A single latest complete
+// observation is retained; replacing an undelivered observation makes Gap sticky.
+// Its lifetime reservation includes all acquisitions; Next only waits for data.
+func (source *Source) Observe(ctx context.Context) (configsource.Observer, error) {
+	if source == nil || source.client == nil {
+		return nil, fail(ErrInput, "observe")
+	}
+	var observer *fileObserver
+	var setup error
+	declared := request("observe_raw")
+	declared.WorkBytes = 24 << 20
+	receipt, err := source.client.endpoint.Run(ctx, declared, func(call *adapters.Call[Evidence]) {
+		guard, err := call.Hold()
+		if err != nil {
+			setup = err
+			_ = call.Resolve(adapters.Outcome[Evidence]{Primary: err})
+			return
 		}
-		return nil
+		settings := source.settings
+		subscription, err := native.Watch(call.Context(), native.WatchOptionsV1{Paths: settings.Paths, Interval: settings.Interval, QueueCapacity: settings.QueueCapacity})
+		if err != nil {
+			setup = translate(err, "observe")
+			_ = call.Resolve(adapters.Outcome[Evidence]{Primary: setup})
+			_ = guard.Release()
+			return
+		}
+		observer = &fileObserver{call: call, receipt: call.Receipt(), changed: make(chan struct{})}
+		go observer.run(source, subscription, guard)
 	})
+	if err != nil {
+		return nil, err
+	}
+	if observer == nil {
+		if setup != nil {
+			return nil, setup
+		}
+		value, _ := receipt.Snapshot()
+		return nil, value.Err()
+	}
+	return observer, nil
 }
-func mapError(err error, ctx context.Context, info source.AcquisitionInfo) error {
-	condition := ErrRead
-	switch {
-	case errors.Is(err, native.ErrClose):
-		condition = ErrClose
-	case errors.Is(err, native.ErrLimit):
-		condition = ErrLimit
-	case errors.Is(err, native.ErrDecode):
-		condition = ErrEncoding
-	}
-	// Filesystem cause access is deliberately sensitive; private fault graphs and
-	// arbitrary parser text are not public causes.
-	var pathError *os.PathError
-	var causes []error
-	if errors.As(err, &pathError) {
-		causes = append(causes, pathError)
-	}
-	if errors.Is(err, context.Canceled) {
-		causes = append(causes, context.Canceled)
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		causes = append(causes, context.DeadlineExceeded)
-	}
-	if ctx.Err() != nil {
-		causes = append(causes, ctx.Err(), context.Cause(ctx))
-	}
-	return owned.Acquisition(condition, info, causes...)
+
+type fileObserver struct {
+	private
+	call     *adapters.Call[Evidence]
+	receipt  *adapters.Receipt[Evidence]
+	mu       sync.Mutex
+	pending  *configsource.Observation
+	changed  chan struct{}
+	closing  bool
+	terminal error
 }
+
+func (observer *fileObserver) run(source *Source, subscription *native.Subscription, guard adapters.Guard) {
+	var terminal error
+	for observer.call.Context().Err() == nil {
+		change, err := subscription.Next(observer.call.Context())
+		if err != nil {
+			if observer.call.Context().Err() == nil {
+				terminal = translate(err, "observe")
+			}
+			break
+		}
+		value := configsource.Observation{FailedIndex: change.Index(), Err: translate(change.Err(), "observe"), Gap: change.Resync()}
+		if value.Err == nil {
+			value.Batch, value.FailedIndex, value.Err = source.capture(observer.call.Context())
+		}
+		observer.mu.Lock()
+		if !observer.closing && observer.call.Context().Err() == nil {
+			if observer.pending != nil {
+				value.Gap = true
+			}
+			observer.pending = &value
+			close(observer.changed)
+			observer.changed = make(chan struct{})
+		}
+		observer.mu.Unlock()
+	}
+	cleanup := translate(subscription.Close(context.Background()), "close")
+	observer.mu.Lock()
+	observer.closing = true
+	observer.pending = nil
+	observer.terminal = terminal
+	close(observer.changed)
+	observer.mu.Unlock()
+	_ = observer.call.Resolve(adapters.Outcome[Evidence]{Value: Evidence{}, Present: true, Primary: terminal, Cleanup: cleanup})
+	_ = guard.Release()
+}
+func (observer *fileObserver) Next(ctx context.Context) (configsource.Observation, error) {
+	if observer == nil || ctx == nil {
+		return configsource.Observation{}, fail(ErrInput, "next")
+	}
+	for {
+		if ctx.Err() != nil {
+			return configsource.Observation{}, fail(ErrRead, "next", ctx.Err(), context.Cause(ctx))
+		}
+		observer.mu.Lock()
+		if observer.closing || observer.call.Context().Err() != nil {
+			terminal := observer.terminal
+			observer.mu.Unlock()
+			return configsource.Observation{}, fail(ErrClosed, "next", terminal, observer.call.Context().Err(), context.Cause(observer.call.Context()))
+		}
+		if observer.pending != nil {
+			result := *observer.pending
+			observer.pending = nil
+			observer.mu.Unlock()
+			return result, nil
+		}
+		changed := observer.changed
+		observer.mu.Unlock()
+		select {
+		case <-changed:
+		case <-observer.call.Context().Done():
+		case <-ctx.Done():
+			return configsource.Observation{}, fail(ErrRead, "next", ctx.Err(), context.Cause(ctx))
+		}
+	}
+}
+func (observer *fileObserver) Close(ctx context.Context) error {
+	if observer == nil || ctx == nil {
+		return fail(ErrInput, "close")
+	}
+	observer.mu.Lock()
+	observer.closing = true
+	observer.pending = nil
+	observer.mu.Unlock()
+	_ = observer.call.Cancel(nil)
+	value, err := observer.receipt.WaitReleased(ctx)
+	if err != nil {
+		return fail(ErrState, "close", err)
+	}
+	return value.Err()
+}
+
+var _ configsource.Source = (*Source)(nil)
+var _ configsource.Observer = (*fileObserver)(nil)

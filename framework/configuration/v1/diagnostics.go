@@ -19,17 +19,33 @@
 
 package configuration
 
-import "log/slog"
+import (
+	"fmt"
+	"log/slog"
+)
 
-// Explicit pointer methods avoid dereferencing a typed nil through a promoted
-// method. Values retain fmt redaction and JSON refusal through private.
-func (*Schema[T]) LogValue() slog.Value     { return private{}.LogValue() }
-func (*Plan) LogValue() slog.Value          { return private{}.LogValue() }
-func (*Snapshot[T]) LogValue() slog.Value   { return private{}.LogValue() }
-func (*State[T]) LogValue() slog.Value      { return private{}.LogValue() }
-func (*Live[T]) LogValue() slog.Value       { return private{}.LogValue() }
-func (*Presentation) LogValue() slog.Value  { return private{}.LogValue() }
-func (*Cursor) LogValue() slog.Value        { return private{}.LogValue() }
-func (*Input) LogValue() slog.Value         { return private{}.LogValue() }
-func (*Variable) LogValue() slog.Value      { return private{}.LogValue() }
-func (*LayerDocument) LogValue() slog.Value { return private{}.LogValue() }
+type private struct{}
+
+func (Declaration[T]) Format(state fmt.State, _ rune) { restricted(state) }
+func (Declaration[T]) LogValue() slog.Value           { return slog.StringValue("configuration.Declaration") }
+func (Declaration[T]) MarshalJSON() ([]byte, error) {
+	return nil, fail(ErrSerialization, "marshal_declaration")
+}
+func (*Declaration[T]) UnmarshalJSON([]byte) error {
+	return fail(ErrSerialization, "unmarshal_declaration")
+}
+
+func (private) String() string                      { return "configuration[restricted]" }
+func (private) GoString() string                    { return "configuration[restricted]" }
+func (private) Format(state fmt.State, _ rune)      { restricted(state) }
+func (private) MarshalJSON() ([]byte, error)        { return nil, fail(ErrSerialization, "marshal") }
+func (*private) UnmarshalJSON([]byte) error         { return fail(ErrSerialization, "unmarshal") }
+func restricted(state fmt.State)                    { _, _ = state.Write([]byte("configuration[restricted]")) }
+func (*State[T]) Format(state fmt.State, _ rune)    { restricted(state) }
+func (*State[T]) LogValue() slog.Value              { return slog.StringValue("configuration.State") }
+func (*Accepted[T]) Format(state fmt.State, _ rune) { restricted(state) }
+func (*Accepted[T]) LogValue() slog.Value           { return slog.StringValue("configuration.Accepted") }
+func (*Watcher[T]) Format(state fmt.State, _ rune)  { restricted(state) }
+func (*Watcher[T]) LogValue() slog.Value            { return slog.StringValue("configuration.Watcher") }
+func (*Event) Format(state fmt.State, _ rune)       { restricted(state) }
+func (*Event) LogValue() slog.Value                 { return slog.StringValue("configuration.Event") }

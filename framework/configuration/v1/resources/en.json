@@ -17,45 +17,36 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.framework.configuration",
+  "module": "fathomry",
+  "component": "configuration",
   "locale": "en",
   "messages": [
     {
-      "id": "fathomry.framework.configuration:invalid_schema",
+      "id": "fathomry.configuration.invalid_declaration",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.invalid_declaration.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Invalid configuration schema or defaults."
+        "other": "The configuration declaration or binding is invalid."
       }
     },
     {
-      "id": "fathomry.framework.configuration:invalid_plan",
+      "id": "fathomry.configuration.source_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.source_failed.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Invalid configuration input plan."
+        "other": "The selected source could not provide a complete configuration observation."
       }
     },
     {
-      "id": "fathomry.framework.configuration:limit",
+      "id": "fathomry.configuration.required_document_missing",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Configuration exceeds a supported limit."
-      }
-    },
-    {
-      "id": "fathomry.framework.configuration:missing",
-      "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.required_document_missing.",
       "args": {},
       "cardinal": false,
       "forms": {
@@ -63,93 +54,73 @@
       }
     },
     {
-      "id": "fathomry.framework.configuration:format",
+      "id": "fathomry.configuration.invalid_observation",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.invalid_observation.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "A configuration document has an invalid format."
+        "other": "The source observation does not match the declared document selection."
       }
     },
     {
-      "id": "fathomry.framework.configuration:preparation",
+      "id": "fathomry.configuration.invalid_handle",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.invalid_handle.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Configuration does not satisfy its declared contract."
+        "other": "The configuration state or producer is not initialized."
       }
     },
     {
-      "id": "fathomry.framework.configuration:invalid_value",
+      "id": "fathomry.configuration.closed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.closed.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Invalid configuration runtime value."
+        "other": "The configuration producer is closing or closed."
       }
     },
     {
-      "id": "fathomry.framework.configuration:invalid_cursor",
+      "id": "fathomry.configuration.wait_interrupted",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.wait_interrupted.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "The cursor belongs to a different configuration owner."
+        "other": "Waiting ended without confirming configuration producer completion."
       }
     },
     {
-      "id": "fathomry.framework.configuration:concurrent_wait",
+      "id": "fathomry.configuration.publication_failed",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.publication_failed.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "A configuration wait is already active."
+        "other": "The accepted configuration could not be published."
       }
     },
     {
-      "id": "fathomry.framework.configuration:closed",
+      "id": "fathomry.configuration.limit_exceeded",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.limit_exceeded.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "The live configuration is closed."
+        "other": "A configuration orchestration bound was exceeded."
       }
     },
     {
-      "id": "fathomry.framework.configuration:wait",
+      "id": "fathomry.configuration.runtime_serialization",
       "contract": "v1",
-      "context": "Configuration boundary refusal.",
+      "context": "Static explanation for fathomry.configuration.runtime_serialization.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "The configuration wait did not complete."
-      }
-    },
-    {
-      "id": "fathomry.framework.configuration:presentation",
-      "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "The configured display zone could not be bound."
-      }
-    },
-    {
-      "id": "fathomry.framework.configuration:cleanup",
-      "contract": "v1",
-      "context": "Configuration boundary refusal.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Configuration observer cleanup failed."
+        "other": "Configuration producer handle serialization is unsupported."
       }
     }
   ]

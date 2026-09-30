@@ -1,0 +1,97 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "i18n",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.i18n.invalid_catalog",
+      "source": "43e821d950a66def409e4b5d9a86cf8a48f785ddcaabc5cff6633a4c5ffa5778",
+      "forms": {
+        "other": "国际化资源图鉴尚未准备完成。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_resource",
+      "source": "308b15f7e0c10a697e7f8b53cd751956684600d4030ead2d447ea2576ddfbad4",
+      "forms": {
+        "other": "国际化资源无效。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.limit_exceeded",
+      "source": "583477c5a590f3b73025de9c142349836f24bb19baa2450af1f301c6562dfd7c",
+      "forms": {
+        "other": "国际化输入或输出超出支持的限制。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_locale",
+      "source": "978a22036f691c685d9a0717e00c845352ebedc0c1d577cb70b8461be6afe52f",
+      "forms": {
+        "other": "请求的语言标记无效。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.missing_message",
+      "source": "325447a250e2af99cef83f36bf2035bd8ffcbe9fd92925e54bd35a4b97f066d1",
+      "forms": {
+        "other": "尚未声明所请求的国际化消息。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_arguments",
+      "source": "b4517cf150020860fcdbf4b74064e05ecdb8b3aac8d6487be23406db76394f3f",
+      "forms": {
+        "other": "国际化参数不符合消息契约。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_binding",
+      "source": "956884a76dab7df391697a713a6fdf6157b7504044dd32862a8151ce80aa9e1c",
+      "forms": {
+        "other": "错误的国际化绑定与其定义不匹配。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_preferences",
+      "source": "e98190d34eac7fcd0cd104ab60a0e08e971a2826132ec6c5af7c50861317ac46",
+      "forms": {
+        "other": "应用国际化配置不可用或无效。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_projection",
+      "source": "cd3ef0058b8751d14a6ddccb80bd314b5a231ae312e4b7dce60c8358a4081774",
+      "forms": {
+        "other": "组件无法提取可公开的国际化参数。"
+      }
+    },
+    {
+      "id": "fathomry.i18n.runtime_serialization",
+      "source": "e1cfcfb47ceef975bc9af469b25bc1222177ac722243280d6c08232ea31ccbbd",
+      "forms": {
+        "other": "不支持序列化国际化运行时句柄。"
+      }
+    }
+  ]
+}

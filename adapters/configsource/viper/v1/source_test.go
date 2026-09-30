@@ -22,81 +22,94 @@ package viper
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sync"
-	"sync/atomic"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/configsource/internal/owned"
-	source "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
 )
 
-func TestObservePacesActualCaptureAttempts(t *testing.T) {
-	var attempts atomic.Int32
-	var mu sync.Mutex
-	var starts []time.Time
-	first := make(chan struct{})
-	observer := observe(context.Background(), time.Second, func(context.Context) (source.Batch, error) {
-		count := attempts.Add(1)
-		mu.Lock()
-		starts = append(starts, time.Now())
-		mu.Unlock()
-		if count == 1 {
-			close(first)
-		}
-		return nil, errors.New("persistent-acquisition-refusal")
-	})
-	t.Cleanup(func() {
-		if err := observer.Close(context.Background()); err != nil {
-			t.Error(err)
-		}
-	})
-	<-first
-	// Deliberately never consume Next: coalescing cannot hide extra I/O attempts.
-	time.Sleep(2300 * time.Millisecond)
-	if count := attempts.Load(); count < 2 || count > 3 {
-		t.Fatal("unpaced or missing actual attempts", count)
+func TestSource(t *testing.T) {
+	client, _, _ := testClient(t, 0)
+	path := filepath.Join(t.TempDir(), "base.yaml")
+	source, err := client.Source(WatchSettings{Paths: []string{path}, Interval: 10 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	for index := 1; index < len(starts); index++ {
-		if starts[index].Sub(starts[index-1]) < time.Second {
-			t.Fatal("attempts exceeded declared interval")
-		}
+	var selected configsource.Source = source
+	batch, index, err := selected.Capture(context.Background())
+	if err != nil || index != -1 || !batch.Valid() {
+		t.Fatal(err)
+	}
+	raw, _ := batch.DocumentsCopy()
+	if !raw[0].Missing {
+		t.Fatal("missing became empty")
+	}
+	observer, err := selected.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer observer.Close(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	first, err := observer.Next(ctx)
+	if err != nil || first.Err != nil || !first.Gap || !first.Batch.Valid() {
+		t.Fatal("initial capture missing", err)
+	}
+	if err := os.WriteFile(path, []byte("value: accepted\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	next, err := observer.Next(ctx)
+	if err != nil || next.Err != nil {
+		t.Fatal(err, next.Err)
+	}
+	documents, _ := next.Batch.DocumentsCopy()
+	if string(documents[0].Content) != "value: accepted\n" {
+		t.Fatal("invalidated file not acquired")
+	}
+	guard, err := observer.(*fileObserver).call.Hold()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped, stop := context.WithCancel(context.Background())
+	stop()
+	if err := observer.Close(stopped); !errors.Is(err, context.Canceled) {
+		t.Fatal("released retained acquisition", err)
+	}
+	if err := guard.Release(); err != nil {
+		t.Fatal(err)
+	}
+	if err := observer.Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := observer.Next(ctx); err == nil {
+		t.Fatal("observation after close")
 	}
 }
 
-func TestShutdownAccountsLateFileCleanupNotBorrowedCause(t *testing.T) {
-	for _, actual := range []bool{false, true} {
-		t.Run(fmt.Sprint(actual), func(t *testing.T) {
-			cleanup := errors.New("late-file-cleanup")
-			began := make(chan struct{})
-			observer := observe(context.Background(), time.Second, func(ctx context.Context) (source.Batch, error) {
-				close(began)
-				<-ctx.Done()
-				info := source.AcquisitionInfo{Source: "fixture", Document: "slot", Phase: source.ObservePhase}
-				if actual {
-					return nil, owned.Acquisition(ErrClose, info, cleanup)
-				}
-				previous := owned.Acquisition(ErrClose, source.AcquisitionInfo{Source: "previous", Phase: source.CapturePhase}, cleanup)
-				return nil, owned.Acquisition(ErrRead, info, ctx.Err(), previous)
-			})
-			<-began
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-			err := observer.Close(ctx)
-			state, problem := observer.Current()
-			if problem != nil || state.Status != source.Closed {
-				t.Fatal("local owner not joined", problem)
-			}
-			if actual {
-				if !errors.Is(err, cleanup) || !errors.Is(state.Failure, cleanup) {
-					t.Fatal("late actual cleanup discarded")
-				}
-			} else if err != nil || errors.Is(state.Failure, cleanup) {
-				t.Fatal("borrowed prior cleanup was treated as current cleanup", err)
-			}
-		})
+func TestSourceObservationRetainsItsReservation(t *testing.T) {
+	client, _, inbox := testClient(t, 1)
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("value: initial"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	source, err := client.Source(WatchSettings{Paths: []string{path}, Interval: 10 * time.Millisecond})
+	if err != nil {
+		t.Fatal(err)
+	}
+	observer, err := source.Observe(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer observer.Close(context.Background())
+	if err := inbox.Seal(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	observation, err := observer.Next(ctx)
+	if err != nil || observation.Err != nil || !observation.Batch.Valid() {
+		t.Fatal("accepted observation tried to reserve another operation", err, observation.Err)
 	}
 }

@@ -37,9 +37,10 @@ current boundary. Commit-pinned historical references retain their original text
 
 “Must” states an obligation for an applicable implementation, not evidence that
 service integrations or the full framework runtime exist. Shared mechanisms are
-implemented; a narrow public [CLI usage entry](../reference/cli/interface.md)
-supplies root/help. Public domain capabilities/errors, loading and durable framework
-orchestration remain absent. Start with the [documentation map](../README.md) for the actual
+implemented; the independent public numeric failure contract is also available.
+Public configsource capabilities, typed loading/Watch and an offline catalog CLI
+are available; a complete application runtime and Run/Item orchestration remain absent.
+Start with the [documentation map](../README.md) for the actual
 subset. Private research is supporting evidence, not a product dependency.
 
 ## Topics

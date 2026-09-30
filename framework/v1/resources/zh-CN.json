@@ -17,23 +17,66 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.framework",
+  "module": "fathomry",
+  "component": "assembly",
   "locale": "zh-CN",
   "messages": [
     {
-      "id": "fathomry.framework:invalid_catalog",
-      "source": "ecad18e8357f19fc990aa2a518f0e9f22fe8417758f47e28947bbd0514ca3205",
+      "id": "fathomry.assembly.invalid_options",
+      "source": "082b3be51b49ea3205910fbef8b911935ea64b2250d119c1405d55a428f36700",
       "forms": {
-        "other": "无法组合静态模块声明。"
+        "other": "运行时组装或接收选项无效。"
       }
     },
     {
-      "id": "fathomry.framework:limit",
-      "source": "9e2ed179f774bce32ba216a63190d75b0975d464ccdc29539b9ed8eb18c614f3",
+      "id": "fathomry.assembly.invalid_handle",
+      "source": "c7a2fa07855ce00df920d0f02e3db20aa9f1f28c89f8db464616892515346279",
       "forms": {
-        "other": "静态模块声明超出支持的限制。"
+        "other": "运行时组装句柄尚未初始化。"
+      }
+    },
+    {
+      "id": "fathomry.assembly.closed",
+      "source": "c1105b6acf69740f141e55d9a0fff362432cf784929983ac503adac0e944ef42",
+      "forms": {
+        "other": "运行时组装或接收器正在关闭或已关闭。"
+      }
+    },
+    {
+      "id": "fathomry.assembly.wait_interrupted",
+      "source": "1548a79027d03ce821cba8720b370e6e8f7d108bffef353e41aa471936cb4e64",
+      "forms": {
+        "other": "等待已结束，但尚未确认实际完成。"
+      }
+    },
+    {
+      "id": "fathomry.assembly.cleanup_failed",
+      "source": "fc01bdfacd5b807a3432bc3ea8711ec51b8e07f65ce34921449fc93aa74ecc9a",
+      "forms": {
+        "other": "运行时组装清理报告失败。"
+      }
+    },
+    {
+      "id": "fathomry.assembly.delivery_failed",
+      "source": "20151937feceaa5320e6e53c0b2ec2c58e64c84769c74ddc206b1019147132c2",
+      "forms": {
+        "other": "必要证据接收失败；保管责任仍被保留。"
+      }
+    },
+    {
+      "id": "fathomry.assembly.evidence_pending",
+      "source": "24eb71d1e167c51027eef6a59dde654dc2ff2ec926634756b55582c9c729278d",
+      "forms": {
+        "other": "仍有必要证据尚未确认接收。"
+      }
+    },
+    {
+      "id": "fathomry.assembly.runtime_serialization",
+      "source": "902dfd02ad0742c024a82bb3093e45238ab0f8dbf1ed4b1836e87720babbb9d7",
+      "forms": {
+        "other": "不支持运行时组装句柄序列化。"
       }
     }
   ]

@@ -102,6 +102,10 @@ func decodeResponse(payload *wire.Payload, expected string) (response.IResponse,
 			create = func() response.IResponse {
 				return &response.ConfigChangeBatchListenResponse{Response: &response.Response{}}
 			}
+		case "ConfigPublishResponse":
+			create = func() response.IResponse { return &response.ConfigPublishResponse{Response: &response.Response{}} }
+		case "ConfigRemoveResponse":
+			create = func() response.IResponse { return &response.ConfigRemoveResponse{Response: &response.Response{}} }
 		}
 	}
 	if create == nil {

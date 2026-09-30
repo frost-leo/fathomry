@@ -42,14 +42,14 @@ counterexamples and all applicable contracts before removing safeguards.
 Fathomry owns admission, HTTP password login, native connection sessions, bounded
 push handling and cleanup. This is not a transparent facade over the high-level
 SDK client. It provides no public application loader, precedence policy,
-configuration publication API, automatic reload, service discovery, migration or
+automatic application reload, service discovery, migration or
 Temporal commands.
 
 ## Call sequence and ownership
 
 1. Resolve `OptionsV1` outside Nacos. `Open` validates and freezes it before
    constructing local transport ownership; return is not service readiness.
-2. `Read` acquires one preselected key. `ReadAll` acquires every selected key in
+2. `Read` acquires one permitted key. `ReadAll` acquires every default key in
    input order, returning nil on any required failure.
 3. Give independently owned `Document.RawCopy()` bytes their authorized
    `resource.LayerKind` and use existing `resource.Prepare` once. Local content
@@ -58,10 +58,21 @@ Temporal commands.
    metadata or an explicit observation gap. A `Resync` requires a complete
    re-read; it does not apply configuration or prove application adoption.
 5. Close subscriptions or their owning client. Retain the same owner after a
-   timed-out Close and retry with a fresh cleanup budget.
+   timed-out Close and retry with a fresh cleanup budget. `ShutdownComplete`
+   reports drained native work plus confirmed assembly quiescence/release.
+   Historical socket-close errors can remain even when this evidence is true;
+   error presence alone is not a reliable ownership-release predicate.
 
-The [public Nacos Adapter](../../../../adapters/configsource/nacos/v1/interface.md)
-uses three narrow seams instead of requiring another native engine:
+`DynamicKeys` explicitly permits per-call keys and namespace-local search; false
+retains the fixed-key boundary. The namespace remains frozen, and this option
+does not grant server ACL permissions. With DynamicKeys, an empty default Keys
+list is valid, but ReadAll/ReadRawAll/Watch/ObserveRaw refuse that empty selection.
+Use `Read`/`ReadRaw`, `WatchKeys` or `ObserveRawKeys` for explicit selections.
+Each subscription freezes 1–16 distinct keys without changing client defaults.
+`Writable` is a separate opt-in for `Publish` and `Delete`, still under key/ACL policy.
+
+Three internal acquisition seams remain available for a future public integration
+without requiring another native engine:
 `ValidateOptions` admits deferred bootstrap; `ReadRawAll` retains present-empty
 content and explicit `Document.Missing` slots; `ObserveRaw` receives complete raw
 batches from the same registration/reconciliation/recovery loop. Read/ReadAll keep
@@ -75,6 +86,8 @@ recovered by searching arbitrary retained context causes. A validated native
 ChangedConfigs response schedules a paced follow-up in the same raw observation
 loop; no new poller/session is added. Metadata-only Watch retains its hash-only
 acquisition and does not inherit raw-batch retention limits.
+The single-key ReadRaw and explicitly selected ObserveRawKeys preserve the same
+missing/empty/error and raw-callback boundaries.
 
 Open's context owns the whole lifetime. Canceling a Next wait does not cancel
 the subscription. Clients and subscriptions support concurrent operations; do
@@ -101,21 +114,24 @@ application document formats. It refuses JSON persistence/reconstruction.
 | Servers | 1–8 explicit members of one authorized cluster, not configuration layers |
 | ServerV1.HTTPURL | At most 2048 bytes; HTTP(S) root or `/nacos` context path; no userinfo, query, fragment or redirects; HTTP requires AllowInsecure |
 | ServerV1.GRPCAddress | Explicit host:port, at most 512 bytes; port 1–65535; gRPC does not inherit security merely from the HTTP URL |
-| Keys | 1–16 distinct group/data-ID pairs; each at most 128 UTF-8 bytes, without edge whitespace/control characters; omitted group becomes DEFAULT_GROUP |
+| Keys | Up to 16 distinct default pairs; empty requires DynamicKeys; group/data ID at most 128 UTF-8 bytes without edge whitespace/control characters; omitted group becomes DEFAULT_GROUP |
+| DynamicKeys / Writable | Both false by default; per-call namespace-local selection/search and publication/removal are independently opted in |
 | Username / Password | Both present or absent; limits 256 / 4096 UTF-8 bytes; no environment or cloud credential discovery |
 | RootCAPEM | Optional trust roots, at most 64 KiB; otherwise system roots; no trust-all mode |
 | AllowInsecure | False by default; true explicitly selects plaintext gRPC and permits isolated-test HTTP |
 | RequestTimeout | Default 10 s, allowed 1 ms–1 min; cooperative admission/request/setup/decode phase budget |
 | RetryDelay | Default 100 ms, allowed 1 ms–1 min; minimum delay for registration retries and observation recovery |
 | ReconcileInterval | Default 30 s, allowed 1 s–5 min; technical state comparison, not application reload |
-| ConcurrentRequests | Default 4, allowed 2–16; finite reads/batches and persistent subscriptions share this admission allowance |
+| ConcurrentRequests | Default 4, allowed 2–16; finite reads/writes/searches and persistent subscriptions share this admission allowance |
 | QueuedRequests | Default 0 refuses overload; allowed 0–64, FIFO wait and separate byte reservations |
 | Subscriptions | Default 1, positive and less than ConcurrentRequests, leaving finite-read capacity |
 | QueueCapacity | Default 16, allowed 1–64 invalidations per subscription |
-| RPC input / output | Receive at most 8 MiB per gRPC message; send at most 64 KiB; header list at most 32 KiB |
+| RPC input / output | Receive/send at most 8 MiB per gRPC message; header list at most 32 KiB |
 | Protocol JSON | Valid UTF-8, one value, no duplicate keys, at most 64 levels and 32768 value nodes |
 | Raw content | At most 1 MiB per document and 4 MiB per returned batch; one additional bounded document may be acquired before aggregate rejection |
 | Login response | At most 64 KiB; token at most 16 KiB; TTL must be integer seconds in 1–604800 |
+| Publication | Nonempty UTF-8 content up to 1 MiB; optional CAS is 32 hexadecimal MD5 characters; each native metadata string at most 512 UTF-8 bytes |
+| Search | Explicit accurate/blur mode; page 1–1,000,000 (default 1), page size 1–100 (default 10); filters at most 128 UTF-8 bytes; HTTP body at most 8 MiB; returned content total at most 4 MiB |
 | Native acquisitions | At most ConcurrentRequests simultaneous dial/TLS phases, separately from logical admission; at most 64 resolved addresses attempted serially |
 
 Each admitted logical operation reserves 16 MiB for a unary response and its
@@ -145,7 +161,8 @@ is promised; caller-context expiry is not proof of released resources.
 The session performs ServerCheck, opens the native bidirectional stream and sends
 ConnectionSetup, then requires a successful HealthCheck response. Sending setup or
 sleeping is not registration proof. Code 301 can be retried up to 16 times within
-the operation budget; exhaustion retains the last native error.
+the operation budget for setup/reads/listening; exhaustion retains the last native
+error. Mutation dispatch never enters that retry loop.
 
 Configuration-query code 300 is missing, distinct from a successful empty string.
 Empty/whitespace required documents are refused with ErrEmpty. Required content
@@ -176,6 +193,42 @@ Finite read failover stays within the configured member set and one total budget
 Failures never authorize addresses suggested by a server reset. No exact physical
 wire-attempt count or atomic multi-member consistency is claimed.
 
+## Publication, CAS, removal and search
+
+Publish uses the SDK's ConfigPublish request with content type, CAS MD5 and explicit
+native metadata. Empty CAS means unconditional publication, **not create-only**.
+Delete uses ConfigRemove. Both acquire the same bounded ownership/admission as
+reads; session setup may fail over before dispatch, but a mutation is issued at
+most once by this package. Neither a generic server error nor transport timeout
+authorizes an automatic retry, even for code 301 after mutation dispatch.
+
+Always inspect MutationResult alongside the error:
+
+| State | Observed evidence |
+| --- | --- |
+| MutationNotIssued (0) | No mutation RPC was attempted; admission/setup may still have performed reads/login/registration |
+| MutationUnknown (1) | RPC was attempted but a validated acknowledgement/rejection is unavailable; a lost reply or generic server 500 cannot prove no effect |
+| MutationAcknowledged (2) | Validated success response; retained even if the caller budget expires afterward; not a read-propagation guarantee |
+| MutationRejected (3) | Validated native 301/401/403/409 rejection response; native codes remain inspectable, not a general rollback or retry policy |
+
+The isolated service's stale CAS returns generic native code 500 rather than 409.
+That outcome remains Unknown; the test separately observes unchanged content.
+Do not infer a stronger effect state by parsing the server's human-readable text.
+
+Search first uses native `/v1/cs/configs`; only HTTP 404/405/501 permits fallback to
+`/v3/admin/cs/config/list`. Authentication denial is never hidden by that fallback
+or endpoint failover. Search bodies preserve native codes and reject malformed,
+duplicate-key, over-limit or cross-namespace/exact-key results. ConfigTags maps to
+`config_tags` on v1 and `configTags` on v3, not the ignored SDK `tag` spelling.
+This mapping follows the [server controller](https://github.com/alibaba/nacos/blob/3.0.3/config/src/main/java/com/alibaba/nacos/config/server/controller/ConfigController.java)
+and [v3 API](https://nacos.io/en/docs/latest/manual/admin/admin-api/#36-query-config-list-by-config-content).
+
+SearchItem is a sensitive immutable observation. ContentPresent distinguishes
+content-bearing results from metadata-only v3 listings; absent content yields nil
+RawCopy, not a fabricated empty configuration. ReadRaw acquires actual content.
+When content/MD5 are both present they must agree. ItemsCopy detaches container
+storage; pagination is not a transactional or durable snapshot across requests.
+
 ## Observation and reconciliation
 
 Watch initially reports a full-set resynchronization requirement after successful
@@ -205,7 +258,8 @@ available. RemoteError retains observed result/error codes; its Message method
 deliberately exposes sensitive native text, while ordinary formatting does not.
 No missing metadata is invented by parsing human-readable error text.
 
-Options, endpoints, keys, clients, documents, subscriptions and changes have
+Options, management inputs/results, search pages/items, endpoints, keys, clients,
+documents, subscriptions and changes have
 restricted ordinary formatting and runtime JSON refusal. Typed nil formatting is
 safe; Go's ordinary nil-to-JSON-null behavior is not runtime reconstruction.
 Namespace/key/MD5 getters and RawCopy deliberately expose data; they are not safe
@@ -214,7 +268,7 @@ sandbox against unrelated Go code replacing global library facilities.
 
 The [maintainer workflow](../../../../../development/testing.md) distinguishes
 ordinary loopback tests, actual consuming build evidence and opt-in service work.
-The current single-server test used the declared Nacos 3.2.4 instance through
+Earlier single-server qualification used a declared Nacos 3.2.4 instance through
 explicit isolated plaintext endpoints and password authentication: raw read/write
 fixtures, pushes, connection replacement/re-registration, denial, malformed
 content, deletion and cleanup were exercised. Periodic reconciliation is longer
@@ -223,8 +277,14 @@ The service refused empty publication (result 500/error 400); successful-empty
 query handling remains a local-fixture check. This is not production TLS,
 multi-node failover/discovery or service-artifact integrity certification.
 
+The opt-in management gate additionally exercises native Publish/Delete, CAS,
+dynamic ReadRaw/WatchKeys, v3 metadata-only search and positive/negative tag filters
+using one uniquely named temporary key. It confirms absence during cleanup.
+Neither service gate modifies an existing configuration or deployment setting.
+
 Source/test categories are client ownership, native transport, authentication,
 protocol, raw acquisition and observation, each with adjacent tests.
+[Management and search boundaries](../../../../../../internal/configsource/nacos/v2/management_test.go),
 [Integration and rejecting preparation control](../../../../../../internal/configsource/nacos/v2/integration_test.go),
 [actual consumer](../../../../../../internal/configsource/nacos/v2/testdata/consumer/main.go),
 [opt-in service gate](../../../../../../internal/configsource/nacos/v2/service_test.go)

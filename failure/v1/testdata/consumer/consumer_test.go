@@ -20,414 +20,207 @@
 package consumer
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
+	"reflect"
 	"slices"
 	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"github.com/frost-leo/fathomry/failure/v1"
 )
 
-const sourceRejected failure.Condition = "example.source.rejected"
-const writePartial failure.Condition = "other.writer.partial"
+const unavailable failure.Code = 0xA4490001
 
-// Each fixture owns its detail contract. The core neither discovers nor prints it.
-type sourceFailure struct {
-	core        *failure.Error
-	generations []uint64
-}
-
-func newSource(generations []uint64, causes ...error) (sourceFailure, error) {
-	if len(generations) > 8 {
-		return sourceFailure{}, errors.New("source: too many generations")
+func TestCapabilityCodeDomains(t *testing.T) {
+	var definitions []failure.Definition
+	for _, item := range []struct {
+		facility  failure.Facility
+		component string
+		domain    failure.Domain
+	}{
+		{0x481, "database", failure.DomainDatabase},
+		{0x501, "cache", failure.DomainCache},
+		{0x541, "objects", failure.DomainObjectStorage},
+	} {
+		code, err := failure.MakeCode(item.facility, 1)
+		if err != nil || code.Domain() != item.domain {
+			t.Fatal("public code did not identify the capability")
+		}
+		definitions = append(definitions, failure.Definition{Code: code, Module: "customer", Component: item.component,
+			Identifier: failure.Identifier("customer." + item.component + ".failed"), Revision: 1, Message: "The selected capability failed."})
 	}
-	core, err := failure.New(sourceRejected, causes...)
-	return sourceFailure{core: core, generations: slices.Clone(generations)}, err
-}
-func (err sourceFailure) Failure() *failure.Error { return err.core }
-func (err sourceFailure) Error() string           { return err.core.Error() }
-func (err sourceFailure) Unwrap() error           { return err.core }
-func (err sourceFailure) Generations() []uint64   { return slices.Clone(err.generations) }
-func (err sourceFailure) Format(state fmt.State, verb rune) {
-	fmt.Fprintf(state, "%"+string(verb), err.core)
-}
-func (err *sourceFailure) LogValue() slog.Value {
-	if err == nil {
-		return slog.StringValue("<nil>")
-	}
-	return err.core.LogValue()
-}
-func (err sourceFailure) MarshalJSON() ([]byte, error) { return nil, failure.ErrSerialization }
-func (*sourceFailure) UnmarshalJSON([]byte) error      { return failure.ErrSerialization }
-
-type writeFailure struct {
-	core     *failure.Error
-	accepted []uint64
-	private  []byte
-}
-
-func newWrite(accepted []uint64, private []byte, causes ...error) (writeFailure, error) {
-	if len(accepted) > 8 || len(private) > 64 {
-		return writeFailure{}, errors.New("writer: detail limit")
-	}
-	core, err := failure.New(writePartial, causes...)
-	return writeFailure{core: core, accepted: slices.Clone(accepted), private: bytes.Clone(private)}, err
-}
-func (err writeFailure) Failure() *failure.Error { return err.core }
-func (err writeFailure) Error() string           { return err.core.Error() }
-func (err writeFailure) Unwrap() error           { return err.core }
-func (err writeFailure) Accepted() []uint64      { return slices.Clone(err.accepted) }
-func (err writeFailure) PrivateCopy() []byte     { return bytes.Clone(err.private) }
-func (err writeFailure) Format(state fmt.State, verb rune) {
-	fmt.Fprintf(state, "%"+string(verb), err.core)
-}
-func (err *writeFailure) LogValue() slog.Value {
-	if err == nil {
-		return slog.StringValue("<nil>")
-	}
-	return err.core.LogValue()
-}
-func (err writeFailure) MarshalJSON() ([]byte, error) { return nil, failure.ErrSerialization }
-func (*writeFailure) UnmarshalJSON([]byte) error      { return failure.ErrSerialization }
-
-var (
-	_ failure.Occurrence = sourceFailure{}
-	_ failure.Occurrence = (*sourceFailure)(nil)
-	_ failure.Occurrence = writeFailure{}
-	_ failure.Occurrence = (*writeFailure)(nil)
-)
-
-// Presentation selects both identity and facts from the supplied extension,
-// never an errors.As search through another occurrence.
-func present(err error, wording map[failure.Condition]string) string {
-	current, ok := failure.Inspect(err)
-	if !ok {
-		return "operation failed"
-	}
-	prefix, ok := wording[current.Diagnostic().Condition]
-	if !ok {
-		return current.Error()
-	}
-	switch owned := err.(type) {
-	case sourceFailure:
-		return fmt.Sprintf("%s %v", prefix, owned.Generations())
-	case *sourceFailure:
-		return fmt.Sprintf("%s %v", prefix, owned.Generations())
-	case writeFailure:
-		return fmt.Sprintf("%s %v", prefix, owned.Accepted())
-	case *writeFailure:
-		return fmt.Sprintf("%s %v", prefix, owned.Accepted())
-	default:
-		return current.Error()
-	}
-}
-
-func TestIndependentOwners(t *testing.T) {
-	generations, accepted := []uint64{17}, []uint64{3, 4}
-	private := []byte("consumer_secret_canary")
-	source, err := newSource(generations)
+	catalog, err := failure.Prepare(definitions...)
 	if err != nil {
 		t.Fatal(err)
 	}
-	write, err := newWrite(accepted, private, source)
+	components, err := catalog.Components()
+	if err != nil || len(components) != 3 {
+		t.Fatal("missing capability atlas components")
+	}
+	for _, component := range components {
+		if component.Domain == "" || component.Domain != component.Codes[0].Domain() {
+			t.Fatal("component atlas lost its capability domain")
+		}
+	}
+}
+
+type nativeStatus uint64
+
+func (nativeStatus) Error() string { return "native status" }
+
+func TestNativeNumericDomainIsNotNarrowed(t *testing.T) {
+	const native nativeStatus = 0x100000005
+	value, err := failure.New(declaration(), failure.Location{}, native)
 	if err != nil {
 		t.Fatal(err)
 	}
-	generations[0], accepted[0], private[0] = 99, 99, 'X'
-	source.Generations()[0], write.Accepted()[0], write.PrivateCopy()[0] = 88, 88, 'Y'
-	if source.Generations()[0] != 17 || write.Accepted()[0] != 3 || string(write.PrivateCopy()) != "consumer_secret_canary" {
-		t.Fatal("detail alias")
-	}
-	for _, value := range []error{source, &source, write, &write} {
-		core, ok := failure.Inspect(value)
-		if !ok || core != value.(failure.Occurrence).Failure() {
-			t.Fatal("direct occurrence lost")
-		}
-		if !errors.Is(value, core.Diagnostic().Condition) {
-			t.Fatal("identity unreachable")
-		}
-		if errors.Is(value, errors.New(value.Error())) {
-			t.Fatal("text used as identity")
-		}
-		var native *failure.Error
-		if !errors.As(value, &native) || native != core {
-			t.Fatal("core As lost")
-		}
-		for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q"} {
-			if strings.Contains(fmt.Sprintf(format, value), "consumer_secret_canary") {
-				t.Fatal("detail formatted")
-			}
-		}
-		var buffer bytes.Buffer
-		slog.New(slog.NewJSONHandler(&buffer, nil)).Info("fixture", "err", value)
-		if strings.Contains(buffer.String(), "consumer_secret_canary") {
-			t.Fatal("detail logged")
-		}
-		if _, err := json.Marshal(value); !errors.Is(err, failure.ErrSerialization) {
-			t.Fatalf("runtime serialized: %v", err)
-		}
-	}
-	var sourceValue sourceFailure
-	if !errors.As(write, &sourceValue) || sourceValue.Generations()[0] != 17 {
-		t.Fatal("value extension unreachable")
-	}
-	pointerWrite, _ := newWrite(nil, nil, &source)
-	var sourcePointer *sourceFailure
-	if !errors.As(pointerWrite, &sourcePointer) || sourcePointer != &source {
-		t.Fatal("pointer extension unreachable")
-	}
-	var missing *writeFailure
-	if errors.As(source, &missing) {
-		t.Fatal("unrelated type matched")
-	}
-	if !errors.As(&write, &missing) || missing != &write {
-		t.Fatal("writer pointer extension unreachable")
-	}
-	var writerValue writeFailure
-	if !errors.As(write, &writerValue) || writerValue.Accepted()[0] != 3 {
-		t.Fatal("writer value extension unreachable")
-	}
-	var readers sync.WaitGroup
-	for range 8 {
-		readers.Go(func() {
-			for range 100 {
-				if source.Generations()[0] != 17 || write.Accepted()[0] != 3 {
-					t.Error("concurrent detail changed")
-				}
-				source.Generations()[0] = 90
-				write.PrivateCopy()[0] = 'Z'
-				_ = present(write, nil)
-			}
-		})
-	}
-	readers.Wait()
-	for _, value := range []any{source, &source, write, &write} {
-		if _, err := json.Marshal(value); !errors.Is(err, failure.ErrSerialization) {
-			t.Fatal("value serialization accepted")
-		}
-	}
-	if err := json.Unmarshal([]byte("{}"), &source); !errors.Is(err, failure.ErrSerialization) {
-		t.Fatal("source reconstructed")
-	}
-	if err := json.Unmarshal([]byte("{}"), &write); !errors.Is(err, failure.ErrSerialization) {
-		t.Fatal("writer reconstructed")
-	}
-	if _, err := newSource(make([]uint64, 9)); err == nil {
-		t.Fatal("source detail truncated")
-	}
-	if _, err := newWrite(make([]uint64, 9), nil); err == nil {
-		t.Fatal("write detail truncated")
-	}
-	if _, err := newWrite(nil, make([]byte, 65)); err == nil {
-		t.Fatal("private detail unbounded")
+	var retained nativeStatus
+	if !errors.As(value, &retained) || retained != native || !errors.Is(value, native) || !errors.Is(value, unavailable) {
+		t.Fatal("32-bit public code changed native numeric evidence")
 	}
 }
 
-func TestSameOccurrencePresentation(t *testing.T) {
-	inner, _ := newSource([]uint64{11})
-	outer, _ := newSource([]uint64{22}, inner)
-	sibling, _ := newSource([]uint64{33})
-	words := map[failure.Condition]string{sourceRejected: "Generation rejected", writePartial: "Accepted subset"}
-	if got := present(outer, words); got != "Generation rejected [22]" {
-		t.Fatal(got)
-	}
-	if got := present(&inner, words); got != "Generation rejected [11]" {
-		t.Fatal(got)
-	}
-	for _, joined := range []error{errors.Join(outer, sibling), errors.Join(sibling, outer), fmt.Errorf("context: %w", inner)} {
-		if _, ok := failure.Inspect(joined); ok {
-			t.Fatal("fabricated primary")
-		}
-		if got := present(joined, words); got != "operation failed" {
-			t.Fatal(got)
-		}
-		if !errors.Is(joined, sourceRejected) {
-			t.Fatal("recursive membership lost")
-		}
-	}
-	plain, _ := failure.New(sourceRejected, inner)
-	if got := present(plain, words); got != string(sourceRejected) {
-		t.Fatal("borrowed descendant detail:", got)
-	}
-	write, _ := newWrite([]uint64{44}, nil, inner)
-	if got := present(write, words); got != "Accepted subset [44]" {
-		t.Fatal(got)
-	}
-	words[sourceRejected] = "Candidate declined"
-	if got := present(outer, words); got != "Candidate declined [22]" || !errors.Is(outer, sourceRejected) {
-		t.Fatal(got)
-	}
-	if got := present(outer, nil); got != string(sourceRejected) || outer.Generations()[0] != 22 {
-		t.Fatal("fallback changed original")
+type ConfigurationDetails struct {
+	Document string   `json:"document"`
+	Fields   []string `json:"fields"`
+}
+
+func declaration() failure.Definition {
+	return failure.Definition{
+		Code: unavailable, Identifier: "customer.configsource.unavailable",
+		Module: "customer", Component: "configsource", Revision: 1,
+		Message: "The selected configuration source is unavailable.",
+		Details: failure.Contract{ID: "customer.configsource.acquisition", Version: 1},
 	}
 }
 
-func TestNilAndInvalidExtensions(t *testing.T) {
-	valid, _ := failure.New(sourceRejected)
-	zero := failure.Error{}
-	for _, value := range []error{(*sourceFailure)(nil), (*writeFailure)(nil), sourceFailure{}, writeFailure{}, sourceFailure{core: &zero}} {
-		if _, ok := failure.Inspect(value); ok {
-			t.Fatal("nil/invalid selected")
-		}
-		if got := present(value, nil); got != "operation failed" {
-			t.Fatal(got)
-		}
-	}
-	for _, value := range []any{(*sourceFailure)(nil), (*writeFailure)(nil)} {
-		for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q"} {
-			if output := fmt.Sprintf(format, value); strings.Contains(output, "PANIC") || strings.Contains(output, "consumer_secret") {
-				t.Fatal("unsafe nil formatting", output)
-			}
-		}
-		if got, err := json.Marshal(value); err != nil || string(got) != "null" {
-			t.Fatal("nil is not absence")
-		}
-	}
-	for _, result := range []*failure.Error{nil, &zero} {
-		invalid := invalidExtension{cause: valid, current: result}
-		if _, ok := failure.Inspect(invalid); ok {
-			t.Fatal("fallback searched descendant")
-		}
-		if !errors.Is(invalid, sourceRejected) {
-			t.Fatal("recursive cause missing")
-		}
-	}
-}
-
-type invalidExtension struct {
-	cause   error
-	current *failure.Error
-}
-
-func (invalidExtension) Error() string               { return "invalid extension" }
-func (err invalidExtension) Failure() *failure.Error { return err.current }
-func (err invalidExtension) Unwrap() error           { return err.cause }
-
-func TestNilExtensionLogging(t *testing.T) {
-	for _, value := range []slog.LogValuer{(*sourceFailure)(nil), (*writeFailure)(nil), &sourceFailure{}, &writeFailure{}} {
-		resolved := slog.AnyValue(value).Resolve()
-		if resolved.Kind() != slog.KindString || resolved.String() != "<nil>" {
-			t.Errorf("%T: nil/core-nil must resolve to absence, got %s", value, resolved.Kind())
-		}
-		for _, jsonLog := range []bool{false, true} {
-			var buffer bytes.Buffer
-			options := &slog.HandlerOptions{ReplaceAttr: func(_ []string, attr slog.Attr) slog.Attr {
-				if attr.Key == slog.TimeKey {
-					return slog.Attr{}
-				}
-				return attr
-			}}
-			var handler slog.Handler = slog.NewTextHandler(&buffer, options)
-			expected := "level=INFO msg=nil err=<nil>\n"
-			if jsonLog {
-				handler = slog.NewJSONHandler(&buffer, options)
-				expected = "{\"level\":\"INFO\",\"msg\":\"nil\",\"err\":\"<nil>\"}\n"
-			}
-			slog.New(handler).Info("nil", "err", value)
-			if buffer.String() != expected {
-				t.Errorf("%T JSON=%v: nil/core-nil did not log exact absence", value, jsonLog)
-			}
-		}
-	}
-	unsafe := slog.AnyValue((*unsafeValueLogger)(nil)).Resolve()
-	if unsafe.Kind() != slog.KindAny || !strings.Contains(fmt.Sprint(unsafe.Any()), "LogValue panicked") {
-		t.Fatal("rejecting control no longer demonstrates promoted nil LogValue failure")
-	}
-}
-
-type unsafeValueLogger struct{}
-
-func (unsafeValueLogger) LogValue() slog.Value { return slog.StringValue("not absence") }
-
-func TestExtensionLoggingForms(t *testing.T) {
-	source, _ := newSource([]uint64{17})
-	write, _ := newWrite([]uint64{3}, []byte("consumer_secret_canary"))
-	for _, value := range []error{source, write, &source, &write} {
-		_, pointerLogger := value.(slog.LogValuer)
-		resolved := slog.AnyValue(value).Resolve()
-		if pointerLogger && (resolved.Kind() != slog.KindString || resolved.String() != value.Error()) {
-			t.Fatal("pointer logging lost code")
-		}
-		if !pointerLogger && resolved.Kind() != slog.KindAny {
-			t.Fatal("value method set changed")
-		}
-		for _, jsonLog := range []bool{false, true} {
-			var buffer bytes.Buffer
-			var handler slog.Handler = slog.NewTextHandler(&buffer, nil)
-			if jsonLog {
-				handler = slog.NewJSONHandler(&buffer, nil)
-			}
-			slog.New(handler).Info("fixture", "err", value)
-			if !jsonLog {
-				if !strings.HasSuffix(buffer.String(), " err="+value.Error()+"\n") {
-					t.Fatal("text form lost safe code")
-				}
-				continue
-			}
-			var record map[string]any
-			if err := json.Unmarshal(buffer.Bytes(), &record); err != nil {
-				t.Fatal(err)
-			}
-			expected := value.Error()
-			expectedAddressed := expected
-			if !pointerLogger {
-				expected = "!ERROR:json: error calling MarshalJSON for type " + fmt.Sprintf("%T", value) + ": " + failure.ErrSerialization.Error()
-				// encoding/json may address its copied value before invoking MarshalJSON.
-				expectedAddressed = strings.Replace(expected, "for type ", "for type *", 1)
-			}
-			if record["err"] != expected && record["err"] != expectedAddressed {
-				t.Fatalf("%T JSON form: got %q, want %q", value, record["err"], expected)
-			}
-		}
-	}
-}
-
-func TestIndependentDefinitionModules(t *testing.T) {
-	root := failure.ModuleDefinition{
-		ID: "example.source", Source: "consumer.source",
-		Conditions: []failure.ConditionDefinition{{Condition: sourceRejected, Contract: "v1"}},
-		Contracts:  []failure.FactContract{{ID: "example.source:query", Revision: "v1", Use: failure.PresentationInput, Access: failure.OwnerFacts, Fields: []failure.FactField{{Name: "state", Kind: failure.EnumFact, Required: true, UnknownAllowed: true, Values: []string{"unknown", "known"}}}}},
-		Children:   []failure.ModuleDefinition{{ID: "example.source.sync", Source: "consumer.sync", Conditions: []failure.ConditionDefinition{{Condition: "example.source.sync.failed", Contract: "v1"}}}},
-	}
-	catalog, err := failure.PrepareDefinitions(root, failure.ModuleDefinition{ID: "example.sourcex", Source: "lookalike"})
+func TestIndependentErrorAndCatalog(t *testing.T) {
+	input := ConfigurationDetails{Document: "private-document", Fields: []string{"private-field"}}
+	native := &fs.PathError{Op: "read", Path: "private-path", Err: fs.ErrPermission}
+	value, err := failure.NewDetailed(declaration(), failure.Location{Operation: "read", Instance: "primary"}, input, func(value ConfigurationDetails) ConfigurationDetails {
+		value.Fields = slices.Clone(value.Fields)
+		return value
+	}, native)
 	if err != nil {
 		t.Fatal(err)
 	}
-	modules, _ := catalog.Modules()
-	if len(modules) != 3 || modules[0].Parent != "" || modules[1].Parent != "example.source" {
-		t.Fatal(modules)
+	input.Fields[0] = "changed"
+	own, ok := failure.Inspect(value)
+	if !ok || own != value.Failure() || own.Diagnostic().Definition.Code != unavailable {
+		t.Fatal("public composition failed")
 	}
-	if _, exists, _ := catalog.Module("example"); exists {
-		t.Fatal("synthetic parent")
+	fields, ok := value.Details()
+	if !ok || !reflect.DeepEqual(fields, ConfigurationDetails{Document: "private-document", Fields: []string{"private-field"}}) {
+		t.Fatal("public detail type/storage lost")
 	}
-	direct, _, _ := catalog.Definitions(root.ID, false)
-	subtree, _, _ := catalog.Definitions(root.ID, true)
-	if len(direct) != 1 || len(subtree) != 2 {
-		t.Fatal("false hierarchy", direct, subtree)
+	var original *fs.PathError
+	if !errors.As(value, &original) || original != native || !errors.Is(value, unavailable) || !errors.Is(value, fs.ErrPermission) {
+		t.Fatal("original native cause or numeric identity lost")
 	}
-	contract, exists, err := catalog.Contract("example.source:query")
-	if err != nil || !exists || contract.Use != failure.PresentationInput || contract.Access != failure.OwnerFacts || !contract.Fields[0].Required || !contract.Fields[0].UnknownAllowed {
-		t.Fatal(contract, err)
+	for _, canary := range []string{"private-document", "private-field", "private-path"} {
+		if strings.Contains(fmt.Sprintf("%+v", value), canary) {
+			t.Fatal("default diagnostic disclosed runtime data")
+		}
 	}
-	contract.Fields[0].Values[0] = "changed"
-	root.Contracts[0].Fields[0].Values[1] = "changed"
-	again, _, _ := catalog.Contract(contract.ID)
-	if again.Fields[0].Values[0] != "known" || again.Fields[0].Values[1] != "unknown" {
-		t.Fatal("definition alias")
+	selected := append(failure.Definitions(), declaration())
+	catalog, err := failure.Prepare(selected...)
+	if err != nil {
+		t.Fatal(err)
 	}
-	unknown, err := failure.New("external.source.unavailable")
-	if inspected, ok := failure.Inspect(unknown); err != nil || !ok || inspected != unknown || !errors.Is(unknown, failure.Condition("external.source.unavailable")) {
-		t.Fatal("mandatory registry")
+	numeric, exists, err := catalog.Lookup(unavailable)
+	if err != nil || !exists {
+		t.Fatal("numeric atlas query failed", err)
 	}
-	if _, exists, err := catalog.Lookup("external.source.unavailable"); err != nil || exists {
-		t.Fatal("observed-error registration")
+	symbolic, exists, err := catalog.LookupIdentifier("customer.configsource.unavailable")
+	if err != nil || !exists || numeric != symbolic {
+		t.Fatal("identifier lookup disagreed", err)
 	}
-	if bad, err := failure.PrepareDefinitions(root, root); err == nil || bad != nil {
-		t.Fatal("duplicate admission")
+	owners, err := catalog.Components()
+	if err != nil || len(owners) != 2 {
+		t.Fatal("definition owners unavailable", err)
+	}
+	other := declaration()
+	other.Identifier = "customer.configsource.other"
+	if _, err := failure.Prepare(declaration(), other); !errors.Is(err, failure.ErrDefinition) {
+		t.Fatal("collision was silently overridden", err)
+	}
+	bytes, err := json.Marshal(unavailable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roundtrip failure.Code
+	if err := json.Unmarshal(bytes, &roundtrip); err != nil || roundtrip != unavailable {
+		t.Fatal("high-bit numeric identity was rounded", err)
+	}
+	if _, err := json.Marshal(value); !errors.Is(err, failure.ErrSerialization) {
+		t.Fatal("runtime error acquired a wire schema", err)
+	}
+	for _, wrapped := range []error{fmt.Errorf("context: %w", value), errors.Join(value, native)} {
+		if _, ok := failure.Inspect(wrapped); ok {
+			t.Fatal("selected a descendant occurrence implicitly")
+		}
+	}
+}
+
+type customError struct {
+	core *failure.Error
+	at   time.Time
+	note string
+}
+
+func (value *customError) Failure() *failure.Error {
+	if value == nil {
+		return nil
+	}
+	return value.core
+}
+func (value *customError) Error() string { return value.Failure().Error() }
+func (value *customError) Unwrap() error {
+	if core := value.Failure(); core != nil {
+		return core
+	}
+	return nil
+}
+func (value customError) Format(state fmt.State, verb rune) {
+	if value.core == nil {
+		_, _ = fmt.Fprint(state, "<nil>")
+		return
+	}
+	value.core.Format(state, verb)
+}
+func (value *customError) LogValue() slog.Value  { return value.Failure().LogValue() }
+func (customError) MarshalJSON() ([]byte, error) { return nil, failure.ErrSerialization }
+func (*customError) UnmarshalJSON([]byte) error  { return failure.ErrSerialization }
+
+func TestOwnerDefinedOccurrenceWithoutDetailed(t *testing.T) {
+	native := &fs.PathError{Op: "open", Path: "private-path", Err: fs.ErrPermission}
+	core, err := failure.New(declaration(), failure.Location{Operation: "load"}, native)
+	if err != nil {
+		t.Fatal("component could not construct its own declared-detail core", err)
+	}
+	instant := time.Date(2026, 9, 29, 0, 0, 0, 0, time.UTC)
+	value := &customError{core: core, at: instant, note: "private-component-note"}
+	selected, ok := failure.Inspect(value)
+	if !ok || selected != core || selected.Diagnostic().Definition.Details != declaration().Details || value.at != instant {
+		t.Fatal("custom occurrence failed the shared protocol")
+	}
+	if !errors.Is(value, unavailable) || !errors.Is(value, native) {
+		t.Fatal("custom occurrence lost semantic or native identity")
+	}
+	var original *fs.PathError
+	if !errors.As(value, &original) || original != native {
+		t.Fatal("custom occurrence rewrote native cause")
+	}
+	if strings.Contains(fmt.Sprintf("%+v", value), "private-component-note") {
+		t.Fatal("component presentation exposed its private extension")
+	}
+	var absent *customError
+	if selected, ok := failure.Inspect(absent); selected != nil || ok {
+		t.Fatal("nil custom occurrence was inspected")
 	}
 }

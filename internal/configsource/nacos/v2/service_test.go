@@ -28,7 +28,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +53,8 @@ type serviceFixture struct {
 	AllowWrites   bool   `json:"allow_writes"`
 }
 
-func TestNacosServiceReadWriteWatchAndCleanup(t *testing.T) {
+func loadServiceFixture(t *testing.T) serviceFixture {
+	t.Helper()
 	path := os.Getenv("FATHOMRY_NACOS_TEST_CONFIG")
 	if path == "" {
 		t.Fatal("set FATHOMRY_NACOS_TEST_CONFIG to the authorized private fixture")
@@ -75,6 +78,11 @@ func TestNacosServiceReadWriteWatchAndCleanup(t *testing.T) {
 	if !errors.Is(decoder.Decode(&extra), io.EOF) || !fixture.AllowWrites {
 		t.Fatal("isolated service writes were not explicitly authorized")
 	}
+	return fixture
+}
+
+func TestNacosServiceReadWriteWatchAndCleanup(t *testing.T) {
+	fixture := loadServiceFixture(t)
 	var nonce [8]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		t.Fatal("fixture identity failed")
@@ -339,4 +347,133 @@ func TestNacosServiceReadWriteWatchAndCleanup(t *testing.T) {
 	}
 	t.Log("Real denial, malformed content, deletion and fail-closed batch checks passed.")
 	t.Log("Service fixture keys will be removed and checked absent before client cleanup.")
+}
+
+func TestNacosManagementService(t *testing.T) {
+	fixture := loadServiceFixture(t)
+	var nonce [8]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		t.Fatal("fixture identity failed")
+	}
+	selected := KeyV1{Group: "DEFAULT_GROUP", DataID: "gh98-capability-" + hex.EncodeToString(nonce[:]) + ".toml"}
+	options := OptionsV1{Name: "capability-admin", Namespace: fixture.Namespace,
+		Servers:     []ServerV1{{HTTPURL: fixture.HTTPURL, GRPCAddress: fixture.GRPCAddress}},
+		DynamicKeys: true, Writable: true, Username: fixture.AdminUsername, Password: fixture.AdminPassword,
+		RootCAPEM: fixture.RootCAPEM, AllowInsecure: fixture.AllowInsecure, RequestTimeout: 10 * time.Second, ReconcileInterval: 30 * time.Second}
+	client := openClient(t, options)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	existing, err := client.ReadRaw(ctx, selected)
+	if err != nil || !existing.Missing() {
+		t.Fatal("unique test key was not confirmed absent")
+	}
+	t.Cleanup(func() {
+		cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stop()
+		_, removeErr := client.Delete(cleanup, selected)
+		for cleanup.Err() == nil {
+			document, readErr := client.ReadRaw(cleanup, selected)
+			if readErr == nil && document.Missing() {
+				t.Log("Isolated management fixture cleanup confirmed.")
+				return
+			}
+			if !pause(cleanup, 100*time.Millisecond) {
+				break
+			}
+		}
+		if removeErr != nil {
+			t.Error("isolated cleanup deletion did not complete")
+		}
+		t.Error("isolated management fixture absence not confirmed")
+	})
+	initial := "value=1\n"
+	result, err := client.Publish(ctx, PublishInputV1{Key: selected, Content: initial, ContentType: "toml", ConfigTags: "capability-proof"})
+	if err != nil || result.State() != MutationAcknowledged {
+		t.Fatal("real publication not acknowledged", err)
+	}
+	await := func(content string) *Document {
+		t.Helper()
+		for ctx.Err() == nil {
+			value, err := client.ReadRaw(ctx, selected)
+			if err == nil && !value.Missing() && string(value.RawCopy()) == content {
+				return value
+			}
+			if !pause(ctx, 100*time.Millisecond) {
+				break
+			}
+		}
+		t.Fatal("expected isolated content not observed")
+		return nil
+	}
+	first := await(initial)
+	subscription, err := client.WatchKeys(ctx, []KeyV1{selected})
+	if err != nil {
+		t.Fatal("dynamic watch failed", err)
+	}
+	defer subscription.Close(context.Background())
+	ready, stop := context.WithTimeout(ctx, 15*time.Second)
+	change, err := subscription.Next(ready)
+	stop()
+	if err != nil || change.Err() != nil || !change.Resync() {
+		t.Fatal("initial dynamic watch registration failed")
+	}
+	updated := "value=2\n"
+	result, err = client.Publish(ctx, PublishInputV1{Key: selected, Content: updated, ContentType: "toml", CASMD5: first.MD5(), ConfigTags: "capability-proof"})
+	if err != nil || result.State() != MutationAcknowledged {
+		t.Fatal("real CAS update failed", err)
+	}
+	await(updated)
+	wait, stop := context.WithTimeout(ctx, 15*time.Second)
+	change, err = subscription.Next(wait)
+	stop()
+	if err != nil || change.Err() != nil || change.Key().DataID != selected.DataID {
+		t.Fatal("real dynamic invalidation not observed")
+	}
+	result, err = client.Publish(ctx, PublishInputV1{Key: selected, Content: "value=3\n", CASMD5: first.MD5(), ConfigTags: "capability-proof"})
+	var remote *RemoteError
+	if err == nil || !errors.As(err, &remote) {
+		t.Fatal("stale CAS was not refused with native evidence")
+	}
+	t.Logf("Stale CAS native code=%d, mutation state=%d.", remote.ErrorCode(), result.State())
+	await(updated)
+	page, err := client.Search(ctx, SearchInputV1{Mode: "accurate", DataID: selected.DataID, Group: selected.Group, ConfigTags: "capability-proof", PageSize: 5})
+	if err != nil || page.Total() != 1 || len(page.ItemsCopy()) != 1 {
+		token, tokenErr := client.token(ctx, 0)
+		if tokenErr == nil {
+			query := url.Values{"search": {"accurate"}, "dataId": {selected.DataID}, "groupName": {selected.Group}, "namespaceId": {fixture.Namespace}, "pageNo": {"1"}, "pageSize": {"5"}, "accessToken": {token}}
+			raw, _, probeErr := client.searchRequest(ctx, 0, "/v3/admin/cs/config/list", query)
+			if probeErr == nil {
+				var shape struct {
+					Data struct {
+						PageItems []map[string]json.RawMessage `json:"pageItems"`
+					} `json:"data"`
+				}
+				if json.Unmarshal(raw, &shape) == nil && len(shape.Data.PageItems) > 0 {
+					var names []string
+					for name := range shape.Data.PageItems[0] {
+						names = append(names, name)
+					}
+					slices.Sort(names)
+					t.Logf("Isolated search item field names: %v", names)
+				}
+			}
+		}
+		t.Fatal("real isolated search failed", err)
+	}
+	item := page.ItemsCopy()[0]
+	if item.Key().DataID != selected.DataID || item.Key().Group != selected.Group || item.MD5() != checksum(updated) {
+		t.Fatal("search returned unexpected isolated metadata")
+	}
+	if item.ContentPresent() && string(item.RawCopy()) != updated {
+		t.Fatal("search returned unexpected isolated content")
+	}
+	page, err = client.Search(ctx, SearchInputV1{Mode: "accurate", DataID: selected.DataID, Group: selected.Group, ConfigTags: "unmatched-capability-proof", PageSize: 5})
+	if err != nil || page.Total() != 0 || len(page.ItemsCopy()) != 0 {
+		t.Fatal("native search ignored config-tag filter", err)
+	}
+	result, err = client.Delete(ctx, selected)
+	if err != nil || result.State() != MutationAcknowledged {
+		t.Fatal("real deletion not acknowledged", err)
+	}
+	t.Log("Native publish, CAS, dynamic read/watch, exact search and delete passed.")
 }

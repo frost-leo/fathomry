@@ -40,7 +40,7 @@ func decode(data []byte, nodes *int) (map[string]any, error) {
 		return nil, err
 	}
 	if _, err := decoder.Token(); err != io.EOF {
-		return nil, reject(ErrResource)
+		return nil, reject(ErrResource, err)
 	}
 	object, ok := value.(map[string]any)
 	if !ok {
@@ -56,7 +56,7 @@ func decodeValue(decoder *json.Decoder, depth int, nodes *int) (any, error) {
 	*nodes++
 	token, err := decoder.Token()
 	if err != nil {
-		return nil, reject(ErrResource)
+		return nil, reject(ErrResource, err)
 	}
 	switch value := token.(type) {
 	case string:
@@ -77,7 +77,7 @@ func decodeValue(decoder *json.Decoder, depth int, nodes *int) (any, error) {
 				*nodes++
 				token, err := decoder.Token()
 				if err != nil {
-					return nil, reject(ErrResource)
+					return nil, reject(ErrResource, err)
 				}
 				key, ok := token.(string)
 				if !ok {
@@ -97,7 +97,7 @@ func decodeValue(decoder *json.Decoder, depth int, nodes *int) (any, error) {
 			}
 			end, err := decoder.Token()
 			if err != nil || end != json.Delim('}') {
-				return nil, reject(ErrResource)
+				return nil, reject(ErrResource, err)
 			}
 			return object, nil
 		case '[':
@@ -111,7 +111,7 @@ func decodeValue(decoder *json.Decoder, depth int, nodes *int) (any, error) {
 			}
 			end, err := decoder.Token()
 			if err != nil || end != json.Delim(']') {
-				return nil, reject(ErrResource)
+				return nil, reject(ErrResource, err)
 			}
 			return array, nil
 		}

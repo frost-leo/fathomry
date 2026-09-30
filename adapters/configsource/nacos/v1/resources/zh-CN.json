@@ -17,51 +17,108 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "fathomry.adapters.configsource.nacos",
+  "module": "fathomry",
+  "component": "configsource_nacos",
   "locale": "zh-CN",
   "messages": [
     {
-      "id": "fathomry.adapters.configsource.nacos:invalid_settings",
-      "source": "5819752f262b7483c4d031e591fc2eb6f677422841395c828f12ca6c74185f6f",
+      "id": "fathomry.configsource_nacos.invalid_input",
+      "source": "77943cc0bfb9fa67db893833ffa746b77fdeeb3fc4155f0647f9287361083731",
       "forms": {
-        "other": "远程配置来源设置无效。"
+        "other": "配置输入或声明无效。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:read",
-      "source": "7d08e0af199c48f531dc230086239c9a0081c5dc6d5a5e39193566777de3c90b",
+      "id": "fathomry.configsource_nacos.limit_exceeded",
+      "source": "cbf1b20f44188d2dbe89d3d256a947dd4cf53c79462db153f20048b50494deaf",
       "forms": {
-        "other": "远程配置获取失败。 来源：{source}；阶段：{phase}。"
+        "other": "超出配置能力的限制。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:denied",
-      "source": "1212ccd690e5aa35edf7d57e7ae909653d66f66e2f4ccabd8ea50a35bdd9bb60",
+      "id": "fathomry.configsource_nacos.read_failed",
+      "source": "9e79ef8a99a400f58591a3408e627678595ac966d5d942be29d83f8da2db3676",
       "forms": {
-        "other": "远程配置访问被拒绝。 来源：{source}；阶段：{phase}。"
+        "other": "配置获取或检查失败。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:protocol",
-      "source": "c2d2bf119c3bc042931b37f60b32d419a06b8ed41dc35fb1757f7dda5e07a381",
+      "id": "fathomry.configsource_nacos.decode_failed",
+      "source": "d79a4d0b3945da9aa356bebfbaa8fa687479b0e9209acfc23a6bd99e03a5b66a",
       "forms": {
-        "other": "远程配置响应无效或不受支持。 来源：{source}；阶段：{phase}。"
+        "other": "配置解码或准备失败。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:limit",
-      "source": "2cb60e70c993e73c83678b44d1a736630352345c28d57c4e9968b5552784f7c1",
+      "id": "fathomry.configsource_nacos.cleanup_failed",
+      "source": "9a4fa80dd82ecdcbc9b476b9067dfc4270aa4d53e1197b7cadf4bbd6751358e3",
       "forms": {
-        "other": "远程配置超出支持的限制。 来源：{source}；阶段：{phase}。"
+        "other": "配置资源清理报告失败。"
       }
     },
     {
-      "id": "fathomry.adapters.configsource.nacos:cleanup",
-      "source": "4331445553ee78feed5d0e95abbade898409b8f888edc956a30f98f54c4df90e",
+      "id": "fathomry.configsource_nacos.closed",
+      "source": "c11b4d7d7737832e055c23a0e27a8209f0da2ee52b2f22bcec3c28b421f3f3d4",
       "forms": {
-        "other": "远程配置清理失败。 来源：{source}；阶段：{phase}。"
+        "other": "配置所有者正在关闭或已关闭。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.completion_unconfirmed",
+      "source": "c4c256be042aa10a58c4e32aa31c556ff705509560bc602dc7c5ef1172350131",
+      "forms": {
+        "other": "尚未确认配置清理已完成。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.runtime_serialization",
+      "source": "ded55d59a6463b7547d7f16ef479878dc1f7309a9f7a311e3908ac0edc54d493",
+      "forms": {
+        "other": "不支持配置运行时句柄序列化。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.access_denied",
+      "source": "16f16cd985e6fe175276c3a50c611665b83ab6d99080fec62672bb1ed43ba864",
+      "forms": {
+        "other": "配置服务拒绝访问。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.document_missing",
+      "source": "cbf245d417b1db6920c559ddb221c53b2dea9f3d3d885fc52702698680b21850",
+      "forms": {
+        "other": "缺少必需的配置文档。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.document_empty",
+      "source": "0dc55d962b27882cc60cc853dedf80157b03cf2ffa06322ccd9aaf3cb5e5e96a",
+      "forms": {
+        "other": "必需的配置文档为空。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.service_unavailable",
+      "source": "365108f85b234b8e35960467f97116d948f0a0951fe97a975dc0a44849580bc7",
+      "forms": {
+        "other": "配置服务未能完成请求。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.unsupported_profile",
+      "source": "204d4d70ad2ae36fd599a01987b5ab79312da97a3ced395f5cad957d3eae3e98",
+      "forms": {
+        "other": "不支持所选配置协议配置。"
+      }
+    },
+    {
+      "id": "fathomry.configsource_nacos.write_failed",
+      "source": "4218d387e8cf15cf151477c05ee61bd4fdfc79aaf7d336617fb841d15d813b10",
+      "forms": {
+        "other": "配置写入报告失败；请检查其效果证据。"
       }
     }
   ]

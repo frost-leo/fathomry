@@ -19,51 +19,82 @@
 
 package adapters
 
-import (
-	"embed"
-	"github.com/frost-leo/fathomry/failure/v1"
-	"github.com/frost-leo/fathomry/i18n/v1"
-)
+import "github.com/frost-leo/fathomry/failure/v1"
 
-// ModuleID owns this layer's catalog admission failures.
-const ModuleID = "fathomry.adapters"
+// Stable identities describe the shared operation capability, not an Adapter
+// layer band, SDK retry policy, mutation effect or business terminal state.
 const (
-	ErrCatalog failure.Condition = ModuleID + ".invalid_catalog"
-	ErrLimit   failure.Condition = ModuleID + ".limit"
+	ErrOptions       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0001
+	ErrHandle        failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0002
+	ErrClosed        failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0003
+	ErrLimit         failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0004
+	ErrWait          failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0005
+	ErrRequest       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0006
+	ErrOutcome       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0007
+	ErrSettled       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0008
+	ErrReleased      failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x0009
+	ErrPending       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x000A
+	ErrEvidence      failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x000B
+	ErrOperation     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x000C
+	ErrSource        failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x000D
+	ErrSerialization failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x000E
 )
 
-//go:embed resources/*.json
-var resources embed.FS
-
-// Definition returns owned declarations without feature or service startup.
-func Definition() failure.ModuleDefinition {
-	return failure.ModuleDefinition{ID: ModuleID, Source: "adapters.v1", Conditions: []failure.ConditionDefinition{
-		{Condition: ErrCatalog, Contract: "v1"}, {Condition: ErrLimit, Contract: "v1"},
-	}}
+// Details is direct local operation evidence. Zero sequence/parent means
+// unspecified; Pending is occurrence-time local responsibility, not rollback.
+type Details struct {
+	Sequence uint64
+	Parent   uint64
+	Pending  bool
 }
 
-// Sources returns named original resources; bytes belong to the caller.
-func Sources() []i18n.Source {
-	var result []i18n.Source
-	for _, locale := range []string{"en", "zh-CN"} {
-		data, _ := resources.ReadFile("resources/" + locale + ".json")
-		result = append(result, i18n.Source{Name: ModuleID + "." + locale, Data: data})
+// Definitions returns detached declarations for explicit failure/i18n composition.
+func Definitions() []failure.Definition {
+	result := make([]failure.Definition, 0, 14)
+	for _, code := range []failure.Code{ErrOptions, ErrHandle, ErrClosed, ErrLimit, ErrWait, ErrRequest, ErrOutcome, ErrSettled, ErrReleased, ErrPending, ErrEvidence, ErrOperation, ErrSource, ErrSerialization} {
+		result = append(result, definition(code))
 	}
 	return result
 }
-
-// Bindings returns owned static associations without inspecting occurrences.
-func Bindings() []i18n.Binding {
-	var result []i18n.Binding
-	for _, item := range Definition().Conditions {
-		key := string(item.Condition)[len(ModuleID)+1:]
-		result = append(result, i18n.Binding{ID: ModuleID + ":" + key, Condition: item.Condition, ConditionContract: "v1", Surface: "catalog", Role: "explanation", Message: ModuleID + ":" + key, MessageContract: "v1"})
+func definition(code failure.Code) failure.Definition {
+	var reason, message string
+	switch code {
+	case ErrOptions:
+		reason, message = "invalid_options", "The operation runtime options or declaration are invalid."
+	case ErrHandle:
+		reason, message = "invalid_handle", "The operation runtime or handle is not initialized."
+	case ErrClosed:
+		reason, message = "closed", "The operation runtime or receiver is closing or closed."
+	case ErrLimit:
+		reason, message = "limit_exceeded", "An operation admission or ownership bound was exceeded."
+	case ErrWait:
+		reason, message = "wait_interrupted", "Waiting ended without confirming the requested completion."
+	case ErrRequest:
+		reason, message = "invalid_request", "The operation metadata or reservation is invalid."
+	case ErrOutcome:
+		reason, message = "missing_outcome", "Actual operation work ended without a reported outcome."
+	case ErrSettled:
+		reason, message = "outcome_settled", "The operation outcome is already being published or settled."
+	case ErrReleased:
+		reason, message = "authority_released", "This operation or delivery authority has already been released."
+	case ErrPending:
+		reason, message = "work_pending", "Actual operation work has not been confirmed released."
+	case ErrEvidence:
+		reason, message = "evidence_failed", "Required operation evidence could not be admitted or received."
+	case ErrOperation:
+		reason, message = "operation_failed", "The accepted operation reported a primary or cleanup failure."
+	case ErrSource:
+		reason, message = "source_unavailable", "The explicitly selected resource could not be borrowed."
+	case ErrSerialization:
+		reason, message = "runtime_serialization", "Operation runtime handle serialization is unsupported."
 	}
-	return result
+	return failure.Definition{Code: code, Identifier: failure.Identifier("fathomry.operation." + reason), Module: "fathomry", Component: "operation",
+		Revision: 1, Message: message, Details: failure.Contract{ID: "fathomry.operation.details", Version: 1}}
 }
-
-// ModuleContribution returns the built-in layer module, included by Catalogs.
-// Explicitly supplying it again is a duplicate, not an override.
-func ModuleContribution() Module {
-	return Module{Definition: Definition(), Messages: Sources(), Grouping: i18n.Module{ID: ModuleID, Owners: []string{ModuleID}}, Bindings: Bindings()}
+func failureOf(code failure.Code, operation, scope string, details Details, causes ...error) error {
+	value, err := failure.NewDetailed(definition(code), failure.Location{Operation: operation, Instance: scope}, details, func(value Details) Details { return value }, causes...)
+	if err != nil {
+		return err
+	}
+	return value
 }

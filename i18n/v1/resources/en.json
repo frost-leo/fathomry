@@ -1,0 +1,127 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "i18n",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.i18n.invalid_catalog",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.invalid_catalog.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The localization catalog is not prepared."
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_resource",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.invalid_resource.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The localization resource is invalid."
+      }
+    },
+    {
+      "id": "fathomry.i18n.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The localization input or output exceeds a supported bound."
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_locale",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.invalid_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested locale is invalid."
+      }
+    },
+    {
+      "id": "fathomry.i18n.missing_message",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.missing_message.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The localization message is not declared."
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_arguments",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.invalid_arguments.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The localization arguments do not match the message contract."
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_binding",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.invalid_binding.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The error localization binding does not match its definition."
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_preferences",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.invalid_preferences.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Application localization preferences are unavailable or invalid."
+      }
+    },
+    {
+      "id": "fathomry.i18n.invalid_projection",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.invalid_projection.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The component could not project safe localization arguments."
+      }
+    },
+    {
+      "id": "fathomry.i18n.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.i18n.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Localization runtime handle serialization is unsupported."
+      }
+    }
+  ]
+}

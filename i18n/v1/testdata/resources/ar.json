@@ -17,16 +17,22 @@
     "You should have received a copy of the GNU General Public License",
     "along with this program. If not, see <http://www.gnu.org/licenses/>."
   ],
-  "schema": "fathomry.i18n-resource/v1",
+  "schema": "fathomry.messages/v1",
   "profile": "scalar-cardinal/v1",
-  "owner": "example.inventory",
+  "module": "example",
+  "component": "source",
   "locale": "ar",
   "messages": [
     {
-      "id": "example.inventory:items",
-      "source": "ccb22f014b18fea2316205041ce07388d04cf600b8a4bd7deb2117337af4470b",
+      "id": "example.source.items",
+      "source": "7c3419ef0257250a7fe2e0df42fdb76a1df028d724098fed4a824d358e3d4a31",
       "forms": {
-        "other": "{count} عناصر في {place}"
+        "zero": "لا عناصر في {label} ({count})",
+        "one": "عنصر في {label} ({count})",
+        "two": "عنصران في {label} ({count})",
+        "few": "عناصر قليلة في {label} ({count})",
+        "many": "عناصر كثيرة في {label} ({count})",
+        "other": "عناصر في {label} ({count})"
       }
     }
   ]

@@ -17,8 +17,36 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+// Command fathomry provides official offline error and translation catalogs.
 package main
 
-import "github.com/frost-leo/fathomry/cli"
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
 
-func main() { cli.Main() }
+	"github.com/frost-leo/fathomry/cmd/fathomry/internal/app"
+	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
+)
+
+func main() { os.Exit(run()) }
+func run() int {
+	signal.Ignore(syscall.SIGPIPE)
+	ctx, stop := signalContext()
+	defer stop()
+	err := app.Run(ctx, os.Args[1:], command.Options{Input: os.Stdin, Output: os.Stdout,
+		ErrorOutput: os.Stderr, Language: os.Getenv("FATHOMRY_LANG")})
+	return command.ExitCode(err)
+}
+
+func signalContext() (context.Context, func()) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	done := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		stop()
+		close(done)
+	}()
+	return ctx, func() { stop(); <-done }
+}

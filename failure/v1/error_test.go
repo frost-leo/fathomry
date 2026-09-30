@@ -21,12 +21,12 @@ package failure_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
-	"regexp"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -34,294 +34,180 @@ import (
 	"github.com/frost-leo/fathomry/failure/v1"
 )
 
-const primaryCode failure.Condition = "example.source.absent"
-const cleanupCode failure.Condition = "another.owner.cleanup"
+const sampleCode failure.Code = 0xA4400001
 
-func newFailure(t *testing.T, condition failure.Condition, causes ...error) *failure.Error {
+func definition() failure.Definition {
+	return failure.Definition{
+		Code: sampleCode, Identifier: "example.source.read_failed", Module: "example", Component: "source",
+		Revision: 1, Message: "The selected configuration could not be read.",
+		Description: "The operation did not obtain a complete document; native causes retain the observed failure.",
+	}
+}
+
+func mustError(t testing.TB, definition failure.Definition, where failure.Location, causes ...error) *failure.Error {
 	t.Helper()
-	err, rejected := failure.New(condition, causes...)
-	if rejected != nil {
-		t.Fatal(rejected)
+	value, err := failure.New(definition, where, causes...)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return err
+	return value
 }
 
-func TestIdentityAndDirectInspection(t *testing.T) {
-	primary := newFailure(t, primaryCode)
-	cleanup := newFailure(t, cleanupCode)
-	outer := newFailure(t, "example.operation.failed", primary, cleanup, context.Canceled)
-	for _, target := range []error{primaryCode, cleanupCode, context.Canceled, primary, cleanup, outer} {
-		if !errors.Is(outer, target) {
-			t.Fatalf("missing deliberate match %T", target)
+func TestOccurrence(t *testing.T) {
+	t.Run("native evidence and semantic layers", func(t *testing.T) {
+		native := &fs.PathError{Op: "open", Path: "private-native-path", Err: fs.ErrPermission}
+		d := definition()
+		where := failure.Location{Operation: "read", Instance: "007-Worker"}
+		slots := []error{native, nil}
+		inner := mustError(t, d, where, slots...)
+		slots[0] = errors.New("replacement")
+		d.Message, where.Operation = "mutated", "mutated"
+		outerDefinition := definition()
+		outerDefinition.Code++
+		outerDefinition.Identifier = "example.source.preparation_failed"
+		outer := mustError(t, outerDefinition, failure.Location{Operation: "prepare"}, inner)
+		if !errors.Is(outer, outerDefinition.Code) || !errors.Is(outer, sampleCode) || !errors.Is(outer, fs.ErrPermission) {
+			t.Fatal("semantic or native matching lost")
 		}
-	}
-	for _, target := range []error{errors.New(primary.Error()), newFailure(t, primaryCode), failure.Condition(""), failure.Condition("owner"), nil} {
-		if errors.Is(primary, target) {
-			t.Fatalf("unintended match %T", target)
+		var original *fs.PathError
+		if !errors.As(outer, &original) || original != native || original.Path != "private-native-path" {
+			t.Fatal("native pointer/type/message lost")
 		}
-	}
-	if current, ok := failure.Inspect(outer); !ok || current != outer || current.Diagnostic().Condition != "example.operation.failed" {
-		t.Fatal("outer meaning lost")
-	}
-	for _, err := range []error{nil, (*failure.Error)(nil), &failure.Error{}, primaryCode, errors.New("foreign"), fmt.Errorf("wrap: %w", primary), errors.Join(primary, cleanup), errors.Join(cleanup, primary)} {
-		if current, ok := failure.Inspect(err); current != nil || ok {
-			t.Fatalf("inferred direct occurrence %T", err)
+		if errors.Is(inner, mustError(t, definition(), failure.Location{})) {
+			t.Fatal("different occurrences matched by identity")
 		}
-	}
-	var found *failure.Error
-	if !errors.As(fmt.Errorf("wrap: %w", primary), &found) || found != primary {
-		t.Fatal("As lost")
-	}
-	if errors.Unwrap(outer) != nil {
-		t.Fatal("unexpected singular unwrap")
-	}
-	unfamiliar := newFailure(t, "unregistered.partner.new_condition")
-	if current, ok := failure.Inspect(unfamiliar); !ok || current != unfamiliar {
-		t.Fatal("registry required")
-	}
-	copyValue := *outer
-	if copyValue != *outer || copyValue.Diagnostic() != outer.Diagnostic() {
-		t.Fatal("copy identity")
-	}
-}
-
-func TestRequiredInputBoundsAndOwnership(t *testing.T) {
-	for _, code := range []failure.Condition{"", "owner", ".owner", "owner.", "a..b", "a.1b", "A.b", "a.b/c", "a.\x00secret", "a.é", failure.Condition("a." + strings.Repeat("b", failure.MaxConditionBytes-1))} {
-		err, rejected := failure.New(code, &hostile{})
-		if err != nil || rejected != failure.ErrCondition || strings.Contains(rejected.Error(), "secret") {
-			t.Fatalf("invalid input accepted: %q", code)
+		core, ok := failure.Inspect(outer)
+		if !ok || core != outer || core.Diagnostic().Location.Operation != "prepare" {
+			t.Fatal("wrong current occurrence selected")
 		}
-	}
-	atLimit := failure.Condition("a." + strings.Repeat("b", failure.MaxConditionBytes-2))
-	if !atLimit.Valid() || newFailure(t, atLimit).Diagnostic().Condition != atLimit {
-		t.Fatal("valid limit rejected")
-	}
-	if !failure.Condition("example.owner-code_1.condition2").Valid() {
-		t.Fatal("grammar")
-	}
-	tooMany := make([]error, failure.MaxCauses+1)
-	tooMany[0] = &hostile{}
-	err, rejected := failure.New(primaryCode, tooMany...)
-	if err != nil || rejected != failure.ErrCauses || tooMany[0] == nil {
-		t.Fatal("over-limit accepted or inputs consumed")
-	}
-	allNil := make([]error, failure.MaxCauses)
-	if newFailure(t, primaryCode, allNil...).Diagnostic().CauseCount != 0 {
-		t.Fatal("literal nil retained")
-	}
-	cause := errors.New("caller cause")
-	causes := make([]error, failure.MaxCauses)
-	for index := range causes {
-		causes[index] = cause
-	}
-	owned := newFailure(t, primaryCode, causes...)
-	causes[0] = nil
-	exposed := owned.Unwrap()
-	exposed[1] = nil
-	if owned.Diagnostic().CauseCount != failure.MaxCauses || owned.Unwrap()[0] != cause || owned.Unwrap()[1] != cause {
-		t.Fatal("cause alias or truncation")
-	}
-	projection := owned.Diagnostic()
-	projection.Condition, projection.CauseCount = cleanupCode, 0
-	if owned.Diagnostic().Condition != primaryCode || owned.Diagnostic().CauseCount != failure.MaxCauses {
-		t.Fatal("projection alias")
-	}
-	var typedNil *hostile
-	withNil := newFailure(t, primaryCode, nil, typedNil)
-	if got := withNil.Unwrap(); len(got) != 1 || got[0] == nil || got[0] != typedNil {
-		t.Fatal("typed nil normalized")
-	}
-	var matched *hostile
-	if !errors.As(withNil, &matched) || matched != nil {
-		t.Fatal("typed nil As lost")
-	}
-}
-
-type hostile struct{}
-
-func (*hostile) Error() string          { panic("secret_panic_canary") }
-func (*hostile) Format(fmt.State, rune) { panic("secret_format_canary") }
-func (*hostile) LogValue() slog.Value   { panic("secret_log_canary") }
-func (*hostile) Is(error) bool          { panic("foreign Is called") }
-func (*hostile) As(any) bool            { panic("foreign As called") }
-func (err *hostile) Unwrap() error      { return err }
-
-func TestSafeOwnedSurfacesDoNotTraverseForeignObjects(t *testing.T) {
-	foreign := &hostile{}
-	err := newFailure(t, primaryCode, foreign)
-	if _, ok := failure.Inspect(foreign); ok {
-		t.Fatal("foreign inspected")
-	}
-	if current, ok := failure.Inspect(err); !ok || current.Diagnostic().CauseCount != 1 {
-		t.Fatal("owned inspection")
-	}
-	if err.Unwrap()[0] != foreign {
-		t.Fatal("foreign object not retained")
-	}
-	for _, value := range []any{err, *err, &failure.Error{}, failure.Error{}, (*failure.Error)(nil), failure.Condition("bad\nsecret_canary")} {
-		for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q", "%#q", "%x", "%1000000.1000000v"} {
-			output := fmt.Sprintf(format, value)
-			if strings.Contains(output, "secret") || strings.Contains(output, "PANIC") || len(output) > failure.MaxConditionBytes+40 {
-				t.Fatalf("unsafe format %s: %.200s", format, output)
+		if got := inner.Diagnostic(); got.Definition.Message != definition().Message || got.Location.Operation != "read" || got.Location.Instance != "007-Worker" || got.CauseCount != 1 {
+			t.Fatal("metadata mutation or direct cause count changed")
+		}
+		causes := inner.Unwrap()
+		causes[0] = nil
+		if inner.Unwrap()[0] != native {
+			t.Fatal("cause-slice storage escaped")
+		}
+		if errors.Unwrap(inner) != nil {
+			t.Fatal("multi-cause contract unexpectedly became single unwrap")
+		}
+		for _, wrapped := range []error{fmt.Errorf("outer: %w", inner), errors.Join(inner, outer), sampleCode, errors.New("native")} {
+			if current, ok := failure.Inspect(wrapped); ok || current != nil {
+				t.Fatal("guessed an occurrence inside a wrapper or join")
 			}
 		}
-		for _, jsonLog := range []bool{false, true} {
-			var buffer bytes.Buffer
-			var handler slog.Handler = slog.NewTextHandler(&buffer, nil)
-			if jsonLog {
-				handler = slog.NewJSONHandler(&buffer, nil)
-			}
-			slog.New(handler).Info("safe", "failure", value)
-			if strings.Contains(buffer.String(), "secret") || strings.Contains(buffer.String(), "PANIC") {
-				t.Fatal("unsafe slog", buffer.String())
+	})
+	t.Run("admission and zero values", func(t *testing.T) {
+		bad := definition()
+		bad.Code = 0
+		if value, err := failure.New(bad, failure.Location{}); value != nil || !errors.Is(err, failure.ErrCode) {
+			t.Fatal(value, err)
+		}
+		bad = definition()
+		bad.Identifier = "different.source.reason"
+		if value, err := failure.New(bad, failure.Location{}); value != nil || !errors.Is(err, failure.ErrDefinition) {
+			t.Fatal(value, err)
+		}
+		if value, err := failure.New(definition(), failure.Location{Operation: "private operation\n"}); value != nil || !errors.Is(err, failure.ErrLocation) {
+			t.Fatal("invalid location retained", err)
+		}
+		if value, err := failure.New(definition(), failure.Location{}, make([]error, failure.MaxCauses+1)...); value != nil || !errors.Is(err, failure.ErrLimit) {
+			t.Fatal("cause-slot budget ignored", err)
+		}
+		var absent *failure.Error
+		if absent.Error() != "<nil>" || absent.Unwrap() != nil || absent.Is(sampleCode) || absent.Diagnostic().Definition.Code != 0 {
+			t.Fatal("nil semantics changed")
+		}
+		for _, input := range []error{nil, absent, new(failure.Error)} {
+			if core, ok := failure.Inspect(input); core != nil || ok {
+				t.Fatal("invalid occurrence acquired identity")
 			}
 		}
-	}
-	if err.Error() != string(primaryCode) || err.LogValue().String() != string(primaryCode) {
-		t.Fatal("not code-only")
-	}
-	var nilError *failure.Error
-	if nilError.Error() != "<nil>" || nilError.LogValue().String() != "<nil>" || nilError.Unwrap() != nil || nilError.Diagnostic() != (failure.Diagnostic{}) || nilError.Is(primaryCode) {
-		t.Fatal("nil semantics")
-	}
-	zero := failure.Error{}
-	if zero.Error() != "failure: invalid occurrence" || zero.Is(primaryCode) || zero.Unwrap() != nil || zero.Diagnostic() != (failure.Diagnostic{}) {
-		t.Fatal("zero semantics")
-	}
-	// Deliberate standard traversal invokes foreign hooks; owned surfaces above do not.
-	func() {
-		defer func() {
-			if recover() == nil {
-				t.Error("foreign Is was not invoked")
-			}
-		}()
-		_ = errors.Is(err, errors.New("missing"))
-	}()
+		var nilNative *fs.PathError
+		value := mustError(t, definition(), failure.Location{}, nilNative)
+		if value.Diagnostic().CauseCount != 1 || reflect.TypeOf(value.Unwrap()[0]) != reflect.TypeFor[*fs.PathError]() {
+			t.Fatal("typed nil native interface was rewritten")
+		}
+		if current, ok := failure.Inspect(failure.ErrCode); ok || current != nil {
+			t.Fatal("bare code became an occurrence")
+		}
+	})
 }
 
-func TestRuntimeSerializationRefused(t *testing.T) {
-	owned := newFailure(t, primaryCode, &hostile{})
-	for _, value := range []any{owned, *owned, failure.Error{}, &failure.Error{}} {
-		if output, err := json.Marshal(value); !errors.Is(err, failure.ErrSerialization) || len(output) != 0 {
-			t.Fatalf("serialized %T: %s %v", value, output, err)
+type hostileCause struct{}
+
+func (*hostileCause) Error() string { panic("foreign formatter called") }
+
+func assertPrivate(t testing.TB, value any, secret string) {
+	t.Helper()
+	for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q"} {
+		text := fmt.Sprintf(format, value)
+		if strings.Contains(text, secret) || strings.Contains(text, "PANIC") {
+			t.Fatalf("unsafe runtime presentation with %s", format)
 		}
 	}
-	before := owned.Diagnostic()
-	if err := json.Unmarshal([]byte("{}"), owned); !errors.Is(err, failure.ErrSerialization) || owned.Diagnostic() != before {
-		t.Fatal("runtime reconstructed or mutated")
-	}
-	var nilError *failure.Error
-	if output, err := json.Marshal(nilError); err != nil || string(output) != "null" {
-		t.Fatal("nil JSON")
-	}
-	if nilError.UnmarshalJSON(nil) != failure.ErrSerialization {
-		t.Fatal("nil reconstruction")
+	for _, handler := range []func(*bytes.Buffer) slog.Handler{
+		func(buffer *bytes.Buffer) slog.Handler { return slog.NewTextHandler(buffer, nil) },
+		func(buffer *bytes.Buffer) slog.Handler { return slog.NewJSONHandler(buffer, nil) },
+	} {
+		var buffer bytes.Buffer
+		slog.New(handler(&buffer)).Info("event", slog.Any("error", value))
+		if strings.Contains(buffer.String(), secret) || strings.Contains(buffer.String(), "PANIC") {
+			t.Fatal("unsafe structured diagnostic")
+		}
 	}
 }
 
-func TestConcurrentOwnedInspection(t *testing.T) {
-	err := newFailure(t, primaryCode, errors.New("immutable caller"), context.DeadlineExceeded)
-	var group sync.WaitGroup
+func TestDiagnostics(t *testing.T) {
+	secret := "private-payload-canary"
+	value := mustError(t, definition(), failure.Location{Operation: "read", Instance: "alpha"},
+		&hostileCause{}, &fs.PathError{Op: "read", Path: secret, Err: errors.New(secret)})
+	for _, form := range []any{value, *value, (*failure.Error)(nil), failure.Error{}} {
+		assertPrivate(t, form, secret)
+	}
+	text := value.Error()
+	if !strings.Contains(text, sampleCode.String()) || !strings.Contains(text, string(definition().Identifier)) || !strings.Contains(text, definition().Message) {
+		t.Fatal("code, readable identity or explanation missing")
+	}
+	var output bytes.Buffer
+	slog.New(slog.NewJSONHandler(&output, nil)).Error("read failed", slog.Any("error", value))
+	for _, name := range []string{`"code"`, `"identifier"`, `"module"`, `"component"`, `"operation"`, `"instance"`, `"message"`, `"cause_count"`} {
+		if !strings.Contains(output.String(), name) {
+			t.Fatal("missing structured diagnostic field", name)
+		}
+	}
+	for _, form := range []any{value, *value} {
+		if _, err := json.Marshal(form); !errors.Is(err, failure.ErrSerialization) {
+			t.Fatal("runtime error serialized", err)
+		}
+	}
+	for _, raw := range []string{"{}", "null", `{"Code":7}`, "[]", "true"} {
+		var zero failure.Error
+		if err := json.Unmarshal([]byte(raw), &zero); !errors.Is(err, failure.ErrSerialization) {
+			t.Fatal("runtime error reconstructed", err)
+		}
+	}
+	if _, err := json.Marshal(value.Diagnostic()); err != nil {
+		t.Fatal("safe scalar diagnostic refused", err)
+	}
+}
+
+func TestConcurrentOccurrenceReads(t *testing.T) {
+	value := mustError(t, definition(), failure.Location{Operation: "read"}, fs.ErrPermission)
+	var workers sync.WaitGroup
 	for range 16 {
-		group.Go(func() {
+		workers.Go(func() {
 			for range 100 {
-				current, ok := failure.Inspect(err)
-				if !ok || current != err || !errors.Is(err, primaryCode) || !errors.Is(err, context.DeadlineExceeded) {
-					t.Error("concurrent inspection changed")
+				if !errors.Is(value, sampleCode) || !errors.Is(value, fs.ErrPermission) {
+					t.Error("immutable matching changed")
 				}
-				current.Unwrap()[0] = nil
-				_ = fmt.Sprintf("%#v", *current)
-				_ = current.LogValue()
+				copy := value.Diagnostic()
+				copy.Definition.Message = "changed"
+				_ = value.Error()
+				_ = value.LogValue()
+				value.Unwrap()[0] = nil
 			}
 		})
 	}
-	group.Wait()
-}
-
-type nilMapExtension map[string]int
-
-func (nilMapExtension) Error() string           { panic("nil hook") }
-func (nilMapExtension) Failure() *failure.Error { panic("nil hook") }
-
-type nilFunctionExtension func()
-
-func (nilFunctionExtension) Error() string           { panic("nil hook") }
-func (nilFunctionExtension) Failure() *failure.Error { panic("nil hook") }
-
-type nilSliceExtension []byte
-
-func (nilSliceExtension) Error() string           { panic("nil hook") }
-func (nilSliceExtension) Failure() *failure.Error { panic("nil hook") }
-
-type nilChannelExtension chan int
-
-func (nilChannelExtension) Error() string           { panic("nil hook") }
-func (nilChannelExtension) Failure() *failure.Error { panic("nil hook") }
-
-type nilPointerExtension struct{}
-
-func (*nilPointerExtension) Error() string           { panic("nil hook") }
-func (*nilPointerExtension) Failure() *failure.Error { panic("nil hook") }
-
-func TestTypedNilExtensionsDoNotInvokeAccessors(t *testing.T) {
-	for _, err := range []error{nilMapExtension(nil), nilFunctionExtension(nil), nilSliceExtension(nil), nilChannelExtension(nil), (*nilPointerExtension)(nil)} {
-		if current, ok := failure.Inspect(err); current != nil || ok {
-			t.Fatal("typed nil acquired occurrence")
-		}
-	}
-}
-
-func TestFmtOwnedExceptions(t *testing.T) {
-	owned := newFailure(t, primaryCode, &hostile{})
-	if got := fmt.Sprintf("%256T", owned); len(got) != 256 || !strings.HasSuffix(got, "*failure.Error") {
-		t.Fatal("type formatting no longer bypasses Formatter with width padding")
-	}
-	if got := fmt.Sprintf("%p", owned); !strings.HasPrefix(got, "0x") {
-		t.Fatal("pointer formatting no longer follows fmt inspection")
-	}
-	invalid := failure.Condition("bad\nformat_boundary_canary")
-	for _, format := range []string{"%p", strings.Join([]string{"%", "w"}, "")} {
-		if got := fmt.Sprintf(format, invalid); !strings.Contains(got, "format_boundary_canary") {
-			t.Fatal("malformed fmt control no longer exposes raw scalar input")
-		}
-	}
-	for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q"} {
-		if got := fmt.Sprintf(format, invalid); strings.Contains(got, "format_boundary_canary") {
-			t.Fatal("supported Formatter-dispatched output exposed invalid text")
-		}
-	}
-}
-
-func FuzzConditionAndConstruction(f *testing.F) {
-	for _, input := range []string{"", "a.b", "example.source.absent", "a..b", "a.é", "a.b\nsecret", "a." + strings.Repeat("b", 126), "a." + strings.Repeat("b", 127)} {
-		f.Add(input, uint8(2))
-	}
-	grammar := regexp.MustCompile(`^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+$`)
-	f.Fuzz(func(t *testing.T, input string, slots uint8) {
-		code := failure.Condition(input)
-		valid := len(input) <= failure.MaxConditionBytes && grammar.MatchString(input)
-		if code.Valid() != valid {
-			t.Fatal("grammar mismatch")
-		}
-		causes := make([]error, int(slots))
-		for index := range causes {
-			causes[index] = &hostile{}
-		}
-		err, rejected := failure.New(code, causes...)
-		if !valid || len(causes) > failure.MaxCauses {
-			if err != nil || rejected == nil {
-				t.Fatal("invalid accepted")
-			}
-			return
-		}
-		if rejected != nil || err.Diagnostic().Condition != code || err.Diagnostic().CauseCount != len(causes) || len(err.Unwrap()) != len(causes) || !errors.Is(err, code) {
-			t.Fatal("valid input changed")
-		}
-		if current, ok := failure.Inspect(err); !ok || current != err {
-			t.Fatal("direct identity")
-		}
-		if output := fmt.Sprintf("%#v", err); output != input {
-			t.Fatal("projection changed")
-		}
-	})
+	workers.Wait()
 }

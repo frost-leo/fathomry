@@ -68,6 +68,7 @@ type Subscription struct {
 	// cannot strand already queued events behind one consumed wakeup token.
 	changed chan struct{}
 	raw     func([]*Document, int, error)
+	keys    []key
 	// These fields belong only to the serialized native observation loop.
 	failedDocument int
 	reacquire      bool
@@ -92,6 +93,36 @@ func (client *Client) ObserveRaw(ctx context.Context, publish func([]*Document, 
 }
 
 func (client *Client) watch(ctx context.Context, publish func([]*Document, int, error)) (*Subscription, error) {
+	if client == nil || client.cancel == nil || len(client.settings.Keys) == 0 {
+		return nil, fail(ErrInput, "watch")
+	}
+	return client.watchKeys(ctx, client.settings.Keys, publish)
+}
+
+// WatchKeys observes an explicit bounded key set under the client's key policy.
+// The set is frozen for this subscription and never mutates the client's defaults.
+func (client *Client) WatchKeys(ctx context.Context, selected []KeyV1) (*Subscription, error) {
+	keys, err := client.selectKeys(selected)
+	if err != nil {
+		return nil, err
+	}
+	return client.watchKeys(ctx, keys, nil)
+}
+
+// ObserveRawKeys freezes an explicit permitted key set for bounded raw observation.
+// Its callback has ObserveRaw's synchronous internal-handoff obligations.
+func (client *Client) ObserveRawKeys(ctx context.Context, selected []KeyV1, publish func([]*Document, int, error)) (*Subscription, error) {
+	if publish == nil {
+		return nil, fail(ErrInput, "observe-raw-keys")
+	}
+	keys, err := client.selectKeys(selected)
+	if err != nil {
+		return nil, err
+	}
+	return client.watchKeys(ctx, keys, publish)
+}
+
+func (client *Client) watchKeys(ctx context.Context, keys []key, publish func([]*Document, int, error)) (*Subscription, error) {
 	work, end, err := client.enter(ctx)
 	if err != nil {
 		return nil, err
@@ -120,7 +151,7 @@ func (client *Client) watch(ctx context.Context, publish func([]*Document, int, 
 		return nil, err
 	}
 	lifetime, cancel := context.WithCancel(work)
-	subscription := &Subscription{cancel: cancel, done: make(chan struct{}), capacity: client.settings.Queue, changed: make(chan struct{}), raw: publish}
+	subscription := &Subscription{cancel: cancel, done: make(chan struct{}), capacity: client.settings.Queue, changed: make(chan struct{}), raw: publish, keys: slices.Clone(keys)}
 	go func() {
 		defer end()
 		defer lease.Release()
@@ -131,13 +162,13 @@ func (client *Client) watch(ctx context.Context, publish func([]*Document, int, 
 		for lifetime.Err() == nil {
 			subscription.failedDocument = -1
 			wake := make(chan struct{}, 1)
-			current, err := client.newSession(lifetime, index, func(selected key) {
+			current, err := client.newSessionKeys(lifetime, index, func(selected key) {
 				subscription.publish(Change{selected: selected})
 				select {
 				case wake <- struct{}{}:
 				default:
 				}
-			})
+			}, subscription.keys)
 			if err == nil {
 				err = subscription.observe(current, wake)
 				current.close()
@@ -197,18 +228,18 @@ func (subscription *Subscription) observe(current *session, wake <-chan struct{}
 // Sending only freshly queried hashes would silently absorb a missed push.
 // Empty hash denotes missing; a present empty document has a nonempty MD5.
 func (subscription *Subscription) reconcile(ctx context.Context, current *session, known map[key]string) error {
-	listen := request.NewConfigBatchListenRequest(len(current.owner.settings.Keys))
+	listen := request.NewConfigBatchListenRequest(len(subscription.keys))
 	listen.RequestId = strconv.FormatUint(current.owner.sequence.Add(1), 10)
-	observed := make(map[key]string, len(current.owner.settings.Keys))
+	observed := make(map[key]string, len(subscription.keys))
 	var documents []*Document
 	if subscription.raw != nil {
 		var err error
-		documents, err = current.readDocumentsMode(ctx, current.owner.settings.Keys, true, &subscription.failedDocument)
+		documents, err = current.readDocumentsMode(ctx, subscription.keys, true, &subscription.failedDocument)
 		if err != nil {
 			return err
 		}
 	}
-	for index, selected := range current.owner.settings.Keys {
+	for index, selected := range subscription.keys {
 		hash := ""
 		if subscription.raw == nil {
 			value, err := current.query(ctx, selected)
@@ -229,13 +260,13 @@ func (subscription *Subscription) reconcile(ctx context.Context, current *sessio
 		return err
 	}
 	changes := value.(*response.ConfigChangeBatchListenResponse).ChangedConfigs
-	if len(changes) > len(current.owner.settings.Keys) {
+	if len(changes) > len(subscription.keys) {
 		return fail(ErrDecode, "listen-response")
 	}
 	seen := make(map[key]bool)
 	for _, change := range changes {
 		selected := key{change.Group, change.DataId}
-		if change.Tenant != current.owner.settings.Namespace || !slices.Contains(current.owner.settings.Keys, selected) || seen[selected] {
+		if change.Tenant != current.owner.settings.Namespace || !slices.Contains(subscription.keys, selected) || seen[selected] {
 			return fail(ErrDecode, "listen-scope")
 		}
 		seen[selected] = true

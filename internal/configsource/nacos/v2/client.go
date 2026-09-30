@@ -223,6 +223,30 @@ func (client *Client) Close(ctx context.Context) error {
 	}
 }
 
+// ShutdownComplete reports observed local quiescence and release independently
+// of retained cleanup errors. It is false before Close and after a timed-out
+// incomplete Close. It does not certify remote unsubscribe or external effects.
+func (client *Client) ShutdownComplete() bool {
+	if client == nil || client.assembly == nil {
+		return false
+	}
+	select {
+	case <-client.drained:
+	default:
+		return false
+	}
+	report := client.assembly.Snapshot()
+	if len(report.Sources) == 0 {
+		return false
+	}
+	for _, source := range report.Sources {
+		if source.Pending || !source.Quiescent || !source.Released {
+			return false
+		}
+	}
+	return true
+}
+
 // ownedSocket transfers a successful native dial into the client's registered
 // socket set. Close is idempotent across transport and owner shutdown paths.
 type ownedSocket struct {

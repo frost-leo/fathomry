@@ -24,7 +24,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -95,12 +94,12 @@ func (document *Document) LastModifiedMillis() int64 {
 	return document.modified
 }
 
-// Read acquires fresh remote bytes for one preselected key, never cache/backup data.
+// Read acquires fresh remote bytes for one permitted key, never cache/backup data.
 // Every finite read opens and closes an explicit Nacos connection session.
 // A new query does not prove that a prior publication is already visible in the
 // server's cache. Returned bytes still require application preparation/validation.
 func (client *Client) Read(ctx context.Context, selected KeyV1) (*Document, error) {
-	if client == nil || client.cancel == nil || !slices.Contains(client.settings.Keys, normalizeKey(selected)) {
+	if !client.permits(selected) {
 		return nil, fail(ErrInput, "read")
 	}
 	values, err := client.read(ctx, []key{normalizeKey(selected)})
@@ -113,7 +112,7 @@ func (client *Client) Read(ctx context.Context, selected KeyV1) (*Document, erro
 // ReadAll returns all selected documents in input order, or nil on any failure.
 // Inputs must be stable; a common-time or transactional snapshot is not implied.
 func (client *Client) ReadAll(ctx context.Context) ([]*Document, error) {
-	if client == nil || client.cancel == nil {
+	if client == nil || client.cancel == nil || len(client.settings.Keys) == 0 {
 		return nil, fail(ErrInput, "read-all")
 	}
 	return client.read(ctx, client.settings.Keys)
@@ -128,7 +127,7 @@ func (client *Client) ReadAll(ctx context.Context) ([]*Document, error) {
 // not assert that this document alone is oversized. Multi-attempt aggregates
 // conservatively have no unique slot.
 func (client *Client) ReadRawAll(ctx context.Context) ([]*Document, int, error) {
-	if client == nil || client.cancel == nil {
+	if client == nil || client.cancel == nil || len(client.settings.Keys) == 0 {
 		return nil, -1, fail(ErrInput, "read-raw")
 	}
 	failedDocument := -1

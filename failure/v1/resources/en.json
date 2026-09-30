@@ -1,0 +1,97 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "failure",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.failure.invalid_code",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.failure.invalid_code.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The public error code is invalid."
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_definition",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.failure.invalid_definition.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The error definition is invalid or conflicts with another definition."
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_location",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.failure.invalid_location.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The error location is invalid."
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_details",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.failure.invalid_details.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The error detail contract or copy function is invalid."
+      }
+    },
+    {
+      "id": "fathomry.failure.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.failure.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The error contract exceeds a supported bound."
+      }
+    },
+    {
+      "id": "fathomry.failure.invalid_catalog",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.failure.invalid_catalog.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The error definition catalog is not prepared."
+      }
+    },
+    {
+      "id": "fathomry.failure.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.failure.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Runtime error serialization is unsupported."
+      }
+    }
+  ]
+}

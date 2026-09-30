@@ -39,20 +39,6 @@ for current availability and package contracts.
 
 The role names below describe responsibilities, not mandatory Go packages.
 
-The implemented [CLI](../reference/cli/interface.md) is an inbound entry, not a
-domain capability or outbound Adapter. Public Run/Main usage is separate from
-private command construction and first-party family composition. The shipped
-root/help graph uses native parsing and the standard library, not an all-SDK
-aggregator. Later selected command families can grow that graph; package boundaries,
-not separate files, determine dependencies. Technical foundations must not depend
-back on this public entry.
-
-The CLI owns checked delivery and process presentation, while actual operations
-retain domain rules, effect meaning and resource ownership. This avoids requiring
-business projects to copy command and signal machinery without introducing a
-public command registry, generic lifecycle container or project delegation protocol.
-See the [first-party maintainer procedure](../development/cli-commands.md).
-
 | Role | Owns | Does not own |
 | --- | --- | --- |
 | Framework | Public capability contracts; execution identity and attribution rules; orchestration and control; interpretation of business results; reliable evidence recording and Item/Run disposition | Invented service guarantees or the mechanics of every SDK |
@@ -60,8 +46,8 @@ See the [first-party maintainer procedure](../development/cli-commands.md).
 | Internal | Process-local technical capabilities and reusable mechanisms for configuration preparation, ownership, controlled operations, technical evidence, safe diagnostics, and version accountability | Workflow-specific business meaning, Item/Run terminal decisions, or application-wide orchestration |
 | Framework-supplied composition boundary | Resolves authorized configuration and dependencies; assembles selected implementations and named instances; grants bounded capabilities; owns application startup and shutdown coordination | Per-Item mutable state inside shared clients or an unrestricted runtime service locator |
 
-The accepted design calls for two public paths (the runtime/capabilities are not
-implemented by the current foundations):
+The accepted design calls for two public paths (shared public operation ownership
+is implemented, but the concrete capability/scenario paths remain incomplete):
 
 - **Framework orchestration/control:** the framework defines the operation and
   execution rules, delegates technical work through the appropriate Adapter,
@@ -75,9 +61,7 @@ In both paths, technical results travel from Provider through Adapter to the
 public caller and, where required, the framework's evidence boundary. This is
 a collaboration path, not a requirement for a wrapper at every diagram arrow.
 
-Public semantic errors use the independent [failure/v1 contract](../reference/failure/v1/interface.md);
-conditions and typed facts belong to their capability or business owner, without
-requiring Framework bootstrap. Internal technical errors,
+Public semantic errors belong to the framework contract. Internal technical errors,
 correlation and required-evidence mechanics do not become public merely because an
 Adapter consumes them. Public dependencies must not pull in concrete Providers,
 SDK clients, framework orchestration or business workflows. Adapters depend on
@@ -97,6 +81,13 @@ by this boundary refactor, and no generic third-party Provider SDK is implied.
 Go's `internal` boundary protects implementation visibility; it is not a security
 sandbox or a reason to hide contracts external consumers require.
 [Go module organization](https://go.dev/doc/modules/layout)
+
+Public shared mechanisms are independent implementations over public foundations,
+not facades over Internal engines. [Adapters/v1](../reference/adapters/v1/interface.md)
+owns bounded operations and independent evidence; [resource/v1](../reference/resource/v1/interface.md)
+owns instance generations. Concrete provider integration may translate native
+Internal capabilities at its explicit boundary. Error construction does not depend
+on an i18n instance; presentation/log composition supplies that optional dependency.
 
 The I/O path operates in Activities or other appropriate process-local callers,
 not directly in Temporal Workflow logic. A public wrapper does not make network
@@ -207,6 +198,15 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 
 | Package | Complete responsibility |
 | --- | --- |
+| `failure/v1` | Public numeric/symbolic identity, component-owned error composition, native-cause access and definition atlas |
+| `settings/v1` | Typed configuration snapshots, atomic publication/read-only views and explicit application-default data access; no sources or runtime lifecycle |
+| `i18n/v1` | Explicit resource/translation catalogs, code explanations and settings-backed presentation; no rewrite of operation/native error identity |
+| `resource/v1` | Explicit runtime scopes, typed instance bindings, fixed/follow adoption, generation borrowing and retained cleanup; no parsing, SDK or Internal mechanism dependency |
+| `adapters/v1` | Independent public operation admission, actual-work ownership and evidence custody; no Internal engine dependency |
+| `adapters/configsource/v1` | Raw source/batch contracts and independent strict preparation; no native provider or Internal dependency |
+| `adapters/configsource/{viper,nacos}/v1` | Full supported native capability translation, loadable settings, public evidence/lifecycle composition and selected raw profiles |
+| `framework/v1` | Composition of public runtime owners, released-evidence reception and bound presentation/logging; no SDK or Internal engine |
+| `framework/configuration/v1` | Typed configuration acquisition/preparation coordination, fenced publication, independent data domains and explicit adoption handoff |
 | `internal/fault` | Technical kinds, frozen context, multi-cause inspection and safe presentation |
 | `internal/resource` | Configuration preparation, source identity/provenance, assembly, authoritative ownership, limits, admission and leases |
 | `internal/invocation` | Requests/budgets, producers, outcomes/results, concrete read-only receipts, scopes/guards, required evidence delivery and optional observation |
@@ -214,6 +214,15 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | `internal/conformance` | Maintainer-only testing helpers; never a production dependency |
 
 ```text
+failure/v1               -> standard library
+settings/v1              -> failure/v1, standard library
+i18n/v1                  -> failure/v1, settings/v1, x/text, standard library
+resource/v1              -> failure/v1, settings/v1, standard library
+adapters/v1              -> failure/v1, resource/v1, standard library
+adapters/configsource/v1 -> failure/v1, settings/v1, YAML, standard library
+concrete configsource    -> public foundations, selected Internal configsource
+framework/v1             -> public failure/settings/i18n/resource/adapters
+framework/configuration  -> public configsource contracts and shared foundations
 internal/fault            -> standard library
 internal/resource         -> internal/fault, existing YAML
 internal/invocation       -> internal/resource, internal/fault
@@ -221,32 +230,38 @@ internal/compatibility    -> internal/resource, internal/fault
 internal/conformance      -> internal mechanisms, testing (test support only)
 ```
 
-These internal production mechanisms have no public error dependency or all-SDK
-aggregator. The separate `failure/v1` package depends only on the standard library.
-Compatibility assessment accepts the authoritative
+The Internal production mechanisms retain no public error dependency or all-SDK
+aggregator. Failure imports only the standard library. Compatibility assessment accepts the authoritative
 `*internal/resource.Access`; it does not introduce a public snapshot-assessment API.
 
 ## Pre-release API migration
 
 
-The complete top-level `source`, `operation`, `compatibility` and `failure`
-packages are withdrawn. There are no public aliases, forwarding constructors,
-receipt interfaces, diagnostic shells or fixture-only bridges. The former public
-error package had no production consumer after internalization; its tests and build
-probe did not justify retaining a framework contract before the framework layer.
-It is removed, not copied into another package or rebuilt in the test fixtures.
-
-The separately implemented `failure/v1` contract supplies owner-qualified identity
-and direct in-process occurrences. It does not restore or promise compatibility
-with the withdrawn Definition/Identity/Attribution API, and has no unversioned facade.
-Future public operations own their semantic mappings and attribution.
+The unversioned `source`, `operation`, `compatibility` and `failure` packages remain
+withdrawn. The new public `failure/v1` uses uint32 Code with an
+[explicit capability-domain allocation protocol](../reference/failure/v1/code-allocation.md), a distinct Identifier,
+explicit definitions and extensible owner data. The former string Condition API
+and presentation-fact atlas are not retained as aliases or forwarding facades.
+[Settings](../reference/settings/v1/interface.md) now supplies data storage/access,
+not an application host or source loader. [I18n](../reference/i18n/v1/interface.md)
+supplies resource catalogs and error presentation separately.
+[Resource](../reference/resource/v1/interface.md) now supplies independent public
+instance ownership without restoring private assembly facades. Public operation
+mechanisms and concrete configsource Adapters now use those public foundations;
+strict public preparation is independent of Internal's engine. Framework common
+composition and configuration scenarios now reuse those public owners. The official
+[CLI](../reference/cmd/fathomry/interface.md) provides offline catalog commands through
+private command packages; the former public CLI Go API remains withdrawn. No complete
+application/Worker runtime is implied. No compatibility
+with the unreleased outer interfaces or earlier uint64 code draft is implied.
 
 ## Technical facts and future public meaning
 
 The [error and evidence architecture](errors-and-evidence.md) owns the cross-package
 rules. The [fault interface](../reference/internal/fault/interface.md) specifies
-the implemented technical boundary. The [public failure interface](../reference/failure/v1/interface.md)
-specifies the independent in-process boundary, not a Framework runtime or durable codec.
+the implemented technical boundary. The separate
+[failure contract](../reference/failure/v1/interface.md) supplies the public core,
+without making private providers depend on it or defining every component's data.
 
 ## Implementation references
 

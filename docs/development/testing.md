@@ -90,6 +90,7 @@ handoff and rejecting controls before broadening to full checks:
 go test -race -count=1 -timeout=3m ./internal/configsource/viper/v1
 go test ./internal/configsource/viper/v1 -run '^$' -fuzz '^FuzzLoad$' -fuzztime=10s -parallel=2
 go test ./internal/configsource/viper/v1 -run '^$' -fuzz '^FuzzQuery$' -fuzztime=10s -parallel=2
+go test ./internal/configsource/viper/v1 -run '^$' -fuzz '^FuzzFormats$' -fuzztime=10s -parallel=2
 GOMAXPROCS=4 go test ./internal/configsource/viper/v1 -run '^$' -bench '^BenchmarkLoading$' -benchmem -benchtime=10x -count=5
 go run ./internal/configsource/viper/v1/testdata/consumer
 ```
@@ -115,6 +116,7 @@ go test -race -count=3 -timeout=3m ./internal/configsource/nacos/v2
 go run ./internal/configsource/nacos/v2/testdata/consumer
 go test ./internal/configsource/nacos/v2 -run '^$' -fuzz '^FuzzOptions$' -fuzztime=10s -parallel=2
 go test ./internal/configsource/nacos/v2 -run '^$' -fuzz '^FuzzProtocol$' -fuzztime=10s -parallel=2
+go test ./internal/configsource/nacos/v2 -run '^$' -fuzz '^FuzzSearchPage$' -fuzztime=10s -parallel=2
 GOMAXPROCS=4 go test ./internal/configsource/nacos/v2 -run '^$' -bench '^BenchmarkRead$' -benchmem -benchtime=10x -count=3
 ```
 
@@ -129,6 +131,10 @@ with explicitly authorized isolated resources and credentials:
 FATHOMRY_NACOS_TEST_CONFIG=/path/to/private-nacos-fixture.json \
   go test -tags=nacos_service -race -count=1 -timeout=4m \
   ./internal/configsource/nacos/v2 -run '^TestNacosServiceReadWriteWatchAndCleanup$'
+
+FATHOMRY_NACOS_TEST_CONFIG=/path/to/private-nacos-fixture.json \
+  go test -tags=nacos_service -race -count=1 -timeout=3m \
+  ./internal/configsource/nacos/v2 -run '^TestNacosManagementService$'
 ```
 
 The bounded mode-0600 JSON fixture contains `http_url`, `grpc_address`, `namespace`,
@@ -139,6 +145,10 @@ writes, deletes those keys and checks absence during cleanup. It does not alter
 roles, deploy services, raise platform limits or restart remote nodes. Its
 connection-interruption test drops only this client's connection. Periodic
 reconciliation is set beyond the bounded push wait to avoid false push acceptance.
+The management gate uses the explicitly authorized administrator for a unique
+fixture, exercises native Publish/CAS/Delete and metadata/tag search, and confirms
+cleanup. A generic stale-CAS server error must remain an unknown mutation outcome;
+the gate separately reads back the content rather than parsing error text.
 Compiling with `-run '^$'` runs no real-service test. See the
 [Nacos profile](../reference/internal/configsource/nacos/v2/interface.md) for current
 version, native limitations, upstream-upgrade TODO and unexecuted service modes.
@@ -295,8 +305,12 @@ mechanism overhead, not SDK throughput or a native-memory cap. Sustained fixture
 check declared high-water limits, not every physical resource.
 
 The [build test](../../internal/compatibility/consumer_test.go) executes SDK behavior
-and inspects that same binary. Fathomry intentionally contributes no public package
-there; a separate in-module probe covers framework-as-main. Do not substitute
+and inspects that same binary. Fathomry intentionally contributes no package to
+that particular probe; a separate in-module probe covers framework-as-main. The
+rebuilt failure and settings contracts have independently compiled consumers.
+Settings default tests run in fresh processes, without a production reset hook;
+parent-process coverage alone does not include those child counters.
+Do not substitute
 inspector metadata or manufacture passing support records from startup facts.
 
 Actual SDK termination, session/account isolation, service effects, native buffers
