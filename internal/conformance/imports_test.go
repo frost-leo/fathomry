@@ -105,6 +105,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command":              true,
 		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog": true,
 		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages":     true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project":      true,
 	}
 	for _, path := range strings.Fields(string(output)) {
 		if cliPackages[path] {

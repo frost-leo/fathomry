@@ -17,19 +17,31 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package configuration composes public raw Sources and strict preparation into
-// typed accepted-data domains. Load returns a published State after complete
-// acceptance. Watch owns one source ingress and one serial validation path;
-// obsolete/invalid observations preserve last-good data and Close fences publishing.
+// Package configuration supplies complete typed configuration scenarios through
+// public Adapters. Projects declare their schema, captured values and an explicit
+// immutable Provider. They do not construct Adapter runtimes, clients or inboxes.
 //
-// The project owns T, defaults, strong validation, selected sources/layer policy
-// and explicit environment bindings. Bootstrap is resolved before acquisition.
-// Application and business-variable declarations use independent stores/readers;
-// no mandatory application envelope, all-SDK settings union or implicit default
-// installation is introduced. Optional public resource adoption is separate from
-// acceptance and readiness. The package imports no root Internal or concrete SDK.
+// ReadInputs binds supplied arguments, an explicit environment lookup, selected
+// dotenv and project defaults. It performs no ambient lookup, provider inference
+// or process mutation. Viper and Nacos associate every original document with its
+// layer policy. PrepareNacos loads the supported deployment bootstrap through
+// the same typed Load path, returning an inert provider and released facts.
 //
-// Callbacks must be bounded, concurrency-safe and non-panicking. Cancellation
-// requests stop but never substitutes for actual cleanup/validation completion.
-// This process-local code must not execute inside deterministic Workflows.
+// Load owns finite acquisition, strict preparation, publication and cleanup.
+// Result separates accepted State from released records and cleanup failure.
+// Watch owns a source and serial validation until actual release. Invalid and
+// obsolete updates preserve last-good data; timed-out Close retains ownership.
+// No second native parser, poller or resource engine is introduced.
+//
+// Settings types, defaults, business validation, permitted input names and
+// environment-to-document choices remain project-owned. Optional Resources is
+// borrowed for adoption, never closed here. Acceptance is not instance readiness.
+// Independent declarations retain independent stores, sources, limits and records;
+// framework.Runtime does not implicitly become their parent or shared quota.
+//
+// Records transfer in-process facts to the caller, not a durable audit sink.
+// Components supplies shared and supported-provider localization definitions
+// without opening clients. Source causes and explicit data copies are sensitive.
+// This package neither installs settings.Default nor starts a Worker/application
+// host. Process-local loading and Watch must not run inside deterministic Workflows.
 package configuration

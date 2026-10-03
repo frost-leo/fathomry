@@ -22,6 +22,7 @@ package configuration
 import (
 	"context"
 	"math"
+	"slices"
 
 	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
@@ -53,6 +54,11 @@ type pending struct {
 	sequence    uint64
 }
 type watchState[T any] struct {
+	scenario *scenario
+	done     chan struct{}
+	records  []Record
+	final    error
+
 	data             *State[T]
 	plan             plan[T]
 	dependencies     Dependencies
@@ -71,7 +77,7 @@ type watchState[T any] struct {
 	terminal         error
 }
 
-// Watch freezes declarations/environment once, then starts one owned producer.
+// Watch freezes schema/captured values once, then starts one owned producer.
 // It never polls independently of Source.Observe or creates a validator per update.
 func Watch[T any](ctx context.Context, declaration Declaration[T], dependencies Dependencies, options WatchOptions) (*Watcher[T], error) {
 	if ctx == nil {
@@ -84,16 +90,22 @@ func Watch[T any](ctx context.Context, declaration Declaration[T], dependencies 
 	if capacity < 1 || capacity > 64 {
 		return nil, fail(ErrDeclaration, "watch")
 	}
-	endpoint, err := bind(dependencies)
-	if err != nil {
-		return nil, err
-	}
-	selected, err := freeze(ctx, declaration, true)
+	selected, err := freeze(ctx, declaration, dependencies.Provider, true)
 	if err != nil {
 		return nil, err
 	}
 	lifetime, cancel := context.WithCancelCause(ctx)
-	state := &watchState[T]{data: newState[T](), plan: selected, dependencies: dependencies, ctx: lifetime, cancel: cancel, capacity: capacity, eventsChanged: make(chan struct{}), inputChanged: make(chan struct{}, 1)}
+	scenario, err := newScenario(lifetime)
+	if err != nil {
+		cancel(nil)
+		return nil, err
+	}
+	endpoint, err := scenario.endpoint()
+	if err != nil {
+		cancel(nil)
+		return nil, scenario.failWatch(ctx, err)
+	}
+	state := &watchState[T]{scenario: scenario, done: make(chan struct{}), data: newState[T](), plan: selected, dependencies: dependencies, ctx: lifetime, cancel: cancel, capacity: capacity, eventsChanged: make(chan struct{}), inputChanged: make(chan struct{}, 1)}
 	receipt, err := endpoint.Run(lifetime, request("watch"), func(call *adapters.Call[Evidence]) {
 		guard, err := call.Hold()
 		if err != nil {
@@ -101,29 +113,46 @@ func Watch[T any](ctx context.Context, declaration Declaration[T], dependencies 
 			return
 		}
 		state.data.state.mu.Lock()
+		state.receipt = call.Receipt()
 		state.work = call.Context()
 		state.data.state.mu.Unlock()
 		go func() {
-			defer guard.Release()
-			state.run(call)
+			func() { defer guard.Release(); state.run(call) }()
+			state.finalize(context.WithoutCancel(ctx))
 		}()
 	})
 	if err != nil {
 		cancel(nil)
-		return nil, err
+		return nil, scenario.failWatch(ctx, err)
 	}
 	if state.work == nil {
 		cancel(nil)
 		value, _ := receipt.Snapshot()
-		return nil, value.Err()
+		return nil, scenario.failWatch(ctx, value.Err())
 	}
-	state.receipt = receipt
 	return &Watcher[T]{state: state}, nil
 }
+
+func (scenario *scenario) failWatch(ctx context.Context, primary error) error {
+	if canceled := ctx.Err(); canceled != nil {
+		primary = fail(ErrClosed, "watch_open", primary, canceled, context.Cause(ctx))
+	}
+	_, cleanup := scenario.finish(context.WithoutCancel(ctx))
+	if cleanup != nil {
+		return fail(ErrCleanup, "watch_open", primary, cleanup)
+	}
+	return primary
+}
+
 func (state *watchState[T]) run(call *adapters.Call[Evidence]) {
 	defer state.cancel(nil)
 	data := state.data.state
-	observer, openError := state.plan.source.Observe(call.Context())
+	openError := state.scenario.open(call.Context(), state.dependencies.Provider)
+	var observer configsource.Observer
+	if openError == nil {
+		state.plan.source = state.scenario.binding.source
+		observer, openError = state.plan.source.Observe(call.Context())
+	}
 	if nilInterface(observer) && openError == nil {
 		openError = fail(ErrObservation, "observe")
 	}
@@ -377,9 +406,46 @@ func (watch *Watcher[T]) Close(ctx context.Context) error {
 	data.status.Closed = true
 	data.mu.Unlock()
 	watch.state.cancel(nil)
-	value, err := watch.state.receipt.WaitReleased(ctx)
-	if err != nil {
-		return fail(ErrWait, "close", err)
+	select {
+	case <-watch.state.done:
+		return watch.state.final
+	default:
 	}
-	return value.Err()
+	select {
+	case <-watch.state.done:
+		return watch.state.final
+	case <-ctx.Done():
+		return fail(ErrWait, "close", ctx.Err(), context.Cause(ctx))
+	}
+}
+
+func (state *watchState[T]) finalize(ctx context.Context) {
+	value, _ := state.receipt.Snapshot()
+	records, cleanup := state.scenario.finish(ctx)
+	state.records = records
+	state.final = value.Primary()
+	if value.Cleanup() != nil {
+		state.final = fail(ErrCleanup, "watch", state.final, value.Cleanup())
+	}
+	if cleanup != nil {
+		state.final = fail(ErrCleanup, "watch_cleanup", state.final, cleanup)
+	}
+	state.data.state.mu.Lock()
+	state.data.state.status.Released = true
+	state.data.state.mu.Unlock()
+	close(state.done)
+}
+
+// Records returns detached finalized evidence only after all scenario owners
+// have released. A false readiness flag is not a successful empty record set.
+func (watch *Watcher[T]) Records() ([]Record, bool) {
+	if watch == nil || watch.state == nil {
+		return nil, false
+	}
+	select {
+	case <-watch.state.done:
+		return slices.Clone(watch.state.records), true
+	default:
+		return nil, false
+	}
 }

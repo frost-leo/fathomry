@@ -49,3 +49,23 @@ func (*Watcher[T]) Format(state fmt.State, _ rune)  { restricted(state) }
 func (*Watcher[T]) LogValue() slog.Value            { return slog.StringValue("configuration.Watcher") }
 func (*Event) Format(state fmt.State, _ rune)       { restricted(state) }
 func (*Event) LogValue() slog.Value                 { return slog.StringValue("configuration.Event") }
+
+func (NacosConnection) Format(state fmt.State, _ rune) { restricted(state) }
+func (NacosConnection) LogValue() slog.Value {
+	return slog.StringValue("configuration.NacosConnection")
+}
+func (NacosOptions) Format(state fmt.State, _ rune) { restricted(state) }
+func (NacosOptions) LogValue() slog.Value           { return slog.StringValue("configuration.NacosOptions") }
+func (InputOptions) Format(state fmt.State, _ rune) { restricted(state) }
+func (InputOptions) LogValue() slog.Value           { return slog.StringValue("configuration.InputOptions") }
+func (InputBinding) Format(state fmt.State, _ rune) { restricted(state) }
+func (InputBinding) LogValue() slog.Value           { return slog.StringValue("configuration.InputBinding") }
+func (Variable) Format(state fmt.State, _ rune)     { restricted(state) }
+func (Variable) LogValue() slog.Value               { return slog.StringValue("configuration.Variable") }
+
+func (NacosBootstrap) Format(state fmt.State, _ rune)        { restricted(state) }
+func (NacosBootstrap) LogValue() slog.Value                  { return slog.StringValue("configuration.NacosBootstrap") }
+func (NacosBootstrapOptions) Format(state fmt.State, _ rune) { restricted(state) }
+func (NacosBootstrapOptions) LogValue() slog.Value {
+	return slog.StringValue("configuration.NacosBootstrapOptions")
+}

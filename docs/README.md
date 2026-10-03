@@ -117,12 +117,14 @@ supported public configuration capabilities, selected raw sources and
 [Framework common composition](reference/framework/v1/interface.md) now supplies
 explicit runtime coordination, released-evidence reception and a safe logging
 boundary. [Framework configuration](reference/framework/configuration/v1/interface.md)
-adds strict typed Load/Watch, captured explicit variables, atomic independent data
-domains and optional resource-adoption handoff. The official
+adds explicit argument/lookup/dotenv binding and YAML/TOML Load/Watch over selected
+provider descriptors, atomic data domains and optional borrowed resource adoption.
+Project Boot supplies choices and settings without importing Adapters; Framework
+owns source/operation/evidence lifecycle and performs no ambient environment lookup. The official
 [CLI](reference/cmd/fathomry/interface.md) now provides offline help, error and
-translation catalogs; its former public Go API stays withdrawn. There is no
-project generator, production-qualified application runtime or
-Run/Item execution model. The intended `fathomry new <project>` entry is not runnable.
+translation catalogs plus `new` project generation; its former public Go API stays
+withdrawn. Generated projects share one Boot/Watch flow with mode-specific dependency declarations.
+There is no production-qualified application runtime or Run/Item execution model.
 Internal raw acquisition, strict JSON preparation and type-admission improvements
 remain implemented. Business authors are not expected to recreate private
 assembly machinery as startup boilerplate.

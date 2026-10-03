@@ -25,7 +25,7 @@
 // Source/Observer define a selected complete raw acquisition profile; immutable
 // batches preserve missing/empty/failure distinctions without importing providers.
 //
-// Documents are explicit UTF-8 JSON or restricted YAML. Fields use exact json
+// Documents are explicit UTF-8 JSON, restricted YAML or strict TOML. Fields use exact json
 // names; objects/maps overlay, lists replace, absence inherits, and null clears
 // only pointers/maps/lists. Preparation performs no I/O, discovery, publication,
 // polling, instance reconstruction or process-environment mutation.

@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Command fathomry provides official offline error and translation catalogs.
+// Command fathomry provides official project generation and offline catalogs.
 package main
 
 import (

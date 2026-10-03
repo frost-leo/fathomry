@@ -41,6 +41,12 @@ and retains both error graphs. An expired wait leaves the same reachable Runtime
 retry Close. Completed native cleanup can retain errors. Borrowed sinks and
 separately created evidence receivers are not silently owned or discarded.
 
+The separately constructed configuration scenarios own their own operation runtime
+and source. This Runtime is not their parent, shared admission limit or application
+host. Passing Resources to a configuration dependency borrows an adoption scope;
+it does not transfer configuration Watch ownership. Generated Boot uses the
+configuration scenario API without this advanced assembly machinery.
+
 ## Receive required evidence without blocking behind live owners
 
 StartReceiver[T] borrows an Inbox and a bounded, non-panicking sink. It uses

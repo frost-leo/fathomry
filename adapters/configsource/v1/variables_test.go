@@ -22,9 +22,69 @@ package configsource
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestDotenv(t *testing.T) {
+	t.Setenv("BOUNDARY_ENV", "ambient")
+	values, err := ParseDotenv([]byte("# explicit values\nBOUNDARY_ENV=literal-$HOME\nEMPTY=\nQUOTED='a # b' # comment\nJSON=\"one\\ntwo\"\n"))
+	if err != nil || !reflect.DeepEqual(values, map[string]string{"BOUNDARY_ENV": "literal-$HOME", "EMPTY": "", "QUOTED": "a # b", "JSON": "one\ntwo"}) {
+		t.Fatal("literal values changed", err)
+	}
+	for _, raw := range []string{"A=1\nA=2", "export A=1", "1BAD=value", "BAD-KEY=value", "A", "A='unclosed", "A=\"\\ud800\"", "A=\"one\ntwo\"", "A='one' trailing", "A=bad\x00value", "A=\xff", strings.Repeat(" ", MaxDotenvBytes+1)} {
+		if _, err := ParseDotenv([]byte(raw)); err == nil {
+			t.Fatal("invalid variable document admitted")
+		}
+	}
+	if values, err := ParseDotenv(nil); err != nil || len(values) != 0 {
+		t.Fatal("empty document changed", err)
+	}
+	t.Run("inclusive_document_limit", func(t *testing.T) {
+		for _, ending := range []string{"", "\n", "\r\n"} {
+			for _, size := range []int{MaxDotenvBytes - 1, MaxDotenvBytes, MaxDotenvBytes + 1} {
+				value := strings.Repeat("x", size-len("A=")-len(ending))
+				parsed, err := ParseDotenv([]byte("A=" + value + ending))
+				if size > MaxDotenvBytes {
+					if !errors.Is(err, ErrLimit) || parsed != nil {
+						t.Fatal("oversized document admitted")
+					}
+				} else if err != nil || parsed["A"] != value {
+					t.Fatalf("valid document refused: size=%d ending=%q: %v", size, ending, err)
+				}
+			}
+		}
+		for _, raw := range []string{strings.Repeat(" ", MaxDotenvBytes), "#" + strings.Repeat("x", MaxDotenvBytes-1)} {
+			if parsed, err := ParseDotenv([]byte(raw)); err != nil || len(parsed) != 0 {
+				t.Fatal("maximum empty/comment-only document refused", err)
+			}
+		}
+	})
+}
+
+func FuzzDotenv(f *testing.F) {
+	for _, raw := range []string{"", "A=literal-$HOME", "A='quoted'", "A=\"escaped\\ntext\"", "A=unterminated'"} {
+		f.Add(raw)
+	}
+	f.Fuzz(func(t *testing.T, raw string) {
+		if len(raw) > MaxDotenvBytes+1 {
+			return
+		}
+		values, err := ParseDotenv([]byte(raw))
+		if err != nil {
+			return
+		}
+		if len(values) > MaxVariables {
+			t.Fatal("unbounded variable count")
+		}
+		for name, value := range values {
+			if !dotenvKey(name) || !dotenvText(value) {
+				t.Fatal("invalid literal output")
+			}
+		}
+	})
+}
 
 func TestVariables(t *testing.T) {
 	values := []Variable{

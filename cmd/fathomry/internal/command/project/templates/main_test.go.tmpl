@@ -1,0 +1,101 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"testing"
+{{if eq .Mode "local"}}
+"errors"
+"os"
+"path/filepath"
+"strings"
+"github.com/frost-leo/fathomry/failure/v1"
+configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+{{end}}
+)
+
+func TestEntryFailure(t *testing.T) {
+	var output bytes.Buffer
+	if run(context.Background(), []string{"--unknown=private-canary"}, &output) == nil {
+		t.Fatal("unsupported option")
+	}
+	var report struct {
+		Accepted bool `json:"configuration_accepted"`
+		Worker   bool `json:"worker_started"`
+	}
+	if json.Unmarshal(output.Bytes(), &report) != nil || report.Accepted || report.Worker || bytes.Contains(output.Bytes(), []byte("private-canary")) {
+		t.Fatal("unsafe failure report")
+	}
+}
+func TestProcessContext(t *testing.T) {
+	ctx, stop := processContext()
+	stop()
+	stop()
+	if ctx.Err() == nil {
+		t.Fatal("signal owner not released")
+	}
+}
+
+{{if eq .Mode "local"}}
+func TestEntryLocal(t *testing.T) {
+	for _, entry := range os.Environ() {
+		name, value, present := strings.Cut(entry, "=")
+		if present && strings.HasPrefix(name, "FATHOMRY_") {
+			t.Setenv(name, value)
+			if os.Unsetenv(name) != nil {
+				t.Fatal("environment isolation failed")
+			}
+		}
+	}
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(root)
+	var output bytes.Buffer
+	if err := run(context.Background(), nil, &output); err != nil {
+		t.Fatal("relative startup failed", err)
+	}
+	var report struct {
+		Code     string `json:"code"`
+		Accepted bool   `json:"configuration_accepted"`
+	}
+	if json.Unmarshal(output.Bytes(), &report) != nil || !report.Accepted {
+		t.Fatal("startup not accepted")
+	}
+	output.Reset()
+	err = run(context.Background(), []string{"--config-dir", t.TempDir()}, &output)
+	if !errors.Is(err, configuration.ErrMissing) {
+		t.Fatal("missing cause lost", err)
+	}
+	var occurrence failure.Occurrence
+	if !errors.As(err, &occurrence) {
+		t.Fatal("public identity lost")
+	}
+	info, _ := failure.Inspect(occurrence)
+	if json.Unmarshal(output.Bytes(), &report) != nil || report.Accepted || report.Code != info.Diagnostic().Definition.Code.String() {
+		t.Fatal("public error projection changed")
+	}
+}
+
+{{end}}

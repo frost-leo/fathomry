@@ -1,0 +1,137 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "project_creation",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.project_creation.invalid_dependency",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.invalid_dependency.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A supported Framework version or explicit development checkout is required."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.destination_unavailable",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.destination_unavailable.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The destination must be absent and its parent must be accessible."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.incomplete_creation",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.incomplete_creation.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Project creation did not complete; created files have been retained."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.new",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.new.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Create an independent project with local or remote typed configuration."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.module",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.module.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Required Go module path."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.name",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.name.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Application name; defaults to the destination basename."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.source",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.source.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Loading mode: local or remote."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.provider",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.provider.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Implementation: viper by default; remote requires explicit nacos."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.format",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.format.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Application document format: yaml or toml."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.framework_source",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.framework_source.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Explicit live development checkout; never inferred or copied."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.created",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.project_creation.created.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Project created:"
+      }
+    }
+  ]
+}

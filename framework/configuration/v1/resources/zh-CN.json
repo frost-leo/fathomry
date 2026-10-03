@@ -92,6 +92,13 @@
       "forms": {
         "other": "不支持配置生产者句柄序列化。"
       }
+    },
+    {
+      "id": "fathomry.configuration.cleanup_failed",
+      "source": "9f5da9a86eaf7f29ac7ac74e28ea230ca72b6d3869bbd902bc972836006720d5",
+      "forms": {
+        "other": "配置加载场景清理失败；已接受的数据仍可单独查看。"
+      }
     }
   ]
 }

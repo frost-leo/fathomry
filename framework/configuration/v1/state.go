@@ -21,6 +21,7 @@ package configuration
 
 import (
 	"context"
+	"slices"
 	"sync"
 
 	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
@@ -48,6 +49,7 @@ type Status struct {
 	Published        uint64
 	Gap              bool
 	Closed           bool
+	Released         bool
 	SourceError      error
 	PreparationError error
 	AdoptionError    error
@@ -108,10 +110,29 @@ func (value *State[T]) Status() (Status, error) {
 	defer value.state.mu.Unlock()
 	return value.state.status, nil
 }
-func (value Accepted[T]) ValueCopy() (T, error)                 { return value.prepared.ValueCopy() }
-func (value Accepted[T]) Description() configsource.Description { return value.prepared.Description() }
-func (value Accepted[T]) View() settings.View                   { return value.view }
-func (value Accepted[T]) Sequence() uint64                      { return value.sequence }
+
+// Description contains detached schema/provenance facts, not source credentials.
+type Description struct {
+	Version  uint32
+	Revision string
+	Layers   []LayerInfo
+}
+type LayerInfo struct {
+	Kind   LayerKind
+	Fields []string
+}
+
+func (value Accepted[T]) ValueCopy() (T, error) { return value.prepared.ValueCopy() }
+func (value Accepted[T]) Description() Description {
+	prepared := value.prepared.Description()
+	result := Description{Version: prepared.Version, Revision: prepared.Revision}
+	for _, layer := range prepared.Layers {
+		result.Layers = append(result.Layers, LayerInfo{Kind: LayerKind(layer.Kind), Fields: slices.Clone(layer.Fields)})
+	}
+	return result
+}
+func (value Accepted[T]) View() settings.View { return value.view }
+func (value Accepted[T]) Sequence() uint64    { return value.sequence }
 
 // publish runs under the State lock. Snapshot construction/validation are outside
 // it; settings.Publish performs no user callback.

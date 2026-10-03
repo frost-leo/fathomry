@@ -1,0 +1,357 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "message_catalog",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.message_catalog.root",
+      "contract": "v1",
+      "context": "Message catalog command: root.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Inspect registered translation resources without application settings."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.list",
+      "contract": "v1",
+      "context": "Message catalog command: list.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List registered message identities and exact resource languages."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.show",
+      "contract": "v1",
+      "context": "Message catalog command: show.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Inspect one exact message translation without fallback."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.coverage",
+      "contract": "v1",
+      "context": "Message catalog command: coverage.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Report exact translation coverage; --strict fails when translations are missing."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.locales",
+      "contract": "v1",
+      "context": "Message catalog command: locales.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List actual resource languages and translated/total counts per component."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.render",
+      "contract": "v1",
+      "context": "Message catalog command: render.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Render a message with declared scalar arguments and explicit language provenance."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_query",
+      "contract": "v1",
+      "context": "Message catalog command: flag_query.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Case-insensitive literal search in identities and message text."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_module",
+      "contract": "v1",
+      "context": "Message catalog command: flag_module.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Exact owner module; independent of --component."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_component",
+      "contract": "v1",
+      "context": "Message catalog command: flag_component.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Exact owner component; independent of --module."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_resource_locale",
+      "contract": "v1",
+      "context": "Message catalog command: flag_resource_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Exact resource language; omit to list all languages without fallback."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_locale",
+      "contract": "v1",
+      "context": "Message catalog command: flag_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Exact translation locale; defaults to the display language."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_render_locale",
+      "contract": "v1",
+      "context": "Message catalog command: flag_render_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Requested rendering language; defaults to the display language and may fall back."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_argument",
+      "contract": "v1",
+      "context": "Message catalog command: flag_argument.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Repeatable NAME=VALUE; types follow the message declaration. Do not supply secrets."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_count",
+      "contract": "v1",
+      "context": "Message catalog command: flag_count.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Unsigned decimal cardinal count (uint64); required only for cardinal messages."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_strict",
+      "contract": "v1",
+      "context": "Message catalog command: flag_strict.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Return exit code 1 for missing translations, retaining the complete report."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.locale",
+      "contract": "v1",
+      "context": "Message catalog command: locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Language"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.owner",
+      "contract": "v1",
+      "context": "Message catalog command: owner.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Owner"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.requested_locale",
+      "contract": "v1",
+      "context": "Message catalog command: requested_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Requested language"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.canonical_locale",
+      "contract": "v1",
+      "context": "Message catalog command: canonical_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Canonical language"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.matched_locale",
+      "contract": "v1",
+      "context": "Message catalog command: matched_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Matched language tag"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.fallback",
+      "contract": "v1",
+      "context": "Message catalog command: fallback.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Message fallback (empty means none)"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.missing",
+      "contract": "v1",
+      "context": "Message catalog command: missing.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Missing translations"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.missing_translation",
+      "contract": "v1",
+      "context": "Message catalog command: missing_translation.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The message exists, but this exact translation is absent."
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.base_locale",
+      "contract": "v1",
+      "context": "Message catalog command: base_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Base language"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.contract",
+      "contract": "v1",
+      "context": "Message catalog command: contract.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Message contract"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.context",
+      "contract": "v1",
+      "context": "Message catalog command: context.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Message context"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.source_digest",
+      "contract": "v1",
+      "context": "Message catalog command: source_digest.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Baseline digest"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.cardinal",
+      "contract": "v1",
+      "context": "Message catalog command: cardinal.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Cardinal message"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.arguments",
+      "contract": "v1",
+      "context": "Message catalog command: arguments.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Arguments"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.translated",
+      "contract": "v1",
+      "context": "Message catalog command: translated.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Translated"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.category",
+      "contract": "v1",
+      "context": "Message catalog command: category.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Selected plural category"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.variant",
+      "contract": "v1",
+      "context": "Message catalog command: variant.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Authored plural form"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.form_fallback",
+      "contract": "v1",
+      "context": "Message catalog command: form_fallback.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Plural-form fallback"
+      }
+    }
+  ]
+}

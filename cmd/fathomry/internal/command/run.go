@@ -50,6 +50,7 @@ type Invocation struct {
 	helperError       error
 	presentationError error
 	pending           []byte
+	checkFailed       bool
 	emitted           bool
 	scopeMu           sync.Mutex
 	scope             *resource.Scope
@@ -171,6 +172,8 @@ func installHelp(cmd *cobra.Command) {
 
 // Bind supplies the common admission boundary without replacing Cobra's command
 // declarations. Domain code returns errors; it never prints diagnostics or exits.
+// The command's static Short resource must render before its handler is entered,
+// including JSON paths that do not otherwise consume presentation resources.
 func (invocation *Invocation) Bind(cmd *cobra.Command, run func(context.Context, []string) error) {
 	cmd.RunE = func(_ *cobra.Command, args []string) error {
 		if err := invocation.ctx.Err(); err != nil {
@@ -178,6 +181,9 @@ func (invocation *Invocation) Bind(cmd *cobra.Command, run func(context.Context,
 		}
 		if err := invocation.configure(); err != nil {
 			return err
+		}
+		if _, err := invocation.presenter.Render(cmd.Short, nil, nil); err != nil {
+			return Fail(ErrOptions, err)
 		}
 		invocation.started = true
 		return run(invocation.ctx, args)
@@ -269,6 +275,17 @@ func (invocation *Invocation) Result(operation string, data any, text func(io.Wr
 		return err
 	}
 	invocation.pending = bytes.Clone(buffer.Bytes())
+	return nil
+}
+
+// CheckResult stages a completed check, not a failed execution. After successful
+// cleanup and delivery, a failed check returns ErrCheck with its report intact.
+// Handler, presentation, cleanup and output failures retain normal precedence.
+func (invocation *Invocation) CheckResult(operation string, data any, passed bool, text func(io.Writer) error) error {
+	if err := invocation.Result(operation, data, text); err != nil {
+		return err
+	}
+	invocation.checkFailed = !passed
 	return nil
 }
 

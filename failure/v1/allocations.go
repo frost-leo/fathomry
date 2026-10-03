@@ -80,6 +80,8 @@ const (
 	FacilityCommandLine Facility = 0x007
 	// FacilityConfiguration owns typed configuration acceptance and publication.
 	FacilityConfiguration Facility = 0x045
+	// FacilityProjectCreation owns independent project creation and its effects.
+	FacilityProjectCreation Facility = 0x00A
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -118,6 +120,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityAssembly, Module: "fathomry", Component: "assembly"},
 		{Facility: FacilityConfiguration, Module: "fathomry", Component: "configuration"},
 		{Facility: FacilityCommandLine, Module: "fathomry", Component: "command_line"},
+		{Facility: FacilityProjectCreation, Module: "fathomry", Component: "project_creation"},
 	}
 }
 

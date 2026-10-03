@@ -1,0 +1,57 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	"context"
+	"{{.Module}}/internal/setting"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+)
+
+func declaration(options Options) configuration.Declaration[setting.Settings] {
+	return configuration.Declaration[setting.Settings]{
+		Schema:    configuration.Schema[setting.Settings]{Version: 1, Defaults: setting.Defaults(), Validate: setting.Validate},
+		Variables: options.Variables,
+	}
+}
+
+// Boot loads accepted project settings and joins finite source cleanup.
+// Records remain available on failure; a cleanup failure does not erase State.
+func Boot(ctx context.Context, options Options) (configuration.Result[setting.Settings], error) {
+	dependencies, records, err := dependencies(ctx, options)
+	if err != nil {
+		return configuration.Result[setting.Settings]{Records: records}, err
+	}
+	result, err := configuration.Load(ctx, declaration(options), dependencies)
+	result.Records = append(records, result.Records...)
+	return result, err
+}
+
+// Watch starts the same declared project as a live configuration domain.
+// The second result contains released startup records, including on failure.
+// The caller closes the watcher; its own final records are available after release.
+func Watch(ctx context.Context, options Options) (*configuration.Watcher[setting.Settings], []configuration.Record, error) {
+	dependencies, records, err := dependencies(ctx, options)
+	if err != nil {
+		return nil, records, err
+	}
+	watch, err := configuration.Watch(ctx, declaration(options), dependencies, configuration.WatchOptions{})
+	return watch, records, err
+}

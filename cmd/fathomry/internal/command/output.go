@@ -82,6 +82,9 @@ func (invocation *Invocation) finish(err, cleanup error) error {
 			err = Fail(ErrOutput, problem)
 		}
 	}
+	if err == nil && invocation.checkFailed {
+		err = Fail(ErrCheck)
+	}
 	if err == nil {
 		return nil
 	}

@@ -31,7 +31,7 @@ import (
 )
 
 func parse(raw []byte, encoding Encoding) (map[string]any, error) {
-	if len(raw) == 0 || !utf8.Valid(raw) {
+	if len(raw) == 0 && encoding != TOML || !utf8.Valid(raw) {
 		return nil, fail(ErrDecode, "document")
 	}
 	if len(raw) > MaxDocumentBytes {
@@ -41,6 +41,8 @@ func parse(raw []byte, encoding Encoding) (map[string]any, error) {
 	var value any
 	var err error
 	switch encoding {
+	case TOML:
+		value, err = parseTOML(raw)
 	case JSON:
 		decoder := jsontext.NewDecoder(bytes.NewReader(raw), jsontext.AllowDuplicateNames(false), jsontext.AllowInvalidUTF8(false))
 		value, err = jsonValue(decoder, &budget, 0)

@@ -63,7 +63,7 @@ func TestCodeLayout(t *testing.T) {
 func TestAllocations(t *testing.T) {
 	t.Run("stable_first_party_manifest", func(t *testing.T) {
 		allocations := failure.Allocations()
-		if len(allocations) != 11 || allocations[0] != (failure.Allocation{Facility: 1, Module: "fathomry", Component: "failure"}) ||
+		if len(allocations) != 12 || allocations[0] != (failure.Allocation{Facility: 1, Module: "fathomry", Component: "failure"}) ||
 			allocations[1] != (failure.Allocation{Facility: 0x003, Module: "fathomry", Component: "i18n"}) ||
 			allocations[2] != (failure.Allocation{Facility: 0x004, Module: "fathomry", Component: "resource"}) ||
 			allocations[3] != (failure.Allocation{Facility: 0x005, Module: "fathomry", Component: "operation"}) ||
@@ -73,7 +73,8 @@ func TestAllocations(t *testing.T) {
 			allocations[7] != (failure.Allocation{Facility: 0x044, Module: "fathomry", Component: "configsource_nacos"}) ||
 			allocations[8] != (failure.Allocation{Facility: 0x006, Module: "fathomry", Component: "assembly"}) ||
 			allocations[9] != (failure.Allocation{Facility: 0x045, Module: "fathomry", Component: "configuration"}) ||
-			allocations[10] != (failure.Allocation{Facility: 0x007, Module: "fathomry", Component: "command_line"}) {
+			allocations[10] != (failure.Allocation{Facility: 0x007, Module: "fathomry", Component: "command_line"}) ||
+			allocations[11] != (failure.Allocation{Facility: 0x00A, Module: "fathomry", Component: "project_creation"}) {
 			t.Fatal("allocation manifest changed without migration")
 		}
 		if failure.ErrCode != 0xA0010001 || failure.ErrSerialization != 0xA0010007 {

@@ -1,0 +1,258 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "message_catalog",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.message_catalog.root",
+      "source": "3abbdf84f268353a82eb98d5c1ed3eecf9ab3da1d448667290a13232f7806952",
+      "forms": {
+        "other": "查询已注册的翻译资源，不读取应用设置。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.list",
+      "source": "96b81deae8391acb60250f6cb2619022665f2a728880f1936f048485ba83d74a",
+      "forms": {
+        "other": "列出已注册的消息标识及精确资源语言。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.show",
+      "source": "aff8e4b2bb5d5a9f114521691a4390462d93324033c0e675c0f3f8563dab055d",
+      "forms": {
+        "other": "查询一条消息的精确翻译，不进行语言回退。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.coverage",
+      "source": "11ffba1200e37816a15d586b8df105f8f213252a2e3408307ec89135a56201c7",
+      "forms": {
+        "other": "报告精确翻译覆盖情况；--strict 在缺译时返回失败。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.locales",
+      "source": "cef2c0bec9839ebab7ecec727efb1c1f316bf97bcc8bdc389ac5367da5e8c813",
+      "forms": {
+        "other": "按组件列出实际资源语言及已翻译数量／总量。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.render",
+      "source": "561ea5a5e89da46b1f7fe910e0ced9804bb9da7c7562344fee453f033e45da95",
+      "forms": {
+        "other": "按声明的标量参数渲染消息，并展示实际语言及回退情况。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_query",
+      "source": "28b8bf83ce197fbc002320856314f2ad6e4b26568480caa13c5875133dd29574",
+      "forms": {
+        "other": "按标识和消息文本搜索，不区分大小写，不使用正则表达式。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_module",
+      "source": "ad39786858b47d65c8a026f5f1c865d7e79f3f48e5818b9bda7d540c6a9c6e55",
+      "forms": {
+        "other": "精确筛选所属模块，可独立于 --component 使用。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_component",
+      "source": "dab2fa4ff7cd6f7314f9c211642b3862578794e0e903c0a2691248e646c75e8d",
+      "forms": {
+        "other": "精确筛选所属组件，可独立于 --module 使用。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_resource_locale",
+      "source": "7e1f7066db608dd3de9f09c35ba022d173612b0b739692470b43a2ae9cddc56e",
+      "forms": {
+        "other": "精确资源语言；省略时列出全部语言，不进行回退。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_locale",
+      "source": "c098068a92a61cefa711fbd46a1d8ffd94b37dffcb67d810797eca1decddc869",
+      "forms": {
+        "other": "精确查询的翻译语言，默认使用显示语言。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_render_locale",
+      "source": "c8253a7b464937b304df36883de0e65eff7d7c0354fb07d938419ba4d80f9e3c",
+      "forms": {
+        "other": "请求的渲染语言，默认使用显示语言，可能发生回退。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_argument",
+      "source": "bcd0c192b053cc7e066831ef807421ec2c6a0f45f0f46145527a14e33f956432",
+      "forms": {
+        "other": "可重复的 NAME=VALUE，类型按消息声明确定，请勿传入秘密信息。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_count",
+      "source": "4f3f6eedd0a54b7fd2b116bbf4ab874afe0b97e82e98166896f1d19189d9f5f6",
+      "forms": {
+        "other": "无符号十进制数量（uint64），仅复数消息需要。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.flag_strict",
+      "source": "604b225c26cb7e33483b3a9f42ab42a272563bd33cb893ada2963ea3adab7f21",
+      "forms": {
+        "other": "缺译时返回退出码 1，同时保留完整报告。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.locale",
+      "source": "ffde1b17347971ce32efd6706e8047f0f90ea6729d62aaf454765bbdf8e7a975",
+      "forms": {
+        "other": "语言"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.owner",
+      "source": "e055432ca6f1ba055f5e1a304f362cb52d8b16a5f0256cea092f2965387754e1",
+      "forms": {
+        "other": "所属组件"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.requested_locale",
+      "source": "b345edd6651ba4cfa7bef68331de4a1d15b68e7584937e93f3f6fbde069790bc",
+      "forms": {
+        "other": "请求语言"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.canonical_locale",
+      "source": "27e72ffe258693b464cd85bcd3ada4f0e4950cdba4b54091270297892c84db5f",
+      "forms": {
+        "other": "规范化语言"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.matched_locale",
+      "source": "cf0d225809221779b143cf042c12f2fae7cc68636134b55fe8862fe88317933b",
+      "forms": {
+        "other": "匹配语言标签"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.fallback",
+      "source": "0bd93cce0f7d5e1200be84b0bab4f8608524a977d9af5cad2658e480b81e3f16",
+      "forms": {
+        "other": "消息回退（空表示无回退）"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.missing",
+      "source": "06314e6c44b0f2250f1065dcb1d783a870b538bb7a9c9303b4091b80ee3b9405",
+      "forms": {
+        "other": "缺失翻译"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.missing_translation",
+      "source": "e523ea3e41662019414d76451166bbf9f80800a4080c41241fd469543e5c9650",
+      "forms": {
+        "other": "消息已存在，但缺少该语言的精确翻译。"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.base_locale",
+      "source": "87fa438a9cfba7ff77a615b0ce844cf71f1d0a5c2a7e03eca65f5b2f1415f032",
+      "forms": {
+        "other": "基准语言"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.contract",
+      "source": "3bab7bf8d111be10a042fd86c391ca1fe99a00e087d38d4c858ae4d6f792b64d",
+      "forms": {
+        "other": "消息契约"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.context",
+      "source": "faf8428753f51faaf8c7788ef6aafd6121a4280c2c28928316c90c303692719e",
+      "forms": {
+        "other": "消息用途"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.source_digest",
+      "source": "f3457e268d9db39dbf4a93a7a109d96b26347383b152e3993524c1205086ae44",
+      "forms": {
+        "other": "基准摘要"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.cardinal",
+      "source": "838f9296203c214d7ebce5ad907cb7cc9288cf501f70661fda3f94e5ce1a7989",
+      "forms": {
+        "other": "复数消息"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.arguments",
+      "source": "8d9775cd7e62d8c8fe216c0237bfdd38275f646d9df95584d1a7d1bc9a9ec9c9",
+      "forms": {
+        "other": "参数"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.translated",
+      "source": "05896f1e557818f0c414a4f2ed31223eefd8554c9900ad63ea189ffaa759998a",
+      "forms": {
+        "other": "已翻译"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.category",
+      "source": "208d72b853d55e980dbe9472a0ee10ff52b7ba63f35b6228be186658a838b959",
+      "forms": {
+        "other": "选中的复数类别"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.variant",
+      "source": "f9833b3517145c902b71bdf380dbd5a501a0f84578607cc5da4c164b044f7b4f",
+      "forms": {
+        "other": "实际使用的复数形式"
+      }
+    },
+    {
+      "id": "fathomry.message_catalog.form_fallback",
+      "source": "8bb30f0d28364120bb1e60c2b7aa5d3b5bf2a0705b0d7308da8a57829790fa34",
+      "forms": {
+        "other": "复数形式回退"
+      }
+    }
+  ]
+}

@@ -29,9 +29,6 @@ import (
 	"testing"
 	"time"
 
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
-	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
-	"github.com/frost-leo/fathomry/adapters/v1"
 	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
 	framework "github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
@@ -55,27 +52,6 @@ type bundle struct {
 func TestIndependentConfigurationDomains(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	runtime, err := framework.New(ctx, framework.Options{Operations: adapters.Options{MaxWorkBytes: 128 << 20}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer runtime.Close(context.Background())
-	sourceEvidence, _ := adapters.NewInbox[viper.Evidence](adapters.EvidenceOptions{})
-	sourceReceiver, err := framework.StartReceiver(context.Background(), sourceEvidence, framework.ReceiverOptions{}, func(context.Context, adapters.Snapshot[viper.Evidence]) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer sourceReceiver.Close(context.Background())
-	configEvidence, _ := adapters.NewInbox[configuration.Evidence](adapters.EvidenceOptions{})
-	configReceiver, err := framework.StartReceiver(context.Background(), configEvidence, framework.ReceiverOptions{}, func(context.Context, adapters.Snapshot[configuration.Evidence]) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer configReceiver.Close(context.Background())
-	client, err := viper.New(viper.Dependencies{Runtime: runtime.Operations(), Evidence: sourceEvidence})
-	if err != nil {
-		t.Fatal(err)
-	}
 	directory := t.TempDir()
 	appPath, businessPath := filepath.Join(directory, "application.yaml"), filepath.Join(directory, "business.yaml")
 	if err := os.WriteFile(appPath, []byte("application: {i18n: {locale: zh-CN}}\ncustom: {name: project, roles: {primary: selected}}\n"), 0600); err != nil {
@@ -84,17 +60,16 @@ func TestIndependentConfigurationDomains(t *testing.T) {
 	if err := os.WriteFile(businessPath, []byte("access: first\nsecret: secret-first\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	appSource, _ := client.Source(viper.WatchSettings{Paths: []string{appPath}, Interval: 10 * time.Millisecond})
-	businessSource, _ := client.Source(viper.WatchSettings{Paths: []string{businessPath}, Interval: 10 * time.Millisecond})
-	dependencies := configuration.Dependencies{Runtime: runtime.Operations(), Evidence: configEvidence}
+	appSource, _ := configuration.Viper(configuration.ViperOptions{Documents: []configuration.File{{Path: appPath, Kind: configuration.Base, Encoding: configuration.YAML}}, Interval: 10 * time.Millisecond})
+	businessSource, _ := configuration.Viper(configuration.ViperOptions{Documents: []configuration.File{{Path: businessPath, Kind: configuration.Base, Encoding: configuration.YAML}}, Interval: 10 * time.Millisecond})
+	dependencies := configuration.Dependencies{Provider: appSource}
 	application, err := configuration.Watch(ctx, configuration.Declaration[project]{
-		Schema: configsource.Schema[project]{Version: 1, Validate: func(_ context.Context, value project) error {
+		Schema: configuration.Schema[project]{Version: 1, Validate: func(_ context.Context, value project) error {
 			if value.Custom.Name == "" || value.Custom.Roles["primary"] == "" {
 				return errors.New("invalid project extension")
 			}
 			return value.Application.I18n.Validate()
 		}},
-		Source: appSource, Layers: []configuration.Layer{{Kind: configsource.Base, Encoding: configsource.YAML}},
 	}, dependencies, configuration.WatchOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -119,14 +94,14 @@ func TestIndependentConfigurationDomains(t *testing.T) {
 	if err != nil || !ok || value != "project" {
 		t.Fatal("default reader lost root extension")
 	}
+	dependencies.Provider = businessSource
 	business, err := configuration.Watch(ctx, configuration.Declaration[bundle]{
-		Schema: configsource.Schema[bundle]{Version: 1, Validate: func(_ context.Context, value bundle) error {
+		Schema: configuration.Schema[bundle]{Version: 1, Validate: func(_ context.Context, value bundle) error {
 			if value.Access == "" || value.Secret != "secret-"+value.Access {
 				return errors.New("invalid bundle")
 			}
 			return nil
 		}},
-		Source: businessSource, Layers: []configuration.Layer{{Kind: configsource.Base, Encoding: configsource.YAML}},
 	}, dependencies, configuration.WatchOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +145,8 @@ func TestIndependentConfigurationDomains(t *testing.T) {
 	}
 	var output strings.Builder
 	logger := framework.NewErrorLog(slog.New(slog.NewJSONHandler(&output, nil)), presenter)
-	_, failure := configuration.Load(ctx, configuration.Declaration[project]{Schema: configsource.Schema[project]{Version: 1}, Layers: []configuration.Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}}, dependencies)
+	dependencies.Provider = configuration.Provider{}
+	_, failure := configuration.Load(ctx, configuration.Declaration[project]{Schema: configuration.Schema[project]{Version: 1}}, dependencies)
 	emitted := logger.Emit(ctx, failure)
 	if emitted.Issue != nil || !errors.Is(emitted.Presented, configuration.ErrDeclaration) || !strings.Contains(output.String(), "zh-CN") {
 		t.Fatal("configured log boundary lost code/locale")
@@ -186,13 +162,10 @@ func TestIndependentConfigurationDomains(t *testing.T) {
 	if err := business.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := runtime.Close(ctx); err != nil {
-		t.Fatal(err)
+	if records, ready := application.Records(); !ready || len(records) != 2 {
+		t.Fatal("application evidence ownership incomplete")
 	}
-	if err := configReceiver.Finish(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := sourceReceiver.Finish(ctx); err != nil {
-		t.Fatal(err)
+	if records, ready := business.Records(); !ready || len(records) != 2 {
+		t.Fatal("business evidence ownership incomplete")
 	}
 }

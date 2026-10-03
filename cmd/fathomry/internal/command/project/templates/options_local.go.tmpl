@@ -1,0 +1,90 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	"context"
+	"errors"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"path/filepath"
+)
+
+type Options struct {
+	Directory   string
+	Environment string
+	LocalConfig string
+	Encoding    configuration.Encoding
+	Variables   []configuration.Variable
+	Records     []configuration.Record
+}
+
+func ParseOptions(ctx context.Context, args []string, lookup func(string) (string, bool)) (Options, error) {
+	inputs, err := configuration.ReadInputs(ctx, configuration.InputOptions{
+		Arguments: args, Lookup: lookup, DotenvFlag: "dotenv", DotenvEnvironment: "FATHOMRY_DOTENV",
+		Bindings: []configuration.InputBinding{
+			{Name: "environment", Flag: "env", Environment: "FATHOMRY_ENV", Default: "development", HasDefault: true, Dotenv: true},
+			{Name: "directory", Flag: "config-dir", Environment: "FATHOMRY_CONFIG_DIR", Default: "configs", HasDefault: true, Dotenv: true},
+			{Name: "override", Flag: "local-config", Environment: "FATHOMRY_LOCAL_CONFIG", Dotenv: true},
+			{Name: "locale", Environment: "FATHOMRY_APP_LOCALE"},
+		},
+	})
+	options := Options{Encoding: DocumentEncoding, Records: inputs.Records()}
+	if err != nil {
+		return options, err
+	}
+	options.Directory, _ = inputs.Lookup("directory")
+	options.Environment, _ = inputs.Lookup("environment")
+	options.LocalConfig, _ = inputs.Lookup("override")
+	options.Variables = applicationVariables(inputs)
+	return options, options.validate()
+}
+func (options Options) validate() error {
+	if !environmentName(options.Environment) || options.Directory == "" ||
+		options.Encoding != configuration.YAML && options.Encoding != configuration.TOML {
+		return errors.New("invalid local project inputs")
+	}
+	return nil
+}
+func dependencies(ctx context.Context, options Options) (configuration.Dependencies, []configuration.Record, error) {
+	records := append([]configuration.Record(nil), options.Records...)
+	if ctx == nil {
+		return configuration.Dependencies{}, records, errors.New("missing startup context")
+	}
+	if err := options.validate(); err != nil {
+		return configuration.Dependencies{}, records, err
+	}
+	directory, err := filepath.Abs(options.Directory)
+	if err != nil {
+		return configuration.Dependencies{}, records, err
+	}
+	documents := []configuration.File{
+		{Path: filepath.Join(directory, "base."+string(options.Encoding)), Kind: configuration.Base, Encoding: options.Encoding},
+		{Path: filepath.Join(directory, "environments", options.Environment+"."+string(options.Encoding)), Kind: configuration.Environment, Encoding: options.Encoding},
+	}
+	if options.LocalConfig != "" {
+		path, err := filepath.Abs(options.LocalConfig)
+		if err != nil {
+			return configuration.Dependencies{}, records, err
+		}
+		documents = append(documents, configuration.File{Path: path, Kind: configuration.Override, Encoding: options.Encoding, Optional: true})
+	}
+	provider, err := configuration.Viper(configuration.ViperOptions{Documents: documents})
+	return configuration.Dependencies{Provider: provider}, records, err
+}

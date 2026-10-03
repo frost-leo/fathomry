@@ -27,10 +27,7 @@ import (
 	"testing"
 	"time"
 
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
-	framework "github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -268,98 +265,5 @@ func TestRawCaptureRetainsOneGeneration(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("capture not completed")
-	}
-}
-
-func TestFrameworkNacosConsumption(t *testing.T) {
-	fixture := newService(t)
-	fixture.mu.Lock()
-	fixture.values[Key{Group: "DEFAULT_GROUP", DataID: "main"}] = "access: first\nsecret: secret-first\n"
-	fixture.mu.Unlock()
-	owner, runtime, _ := openService(t, fixture, fixture.settings())
-	source, err := owner.Client().Source(ObserveOptions{QueueCapacity: 1})
-	if err != nil {
-		t.Fatal(err)
-	}
-	type bundle struct {
-		Access string `json:"access"`
-		Secret string `json:"secret"`
-	}
-	declaration := configuration.Declaration[bundle]{
-		Schema: configsource.Schema[bundle]{Version: 1, Validate: func(_ context.Context, value bundle) error {
-			if value.Access == "" || value.Secret != "secret-"+value.Access {
-				return errors.New("credential validation failed")
-			}
-			return nil
-		}},
-		Source: source, Layers: []configuration.Layer{{Kind: configsource.Base, Encoding: configsource.YAML}},
-	}
-	inbox, err := adapters.NewInbox[configuration.Evidence](adapters.EvidenceOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	receiver, err := framework.StartReceiver(context.Background(), inbox, framework.ReceiverOptions{}, func(context.Context, adapters.Snapshot[configuration.Evidence]) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer receiver.Close(context.Background())
-	dependencies := configuration.Dependencies{Runtime: runtime, Evidence: inbox}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	loaded, err := configuration.Load(ctx, declaration, dependencies)
-	if err != nil {
-		t.Fatal(err)
-	}
-	accepted, err := loaded.Capture()
-	if err != nil {
-		t.Fatal(err)
-	}
-	value, err := accepted.ValueCopy()
-	if err != nil || value.Access != "first" {
-		t.Fatal(err)
-	}
-	watch, err := configuration.Watch(ctx, declaration, dependencies, configuration.WatchOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer watch.Close(context.Background())
-	next := func(accepted bool) {
-		for {
-			event, err := watch.Next(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if event.Accepted == accepted && !event.Superseded {
-				return
-			}
-		}
-	}
-	next(true)
-	before, err := watch.Capture()
-	if err != nil {
-		t.Fatal(err)
-	}
-	fixture.mu.Lock()
-	fixture.values[Key{Group: "DEFAULT_GROUP", DataID: "main"}] = "access: second\nsecret: wrong\n"
-	fixture.mu.Unlock()
-	next(false)
-	retained, _ := watch.Capture()
-	if retained.Description().Revision != before.Description().Revision {
-		t.Fatal("invalid native batch republished")
-	}
-	fixture.mu.Lock()
-	fixture.values[Key{Group: "DEFAULT_GROUP", DataID: "main"}] = "access: second\nsecret: secret-second\n"
-	fixture.mu.Unlock()
-	next(true)
-	current, _ := watch.Capture()
-	value, err = current.ValueCopy()
-	if err != nil || value.Access != "second" || value.Secret != "secret-second" {
-		t.Fatal("native recovery did not accept whole bundle", err)
-	}
-	if err := watch.Close(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := receiver.Finish(ctx); err != nil {
-		t.Fatal(err)
 	}
 }

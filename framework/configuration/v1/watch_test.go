@@ -122,7 +122,18 @@ func nextDecision[T any](t *testing.T, watch *Watcher[T], accepted bool) Event {
 	}
 }
 func TestWatchOrdering(t *testing.T) {
-	deps, _, _ := dependencies(t)
+	for _, encoding := range []Encoding{JSON, TOML} {
+		t.Run(string(encoding), func(t *testing.T) { testWatchOrdering(t, encoding) })
+	}
+}
+func testWatchOrdering(t *testing.T, encoding Encoding) {
+	document := func(port int) string {
+		if encoding == TOML {
+			return fmt.Sprintf("[service]\nport = %d\n", port)
+		}
+		return fmt.Sprintf(`{"service":{"port":%d}}`, port)
+	}
+	deps := Dependencies{}
 	observer := newObserver()
 	entered := make(chan struct{})
 	release := make(chan struct{})
@@ -137,11 +148,12 @@ func TestWatchOrdering(t *testing.T) {
 		}
 		return validate(ctx, value)
 	}
-	t.Setenv("FATHOMRY_WATCH_HOST", "captured")
+	t.Setenv("FATHOMRY_WATCH_HOST", "must-not-be-read")
+	variables := []Variable{{Path: "/service/host", Value: "captured", Present: true}}
+	deps.Provider = sourceProvider(&testSource{observer: observer}, encoding)
 	watch, err := Watch(context.Background(), Declaration[model]{
-		Schema: schema, Source: &testSource{observer: observer},
-		Layers:      []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}},
-		Environment: []Environment{{Name: "FATHOMRY_WATCH_HOST", Path: "/service/host"}},
+		Schema:    schema,
+		Variables: variables,
 	}, deps, WatchOptions{QueueCapacity: 2})
 	if err != nil {
 		t.Fatal(err)
@@ -153,16 +165,16 @@ func TestWatchOrdering(t *testing.T) {
 	if _, err := watch.Reader().Capture(); !errors.Is(err, settings.ErrUnconfigured) {
 		t.Fatal("initial zero looked ready", err)
 	}
-	observer.input <- observation(t, `{"service":{"port":1}}`)
+	observer.input <- observation(t, document(1))
 	nextDecision(t, watch, true)
 	first, _ := watch.Capture()
-	observer.input <- observation(t, `{"service":{"port":2}}`)
+	observer.input <- observation(t, document(2))
 	select {
 	case <-entered:
 	case <-time.After(3 * time.Second):
 		t.Fatal("slow validator not entered")
 	}
-	observer.input <- observation(t, `{"service":{"port":3}}`)
+	observer.input <- observation(t, document(3))
 	waitStatus(t, watch, func(value Status) bool { return value.Observed >= 3 })
 	current, _ := watch.Capture()
 	value, _ := current.ValueCopy()
@@ -176,7 +188,7 @@ func TestWatchOrdering(t *testing.T) {
 	if value.Service.Port != 3 || current.Sequence() != 3 || current.Description().Revision == first.Description().Revision {
 		t.Fatal("obsolete validation published")
 	}
-	observer.input <- observation(t, `{"service":{"port":0}}`)
+	observer.input <- observation(t, document(0))
 	if event := nextDecision(t, watch, false); event.Err == nil {
 		t.Fatal("invalid update not rejected")
 	}
@@ -192,7 +204,9 @@ func TestWatchOrdering(t *testing.T) {
 		t.Fatal("source health failure lost")
 	}
 	t.Setenv("FATHOMRY_WATCH_HOST", "later")
-	observer.input <- observation(t, `{"service":{"port":5}}`)
+	variables[0].Value = "later"
+	deps.Provider = Provider{}
+	observer.input <- observation(t, document(5))
 	nextDecision(t, watch, true)
 	current, _ = watch.Capture()
 	value, _ = current.ValueCopy()
@@ -211,13 +225,14 @@ func TestWatchOrdering(t *testing.T) {
 	}
 }
 func TestWatchCloseRetainsValidation(t *testing.T) {
-	deps, runtime, _ := dependencies(t)
+	deps := Dependencies{}
 	observer := newObserver()
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	schema := modelSchema()
 	schema.Validate = func(context.Context, model) error { close(entered); <-release; return nil }
-	watch, err := Watch(context.Background(), Declaration[model]{Schema: schema, Source: &testSource{observer: observer}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}}, deps, WatchOptions{})
+	deps.Provider = sourceProvider(&testSource{observer: observer}, JSON)
+	watch, err := Watch(context.Background(), Declaration[model]{Schema: schema}, deps, WatchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +246,7 @@ func TestWatchCloseRetainsValidation(t *testing.T) {
 	if _, err := watch.Reader().Capture(); !errors.Is(err, settings.ErrUnconfigured) {
 		t.Fatal("closed validator published")
 	}
-	stats, _ := runtime.Operations().Inspect()
+	stats, _ := watch.state.scenario.runtime.Inspect()
 	if stats.Active != 1 {
 		t.Fatal("actual validation work released", stats)
 	}
@@ -244,12 +259,13 @@ func TestWatchCloseRetainsValidation(t *testing.T) {
 	}
 }
 func TestWatchPartialInitializationAndCleanup(t *testing.T) {
-	deps, _, _ := dependencies(t)
+	deps := Dependencies{}
 	observer := newObserver()
 	observer.closeEntered = make(chan struct{})
 	observer.closeRelease = make(chan struct{})
 	marker := errors.New("partial acquisition")
-	watch, err := Watch(context.Background(), Declaration[model]{Schema: modelSchema(), Source: &testSource{observer: observer, openError: marker}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}}, deps, WatchOptions{})
+	deps.Provider = sourceProvider(&testSource{observer: observer, openError: marker}, JSON)
+	watch, err := Watch(context.Background(), Declaration[model]{Schema: modelSchema()}, deps, WatchOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,9 +284,10 @@ func TestWatchPartialInitializationAndCleanup(t *testing.T) {
 	}
 }
 func TestWatchMalformedObservationAndOverflow(t *testing.T) {
-	deps, _, _ := dependencies(t)
+	deps := Dependencies{}
 	observer := newObserver()
-	watch, err := Watch(context.Background(), Declaration[model]{Schema: modelSchema(), Source: &testSource{observer: observer}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}}, deps, WatchOptions{QueueCapacity: 1})
+	deps.Provider = sourceProvider(&testSource{observer: observer}, JSON)
+	watch, err := Watch(context.Background(), Declaration[model]{Schema: modelSchema()}, deps, WatchOptions{QueueCapacity: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,20 +306,20 @@ func TestWatchMalformedObservationAndOverflow(t *testing.T) {
 }
 
 func TestWatchConcurrentReadersAndSameValue(t *testing.T) {
-	deps, _, _ := dependencies(t)
+	deps := Dependencies{}
 	source := newObserver()
+	deps.Provider = sourceProvider(&testSource{observer: source}, JSON)
 	type pair struct {
 		First  int `json:"first"`
 		Second int `json:"second"`
 	}
 	watch, err := Watch(context.Background(), Declaration[pair]{
-		Schema: configsource.Schema[pair]{Version: 1, Validate: func(_ context.Context, value pair) error {
+		Schema: Schema[pair]{Version: 1, Validate: func(_ context.Context, value pair) error {
 			if value.First != value.Second {
 				return errors.New("mixed pair")
 			}
 			return nil
 		}},
-		Source: &testSource{observer: source}, Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}},
 	}, deps, WatchOptions{})
 	if err != nil {
 		t.Fatal(err)

@@ -33,6 +33,7 @@ const (
 	ErrPublish       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfiguration)<<16 | 0x0008
 	ErrLimit         failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfiguration)<<16 | 0x0009
 	ErrSerialization failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfiguration)<<16 | 0x000a
+	ErrCleanup       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityConfiguration)<<16 | 0x000b
 )
 
 // Details identifies a selected source slot; -1 means unknown/not applicable.
@@ -51,6 +52,7 @@ func Definitions() []failure.Definition {
 		definition(ErrPublish),
 		definition(ErrLimit),
 		definition(ErrSerialization),
+		definition(ErrCleanup),
 	}
 }
 func definition(code failure.Code) failure.Definition {
@@ -76,6 +78,8 @@ func definition(code failure.Code) failure.Definition {
 		identifier, message = "limit_exceeded", "A configuration orchestration bound was exceeded."
 	case ErrSerialization:
 		identifier, message = "runtime_serialization", "Configuration producer handle serialization is unsupported."
+	case ErrCleanup:
+		identifier, message = "cleanup_failed", "Configuration scenario cleanup failed; accepted data remains separately observable."
 	}
 	return failure.Definition{Code: code, Identifier: failure.Identifier("fathomry.configuration." + identifier), Module: "fathomry", Component: "configuration", Revision: 1, Message: message, Details: failure.Contract{ID: "fathomry.configuration.details", Version: 1}}
 }

@@ -17,17 +17,13 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package messages implements offline translation-resource inspection.
 package messages
 
 import (
 	"context"
-	"fmt"
-	"io"
 
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	"github.com/frost-leo/fathomry/i18n/v1"
-	"github.com/spf13/cobra"
 )
 
 type parameter struct {
@@ -69,98 +65,188 @@ func describe(value i18n.Definition) entry {
 type lookup struct {
 	MessageExists     bool   `json:"message_exists"`
 	TranslationExists bool   `json:"translation_exists"`
+	RequestedLocale   string `json:"requested_locale"`
+	CanonicalLocale   string `json:"canonical_locale"`
 	Definition        *entry `json:"definition,omitempty"`
 }
 type coverage struct {
-	Module    string   `json:"module"`
-	Component string   `json:"component"`
-	Locale    string   `json:"locale"`
-	Missing   []string `json:"missing"`
+	Module     string   `json:"module"`
+	Component  string   `json:"component"`
+	Locale     string   `json:"locale"`
+	Total      int      `json:"total"`
+	Translated int      `json:"translated"`
+	Missing    []string `json:"missing"`
+}
+type coverageReport struct {
+	Locale     string     `json:"locale"`
+	Total      int        `json:"total"`
+	Translated int        `json:"translated"`
+	Missing    int        `json:"missing"`
+	Complete   bool       `json:"complete"`
+	Components []coverage `json:"components"`
+}
+type localeCount struct {
+	Locale     string `json:"locale"`
+	Translated int    `json:"translated"`
+}
+type localeOwner struct {
+	Module     string        `json:"module"`
+	Component  string        `json:"component"`
+	BaseLocale string        `json:"base_locale"`
+	Total      int           `json:"total"`
+	Locales    []localeCount `json:"locales"`
+}
+type owner struct{ module, component string }
+
+func selectComponents(ctx context.Context, catalog *i18n.Catalog, owners command.OwnerFilter) ([]i18n.ComponentInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := owners.Validate(); err != nil {
+		return nil, err
+	}
+	values, err := catalog.Components()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]i18n.ComponentInfo, 0, len(values))
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if owners.Match(value.Module, value.Name) {
+			result = append(result, value)
+		}
+	}
+	if err := owners.RequireMatch(len(result) != 0); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
-// New binds the immutable atlas supplied by the process assembly.
-func New(invocation *command.Invocation) *cobra.Command {
-	root := invocation.Group("i18n", "fathomry.command_line.i18n_group")
-	list := &cobra.Command{Use: "list", Short: "fathomry.command_line.i18n_list", Args: cobra.NoArgs}
-	invocation.Bind(list, func(ctx context.Context, _ []string) error {
-		values, err := invocation.Catalogs().Messages.Inspect()
-		if err != nil {
-			return err
+func listMessages(ctx context.Context, catalog *i18n.Catalog, input listOptions) ([]entry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	options, err := prepareList(input)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := selectComponents(ctx, catalog, options.owners); err != nil {
+		return nil, err
+	}
+	values, err := catalog.Inspect()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]entry, 0, len(values))
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		entries := make([]entry, 0, len(values))
-		for _, value := range values {
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			entries = append(entries, describe(value))
+		if !options.owners.Match(value.Module, value.Component) || options.locale != nil && value.Locale != *options.locale {
+			continue
 		}
-		return invocation.Result("i18n.list", entries, func(writer io.Writer) error {
-			for _, value := range entries {
-				if _, err := fmt.Fprintf(writer, "%s  %s\n", value.ID, value.Locale); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	var locale string
-	show := &cobra.Command{Use: "show MESSAGE_ID", Short: "fathomry.command_line.i18n_show", Args: cobra.ExactArgs(1)}
-	show.Flags().StringVar(&locale, "locale", "", "fathomry.command_line.flag_locale")
-	invocation.Bind(show, func(_ context.Context, args []string) error {
-		selected := locale
-		if selected == "" {
-			selected = invocation.Locale()
+		matched := command.ContainsQuery(options.query, value.ID, value.Context)
+		for _, variant := range value.Forms {
+			matched = matched || command.ContainsQuery(options.query, variant.Pattern)
 		}
-		value, err := invocation.Catalogs().Messages.Lookup(args[0], selected)
-		if err != nil {
-			return command.Fail(command.ErrUsage, err)
+		if matched {
+			result = append(result, describe(value))
 		}
-		result := lookup{MessageExists: value.MessageExists, TranslationExists: value.TranslationExists}
-		if !value.MessageExists {
-			return command.Fail(command.ErrNotFound)
+	}
+	return result, nil
+}
+
+func lookupMessage(ctx context.Context, catalog *i18n.Catalog, id, locale string) (lookup, error) {
+	if err := ctx.Err(); err != nil {
+		return lookup{}, err
+	}
+	canonical, err := canonicalLocale(locale)
+	if err != nil {
+		return lookup{}, err
+	}
+	value, err := catalog.Lookup(id, locale)
+	if err != nil {
+		return lookup{}, command.Fail(command.ErrUsage, err)
+	}
+	if !value.MessageExists {
+		return lookup{}, command.Fail(command.ErrNotFound)
+	}
+	result := lookup{MessageExists: value.MessageExists, TranslationExists: value.TranslationExists,
+		RequestedLocale: locale, CanonicalLocale: canonical}
+	if value.TranslationExists {
+		item := describe(value.Definition)
+		result.Definition = &item
+	}
+	return result, nil
+}
+
+func inspectLocales(ctx context.Context, catalog *i18n.Catalog, owners command.OwnerFilter) ([]localeOwner, error) {
+	components, err := selectComponents(ctx, catalog, owners)
+	if err != nil {
+		return nil, err
+	}
+	values, err := catalog.Inspect()
+	if err != nil {
+		return nil, err
+	}
+	counts := map[owner]map[string]int{}
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		if value.TranslationExists {
-			item := describe(value.Definition)
-			result.Definition = &item
+		if !owners.Match(value.Module, value.Component) {
+			continue
 		}
-		return invocation.Result("i18n.show", result, func(writer io.Writer) error {
-			if !value.TranslationExists {
-				_, err := fmt.Fprintln(writer, invocation.Text("fathomry.command_line.missing_translation"))
-				return err
-			}
-			for _, variant := range value.Definition.Forms {
-				if _, err := fmt.Fprintf(writer, "%s  %s  %s\n", value.Definition.Locale, variant.Category, variant.Pattern); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	check := &cobra.Command{Use: "coverage LOCALE", Short: "fathomry.command_line.i18n_coverage", Args: cobra.ExactArgs(1)}
-	invocation.Bind(check, func(_ context.Context, args []string) error {
-		values, err := invocation.Catalogs().Messages.Coverage(args[0])
-		if err != nil {
-			return command.Fail(command.ErrUsage, err)
+		key := owner{value.Module, value.Component}
+		if counts[key] == nil {
+			counts[key] = map[string]int{}
 		}
-		result := make([]coverage, 0, len(values))
-		for _, value := range values {
-			result = append(result, coverage{Module: value.Module, Component: value.Component, Locale: value.Locale, Missing: append([]string{}, value.Missing...)})
+		counts[key][value.Locale]++
+	}
+	result := make([]localeOwner, 0, len(components))
+	for _, component := range components {
+		item := localeOwner{Module: component.Module, Component: component.Name,
+			BaseLocale: component.BaseLocale, Total: len(component.Messages), Locales: []localeCount{}}
+		for _, locale := range component.Locales {
+			item.Locales = append(item.Locales, localeCount{locale, counts[owner{component.Module, component.Name}][locale]})
 		}
-		return invocation.Result("i18n.coverage", result, func(writer io.Writer) error {
-			for _, value := range result {
-				if _, err := fmt.Fprintf(writer, "%s.%s  %s  %s: %d\n", value.Module, value.Component, value.Locale,
-					invocation.Text("fathomry.command_line.missing"), len(value.Missing)); err != nil {
-					return err
-				}
-				for _, id := range value.Missing {
-					if _, err := fmt.Fprintf(writer, "  %s\n", id); err != nil {
-						return err
-					}
-				}
-			}
-			return nil
-		})
-	})
-	root.AddCommand(list, show, check)
-	return root
+		result = append(result, item)
+	}
+	return result, nil
+}
+
+func inspectCoverage(ctx context.Context, catalog *i18n.Catalog, owners command.OwnerFilter, locale string) (coverageReport, error) {
+	components, err := selectComponents(ctx, catalog, owners)
+	if err != nil {
+		return coverageReport{}, err
+	}
+	values, err := catalog.Coverage(locale)
+	if err != nil {
+		return coverageReport{}, command.Fail(command.ErrUsage, err)
+	}
+	totals := map[owner]int{}
+	for _, component := range components {
+		totals[owner{component.Module, component.Name}] = len(component.Messages)
+	}
+	result := coverageReport{Complete: true, Components: []coverage{}}
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return coverageReport{}, err
+		}
+		total, selected := totals[owner{value.Module, value.Component}]
+		if !selected {
+			continue
+		}
+		result.Locale = value.Locale
+		translated := total - len(value.Missing)
+		result.Total += total
+		result.Translated += translated
+		result.Missing += len(value.Missing)
+		result.Components = append(result.Components, coverage{Module: value.Module, Component: value.Component,
+			Locale: value.Locale, Total: total, Translated: translated, Missing: append([]string{}, value.Missing...)})
+	}
+	result.Complete = result.Missing == 0
+	return result, nil
 }

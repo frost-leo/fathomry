@@ -20,6 +20,7 @@
 package configsource
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"encoding/json/jsontext"
@@ -31,6 +32,118 @@ import (
 )
 
 const MaxVariables = 64
+
+// MaxDotenvBytes bounds explicitly supplied literal variable documents.
+const MaxDotenvBytes = 64 << 10
+
+// ParseDotenv decodes an explicit literal variable document without filesystem,
+// process-environment access or interpolation. It accepts ASCII environment names,
+// single quotes, strict JSON double quotes and comments. Duplicates, export and
+// multiline assignments reject. The returned map is caller-owned; values may be
+// sensitive. Callers separately authorize which names may affect their program.
+func ParseDotenv(raw []byte) (map[string]string, error) {
+	if len(raw) > MaxDotenvBytes {
+		return nil, fail(ErrLimit, "dotenv")
+	}
+	if !utf8.Valid(raw) || bytes.ContainsRune(raw, 0) {
+		return nil, fail(ErrDecode, "dotenv")
+	}
+	result := map[string]string{}
+	lines := bufio.NewScanner(bytes.NewReader(raw))
+	// Scanner needs room to detect EOF after a maximum-size final line.
+	lines.Buffer(make([]byte, 1024), MaxDotenvBytes+1)
+	for lines.Scan() {
+		line := strings.TrimSpace(lines.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, text, present := strings.Cut(line, "=")
+		key = strings.TrimSpace(key)
+		if !present || !dotenvKey(key) || len(result) == MaxVariables {
+			return nil, fail(ErrInput, "dotenv")
+		}
+		if _, exists := result[key]; exists {
+			return nil, fail(ErrInput, "dotenv_duplicate")
+		}
+		value, err := dotenvLiteral(strings.TrimSpace(text))
+		if err != nil {
+			return nil, err
+		}
+		result[key] = value
+	}
+	if err := lines.Err(); err != nil {
+		return nil, fail(ErrLimit, "dotenv", err)
+	}
+	return result, nil
+}
+
+func dotenvLiteral(value string) (string, error) {
+	invalid := func() (string, error) { return "", fail(ErrInput, "dotenv_value") }
+	if value == "" {
+		return "", nil
+	}
+	if value[0] == '\'' {
+		end := strings.IndexByte(value[1:], '\'')
+		if end < 0 {
+			return invalid()
+		}
+		end++
+		tail := strings.TrimSpace(value[end+1:])
+		if tail != "" && !strings.HasPrefix(tail, "#") {
+			return invalid()
+		}
+		return value[1:end], nil
+	}
+	if value[0] == '"' {
+		end := 1
+		for ; end < len(value); end++ {
+			if value[end] == '\\' {
+				end++
+				continue
+			}
+			if value[end] == '"' {
+				break
+			}
+		}
+		if end >= len(value) {
+			return invalid()
+		}
+		tail := strings.TrimSpace(value[end+1:])
+		if tail != "" && !strings.HasPrefix(tail, "#") {
+			return invalid()
+		}
+		decoder := jsontext.NewDecoder(strings.NewReader(value[:end+1]), jsontext.AllowInvalidUTF8(false))
+		token, err := decoder.ReadToken()
+		if err != nil || token.Kind() != '"' || !dotenvText(token.String()) {
+			return invalid()
+		}
+		return token.String(), nil
+	}
+	for index, char := range value {
+		if char == '#' && (index == 0 || value[index-1] == ' ' || value[index-1] == '\t') {
+			return strings.TrimSpace(value[:index]), nil
+		}
+		if char == '\'' || char == '"' || char < ' ' && char != '\t' {
+			return invalid()
+		}
+	}
+	return value, nil
+}
+
+func dotenvKey(key string) bool {
+	if len(key) == 0 || len(key) > 256 {
+		return false
+	}
+	for index, char := range key {
+		if char != '_' && !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || index > 0 && char >= '0' && char <= '9') {
+			return false
+		}
+	}
+	return true
+}
+func dotenvText(value string) bool {
+	return len(value) <= MaxDotenvBytes && utf8.ValidString(value) && !strings.ContainsRune(value, 0)
+}
 
 // Variable is an explicitly captured value, not authority to read the process
 // environment. Unset values still undergo declaration admission, but contribute

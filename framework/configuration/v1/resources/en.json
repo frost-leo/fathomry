@@ -122,6 +122,16 @@
       "forms": {
         "other": "Configuration producer handle serialization is unsupported."
       }
+    },
+    {
+      "id": "fathomry.configuration.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.configuration.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Configuration scenario cleanup failed; accepted data remains separately observable."
+      }
     }
   ]
 }

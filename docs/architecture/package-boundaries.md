@@ -63,7 +63,7 @@ a collaboration path, not a requirement for a wrapper at every diagram arrow.
 
 Public semantic errors belong to the framework contract. Internal technical errors,
 correlation and required-evidence mechanics do not become public merely because an
-Adapter consumes them. Public dependencies must not pull in concrete Providers,
+Adapter consumes them. Public shared contracts must not pull in concrete Providers,
 SDK clients, framework orchestration or business workflows. Adapters depend on
 their public contracts and private technical capabilities; Providers depend on
 technical contracts/shared foundations, not public framework attribution, concrete
@@ -71,12 +71,15 @@ Adapters or business implementations. Composition
 may know selected concrete implementations. All dependencies must remain acyclic.
 Fathomry, not each independent business project, supplies composition. Business
 authors declare configuration, choose permitted capabilities/named sources and
-write workflow/node logic. They do not write resource factories, Viper wiring,
-lease/admission accounting or independent evidence-reception loops. Public
+write workflow/node logic. The generated project Boot declares those choices through Framework scenario
+APIs, without Adapter imports. Framework assembles public Adapters and owns its
+scenario lifetimes; projects do not reimplement lease/admission accounting,
+source protocols or evidence-reception loops. Public
 contracts expose behavior, errors, results and diagnostics, not these authorities.
-The intended entry is obtain CLI → `fathomry new <project>` → configuration and
-business code → unified execution/query/control. That entry is not implemented
-by this boundary refactor, and no generic third-party Provider SDK is implied.
+The entry is obtain CLI → `fathomry new <project>` → configuration and business
+code. Project generation and finite configuration startup are implemented; unified
+execution/query/control remains future work. No generic third-party Provider SDK
+is implied.
 
 Go's `internal` boundary protects implementation visibility; it is not a security
 sandbox or a reason to hide contracts external consumers require.
@@ -188,7 +191,8 @@ A package/file review must answer:
   rather than add forwarding and navigation cost?
 - Does combining files retain Provider separation, testability, and a clear owner,
   rather than hide several unrelated responsibilities?
-- Does selecting one Provider avoid importing other concrete SDK implementations?
+- Do provider-only contracts avoid unrelated SDK imports, and does composition
+  document its built-in dependency closure without initializing unused clients?
 
 These questions make both fragmentation and overloaded packages reviewable.
 Earlier candidate names and layouts are not approved by satisfying this section.
@@ -206,7 +210,8 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | `adapters/configsource/v1` | Raw source/batch contracts and independent strict preparation; no native provider or Internal dependency |
 | `adapters/configsource/{viper,nacos}/v1` | Full supported native capability translation, loadable settings, public evidence/lifecycle composition and selected raw profiles |
 | `framework/v1` | Composition of public runtime owners, released-evidence reception and bound presentation/logging; no SDK or Internal engine |
-| `framework/configuration/v1` | Typed configuration acquisition/preparation coordination, fenced publication, independent data domains and explicit adoption handoff |
+| `framework/configuration/v1` | Explicit input binding and provider-owned typed Load/Watch; source/policy association, fenced publication, released facts and opt-in borrowed resource adoption |
+| `cmd/fathomry` | Official offline catalogs and exclusive project generation; private command implementation, not a public extension SDK |
 | `internal/fault` | Technical kinds, frozen context, multi-cause inspection and safe presentation |
 | `internal/resource` | Configuration preparation, source identity/provenance, assembly, authoritative ownership, limits, admission and leases |
 | `internal/invocation` | Requests/budgets, producers, outcomes/results, concrete read-only receipts, scopes/guards, required evidence delivery and optional observation |
@@ -219,10 +224,10 @@ settings/v1              -> failure/v1, standard library
 i18n/v1                  -> failure/v1, settings/v1, x/text, standard library
 resource/v1              -> failure/v1, settings/v1, standard library
 adapters/v1              -> failure/v1, resource/v1, standard library
-adapters/configsource/v1 -> failure/v1, settings/v1, YAML, standard library
+adapters/configsource/v1 -> failure/v1, settings/v1, YAML/TOML, standard library
 concrete configsource    -> public foundations, selected Internal configsource
 framework/v1             -> public failure/settings/i18n/resource/adapters
-framework/configuration  -> public configsource contracts and shared foundations
+framework/configuration  -> public configsource preparation, selected Adapter implementations and shared foundations
 internal/fault            -> standard library
 internal/resource         -> internal/fault, existing YAML
 internal/invocation       -> internal/resource, internal/fault
@@ -233,6 +238,14 @@ internal/conformance      -> internal mechanisms, testing (test support only)
 The Internal production mechanisms retain no public error dependency or all-SDK
 aggregator. Failure imports only the standard library. Compatibility assessment accepts the authoritative
 `*internal/resource.Access`; it does not introduce a public snapshot-assessment API.
+The generated project owns project choices and data; it imports Framework
+configuration and ordinary data foundations, not Adapters or Internal.
+Framework Viper/Nacos declarations explicitly select the source implementation.
+Load/Watch constructs and owns that scenario's operation/evidence/source machinery.
+There is no provider-name registry, ambient inference, global service locator or
+compatibility facade. Direct public Adapter use remains a separate supported path,
+not an extra assembly obligation on the generated Boot. Shared data contracts and
+scenario-specific policies must not expose native/runtime handles as settings.
 
 ## Pre-release API migration
 
@@ -250,7 +263,7 @@ instance ownership without restoring private assembly facades. Public operation
 mechanisms and concrete configsource Adapters now use those public foundations;
 strict public preparation is independent of Internal's engine. Framework common
 composition and configuration scenarios now reuse those public owners. The official
-[CLI](../reference/cmd/fathomry/interface.md) provides offline catalog commands through
+[CLI](../reference/cmd/fathomry/interface.md) provides offline catalogs and project generation through
 private command packages; the former public CLI Go API remains withdrawn. No complete
 application/Worker runtime is implied. No compatibility
 with the unreleased outer interfaces or earlier uint64 code draft is implied.

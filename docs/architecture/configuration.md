@@ -33,6 +33,7 @@ for current availability and package contracts.
 ## Contents
 
 - [Named sources and selection](#named-sources-and-selection)
+- [Finite project bootstrap](#finite-project-bootstrap)
 - [Configuration ownership and revisions](#configuration-ownership-and-revisions)
 
 ## Named sources and selection
@@ -65,9 +66,10 @@ retain the actual selected identity. User metadata cannot overwrite these facts.
 Background tasks without a business Run must not manufacture one for correlation.
 
 Including a Provider in a build, constructing instances at startup, and choosing
-an available source for a call are different decisions. Whether configuration can
-choose among compiled construction implementations remains open; permitted runtime
-source selection is not thereby prohibited. No dynamic plugin loader is implied.
+an available source for a call are different decisions. Project composition explicitly
+selects an immutable provider descriptor; Framework Load/Watch constructs and
+owns the selected Adapter source for that scenario. No provider registry, name-based discovery or mode-based fallback is
+implied.
 
 Framework control persistence and business database access are separate uses of
 a technical database capability. Control Adapters own control-schema operations;
@@ -77,6 +79,43 @@ imply a shared pool. Explicit sharing must document permissions, contention,
 transaction boundaries, and shutdown ownership. Neither different source names
 nor Go interfaces prove service/process isolation. A request spanning sources
 must not acquire an implied cross-source transaction guarantee.
+
+## Finite project bootstrap
+
+Project Boot is the application choice boundary, not another configuration engine.
+It supplies the project data/defaults/validation and explicitly selects Framework
+dependencies. Generated project code imports no Adapter or Internal package.
+Framework owns the selected source, operation/evidence mechanisms and cleanup.
+
+Keep mode (local/remote), implementation (Viper/Nacos), document encoding and project
+Go type separate. The [CLI](../reference/cmd/fathomry/interface.md) selects a supported
+project profile; runtime inputs do not silently switch implementations. A descriptor
+contains no live client. Framework's built-in package has both provider dependencies
+in its build closure, but constructs only the selected source.
+
+Declaration contains Schema and captured Variables. Each source document combines
+its location, format, layer kind and optionality. This removes the positional
+coupling of independently assembled document and policy slices. Dependencies
+contains an explicit Provider and an optional borrowed resource-adoption scope.
+
+Framework ReadInputs implements declared argument/lookup/dotenv/default precedence,
+using the public Viper Adapter for file acquisition and configsource for literal
+preparation. The project owns authorized names/defaults; Framework never reads the
+process environment implicitly. PrepareNacos implements the supported deployment
+profile using a typed Load of an explicit local file; its accepted connection and
+environment-to-key declarations select the Nacos application source. Namespace is not inferred from the environment name.
+Failure never authorizes a different source or local fallback.
+
+The same generated Boot implementation serves both modes; mode-specific options
+only declare inputs and dependencies. Load returns accepted State and released
+records, retaining acceptance when cleanup alone fails. Watch uses the same policy,
+owns the actual producer and preserves last-good data. A timed-out Close retains
+that owner. Boot has no parser, merge loop, receiver or resource state machine.
+
+Records transfer in-process custody to the caller, not to an imaginary durable sink.
+Configuration does not install settings.Default, start a Worker or become an
+application host. Separate framework.Runtime instances are advanced assembly
+helpers, not implicit owners of these independently scoped configuration scenarios.
 
 ## Configuration ownership and revisions
 
@@ -110,7 +149,7 @@ maps, publish settings or infer instance adoption. Framework scenario ownership
 of input authorization, update ordering and publication remains a separate boundary.
 Its one source ingress and serial validation worker fence obsolete results before
 whole-value publication. Invalid updates retain last-good; shutdown fences publishing
-before joining actual work. Explicit environment values freeze once at admission.
+before joining actual work. Caller-supplied variable values freeze once at admission; Load/Watch perform no environment lookup; ReadInputs uses only the caller-supplied lookup.
 
 The public [resource holder](../reference/resource/v1/interface.md) independently
 owns typed component instances. Each binding selects its configuration and chooses
@@ -121,12 +160,12 @@ separate states. New configuration does not retarget an existing lease, prove
 service readiness or migrate a control database. Native instance implementations
 remain responsible for their protocol-specific adoption and retirement behavior.
 
-Framework-supplied composition owns configuration input authorization, precedence,
-recursive overlays, secret resolution, and provenance. Base configuration,
-environment-specific YAML, local overrides, and environment variables must have a documented precedence;
+Project composition owns input authorization, source/layer selection and secret
+resolution. Public strict preparation owns recursive overlays and provenance. Base configuration,
+environment-specific YAML/TOML, explicit overrides, and environment variables must have a documented precedence;
 nested overrides retain unrelated sibling fields. Viper and configuration-center
-integration such as Nacos do not move loading/SDK management to business
-code. Loaders must preserve authorized layer distinctions and use the established
+integration such as Nacos remain public capabilities, not native protocol code
+that business authors must reproduce. Generated Boot declares choices through Framework; Framework wires the capabilities. Loaders must preserve authorized layer distinctions and use the established
 preparation/merge once, not create a second precedence or null policy. Providers
 receive explicit, resolved typed settings. They must not
 read process environment or global application settings during construction or calls.

@@ -21,57 +21,72 @@ package configuration
 
 import (
 	"context"
-	"os"
 	"reflect"
 	"slices"
-	"strings"
-	"unicode/utf8"
 
 	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
-	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 )
 
-// Layer assigns application policy to one source slot, in source order.
-// Only Base/Environment/Local are external slots. Present-empty is not optional.
-type Layer struct {
-	Kind     configsource.LayerKind `json:"kind"`
-	Encoding configsource.Encoding  `json:"encoding"`
-	Optional bool                   `json:"optional"`
+// Encoding names the original document syntax, independently of its provider.
+type Encoding string
+
+const (
+	JSON Encoding = "json"
+	YAML Encoding = "yaml"
+	TOML Encoding = "toml"
+)
+
+// LayerKind assigns precedence, not provider identity.
+type LayerKind uint8
+
+const (
+	Base        LayerKind = 1
+	Environment LayerKind = 2
+	Override    LayerKind = 3
+	// Variables appears only in preparation provenance, not external source slots.
+	Variables LayerKind = 4
+)
+
+// Schema declares project data and bounded, non-panicking validation.
+// Defaults is frozen at admission; validation receives a separate candidate.
+type Schema[T any] struct {
+	Version  uint32
+	Defaults T
+	Validate func(context.Context, T) error
 }
 
-// Environment binds one explicit process name to a declared struct-field path.
-// JSON=false is literal string text; JSON=true uses strict JSON values. Values
-// are captured once per Load/Watch admission; Watch never rereads os.Environ.
-type Environment struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	JSON bool   `json:"json"`
+type layer struct {
+	Kind     LayerKind `json:"kind"`
+	Encoding Encoding  `json:"encoding"`
+	Optional bool      `json:"optional"`
 }
 
-// Declaration keeps project data/schema separate from already-resolved bootstrap.
-// Source is optional only for defaults/environment-only Load. Watch needs a source.
-// Defaults and slices are borrowed only during admission, then independently frozen.
-// Validate and the selected Source are retained; they must obey their own bounded,
-// concurrent-use contracts and must not reenter shutdown waiting for themselves.
+// Variable is an explicitly captured value. It grants no environment-read
+// authority. JSON=false means literal text; Present distinguishes absent/empty.
+type Variable struct {
+	Path    string
+	Value   string
+	Present bool
+	JSON    bool
+}
+
+// Declaration contains configuration policy, not process inputs or SDK handles.
 type Declaration[T any] struct {
-	Schema      configsource.Schema[T]
-	Source      configsource.Source
-	Layers      []Layer
-	Environment []Environment
+	Schema    Schema[T]
+	Variables []Variable
 }
 
-// Dependencies explicitly borrows public operations/evidence and optional instance
-// adoption. Accepting settings does not imply all requested instances adopted them.
+// Dependencies explicitly selects a provider. A zero Provider is invalid, never
+// a default. Resources optionally borrows an existing adoption scope; the loader
+// does not close it. No Adapter runtime, inbox or receiver is caller-owned here.
 type Dependencies struct {
-	Runtime   *adapters.Runtime
-	Evidence  *adapters.Inbox[Evidence]
-	Observer  *adapters.Observer
+	Provider  Provider
 	Resources *resource.Scope
 }
 
-// WatchOptions bounds status notifications, not native polling. Zero selects 16,
-// valid 1..64. Pending source input is separately coalesced to one latest value.
+// WatchOptions bounds decision notifications, not native polling. Zero uses 16;
+// valid capacities are 1..64. Required evidence is separately retained until release.
 type WatchOptions struct {
 	QueueCapacity int `json:"queue_capacity"`
 }
@@ -79,61 +94,34 @@ type WatchOptions struct {
 type plan[T any] struct {
 	schema    configsource.Schema[T]
 	source    configsource.Source
-	layers    []Layer
+	layers    []layer
 	variables *configsource.Layer
 }
 
-func freeze[T any](ctx context.Context, declaration Declaration[T], watch bool) (plan[T], error) {
-	if len(declaration.Layers) > 3 || len(declaration.Environment) > configsource.MaxVariables {
+func freeze[T any](ctx context.Context, declaration Declaration[T], provider Provider, watch bool) (plan[T], error) {
+	if provider.state == nil || provider.state.open == nil || watch && len(provider.state.layers) == 0 {
+		return plan[T]{}, fail(ErrDeclaration, "provider")
+	}
+	if len(declaration.Variables) > configsource.MaxVariables {
 		return plan[T]{}, fail(ErrLimit, "declaration")
 	}
-	missing := nilInterface(declaration.Source)
-	if missing != (len(declaration.Layers) == 0) || watch && missing {
-		return plan[T]{}, fail(ErrDeclaration, "source")
+	if err := validateLayers(provider.state.layers); err != nil {
+		return plan[T]{}, err
 	}
-	seen := map[configsource.LayerKind]bool{}
-	for _, layer := range declaration.Layers {
-		if layer.Kind < configsource.Base || layer.Kind > configsource.Local || seen[layer.Kind] || layer.Encoding != configsource.JSON && layer.Encoding != configsource.YAML {
-			return plan[T]{}, fail(ErrDeclaration, "layers")
-		}
-		seen[layer.Kind] = true
-	}
-	defaults, err := configsource.Prepare(ctx, configsource.Schema[T]{Version: declaration.Schema.Version, Defaults: declaration.Schema.Defaults}, nil)
+	schema := configsource.Schema[T]{Version: declaration.Schema.Version, Defaults: declaration.Schema.Defaults, Validate: declaration.Schema.Validate}
+	defaults, err := configsource.Prepare(ctx, configsource.Schema[T]{Version: schema.Version, Defaults: schema.Defaults}, nil)
 	if err != nil {
 		return plan[T]{}, err
 	}
-	schema := declaration.Schema
 	schema.Defaults, err = defaults.ValueCopy()
 	if err != nil {
 		return plan[T]{}, err
 	}
-	result := plan[T]{schema: schema, source: declaration.Source, layers: slices.Clone(declaration.Layers)}
-	if missing {
-		result.source = nil
-	}
-	variables := make([]configsource.Variable, len(declaration.Environment))
-	for index, binding := range declaration.Environment {
-		if binding.Name == "" || len(binding.Name) > 256 || !utf8.ValidString(binding.Name) || strings.ContainsAny(binding.Name, "=\x00") {
-			return plan[T]{}, fail(ErrDeclaration, "environment")
-		}
-		variables[index] = configsource.Variable{Path: binding.Path, JSON: binding.JSON}
-	}
-	if len(variables) > 0 {
-		if _, err := configsource.BindVariables[T](variables); err != nil {
-			return plan[T]{}, err
-		}
-		type captured struct {
-			value   string
-			present bool
-		}
-		values := map[string]captured{}
-		for index, binding := range declaration.Environment {
-			value, exists := values[binding.Name]
-			if !exists {
-				value.value, value.present = os.LookupEnv(binding.Name)
-				values[binding.Name] = value
-			}
-			variables[index].Value, variables[index].Present = value.value, value.present
+	result := plan[T]{schema: schema, layers: slices.Clone(provider.state.layers)}
+	if len(declaration.Variables) > 0 {
+		variables := make([]configsource.Variable, len(declaration.Variables))
+		for index, value := range declaration.Variables {
+			variables[index] = configsource.Variable{Path: value.Path, Value: value.Value, Present: value.Present, JSON: value.JSON}
 		}
 		layer, err := configsource.BindVariables[T](variables)
 		if err != nil {
@@ -142,6 +130,20 @@ func freeze[T any](ctx context.Context, declaration Declaration[T], watch bool) 
 		result.variables = &layer
 	}
 	return result, nil
+}
+
+func validateLayers(layers []layer) error {
+	if len(layers) > 3 {
+		return fail(ErrLimit, "layers")
+	}
+	seen := map[LayerKind]bool{}
+	for _, value := range layers {
+		if value.Kind < Base || value.Kind > Override || seen[value.Kind] || value.Encoding != JSON && value.Encoding != YAML && value.Encoding != TOML {
+			return fail(ErrDeclaration, "layers")
+		}
+		seen[value.Kind] = true
+	}
+	return nil
 }
 func nilInterface(value any) bool {
 	if value == nil {
@@ -153,10 +155,4 @@ func nilInterface(value any) bool {
 		return reflected.IsNil()
 	}
 	return false
-}
-func bind(dependencies Dependencies) (adapters.Endpoint[Evidence], error) {
-	return adapters.Bind(dependencies.Runtime, adapters.Declaration[Evidence]{Evidence: dependencies.Evidence, Observer: dependencies.Observer, Copy: func(value Evidence) Evidence { return value }})
-}
-func request(operation string) adapters.Request {
-	return adapters.Request{Operation: "configuration." + operation, WorkBytes: 16 << 20, EvidenceBytes: 64 << 10}
 }

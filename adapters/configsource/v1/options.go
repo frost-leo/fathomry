@@ -43,11 +43,13 @@ type Encoding string
 const (
 	JSON Encoding = "json"
 	YAML Encoding = "yaml"
+	TOML Encoding = "toml"
 )
 
 // Layer supplies one original document. Storage is borrowed until Prepare returns.
-// Each kind occurs at most once; omission inherits. Empty/present input is invalid,
-// not missing or an empty mapping. No source path or credentials enter provenance.
+// Each kind occurs at most once; omission inherits. Present-empty YAML/JSON is
+// invalid; empty/comment-only TOML is an empty mapping, never positive absence.
+// No source path or credentials enter provenance.
 type Layer struct {
 	Kind     LayerKind
 	Encoding Encoding
