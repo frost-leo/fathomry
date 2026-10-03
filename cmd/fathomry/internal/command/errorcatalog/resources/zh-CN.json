@@ -1,0 +1,160 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "error_catalog",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.error_catalog.root",
+      "source": "650ed2693d6a29fa0ea768e4d6fb76bb82c83981fff758aff1dffe7955c96459",
+      "forms": {
+        "other": "查询已注册的错误定义，不启动应用。"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.list",
+      "source": "7f562db44091f55925a34896902e0710eade9c491f6449be9dea4b4a9d235b8c",
+      "forms": {
+        "other": "筛选、搜索已注册的错误定义及本地化说明。"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.explain",
+      "source": "26d24e50ab9d194c44d15009571af22fcaaec9458ff9d8ff0163c266bc92cac6",
+      "forms": {
+        "other": "按显示语言解释错误码或错误标识符。"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.components",
+      "source": "8ba94b1f481fc51e92373b368c3c63bc4f647c7bb704eafddb9f1f4c7d1fe86b",
+      "forms": {
+        "other": "列出错误所属组件、分类编号及错误码数量。"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.flag_query",
+      "source": "814261f1f8dc10b4938dd8bc17891198eb0671d4664e85084996f5db674c8b00",
+      "forms": {
+        "other": "按标识和消息文本搜索，不区分大小写，不使用正则表达式。"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.flag_module",
+      "source": "8e24211155235e678a5f4a8d7659ffe335d6462e82e62d09d575a57cd91505cb",
+      "forms": {
+        "other": "精确筛选所属模块，可独立于 --component 使用。"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.flag_component",
+      "source": "b6286fa00caedd34d30f427905e8e2d8022d954f707e50774eeae784e1f1e7fb",
+      "forms": {
+        "other": "精确筛选所属组件，可独立于 --module 使用。"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.locale",
+      "source": "d2ee0fdbcc495abb872773b6e720357b8f84e3a308bdac74f87f242318fb95f1",
+      "forms": {
+        "other": "语言"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.owner",
+      "source": "5ce6ac739dd84f9a125fb8be88c91a278492b60bb6fe07986653cf490a7abffb",
+      "forms": {
+        "other": "所属组件"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.domain",
+      "source": "11ce29dbfdbdab995b3ab83d4d816b02cd771b2a606f505dda5279d29a34188a",
+      "forms": {
+        "other": "分域"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.facility",
+      "source": "abf7d8031eb97602cecc38ed4f9b189f82d13b4bf4d4fa672102794e3ef317dc",
+      "forms": {
+        "other": "组件编号"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.number",
+      "source": "e500c01f899273783d3880f5cda8666a2d57affcea8b86959b9d6efb8e3c19d5",
+      "forms": {
+        "other": "组件内编号"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.revision",
+      "source": "aeac66a0428471dd6573bf8581353d8b2ce6aea0975ccb78c2f40e25bdef19f5",
+      "forms": {
+        "other": "契约修订"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.requested_locale",
+      "source": "38c5b4b182b2d11c3884e07941a56406fce20cf3bcd7bd35e50a942262df7fc7",
+      "forms": {
+        "other": "请求语言"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.canonical_locale",
+      "source": "42dd34c0037e62bd99c48934cbf2884d12293897e1eb5ff3d9bfde17e9d4fef8",
+      "forms": {
+        "other": "规范化语言"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.matched_locale",
+      "source": "9e669a79971bba7818e1ca2098612440325f860399d95f9beb61386892e78762",
+      "forms": {
+        "other": "匹配语言标签"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.fallback",
+      "source": "2a567eca257bbbf9c9db799e341d3695333706083ce76b0075173af8f5659bd1",
+      "forms": {
+        "other": "消息回退（空表示无回退）"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.description",
+      "source": "2e288efa6b6e3b6e928ee8380a308eef31640c86ad7a9e854270e3fd68885479",
+      "forms": {
+        "other": "基准说明"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.details",
+      "source": "9a37fdcf5e408acc84ae1a78026d2e0023f65a42bd61be96de91be11026b9553",
+      "forms": {
+        "other": "详情契约"
+      }
+    }
+  ]
+}

@@ -49,7 +49,7 @@ func TestOfficialCommands(t *testing.T) {
 			if err != nil || diagnostic != "" || !strings.Contains(output, "Usage:") {
 				t.Fatalf("help %q: %v / %s", args, err, diagnostic)
 			}
-			if strings.Contains(output, "version") || strings.Contains(output, "completion") || strings.Contains(output, "new ") {
+			if strings.Contains(output, "version") || strings.Contains(output, "completion") {
 				t.Fatal("deferred command advertised")
 			}
 		}
@@ -113,10 +113,18 @@ func TestOfficialCommands(t *testing.T) {
 		}
 		output, diagnostic, err = execute([]string{"error", "list", "--module", "fathomry", "--component", "failure", "--output", "json"}, "")
 		var list struct {
-			Data []failure.Definition `json:"data"`
+			Data []struct {
+				Definition failure.Definition `json:"definition"`
+				Message    string             `json:"message"`
+			} `json:"data"`
 		}
 		if err != nil || diagnostic != "" || json.Unmarshal([]byte(output), &list) != nil || len(list.Data) != len(failure.Definitions()) {
 			t.Fatal("owner filter differs")
+		}
+		for index, item := range list.Data {
+			if item.Definition != failure.Definitions()[index] || item.Message != item.Definition.Message {
+				t.Fatal("list lost the baseline or localized explanation")
+			}
 		}
 		output, _, err = execute([]string{"error", "explain", "0xA0450001", "--lang", "zh-CN"}, "")
 		if err != nil || !strings.Contains(output, "配置声明") {
@@ -124,6 +132,14 @@ func TestOfficialCommands(t *testing.T) {
 		}
 	})
 	t.Run("exact_translation_and_coverage", func(t *testing.T) {
+		registered, err := catalogs()
+		if err != nil {
+			t.Fatal(err)
+		}
+		owners, err := registered.Messages.Components()
+		if err != nil {
+			t.Fatal(err)
+		}
 		for _, locale := range []string{"en", "zh-CN", "fr"} {
 			output, diagnostic, err := execute([]string{"i18n", "show", "fathomry.failure.invalid_code", "--locale", locale, "--output", "json"}, "")
 			if err != nil || diagnostic != "" {
@@ -146,14 +162,21 @@ func TestOfficialCommands(t *testing.T) {
 				t.Fatal(err)
 			}
 			var value struct {
-				Data []struct {
-					Missing []string `json:"missing"`
+				Data struct {
+					Components []struct {
+						Module    string   `json:"module"`
+						Component string   `json:"component"`
+						Missing   []string `json:"missing"`
+					} `json:"components"`
 				} `json:"data"`
 			}
-			if json.Unmarshal([]byte(output), &value) != nil || len(value.Data) != len(failure.Allocations()) {
+			if json.Unmarshal([]byte(output), &value) != nil || len(value.Data.Components) != len(owners) {
 				t.Fatal("coverage omitted owners")
 			}
-			for _, item := range value.Data {
+			for index, item := range value.Data.Components {
+				if item.Module != owners[index].Module || item.Component != owners[index].Name {
+					t.Fatal("coverage substituted error owners for message owners")
+				}
 				if (len(item.Missing) == 0) != (locale == "zh-CN") {
 					t.Fatal("coverage counted fallback as a translation")
 				}
@@ -180,6 +203,106 @@ func TestOfficialCommands(t *testing.T) {
 	})
 }
 
+func TestCatalogQueries(t *testing.T) {
+	catalog, err := catalogs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definitions, err := catalog.Errors.Inspect()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		name  string
+		flags []string
+		count int
+	}{
+		{"module", []string{"--module", "fathomry"}, len(definitions)},
+		{"component", []string{"--component", "failure"}, len(failure.Definitions())},
+		{"joint", []string{"--module", "fathomry", "--component", "failure"}, len(failure.Definitions())},
+		{"code", []string{"--query", "0XA0010001"}, 1},
+		{"identifier", []string{"--query", "FATHOMRY.FAILURE.INVALID_CODE"}, 1},
+		{"empty_search", []string{"--module", "fathomry", "--query", "[no-matching-literal]"}, 0},
+	} {
+		t.Run(item.name, func(t *testing.T) {
+			args := append([]string{"--output", "json", "error", "list"}, item.flags...)
+			output, diagnostic, err := execute(args, "en")
+			var result struct {
+				Data []struct {
+					Definition failure.Definition `json:"definition"`
+					Domain     failure.Domain     `json:"domain"`
+					Facility   failure.Facility   `json:"facility"`
+					Number     uint16             `json:"number"`
+					Message    string             `json:"message"`
+					Locale     string             `json:"locale"`
+				} `json:"data"`
+			}
+			if err != nil || diagnostic != "" || json.Unmarshal([]byte(output), &result) != nil || len(result.Data) != item.count || result.Data == nil {
+				t.Fatalf("query %v: %v / %s", args, err, output)
+			}
+			for index, value := range result.Data {
+				if value.Domain != value.Definition.Code.Domain() || value.Facility != value.Definition.Code.Facility() ||
+					value.Number != value.Definition.Code.Number() || value.Message != value.Definition.Message || value.Locale != "en" {
+					t.Fatal("list metadata differs from public definitions")
+				}
+				if index > 0 && value.Definition.Code <= result.Data[index-1].Definition.Code {
+					t.Fatal("error list order is unstable")
+				}
+			}
+		})
+	}
+	t.Run("localized_search_and_provenance", func(t *testing.T) {
+		value, found, err := catalog.Messages.Explain(failure.ErrCode, "zh-CN")
+		if err != nil || !found {
+			t.Fatal(err)
+		}
+		output, diagnostic, err := execute([]string{"--output", "json", "--lang", "zh-CN", "error", "list",
+			"--component", "failure", "--query", value.Message.Text}, "en")
+		if err != nil || diagnostic != "" || !strings.Contains(output, value.Message.Text) ||
+			!strings.Contains(output, `"locale":"zh-CN"`) || !strings.Contains(output, `"code":"0xA0010001"`) {
+			t.Fatal("translated search missing", err, output)
+		}
+		output, diagnostic, err = execute([]string{"error", "explain", "0xA0010001", "--lang", "fr"}, "en")
+		for _, field := range []string{"Owner: fathomry.failure", "Domain: core", "Facility: 0x001", "Local number: 1",
+			"Contract revision: 1", "Requested language: fr", "Language: en", "unsupported-locale"} {
+			if err != nil || diagnostic != "" || !strings.Contains(output, field) {
+				t.Fatal("text explanation omitted metadata", field, err, output)
+			}
+		}
+	})
+	t.Run("component_filter", func(t *testing.T) {
+		for _, flags := range [][]string{{"--module", "fathomry"}, {"--component", "failure"},
+			{"--module", "fathomry", "--component", "failure"}} {
+			args := append([]string{"--output", "json", "error", "components"}, flags...)
+			output, diagnostic, err := execute(args, "")
+			var result struct {
+				Data []failure.Component `json:"data"`
+			}
+			if err != nil || diagnostic != "" || json.Unmarshal([]byte(output), &result) != nil || len(result.Data) == 0 {
+				t.Fatal("component filter failed", err)
+			}
+			if len(flags) != 2 || flags[0] == "--component" {
+				if len(result.Data) != 1 || result.Data[0].Name != "failure" {
+					t.Fatal("component filter ignored")
+				}
+			}
+		}
+	})
+	t.Run("localized_help_for_every_catalog_command", func(t *testing.T) {
+		for _, path := range [][]string{{"error", "list"}, {"error", "explain"}, {"error", "components"},
+			{"i18n", "list"}, {"i18n", "show"}, {"i18n", "locales"}, {"i18n", "render"}, {"i18n", "coverage"}} {
+			for _, locale := range []string{"en", "zh-CN"} {
+				args := append([]string{"--lang", locale, "--output", "json"}, path...)
+				args = append(args, "--help")
+				output, diagnostic, err := execute(args, "")
+				if err != nil || diagnostic != "" || !json.Valid([]byte(output)) || strings.Contains(output, "fathomry.command_line.") {
+					t.Fatalf("unresolved help %v: %v / %s", args, err, output)
+				}
+			}
+		}
+	})
+}
+
 func TestInvalidCommands(t *testing.T) {
 	tests := []struct {
 		args []string
@@ -192,7 +315,7 @@ func TestInvalidCommands(t *testing.T) {
 		{[]string{"error", "explain", "private-value-canary"}, 2},
 		{[]string{"error", "explain", "0xA7FFFFFF"}, 1},
 		{[]string{"error", "explain", "example.source.unknown"}, 1},
-		{[]string{"error", "list", "--module", "fathomry"}, 2},
+		{[]string{"error", "list", "--module", "absent"}, 1},
 		{[]string{"error", "list", "--module", "fathomry", "--component", "missing"}, 1},
 		{[]string{"error", "list", "--module", "private/value-canary", "--component", "missing"}, 2},
 		{[]string{"i18n", "show", "unknown-private-canary"}, 1},
@@ -259,7 +382,7 @@ func TestConcurrentInvocations(t *testing.T) {
 }
 
 func FuzzArguments(f *testing.F) {
-	for _, seed := range []string{"", "--help", "error\nlist", "--lang\nzh-CN\ni18n\ncoverage\nfr", "--output\njson\nerror\nexplain\n0xA0010001", "__complete\n--help", "\xff", "--\n-private"} {
+	for _, seed := range []string{"", "--help", "error\nlist", "--lang\nzh-CN\ni18n\ncoverage\nfr", "--output\njson\nerror\nexplain\n0xA0010001", "__complete\n--help", "\xff", "--\n-private", "i18n\ncoverage\nfr\n--strict", "i18n\nrender\nfathomry.failure.invalid_code\n--locale\nzh-CN", "error\nlist\n--module\nfathomry\n--query\ninvalid", "i18n\nlocales\n--component\nfailure"} {
 		f.Add(seed)
 	}
 	catalogs, err := catalogs()
@@ -277,8 +400,11 @@ func FuzzArguments(f *testing.F) {
 		if command.ExitCode(err) == 0 && diagnostic.Len() != 0 {
 			t.Fatal("success emitted an error")
 		}
-		if command.ExitCode(err) != 0 && output.Len() != 0 {
+		if command.ExitCode(err) != 0 && !errors.Is(err, command.ErrCheck) && output.Len() != 0 {
 			t.Fatal("failed finite command emitted a success response")
+		}
+		if errors.Is(err, command.ErrCheck) && (output.Len() == 0 || diagnostic.Len() == 0 || command.ExitCode(err) != 1) {
+			t.Fatal("failed check lost its report or status")
 		}
 		if output.Len() > command.MaxOutputBytes || diagnostic.Len() > command.MaxOutputBytes {
 			t.Fatal("output bounds lost")

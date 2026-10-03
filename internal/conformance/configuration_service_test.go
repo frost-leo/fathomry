@@ -69,8 +69,8 @@ type configurationServiceSettings struct {
 
 var errConfigurationServiceSchema = errors.New("invalid isolated application settings")
 
-func configurationServiceSchema() configsource.Schema[configurationServiceSettings] {
-	return configsource.Schema[configurationServiceSettings]{
+func configurationServiceSchema() configuration.Schema[configurationServiceSettings] {
+	return configuration.Schema[configurationServiceSettings]{
 		Version: 1,
 		Validate: func(_ context.Context, value configurationServiceSettings) error {
 			database := value.Database
@@ -114,7 +114,6 @@ func configurationServiceInbox[T any](t *testing.T) *adapters.Inbox[T] {
 func configurationServiceRuntime(t *testing.T, ctx context.Context) (*framework.Runtime, nacos.Dependencies, configuration.Dependencies) {
 	t.Helper()
 	nativeInbox := configurationServiceInbox[nacos.Evidence](t)
-	configInbox := configurationServiceInbox[configuration.Evidence](t)
 	runtime, err := framework.New(ctx, framework.Options{
 		Operations: adapters.Options{MaxWorkBytes: 256 << 20},
 		Resources:  resource.Options{Name: "configuration-service", CleanupTimeout: 5 * time.Second},
@@ -130,7 +129,12 @@ func configurationServiceRuntime(t *testing.T, ctx context.Context) (*framework.
 		}
 	})
 	return runtime, nacos.Dependencies{Runtime: runtime.Operations(), Evidence: nativeInbox},
-		configuration.Dependencies{Runtime: runtime.Operations(), Evidence: configInbox}
+		configuration.Dependencies{Provider: configuration.Values()}
+}
+
+func configurationServiceVariable(name, path string, json bool) configuration.Variable {
+	value, present := os.LookupEnv(name)
+	return configuration.Variable{Path: path, Value: value, Present: present, JSON: json}
 }
 
 func configurationServiceBootstrap(t *testing.T, ctx context.Context, deps configuration.Dependencies, writable bool) nacos.Settings {
@@ -140,7 +144,7 @@ func configurationServiceBootstrap(t *testing.T, ctx context.Context, deps confi
 		role = "WRITER"
 	}
 	state, err := configuration.Load(ctx, configuration.Declaration[nacos.Settings]{
-		Schema: configsource.Schema[nacos.Settings]{
+		Schema: configuration.Schema[nacos.Settings]{
 			Version: 1,
 			Defaults: nacos.Settings{
 				Name: "configuration-service", DynamicKeys: true, Writable: writable,
@@ -149,18 +153,18 @@ func configurationServiceBootstrap(t *testing.T, ctx context.Context, deps confi
 			},
 			Validate: func(_ context.Context, value nacos.Settings) error { return nacos.Validate(value) },
 		},
-		Environment: []configuration.Environment{
-			{Name: "FATHOMRY_LIVE_NACOS_SERVERS", Path: "/servers", JSON: true},
-			{Name: "FATHOMRY_LIVE_NACOS_NAMESPACE", Path: "/namespace"},
-			{Name: "FATHOMRY_LIVE_NACOS_" + role + "_USERNAME", Path: "/username"},
-			{Name: "FATHOMRY_LIVE_NACOS_" + role + "_PASSWORD", Path: "/password"},
-			{Name: "FATHOMRY_LIVE_NACOS_ALLOW_INSECURE", Path: "/allow_insecure", JSON: true},
+		Variables: []configuration.Variable{
+			configurationServiceVariable("FATHOMRY_LIVE_NACOS_SERVERS", "/servers", true),
+			configurationServiceVariable("FATHOMRY_LIVE_NACOS_NAMESPACE", "/namespace", false),
+			configurationServiceVariable("FATHOMRY_LIVE_NACOS_"+role+"_USERNAME", "/username", false),
+			configurationServiceVariable("FATHOMRY_LIVE_NACOS_"+role+"_PASSWORD", "/password", false),
+			configurationServiceVariable("FATHOMRY_LIVE_NACOS_ALLOW_INSECURE", "/allow_insecure", true),
 		},
 	}, deps)
 	if err != nil {
 		t.Fatal("Framework environment bootstrap failed")
 	}
-	accepted, err := state.Capture()
+	accepted, err := state.State.Capture()
 	if err != nil {
 		t.Fatal("accepted bootstrap unavailable")
 	}
@@ -388,7 +392,8 @@ func TestConfigurationServicePreparation(t *testing.T) {
 			if json.Unmarshal(document["database"], &database) != nil || database["password"] != nil {
 				t.Fatal("remote document must not contain the environment password field")
 			}
-			prepared, err := configsource.Prepare(context.Background(), configurationServiceSchema(), []configsource.Layer{
+			schema := configurationServiceSchema()
+			prepared, err := configsource.Prepare(context.Background(), configsource.Schema[configurationServiceSettings]{Version: schema.Version, Defaults: schema.Defaults, Validate: schema.Validate}, []configsource.Layer{
 				{Kind: configsource.Base, Encoding: configsource.JSON, Content: []byte(raw)}, variables,
 			})
 			if invalid {
@@ -447,19 +452,19 @@ func TestConfigurationService(t *testing.T) {
 	seedSchema.Defaults = configurationServiceSettings{Version: 1, Label: "initial", Database: configurationServiceDatabase{PoolSize: 1}}
 	seed, err := configuration.Load(ctx, configuration.Declaration[configurationServiceSettings]{
 		Schema: seedSchema,
-		Environment: []configuration.Environment{
-			{Name: "FATHOMRY_LIVE_DB_ADDRESS", Path: "/database/address"},
-			{Name: "FATHOMRY_LIVE_DB_PORT", Path: "/database/port", JSON: true},
-			{Name: "FATHOMRY_LIVE_DB_USER", Path: "/database/user"},
-			{Name: "FATHOMRY_LIVE_DB_PASSWORD", Path: "/database/password"},
-			{Name: "FATHOMRY_LIVE_DB_DATABASE", Path: "/database/database"},
-			{Name: "FATHOMRY_LIVE_DB_PLAINTEXT", Path: "/database/plaintext", JSON: true},
+		Variables: []configuration.Variable{
+			configurationServiceVariable("FATHOMRY_LIVE_DB_ADDRESS", "/database/address", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_PORT", "/database/port", true),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_USER", "/database/user", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_PASSWORD", "/database/password", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_DATABASE", "/database/database", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_PLAINTEXT", "/database/plaintext", true),
 		},
 	}, configDeps)
 	if err != nil {
 		t.Fatal("isolated application seed environment loading failed")
 	}
-	seedAccepted, err := seed.Capture()
+	seedAccepted, err := seed.State.Capture()
 	if err != nil {
 		t.Fatal("isolated seed unavailable")
 	}
@@ -469,20 +474,28 @@ func TestConfigurationService(t *testing.T) {
 	}
 	content := configurationServiceContent(t, expected)
 	configurationServicePublish(t, ctx, writer, reader, key, content)
-	source, err := reader.Source(nacos.ObserveOptions{QueueCapacity: 4}, key)
+	connection := configuration.NacosConnection{Name: readerSettings.Name, Namespace: readerSettings.Namespace, AppName: readerSettings.AppName,
+		Username: readerSettings.Username, Password: readerSettings.Password, RootCAPEM: readerSettings.RootCAPEM,
+		AllowInsecure: readerSettings.AllowInsecure, RequestTimeout: readerSettings.RequestTimeout, RetryDelay: readerSettings.RetryDelay, ReconcileInterval: time.Second}
+	for _, server := range readerSettings.Servers {
+		connection.Servers = append(connection.Servers, configuration.NacosServer{HTTPURL: server.HTTPURL, GRPCAddress: server.GRPCAddress})
+	}
+	provider, err := configuration.Nacos(configuration.NacosOptions{Connection: connection, Documents: []configuration.NacosDocument{
+		{Key: configuration.NacosKey{Group: key.Group, DataID: key.DataID}, Kind: configuration.Base, Encoding: configuration.JSON},
+	}, ObservationCapacity: 4})
 	if err != nil {
-		t.Fatal("public Nacos Source selection failed")
+		t.Fatal("Framework Nacos declaration failed")
 	}
 	declaration := configuration.Declaration[configurationServiceSettings]{
-		Schema: configurationServiceSchema(), Source: source,
-		Layers:      []configuration.Layer{{Kind: configsource.Base, Encoding: configsource.JSON}},
-		Environment: []configuration.Environment{{Name: "FATHOMRY_LIVE_DB_PASSWORD", Path: "/database/password"}},
+		Schema:    configurationServiceSchema(),
+		Variables: []configuration.Variable{configurationServiceVariable("FATHOMRY_LIVE_DB_PASSWORD", "/database/password", false)},
 	}
+	configDeps.Provider = provider
 	loaded, err := configuration.Load(ctx, declaration, configDeps)
 	if err != nil {
 		t.Fatal("real Nacos -> Framework Load failed")
 	}
-	loadedView, err := loaded.Reader().Capture()
+	loadedView, err := loaded.State.Reader().Capture()
 	if err != nil {
 		t.Fatal("loaded settings reader unavailable")
 	}

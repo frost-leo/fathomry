@@ -1,0 +1,217 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "error_catalog",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.error_catalog.root",
+      "contract": "v1",
+      "context": "Error catalog command: root.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Inspect registered error definitions without starting an application."
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.list",
+      "contract": "v1",
+      "context": "Error catalog command: list.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Filter and search registered error definitions and localized explanations."
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.explain",
+      "contract": "v1",
+      "context": "Error catalog command: explain.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Explain an error code or identifier in the display language."
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.components",
+      "contract": "v1",
+      "context": "Error catalog command: components.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List registered error owners, facilities and code counts."
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.flag_query",
+      "contract": "v1",
+      "context": "Error catalog command: flag_query.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Case-insensitive literal search in identities and message text."
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.flag_module",
+      "contract": "v1",
+      "context": "Error catalog command: flag_module.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Exact owner module; independent of --component."
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.flag_component",
+      "contract": "v1",
+      "context": "Error catalog command: flag_component.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Exact owner component; independent of --module."
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.locale",
+      "contract": "v1",
+      "context": "Error catalog command: locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Language"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.owner",
+      "contract": "v1",
+      "context": "Error catalog command: owner.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Owner"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.domain",
+      "contract": "v1",
+      "context": "Error catalog command: domain.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Domain"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.facility",
+      "contract": "v1",
+      "context": "Error catalog command: facility.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Facility"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.number",
+      "contract": "v1",
+      "context": "Error catalog command: number.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Local number"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.revision",
+      "contract": "v1",
+      "context": "Error catalog command: revision.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Contract revision"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.requested_locale",
+      "contract": "v1",
+      "context": "Error catalog command: requested_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Requested language"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.canonical_locale",
+      "contract": "v1",
+      "context": "Error catalog command: canonical_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Canonical language"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.matched_locale",
+      "contract": "v1",
+      "context": "Error catalog command: matched_locale.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Matched language tag"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.fallback",
+      "contract": "v1",
+      "context": "Error catalog command: fallback.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Message fallback (empty means none)"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.description",
+      "contract": "v1",
+      "context": "Error catalog command: description.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Baseline description"
+      }
+    },
+    {
+      "id": "fathomry.error_catalog.details",
+      "contract": "v1",
+      "context": "Error catalog command: details.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Details contract"
+      }
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "project_creation",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.project_creation.invalid_dependency",
+      "source": "e1fc7c4108d96df9a04c69dc45c81171c84398f5aba28ae162dab89597d9f0c0",
+      "forms": {
+        "other": "需要受支持的框架版本或显式指定的开发源码目录。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.destination_unavailable",
+      "source": "f52e5d91f88f3d4a0740f2c0aecdc7f7f9d6e0e5a366860bec96e359a64d9f10",
+      "forms": {
+        "other": "目标目录必须尚不存在，且父目录必须可访问。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.incomplete_creation",
+      "source": "c1525316e72288e584a10c1071a3465b8e6eb9f49244e29feba324e18d62b47a",
+      "forms": {
+        "other": "项目创建未完成；已经创建的文件已保留。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.new",
+      "source": "1abb6dfab5c3535b01b1cff666aef1c706b489e5b262e29d050fd4b1d5f44a0f",
+      "forms": {
+        "other": "创建具有本地或远程强类型配置的独立项目。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.module",
+      "source": "2b6970846bd3d0db2708048b09c10100e027f8cc24cbd434b1c08bd7b99cc6b0",
+      "forms": {
+        "other": "必填的 Go 模块路径。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.name",
+      "source": "ea701af834c08645e9b837bbb0cf87b147c540aca4da02771fc262f816c81640",
+      "forms": {
+        "other": "应用名称；默认使用目标目录名。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.source",
+      "source": "b75e864f52981c33fa3a1eb6cb759f07f4be1ddf61d1843925488aa1b3276568",
+      "forms": {
+        "other": "配置加载方式：local 或 remote。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.provider",
+      "source": "211ad840560ac9070ffc79d5948cdb375a6a57f23974b089ac7ba46cfd82a2d7",
+      "forms": {
+        "other": "实现：默认 viper；远程加载必须显式选择 nacos。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.format",
+      "source": "456f7301bce17ff0a8a401e7e78aa348f80873e574917a8f7492a50be66d5351",
+      "forms": {
+        "other": "应用配置文档格式：yaml 或 toml。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.framework_source",
+      "source": "89e539666938511c4f0b4664fda6fcf87c8d11221eface38266bbe49761416c6",
+      "forms": {
+        "other": "显式指定的开发源码目录；不会隐式查找或复制。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.created",
+      "source": "ac31c094a71200b0b60a86aa93fecfe9f3649252433e6da74ac72178804b0f50",
+      "forms": {
+        "other": "项目已创建："
+      }
+    }
+  ]
+}

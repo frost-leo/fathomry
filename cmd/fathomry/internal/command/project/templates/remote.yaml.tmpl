@@ -1,0 +1,38 @@
+# fathomry
+# Copyright (C) 2026  Frost Leo
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+# Copy deliberately to bootstrap.yaml, configure authorized endpoints,
+# and select it with --bootstrap. This is not application data to publish.
+connection:
+  name: {{quote .Name}}
+  namespace: REPLACE_WITH_NAMESPACE_ID
+  servers:
+    - http_url: https://config.example.invalid/nacos
+      grpc_address: config.example.invalid:9848
+base:
+  group: PROJECT_CONFIGURATION
+  data_id: {{.Name}}.base.{{.Encoding}}
+environments:
+  development:
+    group: PROJECT_CONFIGURATION
+    data_id: {{.Name}}.development.{{.Encoding}}
+  testing:
+    group: PROJECT_CONFIGURATION
+    data_id: {{.Name}}.testing.{{.Encoding}}
+  production:
+    group: PROJECT_CONFIGURATION
+    data_id: {{.Name}}.production.{{.Encoding}}

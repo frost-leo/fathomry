@@ -133,6 +133,7 @@ The authoritative first-party manifest is
 | 0x005 | fathomry / operation | [Public operation ownership and evidence custody](../../adapters/v1/interface.md) |
 | 0x006 | fathomry / assembly | [Public runtime composition and evidence reception](../../framework/v1/interface.md) |
 | 0x007 | fathomry / command_line | [Command invocation and terminal I/O](../../cmd/fathomry/interface.md), not a CLI-layer allocation band |
+| 0x00A | fathomry / project_creation | [Dependency admission and exclusive project creation](../../cmd/fathomry/interface.md#create-an-independent-project) |
 | 0x041 | fathomry / settings | [Typed configuration data storage/access](../../settings/v1/interface.md) |
 | 0x042 | fathomry / configuration_data | [Independent strict preparation and raw batch contract](../../adapters/configsource/v1/interface.md) |
 | 0x043 | fathomry / configsource_viper | [Public Viper configuration capability](../../adapters/configsource/viper/v1/interface.md) |

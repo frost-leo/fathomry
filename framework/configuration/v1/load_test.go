@@ -29,12 +29,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
-	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	framework "github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
 
@@ -51,10 +48,10 @@ type model struct {
 	} `json:"credential"`
 }
 
-func modelSchema() configsource.Schema[model] {
+func modelSchema() Schema[model] {
 	defaults := model{Values: map[string]int{"default": 1}, Items: []int{9}}
 	defaults.Service.Host, defaults.Service.Port = "default", 8080
-	return configsource.Schema[model]{Version: 1, Defaults: defaults, Validate: func(_ context.Context, value model) error {
+	return Schema[model]{Version: 1, Defaults: defaults, Validate: func(_ context.Context, value model) error {
 		if value.Service.Host == "" || value.Service.Port == 0 || (value.Credential.Access == "") != (value.Credential.Secret == "") {
 			return errors.New("private-validation-canary")
 		}
@@ -62,44 +59,12 @@ func modelSchema() configsource.Schema[model] {
 		return nil
 	}}
 }
-func dependencies(t *testing.T) (Dependencies, *framework.Runtime, *viper.Client) {
-	t.Helper()
-	runtime, err := framework.New(context.Background(), framework.Options{Operations: adapters.Options{MaxWorkBytes: 128 << 20}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	evidence, err := adapters.NewInbox[Evidence](adapters.EvidenceOptions{Capacity: 128})
-	if err != nil {
-		t.Fatal(err)
-	}
-	receiver, err := framework.StartReceiver(context.Background(), evidence, framework.ReceiverOptions{}, func(context.Context, adapters.Snapshot[Evidence]) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	sourceEvidence, _ := adapters.NewInbox[viper.Evidence](adapters.EvidenceOptions{Capacity: 128})
-	sourceReceiver, err := framework.StartReceiver(context.Background(), sourceEvidence, framework.ReceiverOptions{}, func(context.Context, adapters.Snapshot[viper.Evidence]) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	client, err := viper.New(viper.Dependencies{Runtime: runtime.Operations(), Evidence: sourceEvidence})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		if err := runtime.Close(ctx); err != nil {
-			t.Error(err)
-		}
-		if err := receiver.Finish(ctx); err != nil {
-			t.Error(err)
-		}
-		if err := sourceReceiver.Finish(ctx); err != nil {
-			t.Error(err)
-		}
-	})
-	return Dependencies{Runtime: runtime.Operations(), Evidence: evidence}, runtime, client
+func sourceProvider(source configsource.Source, encoding Encoding) Provider {
+	return Provider{state: &providerPlan{name: "test", layers: []layer{{Kind: Base, Encoding: encoding}}, open: func(context.Context, *adapters.Runtime) (sourceBinding, error) {
+		return sourceBinding{source: source}, nil
+	}}}
 }
+
 func write(t *testing.T, path, value string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
@@ -107,26 +72,32 @@ func write(t *testing.T, path, value string) {
 	}
 }
 func TestLoad(t *testing.T) {
-	deps, _, client := dependencies(t)
 	root := t.TempDir()
 	paths := []string{filepath.Join(root, "base.yaml"), filepath.Join(root, "environment.yaml"), filepath.Join(root, "local.yaml")}
 	write(t, paths[0], "service: {port: 443}\nvalues: {base: 2}\nitems: [1, 2]\n")
 	write(t, paths[2], "service: {host: local}\nvalues: {local: 3}\nitems: []\n")
-	source, err := client.Source(viper.WatchSettings{Paths: paths})
+	provider, err := Viper(ViperOptions{Documents: []File{{Path: paths[0], Kind: Base, Encoding: YAML}, {Path: paths[1], Kind: Environment, Encoding: YAML, Optional: true}, {Path: paths[2], Kind: Override, Encoding: YAML, Optional: true}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("FATHOMRY_CONFIG_HOST", "environment")
-	t.Setenv("FATHOMRY_CONFIG_PORT", "65535")
-	t.Setenv("FATHOMRY_CONFIG_VALUES", `{"variable":4}`)
+	deps := Dependencies{Provider: provider}
+	t.Setenv("FATHOMRY_CONFIG_HOST", "must-not-be-read")
 	declaration := Declaration[model]{
-		Schema: modelSchema(), Source: source,
-		Layers:      []Layer{{Kind: configsource.Base, Encoding: configsource.YAML}, {Kind: configsource.Environment, Encoding: configsource.YAML, Optional: true}, {Kind: configsource.Local, Encoding: configsource.YAML, Optional: true}},
-		Environment: []Environment{{Name: "FATHOMRY_CONFIG_HOST", Path: "/service/host"}, {Name: "FATHOMRY_CONFIG_PORT", Path: "/service/port", JSON: true}, {Name: "FATHOMRY_CONFIG_VALUES", Path: "/values", JSON: true}},
+		Schema:    modelSchema(),
+		Variables: []Variable{{Value: "environment", Present: true, Path: "/service/host"}, {Value: "65535", Present: true, Path: "/service/port", JSON: true}, {Value: `{"variable":4}`, Present: true, Path: "/values", JSON: true}},
 	}
-	state, err := Load(context.Background(), declaration, deps)
+	result, err := Load(context.Background(), declaration, deps)
 	if err != nil {
 		t.Fatal(err)
+	}
+	state := result.State
+	if len(result.Records) != 2 {
+		t.Fatal("missing owned scenario records")
+	}
+	for _, record := range result.Records {
+		if !record.Info().Released {
+			t.Fatal("live record escaped Load")
+		}
 	}
 	accepted, err := state.Capture()
 	if err != nil {
@@ -163,7 +134,7 @@ func TestLoad(t *testing.T) {
 	t.Run("invalid lower layer cannot be masked", func(t *testing.T) {
 		write(t, paths[0], "service: {unknown: 1}\n")
 		result, err := Load(context.Background(), declaration, deps)
-		if result != nil || !errors.Is(err, configsource.ErrDecode) {
+		if result.State != nil || !errors.Is(err, configsource.ErrDecode) {
 			t.Fatal("invalid layer published", err)
 		}
 	})
@@ -171,19 +142,19 @@ func TestLoad(t *testing.T) {
 		if err := os.Remove(paths[0]); err != nil {
 			t.Fatal(err)
 		}
-		if result, err := Load(context.Background(), declaration, deps); result != nil || !errors.Is(err, ErrMissing) {
+		if result, err := Load(context.Background(), declaration, deps); result.State != nil || !errors.Is(err, ErrMissing) {
 			t.Fatal(err)
 		}
 		write(t, paths[0], "{}")
 		write(t, paths[2], "")
-		if result, err := Load(context.Background(), declaration, deps); result != nil || !errors.Is(err, configsource.ErrDecode) {
+		if result, err := Load(context.Background(), declaration, deps); result.State != nil || !errors.Is(err, configsource.ErrDecode) {
 			t.Fatal("present empty treated as missing", err)
 		}
 	})
 	t.Run("strong validation does not expose rejected input", func(t *testing.T) {
 		write(t, paths[2], "credential: {access: private-credential-canary}\n")
 		result, err := Load(context.Background(), declaration, deps)
-		if result != nil || err == nil || strings.Contains(fmt.Sprintf("%+v", err), "canary") {
+		if result.State != nil || err == nil || strings.Contains(fmt.Sprintf("%+v", err), "canary") {
 			t.Fatal("validation leaked or published")
 		}
 	})
@@ -196,27 +167,28 @@ func TestDeclaration(t *testing.T) {
 	if err := json.Unmarshal([]byte("{}"), &guarded); !errors.Is(err, ErrSerialization) || guarded.Schema.Validate == nil {
 		t.Fatal("declaration validation silently reconstructed", err)
 	}
-	deps, _, client := dependencies(t)
-	if result, err := Load(context.Background(), Declaration[struct{}]{Schema: configsource.Schema[struct{}]{Version: 1}}, deps); err != nil || result == nil {
+	deps := Dependencies{Provider: Values()}
+	if result, err := Load(context.Background(), Declaration[struct{}]{Schema: Schema[struct{}]{Version: 1}}, deps); err != nil || result.State == nil {
 		t.Fatal(err)
 	}
-	var typedNil *viper.Source
-	if result, err := Load(context.Background(), Declaration[struct{}]{Schema: configsource.Schema[struct{}]{Version: 1}, Source: typedNil}, deps); err != nil || result == nil {
+	provider, err := Viper(ViperOptions{Documents: []File{{Path: filepath.Join(t.TempDir(), "missing"), Kind: Base, Encoding: JSON}}})
+	if err != nil {
 		t.Fatal(err)
 	}
-	source, _ := client.Source(viper.WatchSettings{Paths: []string{filepath.Join(t.TempDir(), "missing")}})
-	for _, declaration := range []Declaration[model]{
-		{Schema: modelSchema(), Source: source},
-		{Schema: modelSchema(), Layers: []Layer{{Kind: configsource.Base, Encoding: configsource.JSON}}},
-		{Schema: modelSchema(), Source: source, Layers: []Layer{{Kind: configsource.Variables, Encoding: configsource.JSON}}},
-		{Schema: modelSchema(), Source: source, Layers: []Layer{{Kind: configsource.Base, Encoding: "toml"}}},
-		{Schema: modelSchema(), Environment: []Environment{{Name: "bad=name", Path: "/service/host"}}},
-		{Schema: modelSchema(), Environment: []Environment{{Name: "VALID", Path: "/values/key", JSON: true}}},
+	for _, invalid := range []struct {
+		declaration Declaration[model]
+		provider    Provider
+	}{
+		{Declaration[model]{}, provider},
+		{Declaration[model]{Schema: modelSchema()}, Provider{}},
+		{Declaration[model]{Schema: modelSchema(), Variables: []Variable{{Path: "bad-path"}}}, Values()},
+		{Declaration[model]{Schema: modelSchema(), Variables: []Variable{{Path: "/values/key", JSON: true}}}, Values()},
 	} {
-		if result, err := Load(context.Background(), declaration, deps); err == nil || result != nil {
+		if result, err := Load(context.Background(), invalid.declaration, Dependencies{Provider: invalid.provider}); err == nil || result.State != nil {
 			t.Fatal("invalid declaration published")
 		}
 	}
+
 	if _, err := new(State[model]).Capture(); !errors.Is(err, ErrHandle) {
 		t.Fatal(err)
 	}

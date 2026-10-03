@@ -57,7 +57,7 @@ func fixtureCatalogs(t testing.TB) Catalogs {
 
 func fixtureCommand(invocation *Invocation, action func(*Invocation) error) *cobra.Command {
 	root := invocation.Group("fathomry", "fathomry.command_line.root")
-	work := &cobra.Command{Use: "work", Short: "fathomry.command_line.error_list", Args: cobra.NoArgs}
+	work := &cobra.Command{Use: "work", Short: "fathomry.command_line.root", Args: cobra.NoArgs}
 	invocation.Bind(work, func(context.Context, []string) error { return action(invocation) })
 	root.AddCommand(work)
 	return root
@@ -274,6 +274,119 @@ func (writer *failingWriter) Write(data []byte) (int, error) {
 		return len(data) - 1, nil
 	}
 	return 0, writer.cause
+}
+
+func TestCommandResourceAdmission(t *testing.T) {
+	for _, format := range []string{"text", "json"} {
+		var output, diagnostic bytes.Buffer
+		entered := false
+		err := Run(context.Background(), []string{"work", "--output", format},
+			Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic},
+			fixtureCatalogs(t), func(invocation *Invocation) *cobra.Command {
+				root := fixtureCommand(invocation, func(invocation *Invocation) error {
+					entered = true
+					return invocation.Result("work", "completed", func(writer io.Writer) error {
+						_, err := io.WriteString(writer, "completed")
+						return err
+					})
+				})
+				root.Commands()[0].Short = "example.absent.description"
+				return root
+			})
+		if entered || output.Len() != 0 || !errors.Is(err, ErrOptions) {
+			t.Errorf("%s: missing selected-command resource reached handler=%v stdout=%q err=%v", format, entered, output.String(), err)
+		}
+	}
+}
+
+func TestCheckResult(t *testing.T) {
+	catalogs := fixtureCatalogs(t)
+	for _, format := range []string{"text", "json"} {
+		for _, mode := range []string{"pass", "fail", "handler", "canceled", "cleanup", "presentation", "output", "duplicate"} {
+			t.Run(format+"/"+mode, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				var output, diagnostic bytes.Buffer
+				var released atomic.Int32
+				var writer io.Writer = &output
+				if mode == "output" {
+					writer = &failingWriter{cause: io.ErrClosedPipe, before: func() {
+						if released.Load() != 1 {
+							t.Error("check output preceded cleanup")
+						}
+					}}
+				}
+				err := Run(ctx, []string{"work", "--output", format},
+					Options{Input: strings.NewReader(""), Output: writer, ErrorOutput: &diagnostic},
+					catalogs, func(invocation *Invocation) *cobra.Command {
+						return fixtureCommand(invocation, func(invocation *Invocation) error {
+							_, _, err := bindFixture(t, invocation, func(context.Context) resource.ReleaseResult {
+								released.Add(1)
+								var problem error
+								if mode == "cleanup" {
+									problem = errors.New("private-cleanup-canary")
+								}
+								return resource.ReleaseResult{Complete: true, Err: problem}
+							}, nil)
+							if err != nil {
+								return err
+							}
+							if err := invocation.CheckResult("work", map[string]bool{"passed": mode == "pass"}, mode == "pass",
+								func(writer io.Writer) error { _, err := io.WriteString(writer, "complete-report\n"); return err }); err != nil {
+								return err
+							}
+							switch mode {
+							case "handler":
+								return errors.New("private-handler-canary")
+							case "canceled":
+								cancel()
+								return ctx.Err()
+							case "presentation":
+								invocation.Text("absent.component.message")
+							case "duplicate":
+								return invocation.Result("work", 0, func(io.Writer) error { return nil })
+							}
+							return nil
+						})
+					})
+				if released.Load() != 1 || strings.Contains(diagnostic.String(), "private-") {
+					t.Fatal("check lost cleanup or safe diagnostics", err)
+				}
+				switch mode {
+				case "pass":
+					if err != nil || output.Len() == 0 || diagnostic.Len() != 0 {
+						t.Fatal("passing check failed", err)
+					}
+				case "fail":
+					if !errors.Is(err, ErrCheck) || ExitCode(err) != 1 || output.Len() == 0 || diagnostic.Len() == 0 {
+						t.Fatal("incomplete check discarded its report", err)
+					}
+				default:
+					expected := map[string]failure.Code{"handler": ErrExecution, "canceled": ErrCanceled,
+						"cleanup": ErrCleanup, "presentation": ErrExecution, "output": ErrOutput, "duplicate": ErrOptions}[mode]
+					if !errors.Is(err, expected) || errors.Is(err, ErrCheck) || output.Len() != 0 {
+						t.Fatal("unqualified check escaped or replaced execution failure", err)
+					}
+				}
+			})
+		}
+	}
+	t.Run("failed_diagnostic_retains_check_and_report", func(t *testing.T) {
+		var output bytes.Buffer
+		err := Run(context.Background(), []string{"work"},
+			Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &failingWriter{cause: io.ErrClosedPipe}},
+			catalogs, func(invocation *Invocation) *cobra.Command {
+				return fixtureCommand(invocation, func(invocation *Invocation) error {
+					return invocation.CheckResult("work", false, false, func(writer io.Writer) error {
+						_, err := io.WriteString(writer, "report")
+						return err
+					})
+				})
+			})
+		if !errors.Is(err, ErrCheck) || !errors.Is(err, ErrOutput) || !errors.Is(err, io.ErrClosedPipe) || output.String() != "report" {
+			t.Fatal("diagnostic failure lost check identity or delivered report", err)
+		}
+	})
 }
 
 func TestOutputAndAdmission(t *testing.T) {

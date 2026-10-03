@@ -104,6 +104,16 @@
       }
     },
     {
+      "id": "fathomry.command_line.check_failed",
+      "contract": "v1",
+      "context": "Command interface: check_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The check did not pass. Consult the report for details."
+      }
+    },
+    {
       "id": "fathomry.command_line.root",
       "contract": "v1",
       "context": "Command interface: root.",
@@ -154,36 +164,6 @@
       }
     },
     {
-      "id": "fathomry.command_line.flag_module",
-      "contract": "v1",
-      "context": "Command interface: flag_module.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Error owner module; use together with --component."
-      }
-    },
-    {
-      "id": "fathomry.command_line.flag_component",
-      "contract": "v1",
-      "context": "Command interface: flag_component.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Error owner component; use together with --module."
-      }
-    },
-    {
-      "id": "fathomry.command_line.flag_locale",
-      "contract": "v1",
-      "context": "Command interface: flag_locale.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Exact translation locale; defaults to the display language."
-      }
-    },
-    {
       "id": "fathomry.command_line.usage",
       "contract": "v1",
       "context": "Command interface: usage.",
@@ -211,116 +191,6 @@
       "cardinal": false,
       "forms": {
         "other": "Options:"
-      }
-    },
-    {
-      "id": "fathomry.command_line.locale",
-      "contract": "v1",
-      "context": "Command interface: locale.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Language"
-      }
-    },
-    {
-      "id": "fathomry.command_line.missing",
-      "contract": "v1",
-      "context": "Command interface: missing.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Missing translations"
-      }
-    },
-    {
-      "id": "fathomry.command_line.missing_translation",
-      "contract": "v1",
-      "context": "Command interface: missing_translation.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "The message exists, but this exact translation is absent."
-      }
-    },
-    {
-      "id": "fathomry.command_line.error_group",
-      "contract": "v1",
-      "context": "Command interface: error_group.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Inspect registered error definitions without starting an application."
-      }
-    },
-    {
-      "id": "fathomry.command_line.error_list",
-      "contract": "v1",
-      "context": "Command interface: error_list.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "List error definitions; optionally select a module/component pair."
-      }
-    },
-    {
-      "id": "fathomry.command_line.error_explain",
-      "contract": "v1",
-      "context": "Command interface: error_explain.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Explain an error code or identifier in the display language."
-      }
-    },
-    {
-      "id": "fathomry.command_line.error_components",
-      "contract": "v1",
-      "context": "Command interface: error_components.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "List registered error owners, facilities and code counts."
-      }
-    },
-    {
-      "id": "fathomry.command_line.i18n_group",
-      "contract": "v1",
-      "context": "Command interface: i18n_group.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Inspect registered translation resources without application settings."
-      }
-    },
-    {
-      "id": "fathomry.command_line.i18n_list",
-      "contract": "v1",
-      "context": "Command interface: i18n_list.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "List registered message identities and exact resource languages."
-      }
-    },
-    {
-      "id": "fathomry.command_line.i18n_show",
-      "contract": "v1",
-      "context": "Command interface: i18n_show.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "Inspect one exact message translation without fallback."
-      }
-    },
-    {
-      "id": "fathomry.command_line.i18n_coverage",
-      "contract": "v1",
-      "context": "Command interface: i18n_coverage.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "List exact missing translations by component."
       }
     }
   ]

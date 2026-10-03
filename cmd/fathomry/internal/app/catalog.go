@@ -20,9 +20,10 @@
 package app
 
 import (
-	nacos "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1"
-	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
+	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
+	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages"
+	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project"
 	"github.com/frost-leo/fathomry/failure/v1"
 	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
@@ -31,9 +32,10 @@ import (
 // catalogs is offline metadata composition, not Framework runtime construction.
 func catalogs() (command.Catalogs, error) {
 	components := append(configuration.Components(),
-		i18n.Component{Module: "fathomry", Name: "configsource_viper", BaseLocale: "en", Resources: viper.Resources(), Directory: "resources", Definitions: viper.Definitions()},
-		i18n.Component{Module: "fathomry", Name: "configsource_nacos", BaseLocale: "en", Resources: nacos.Resources(), Directory: "resources", Definitions: nacos.Definitions()},
 		command.Component(),
+		errorcatalog.Component(),
+		messages.Component(),
+		project.Component(),
 	)
 	var definitions []failure.Definition
 	for _, component := range components {
@@ -43,9 +45,9 @@ func catalogs() (command.Catalogs, error) {
 	if err != nil {
 		return command.Catalogs{}, err
 	}
-	messages, err := i18n.Prepare(components...)
+	translations, err := i18n.Prepare(components...)
 	if err != nil {
 		return command.Catalogs{}, err
 	}
-	return command.Catalogs{Errors: errors, Messages: messages}, nil
+	return command.Catalogs{Errors: errors, Messages: translations}, nil
 }

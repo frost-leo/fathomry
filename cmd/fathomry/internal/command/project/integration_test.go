@@ -1,0 +1,215 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package project
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"net/url"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"golang.org/x/mod/module"
+	modzip "golang.org/x/mod/zip"
+)
+
+func goTool() string {
+	name := "go"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(runtime.GOROOT(), "bin", name)
+}
+func consumerEnvironment(extra ...string) []string {
+	var result []string
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "FATHOMRY_") || name == "GOWORK" || name == "GOTOOLCHAIN" || name == "GOFLAGS" {
+			continue
+		}
+		replace := false
+		for _, value := range extra {
+			key, _, _ := strings.Cut(value, "=")
+			if name == key {
+				replace = true
+			}
+		}
+		if !replace {
+			result = append(result, entry)
+		}
+	}
+	return append(append(result, "GOWORK=off", "GOTOOLCHAIN=local"), extra...)
+}
+func runConsumer(t testing.TB, directory string, environment []string, command string, args ...string) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	process := exec.CommandContext(ctx, command, args...)
+	process.Dir = directory
+	process.Env = environment
+	output, err := process.CombinedOutput()
+	if err != nil || ctx.Err() != nil {
+		t.Fatalf("consumer command %s %v: %v\n%s", filepath.Base(command), args, err, output)
+	}
+	return output
+}
+func qualifyProject(t *testing.T, directory string, environment []string, mode string) {
+	t.Helper()
+	for _, args := range [][]string{{"mod", "tidy"}, {"mod", "tidy", "-diff"}, {"vet", "./..."}, {"test", "-race", "-count=1", "./..."}} {
+		runConsumer(t, directory, environment, goTool(), args...)
+	}
+	binary := filepath.Join(t.TempDir(), "application")
+	runConsumer(t, directory, environment, goTool(), "build", "-mod=readonly", "-o", binary, "./cmd/demo")
+	for _, name := range []string{"development", "testing", "production"} {
+		if mode == "remote" {
+			break
+		}
+		output := runConsumer(t, directory, environment, binary, "--env", name, "--config-dir", filepath.Join(directory, "configs"))
+		var report struct {
+			Status   string `json:"status"`
+			Accepted bool   `json:"configuration_accepted"`
+			Worker   bool   `json:"worker_started"`
+		}
+		if json.Unmarshal(output, &report) != nil || !report.Accepted || report.Worker || report.Status != "configuration_accepted" {
+			t.Fatal("generated executable misreported configuration")
+		}
+	}
+	boot, err := os.ReadFile(filepath.Join(directory, "internal/bootstrap/boot.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(boot, []byte("configuration.Bootstrap")) || !bytes.Contains(boot, []byte("configuration.Load(")) || !bytes.Contains(boot, []byte("configuration.Watch(")) {
+		t.Fatal("generated boot does not consume the Framework scenario")
+	}
+	packages := runConsumer(t, directory, environment, goTool(), "list", "-f", "{{.ImportPath}} {{join .Imports \" \"}}", "./...")
+	if bytes.Contains(packages, []byte(frameworkModule+"/adapters/")) || bytes.Contains(packages, []byte(frameworkModule+"/internal/")) {
+		t.Fatal("project assembly imports Adapter or Internal APIs")
+	}
+
+}
+
+func TestIndependentProjects(t *testing.T) {
+	if testing.Short() {
+		t.Skip("independent generated-module qualification")
+	}
+	for _, mode := range []string{"local", "remote"} {
+		for _, encoding := range []string{"yaml", "toml"} {
+			t.Run(mode+"/"+encoding, func(t *testing.T) {
+				tree := testPlan(t, mode, encoding)
+				if err := create(context.Background(), tree, writeProjectFile); err != nil {
+					t.Fatal(err)
+				}
+				qualifyProject(t, tree.destination, consumerEnvironment(), mode)
+			})
+		}
+	}
+}
+
+func TestVersionedProjects(t *testing.T) {
+	if testing.Short() {
+		t.Skip("cold-cache versioned-module qualification")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("the cold module-proxy runtime fixture is Linux-qualified")
+	}
+	job := t.TempDir()
+	proxy := filepath.Join(job, "proxy")
+	cache := filepath.Join(job, "module-cache")
+	const fixtureVersion = "v0.0.0-configuration-test"
+	versionDirectory := filepath.Join(proxy, filepath.FromSlash(frameworkModule), "@v")
+	if err := os.MkdirAll(versionDirectory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	moduleFile, err := os.ReadFile(filepath.Join(repository(t), "go.mod"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string][]byte{
+		fixtureVersion + ".mod":  moduleFile,
+		fixtureVersion + ".info": []byte("{\"Version\":\"" + fixtureVersion + "\",\"Time\":\"2026-10-02T00:00:00Z\"}"),
+		"list":                   []byte(fixtureVersion + "\n"),
+	} {
+		if err := os.WriteFile(filepath.Join(versionDirectory, name), data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	archive, err := os.Create(filepath.Join(versionDirectory, fixtureVersion+".zip"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = modzip.CreateFromDir(archive, module.Version{Path: frameworkModule, Version: fixtureVersion}, repository(t))
+	closeErr := archive.Close()
+	if err != nil || closeErr != nil {
+		t.Fatal(err, closeErr)
+	}
+	toolDirectory := filepath.Join(job, "tool")
+	if err := os.Mkdir(toolDirectory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := "module example.org/configuration-tool\n\ngo 1.27.0\nrequire " + frameworkModule + " " + fixtureVersion + "\n"
+	if err := os.WriteFile(filepath.Join(toolDirectory, "go.mod"), []byte(manifest), 0600); err != nil {
+		t.Fatal(err)
+	}
+	proxyURL := (&url.URL{Scheme: "file", Path: filepath.ToSlash(proxy)}).String()
+	environment := consumerEnvironment("GOMODCACHE="+cache, "GOPROXY="+proxyURL+",https://proxy.golang.org", "GONOSUMDB="+frameworkModule, "GOFLAGS=-modcacherw")
+	cli := filepath.Join(job, "fathomry")
+	runConsumer(t, toolDirectory, environment, goTool(), "build", "-mod=mod", "-o", cli, frameworkModule+"/cmd/fathomry")
+	for _, mode := range []string{"local", "remote"} {
+		for _, encoding := range []string{"yaml", "toml"} {
+			t.Run(mode+"/"+encoding, func(t *testing.T) {
+				destination := filepath.Join(job, mode+"-"+encoding)
+				provider := "viper"
+				if mode == "remote" {
+					provider = "nacos"
+				}
+				runConsumer(t, job, environment, cli, "new", destination, "--name=demo", "--module=example.org/demo", "--config-source", mode, "--config-provider", provider, "--config-format", encoding, "--output=json")
+				qualifyProject(t, destination, environment, mode)
+				moduleJSON := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
+				var selected struct {
+					Version, Dir string
+					Replace      any
+				}
+				if json.Unmarshal(moduleJSON, &selected) != nil || selected.Version != fixtureVersion || selected.Replace != nil || !strings.HasPrefix(selected.Dir, cache+string(filepath.Separator)) {
+					t.Fatal("versioned project retained a developer checkout")
+				}
+				raw, err := os.ReadFile(filepath.Join(destination, "go.mod"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, pin := range sdkPins() {
+					expected := frameworkModule + "/" + pin.directory + " " + pin.version
+					if !bytes.Contains(raw, []byte(expected)) {
+						t.Fatal("versioned SDK policy missing", pin.original)
+					}
+				}
+				t.Logf("%s/%s: generated, tidied, vetted, race-tested and built from the isolated module cache; local programs executed, remote programs reject absent bootstrap", mode, encoding)
+			})
+		}
+	}
+	if _, err := os.Stat(filepath.Join(repository(t), "scripts", "install-cli.sh")); err == nil {
+		t.Fatal("unrequested installer appeared")
+	}
+}

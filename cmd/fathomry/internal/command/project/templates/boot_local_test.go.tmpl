@@ -1,0 +1,186 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	"context"
+	"errors"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func localProject(t *testing.T, encoding configuration.Encoding) Options {
+	t.Helper()
+	directory := t.TempDir()
+	if err := os.Mkdir(filepath.Join(directory, "environments"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	base, empty := "application: {name: {{.Name}}, i18n: {locale: en}}\n", "{}\n"
+	if encoding == configuration.TOML {
+		base = "[application]\nname='{{.Name}}'\n[application.i18n]\nlocale='en'\n"
+		empty = "# no overrides\n"
+	}
+	put(t, filepath.Join(directory, "base."+string(encoding)), base)
+	for _, name := range []string{"development", "testing", "production"} {
+		put(t, filepath.Join(directory, "environments", name+"."+string(encoding)), empty)
+	}
+	return Options{Directory: directory, Environment: "development", Encoding: encoding}
+}
+func put(t *testing.T, path, value string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestBoot(t *testing.T) {
+	for _, encoding := range []configuration.Encoding{configuration.YAML, configuration.TOML} {
+		t.Run(string(encoding), func(t *testing.T) {
+			options := localProject(t, encoding)
+			for _, environment := range []string{"development", "testing", "production"} {
+				options.Environment = environment
+				result, err := Boot(context.Background(), options)
+				if err != nil || result.State == nil || len(result.Records) != 2 {
+					t.Fatal("finite load did not release its owners", err)
+				}
+				accepted, _ := result.State.Capture()
+				value, _ := accepted.ValueCopy()
+				if value.Application.Name != {{quote .Name}} || value.Application.I18n.Locale != "en" {
+					t.Fatal("project data changed")
+				}
+				for _, record := range result.Records {
+					if !record.Info().Released {
+						t.Fatal("live record")
+					}
+				}
+			}
+			options.Environment = "production"
+			target := filepath.Join(options.Directory, "environments", "production."+string(encoding))
+			if err := os.Remove(target); err != nil {
+				t.Fatal(err)
+			}
+			if result, err := Boot(context.Background(), options); err == nil || result.State != nil || !errors.Is(err, configuration.ErrMissing) {
+				t.Fatal("missing production fell back", err)
+			}
+		})
+	}
+}
+func TestWatch(t *testing.T) {
+	for _, encoding := range []configuration.Encoding{configuration.YAML, configuration.TOML} {
+		t.Run(string(encoding), func(t *testing.T) {
+			options := localProject(t, encoding)
+			ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+			defer cancel()
+			watch, records, err := Watch(ctx, options)
+			if err != nil || len(records) != 0 {
+				t.Fatal(err)
+			}
+			defer watch.Close(context.Background())
+			next := func(accepted bool) {
+				t.Helper()
+				for {
+					event, err := watch.Next(ctx)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !event.Superseded && event.Accepted == accepted {
+						return
+					}
+				}
+			}
+			next(true)
+			before, _ := watch.Capture()
+			target := filepath.Join(options.Directory, "environments", "development."+string(encoding))
+			bad, good := "application: {name: wrong}\n", "application: {i18n: {locale: zh-CN}}\n"
+			if encoding == configuration.TOML {
+				bad = "[application]\nname='wrong'\n"
+				good = "[application.i18n]\nlocale='zh-CN'\n"
+			}
+			put(t, target, bad)
+			next(false)
+			retained, _ := watch.Capture()
+			if retained.Description().Revision != before.Description().Revision {
+				t.Fatal("rejection changed accepted data")
+			}
+			put(t, target, good)
+			next(true)
+			accepted, _ := watch.Capture()
+			value, _ := accepted.ValueCopy()
+			if value.Application.I18n.Locale != "zh-CN" {
+				t.Fatal("replacement not published")
+			}
+			if err := watch.Close(ctx); err != nil {
+				t.Fatal(err)
+			}
+			records, ready := watch.Records()
+			if !ready || len(records) != 2 {
+				t.Fatal("ownership/evidence not finalized")
+			}
+			old, _ := before.ValueCopy()
+			if old.Application.I18n.Locale != "en" {
+				t.Fatal("old snapshot mutated")
+			}
+		})
+	}
+}
+func TestInputsAndPrecedence(t *testing.T) {
+	lookup := func(name string) (string, bool) {
+		value, present := map[string]string{"FATHOMRY_ENV": "testing"}[name]
+		return value, present
+	}
+	path := filepath.Join(t.TempDir(), "selected.env")
+	put(t, path, "FATHOMRY_ENV=production\n")
+	options, err := ParseOptions(context.Background(), []string{"--dotenv", path, "--env=development"}, lookup)
+	if err != nil || options.Environment != "development" || len(options.Records) != 1 {
+		t.Fatal("input precedence", err)
+	}
+	if _, err := ParseOptions(context.Background(), []string{"--env="}, lookup); err == nil {
+		t.Fatal("empty selector lost")
+	}
+	selected := localProject(t, configuration.YAML)
+	put(t, filepath.Join(selected.Directory, "environments/development.yaml"), "application: {i18n: {locale: zh-CN}}\n")
+	selected.LocalConfig = filepath.Join(selected.Directory, "override.yaml")
+	put(t, selected.LocalConfig, "application: {i18n: {locale: fr}}\n")
+	result, err := Boot(context.Background(), selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, _ := result.State.Capture()
+	value, _ := accepted.ValueCopy()
+	if value.Application.I18n.Locale != "fr" {
+		t.Fatal("local override lost")
+	}
+	selected.Variables = []configuration.Variable{ {Path: "/application/i18n/locale", Value: "ja", Present: true}}
+	result, err = Boot(context.Background(), selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accepted, _ = result.State.Capture()
+	value, _ = accepted.ValueCopy()
+	if value.Application.I18n.Locale != "ja" {
+		t.Fatal("captured override lost")
+	}
+	put(t, filepath.Join(selected.Directory, "base.yaml"), "application: {unknown: true}\n")
+	if result, err := Boot(context.Background(), selected); err == nil || result.State != nil {
+		t.Fatal("invalid lower layer hidden")
+	}
+}

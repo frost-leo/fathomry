@@ -1,0 +1,83 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	"context"
+	"errors"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+)
+
+type Options struct {
+	Bootstrap   string
+	Environment string
+	Encoding    configuration.Encoding
+	Credentials []configuration.Variable
+	Variables   []configuration.Variable
+	Records     []configuration.Record
+}
+
+func ParseOptions(ctx context.Context, args []string, lookup func(string) (string, bool)) (Options, error) {
+	inputs, err := configuration.ReadInputs(ctx, configuration.InputOptions{
+		Arguments: args, Lookup: lookup, DotenvFlag: "dotenv", DotenvEnvironment: "FATHOMRY_DOTENV",
+		Bindings: []configuration.InputBinding{
+			{Name: "environment", Flag: "env", Environment: "FATHOMRY_ENV", Default: "development", HasDefault: true, Dotenv: true},
+			{Name: "bootstrap", Flag: "bootstrap", Environment: "FATHOMRY_BOOTSTRAP", Dotenv: true},
+			{Name: "locale", Environment: "FATHOMRY_APP_LOCALE"},
+			{Name: "username", Environment: "FATHOMRY_NACOS_USERNAME", Dotenv: true},
+			{Name: "password", Environment: "FATHOMRY_NACOS_PASSWORD", Dotenv: true},
+			{Name: "root_ca_pem", Environment: "FATHOMRY_NACOS_ROOT_CA_PEM", Dotenv: true},
+		},
+	})
+	options := Options{Encoding: DocumentEncoding, Records: inputs.Records()}
+	if err != nil {
+		return options, err
+	}
+	options.Bootstrap, _ = inputs.Lookup("bootstrap")
+	options.Environment, _ = inputs.Lookup("environment")
+	options.Variables = applicationVariables(inputs)
+	for _, name := range []string{"username", "password", "root_ca_pem"} {
+		if value, present := inputs.Lookup(name); present {
+			options.Credentials = append(options.Credentials, configuration.Variable{Path: "/connection/" + name, Value: value, Present: true})
+		}
+	}
+	return options, options.validate()
+}
+func (options Options) validate() error {
+	if !environmentName(options.Environment) || options.Bootstrap == "" ||
+		options.Encoding != configuration.YAML && options.Encoding != configuration.TOML {
+		return errors.New("invalid remote project inputs")
+	}
+	return nil
+}
+
+func dependencies(ctx context.Context, options Options) (configuration.Dependencies, []configuration.Record, error) {
+	records := append([]configuration.Record(nil), options.Records...)
+	if ctx == nil {
+		return configuration.Dependencies{}, records, errors.New("missing startup context")
+	}
+	if err := options.validate(); err != nil {
+		return configuration.Dependencies{}, records, err
+	}
+	provider, startup, err := configuration.PrepareNacos(ctx, configuration.NacosBootstrapOptions{
+		File: options.Bootstrap, Environment: options.Environment, Encoding: options.Encoding, Variables: options.Credentials,
+	})
+	return configuration.Dependencies{Provider: provider}, append(records, startup...), err
+}

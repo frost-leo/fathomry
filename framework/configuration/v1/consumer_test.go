@@ -22,9 +22,12 @@ package configuration_test
 import (
 	"context"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -73,8 +76,14 @@ func TestIndependentConsumer(t *testing.T) {
 		}
 	}
 	output, err := run(true, "list", "-deps", "github.com/frost-leo/fathomry/framework/configuration/v1")
-	if err != nil || strings.Contains(string(output), "github.com/frost-leo/fathomry/internal/") || strings.Contains(string(output), "github.com/spf13/viper") || strings.Contains(string(output), "github.com/nacos-group") {
-		t.Fatal("Framework aggregated SDKs or Internal", err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(output), "github.com/frost-leo/fathomry/adapters/configsource/v1") {
+		t.Fatal("Framework scenario bypassed the public preparation capability")
+	}
+	if strings.Contains(string(source), "github.com/frost-leo/fathomry/adapters/") {
+		t.Fatal("Framework consumer requires Adapter assembly")
 	}
 	notice, err := os.ReadFile(filepath.Join(root, ".github/LICENSE_HEADER"))
 	if err != nil {
@@ -90,6 +99,45 @@ func TestIndependentConsumer(t *testing.T) {
 		output, err := run(true, "test", "-mod=readonly", "./...")
 		if err == nil || !strings.Contains(string(output), "cannot convert") {
 			t.Fatalf("generic authority seal not enforced: %v\n%s", err, output)
+		}
+	}
+	for _, declaration := range []string{
+		"var _ = c.Bootstrap[struct{}]", "var _ c.Startup[struct{}]", "var _ c.BootstrapOptions[struct{}]",
+		"var _ c.BootstrapDefaults", "var _ c.SourceMode", "var _ c.Layer",
+		"var _ = c.Declaration[struct{}]{Layers:nil}", "var _ = c.ViperOptions{Paths:nil}", "var _ = c.NacosOptions{Keys:nil}",
+		"var _ = c.Dependencies{Source:nil}", "var _ = c.Dependencies{Runtime:nil}", "var _ = c.Dependencies{Evidence:nil}",
+		"var _ = c.Declaration[struct{}]{Source: nil}", "var _ = c.Declaration[struct{}]{Environment: nil}",
+	} {
+		if err := os.WriteFile(filepath.Join(directory, "forbidden.go"), []byte(header+"package consumer\nimport c \"github.com/frost-leo/fathomry/framework/configuration/v1\"\n"+declaration+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if output, err := run(true, "test", "-mod=readonly", "./..."); err == nil || !strings.Contains(string(output), "undefined:") && !strings.Contains(string(output), "unknown field") {
+			t.Fatalf("withdrawn configuration contract remains usable: %s: %v\n%s", declaration, err, output)
+		}
+	}
+}
+
+func TestConfigurationDoesNotBypassAdaptersOrChooseProcessInputs(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), entry.Name(), nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, imported := range file.Imports {
+			path, err := strconv.Unquote(imported.Path.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if path == "os" || strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") {
+				t.Fatal("configuration bypassed its explicit Adapter boundary or read process inputs", entry.Name(), path)
+			}
 		}
 	}
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages"
+	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project"
 	"github.com/spf13/cobra"
 )
 
@@ -40,6 +41,6 @@ func Run(ctx context.Context, args []string, options command.Options) error {
 
 func commands(invocation *command.Invocation) *cobra.Command {
 	root := invocation.Group("fathomry", "fathomry.command_line.root")
-	root.AddCommand(errorcatalog.New(invocation), messages.New(invocation))
+	root.AddCommand(errorcatalog.New(invocation), messages.New(invocation), project.New(invocation))
 	return root
 }

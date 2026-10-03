@@ -1,0 +1,148 @@
+<!--
+fathomry
+Copyright (C) 2026  Frost Leo
+SPDX-License-Identifier: GPL-3.0-or-later
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+
+# {{.Name}}
+
+An independent Go {{.GoVersion}} project. Its current executable loads and validates
+configuration, publishes a typed value, closes its temporary source, reports the
+result and exits. It does not start a Worker, Workflow, server or background host.
+
+## Build and test
+
+Run from the project directory:
+
+```sh
+GOWORK=off go mod tidy
+GOWORK=off go mod tidy -diff
+GOWORK=off go test -race ./...
+mkdir -p bin
+GOWORK=off go build -mod=readonly -o bin/{{.Name}} ./cmd/{{.Name}}
+```
+
+Generation performs none of these commands and does not fabricate go.sum.
+{{if .Source}}
+This is explicit development mode. go.mod contains live replacements into the
+selected Framework checkout and its confined SDK directories. Changes there affect
+later builds. v0.0.0 is only a local replacement placeholder, not a release.
+Do not deploy with developer-specific checkout paths.
+{{else}}
+The Framework is pinned to {{.Version}}. Its versioned SDK replacement policy is
+included automatically because Go does not inherit a dependency's replace rules.
+No source tree or external dependency manifest is copied.
+{{end}}
+
+## Project responsibilities
+
+- internal/setting: aggregate/application data, defaults and validation.
+- internal/bootstrap/options.go: the selected provider's typed inputs and bindings.
+- internal/bootstrap/inputs.go: project environment names and captured application overrides.
+- internal/bootstrap/boot.go: one shared Boot/Watch path over Framework scenarios.
+- cmd/{{.Name}}: process signals, safe result output and exit.
+
+Boot imports Framework configuration, never Adapters or Internal. It supplies an
+explicit Provider descriptor and project Schema/Variables. Framework owns source
+construction, operation/evidence machinery and cleanup. ReadInputs handles the
+explicitly authorized input bindings; document locations carry their layer policy.
+Application code extends Settings rather than modifying Framework.
+
+## Explicit provider and format
+
+This project explicitly selects {{.Mode}} / {{.Provider}}. Framework's built-in
+package includes both supported provider dependencies, but constructs only the
+selected implementation; unused services and credentials are never required. The
+DocumentEncoding constant declares {{.Encoding}}; Boot passes that encoding to
+strict preparation. The runtime has no --config-source, --config-provider or
+--config-format selector. To change provider, explicitly edit the Framework dependency declaration
+or generate another profile; changing environment never changes provider.
+
+Runtime inputs are --env and --dotenv, plus
+{{if eq .Mode "local"}}--config-dir and --local-config.
+Defaults are development and configs.{{else}}required --bootstrap.
+The environment default is development.{{end}}
+Flags override the matching declared process variables, explicitly selected dotenv,
+then these project defaults. Empty is present, not permission to fall back.
+Relative paths are relative to the invocation directory.
+
+.env.example is inert. Copy deliberately and select with --dotenv .env. Literal
+dotenv accepts KEY=value, single quotes, JSON double quotes and comments; it does
+not execute export/interpolation, modify os.Environ or authorize unknown keys.
+FATHOMRY_APP_LOCALE is a separate process-only application override.
+
+{{if eq .Mode "local"}}
+## Local execution
+
+```sh
+./bin/{{.Name}} --env development --config-dir configs
+./bin/{{.Name}} --env production --config-dir /mounted/configs
+```
+
+Precedence: defaults < required base < required environment < explicit optional
+local override < captured application values. A missing production document never
+falls back to development. The local example is not automatically loaded; use
+--local-config only after deliberately creating the override.
+{{else}}
+## Remote execution
+
+Copy bootstrap.example.{{.Encoding}} to a protected bootstrap.{{.Encoding}} and
+replace its endpoint/namespace/document bindings. Publish the application samples
+through your authorized configuration-management process; creation does not publish.
+
+```sh
+./bin/{{.Name}} --env production --bootstrap /mounted/bootstrap.{{.Encoding}}
+```
+
+Bootstrap contains deployment-selected Nacos acquisition data, not application
+Settings. Framework PrepareNacos owns its supported schema, strict loading and
+environment-to-key selection; the project supplies the path and selected environment.
+Its extension selects YAML/YML, TOML or JSON independently of application encoding.
+Namespace and document keys are explicit; environment is not a Namespace ID.
+The bootstrap schema grants no write/dynamic-key permissions or implicit keys. An optional
+override is another remote key, never a mixed local fallback. Multiple document
+reads are not a server transaction.
+
+Only declared FATHOMRY_NACOS_USERNAME, FATHOMRY_NACOS_PASSWORD and
+FATHOMRY_NACOS_ROOT_CA_PEM override connection fields. Process values override
+dotenv; explicit empty remains empty. Do not commit credentials or pass them in
+command history. An unavailable service does not authorize reading local samples.
+{{end}}
+
+## Data, evidence and shutdown
+
+Both formats use strict original-document preparation: exact json field names,
+per-layer type/unknown-field checks, recursive object overlay and whole-list
+replacement. Invalid lower layers cannot be hidden by later ones. Empty TOML is
+a valid empty map, not a missing document; empty YAML/JSON rejects. TOML temporal
+and nonfinite values are unsupported. Native weak decoding is not substituted.
+
+Boot returns Framework Result with accepted State and released records, including
+startup-input and remote-bootstrap reads.
+A cleanup error does not erase accepted data. Records are process-local evidence,
+not a durable audit log. Main reports acceptance, application name, record count
+and the first public error occurrence's code; it never dumps native causes or
+configuration/credential payloads. settings.Default is not installed implicitly.
+
+Framework joins its acquired source/operation owners and transfers released facts.
+Boot contains no receiver or cleanup engine. Cancellation does not detach cleanup. The first SIGINT/SIGTERM requests cancellation
+after restoring default handling; a later signal can force exit, which cannot prove
+cleanup. The generated Watch function uses the same project declarations and dependency
+selection. Its second return value contains released startup records. The caller
+owns the returned Watcher, waits for initial acceptance, reads its Reader, and calls
+Close before collecting its final Records. Timed-out Close retains ownership.
+Invalid updates retain last-good data; valid updates replace the complete snapshot.
+Watch does not update a separate earlier Boot result or start a Worker.

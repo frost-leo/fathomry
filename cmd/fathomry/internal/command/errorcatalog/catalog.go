@@ -17,125 +17,132 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package errorcatalog implements the official offline error atlas commands.
 package errorcatalog
 
 import (
 	"context"
-	"fmt"
-	"io"
 
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	"github.com/frost-leo/fathomry/failure/v1"
-	"github.com/spf13/cobra"
+	"github.com/frost-leo/fathomry/i18n/v1"
 )
 
 type explanation struct {
 	Definition      failure.Definition `json:"definition"`
+	Domain          failure.Domain     `json:"domain"`
+	Facility        failure.Facility   `json:"facility"`
+	Number          uint16             `json:"number"`
 	Message         string             `json:"message"`
 	RequestedLocale string             `json:"requested_locale"`
+	CanonicalLocale string             `json:"canonical_locale"`
+	MatchedLocale   string             `json:"matched_locale"`
 	Locale          string             `json:"locale"`
 	Fallback        string             `json:"fallback,omitempty"`
 }
 
-// New registers only commands; it opens no source or runtime.
-func New(invocation *command.Invocation) *cobra.Command {
-	root := invocation.Group("error", "fathomry.command_line.error_group")
-	var module, component string
-	list := &cobra.Command{Use: "list", Short: "fathomry.command_line.error_list", Args: cobra.NoArgs}
-	list.Flags().StringVar(&module, "module", "", "fathomry.command_line.flag_module")
-	list.Flags().StringVar(&component, "component", "", "fathomry.command_line.flag_component")
-	invocation.Bind(list, func(ctx context.Context, _ []string) error {
-		if (module == "") != (component == "") {
-			return command.Fail(command.ErrUsage)
+func describe(value i18n.Explanation) explanation {
+	return explanation{
+		Definition: value.Definition, Domain: value.Definition.Code.Domain(),
+		Facility: value.Definition.Code.Facility(), Number: value.Definition.Code.Number(),
+		Message: value.Message.Text, RequestedLocale: value.Selection.Requested,
+		CanonicalLocale: value.Selection.Canonical, MatchedLocale: value.Selection.Matched,
+		Locale: value.Message.Locale, Fallback: string(value.Selection.Fallback),
+	}
+}
+
+func listErrors(ctx context.Context, catalogs command.Catalogs, input listOptions) ([]explanation, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	options, err := prepareList(input)
+	if err != nil {
+		return nil, err
+	}
+	definitions, err := catalogs.Errors.Inspect()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]explanation, 0, len(definitions))
+	ownerFound := false
+	for _, definition := range definitions {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		var definitions []failure.Definition
-		var err error
-		if module == "" {
-			definitions, err = invocation.Catalogs().Errors.Inspect()
-		} else {
-			var found bool
-			definitions, found, err = invocation.Catalogs().Errors.InComponent(module, component)
-			if err != nil {
-				return command.Fail(command.ErrUsage, err)
-			}
-			if !found {
-				return command.Fail(command.ErrNotFound)
-			}
+		if !options.owners.Match(definition.Module, definition.Component) {
+			continue
 		}
+		ownerFound = true
+		value, found, err := catalogs.Messages.Explain(definition.Code, options.locale)
 		if err != nil {
-			return err
-		}
-		return invocation.Result("error.list", definitions, func(writer io.Writer) error {
-			for _, definition := range definitions {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				value, found, err := invocation.Catalogs().Messages.Explain(definition.Code, invocation.Locale())
-				if err != nil {
-					return err
-				}
-				if !found {
-					return command.Fail(command.ErrNotFound)
-				}
-				if _, err := fmt.Fprintf(writer, "%s  %s  %s\n", definition.Code.String(), definition.Identifier, value.Message.Text); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	explain := &cobra.Command{Use: "explain CODE_OR_IDENTIFIER", Short: "fathomry.command_line.error_explain", Args: cobra.ExactArgs(1)}
-	invocation.Bind(explain, func(_ context.Context, args []string) error {
-		catalogs := invocation.Catalogs()
-		var definition failure.Definition
-		var found bool
-		var err error
-		if failure.Identifier(args[0]).Valid() {
-			definition, found, err = catalogs.Errors.LookupIdentifier(failure.Identifier(args[0]))
-		} else {
-			code, problem := failure.ParseCode(args[0])
-			if problem != nil {
-				return command.Fail(command.ErrUsage, problem)
-			}
-			definition, found, err = catalogs.Errors.Lookup(code)
-		}
-		if err != nil {
-			return err
+			return nil, err
 		}
 		if !found {
-			return command.Fail(command.ErrNotFound)
+			return nil, command.Fail(command.ErrNotFound)
 		}
-		value, found, err := catalogs.Messages.Explain(definition.Code, invocation.Locale())
-		if err != nil {
-			return err
+		if command.ContainsQuery(options.query, definition.Code.String(), string(definition.Identifier),
+			definition.Message, definition.Description, value.Message.Text) {
+			result = append(result, describe(value))
 		}
-		if !found {
-			return command.Fail(command.ErrNotFound)
+	}
+	if err := options.owners.RequireMatch(ownerFound); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func explainError(ctx context.Context, catalogs command.Catalogs, identity, locale string) (explanation, error) {
+	if err := ctx.Err(); err != nil {
+		return explanation{}, err
+	}
+	options, err := prepareExplanation(identity, locale)
+	if err != nil {
+		return explanation{}, err
+	}
+	var definition failure.Definition
+	var found bool
+	if options.identifier != "" {
+		definition, found, err = catalogs.Errors.LookupIdentifier(options.identifier)
+	} else {
+		definition, found, err = catalogs.Errors.Lookup(options.code)
+	}
+	if err != nil {
+		return explanation{}, err
+	}
+	if !found {
+		return explanation{}, command.Fail(command.ErrNotFound)
+	}
+	value, found, err := catalogs.Messages.Explain(definition.Code, options.locale)
+	if err != nil {
+		return explanation{}, err
+	}
+	if !found {
+		return explanation{}, command.Fail(command.ErrNotFound)
+	}
+	return describe(value), nil
+}
+
+func listComponents(ctx context.Context, catalog *failure.Catalog, owners command.OwnerFilter) ([]failure.Component, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := owners.Validate(); err != nil {
+		return nil, err
+	}
+	values, err := catalog.Components()
+	if err != nil {
+		return nil, err
+	}
+	result := make([]failure.Component, 0, len(values))
+	for _, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
 		}
-		result := explanation{Definition: value.Definition, Message: value.Message.Text,
-			RequestedLocale: value.Selection.Requested, Locale: value.Message.Locale, Fallback: string(value.Selection.Fallback)}
-		return invocation.Result("error.explain", result, func(writer io.Writer) error {
-			_, err := fmt.Fprintf(writer, "%s  %s\n%s\n%s: %s\n", result.Definition.Code.String(),
-				result.Definition.Identifier, result.Message, invocation.Text("fathomry.command_line.locale"), result.Locale)
-			return err
-		})
-	})
-	components := &cobra.Command{Use: "components", Short: "fathomry.command_line.error_components", Args: cobra.NoArgs}
-	invocation.Bind(components, func(_ context.Context, _ []string) error {
-		values, err := invocation.Catalogs().Errors.Components()
-		if err != nil {
-			return err
+		if owners.Match(value.Module, value.Name) {
+			result = append(result, value)
 		}
-		return invocation.Result("error.components", values, func(writer io.Writer) error {
-			for _, value := range values {
-				if _, err := fmt.Fprintf(writer, "%s.%s  %s  0x%03X  %d\n", value.Module, value.Name, value.Domain, uint16(value.Facility), len(value.Codes)); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	})
-	root.AddCommand(list, explain, components)
-	return root
+	}
+	if err := owners.RequireMatch(len(result) != 0); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

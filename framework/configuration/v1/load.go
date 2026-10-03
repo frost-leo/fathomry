@@ -26,27 +26,50 @@ import (
 	"github.com/frost-leo/fathomry/adapters/v1"
 )
 
-// Load acquires, strictly prepares and publishes one whole typed data domain.
-// Source/bootstrap/read/schema failure returns no usable State. Optional adoption
-// is reported separately by Status; success never claims all instances ready.
-func Load[T any](ctx context.Context, declaration Declaration[T], dependencies Dependencies) (*State[T], error) {
-	endpoint, err := bind(dependencies)
-	if err != nil {
-		return nil, err
+// Load owns one complete configuration scenario over an explicitly declared
+// provider. It joins acquired owners before returning and transfers released
+// records even on failure. A cleanup error never erases accepted State.
+func Load[T any](ctx context.Context, declaration Declaration[T], dependencies Dependencies) (result Result[T], err error) {
+	if ctx == nil {
+		return result, fail(ErrDeclaration, "load")
 	}
-	var result *State[T]
+	selected, err := freeze(ctx, declaration, dependencies.Provider, false)
+	if err != nil {
+		return result, err
+	}
+	scenario, err := newScenario(ctx)
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		var cleanup error
+		result.Records, cleanup = scenario.finish(context.WithoutCancel(ctx))
+		if result.State != nil {
+			result.State.state.mu.Lock()
+			result.State.state.status.Released = true
+			result.State.state.mu.Unlock()
+		}
+		if cleanup != nil {
+			err = fail(ErrCleanup, "load_cleanup", err, cleanup)
+		}
+	}()
+	endpoint, err := scenario.endpoint()
+	if err != nil {
+		return result, err
+	}
 	receipt, err := endpoint.Run(ctx, request("load"), func(call *adapters.Call[Evidence]) {
 		evidence := Evidence{Observed: 1}
-		plan, err := freeze(call.Context(), declaration, false)
-		if err != nil {
-			_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: err})
+		if err := scenario.open(call.Context(), dependencies.Provider); err != nil {
+			evidence.Rejected = 1
+			_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: fail(ErrSource, "open", err)})
 			return
 		}
+		selected.source = scenario.binding.source
 		observed := configsource.Observation{FailedIndex: -1}
-		if plan.source != nil {
-			observed.Batch, observed.FailedIndex, observed.Err = plan.source.Capture(call.Context())
+		if selected.source != nil {
+			observed.Batch, observed.FailedIndex, observed.Err = selected.source.Capture(call.Context())
 		}
-		prepared, err := prepare(call.Context(), plan, observed)
+		prepared, err := prepare(call.Context(), selected, observed)
 		if err != nil {
 			evidence.Rejected = 1
 			_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true, Primary: err})
@@ -71,17 +94,17 @@ func Load[T any](ctx context.Context, declaration Declaration[T], dependencies D
 		state.state.status.Closed = true
 		evidence = state.state.status.Evidence
 		state.state.mu.Unlock()
-		result = state
+		result.State = state
 		_ = call.Resolve(adapters.Outcome[Evidence]{Value: evidence, Present: true})
 	})
 	if err != nil {
-		return nil, err
+		return result, err
 	}
-	value, _ := receipt.Snapshot()
-	if err := value.Err(); err != nil {
-		return nil, err
+	snapshot, _ := receipt.Snapshot()
+	if cleanup := snapshot.Cleanup(); cleanup != nil {
+		return result, fail(ErrCleanup, "load", snapshot.Primary(), cleanup)
 	}
-	return result, nil
+	return result, snapshot.Primary()
 }
 func prepare[T any](ctx context.Context, plan plan[T], observation configsource.Observation) (configsource.Prepared[T], error) {
 	if observation.Err != nil {
@@ -104,7 +127,7 @@ func prepare[T any](ctx context.Context, plan plan[T], observation configsource.
 				}
 				return configsource.Prepared[T]{}, at(ErrMissing, "prepare", index)
 			}
-			layers = append(layers, configsource.Layer{Kind: declared.Kind, Encoding: declared.Encoding, Content: document.Content})
+			layers = append(layers, configsource.Layer{Kind: configsource.LayerKind(declared.Kind), Encoding: configsource.Encoding(declared.Encoding), Content: document.Content})
 		}
 	}
 	if plan.variables != nil {

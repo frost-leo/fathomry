@@ -1,0 +1,88 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"{{.Module}}/internal/bootstrap"
+	"{{.Module}}/internal/setting"
+	"github.com/frost-leo/fathomry/failure/v1"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"io"
+	"os"
+	"os/signal"
+	"syscall"
+)
+
+func main() {
+	ctx, stop := processContext()
+	err := run(ctx, os.Args[1:], os.Stdout)
+	stop()
+	if err != nil {
+		os.Exit(1)
+	}
+}
+func processContext() (context.Context, func()) {
+	signals, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, cancel := context.WithCancelCause(context.Background())
+	done := make(chan struct{})
+	go func() { <-signals.Done(); stopSignals(); cancel(context.Cause(signals)); close(done) }()
+	return ctx, func() { stopSignals(); <-done }
+}
+func run(ctx context.Context, args []string, output io.Writer) error {
+	options, err := bootstrap.ParseOptions(ctx, args, os.LookupEnv)
+	result := configuration.Result[setting.Settings]{Records: options.Records}
+	if err == nil {
+		result, err = bootstrap.Boot(ctx, options)
+	}
+	report := struct {
+		Status      string `json:"status"`
+		Accepted    bool   `json:"configuration_accepted"`
+		Application string `json:"application,omitempty"`
+		Code        string `json:"code,omitempty"`
+		Records     int    `json:"evidence_records"`
+		Worker      bool   `json:"worker_started"`
+	}{Status: "configuration_accepted", Accepted: result.State != nil, Records: len(result.Records)}
+	if result.State != nil {
+		accepted, problem := result.State.Capture()
+		if problem == nil {
+			value, problem := accepted.ValueCopy()
+			if problem == nil {
+				report.Application = value.Application.Name
+			} else {
+				err = errors.Join(err, problem)
+			}
+		} else {
+			err = errors.Join(err, problem)
+		}
+	}
+	if err != nil {
+		report.Status = "configuration_failed"
+		var occurrence failure.Occurrence
+		if errors.As(err, &occurrence) {
+			if info, present := failure.Inspect(occurrence); present {
+				report.Code = info.Diagnostic().Definition.Code.String()
+			}
+		}
+	}
+	return errors.Join(err, json.NewEncoder(output).Encode(report))
+}

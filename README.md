@@ -60,9 +60,13 @@ values, preserving last-good data and separating publication from instance adopt
 The official [CLI](docs/reference/cmd/fathomry/interface.md) supplies offline help,
 error explanations and translation-resource/coverage queries with shared failure
 identity, explicit language selection and bounded invocation/cleanup behavior.
-There is no version command, project generator or complete application runtime yet.
-The intended `fathomry new <project>` path remains future framework work, not
-business-owned assembly boilerplate.
+`fathomry new <project>` now generates an independent typed configuration project:
+local or remote acquisition and YAML or TOML. Project Boot declares inputs,
+settings and the selected Framework provider, without Adapter imports. Framework
+owns acquisition, Load/Watch, released evidence and source cleanup; input lookup
+and source selection remain explicit.
+The generated executable validates configuration and exits; it is not a Worker or
+a complete application runtime. There is no version command yet.
 
 The earlier pre-release Adapter, failure, i18n, Framework, settings and CLI
 surfaces were withdrawn for redesign; failure/v1, settings/v1 and i18n/v1 are rebuilt,

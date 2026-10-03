@@ -1,0 +1,42 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package setting
+
+import (
+	"errors"
+	"github.com/frost-leo/fathomry/i18n/v1"
+)
+
+const Name = {{quote .Name}}
+
+type Application struct {
+	Name string           `json:"name"`
+	I18n i18n.Preferences `json:"i18n"`
+}
+
+func ApplicationDefaults() Application {
+	return Application{Name: Name, I18n: i18n.Preferences{Locale: "en"}}
+}
+func (value Application) Validate() error {
+	if value.Name != Name {
+		return errors.New("application identity differs from its declaration")
+	}
+	return value.I18n.Validate()
+}

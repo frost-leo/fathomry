@@ -30,6 +30,7 @@ const (
 	ErrCleanup   failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0006
 	ErrCanceled  failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0007
 	ErrLimit     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0008
+	ErrCheck     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0009
 )
 
 // Definitions describes command invocation failures, not every domain command.
@@ -43,6 +44,7 @@ func Definitions() []failure.Definition {
 		{Code: ErrCleanup, Identifier: "fathomry.command_line.cleanup_failed", Module: "fathomry", Component: "command_line", Revision: 1, Message: "Command resource cleanup failed or did not finish within the waiting budget."},
 		{Code: ErrCanceled, Identifier: "fathomry.command_line.canceled", Module: "fathomry", Component: "command_line", Revision: 1, Message: "The command was canceled; cancellation does not establish absence of effects."},
 		{Code: ErrLimit, Identifier: "fathomry.command_line.limit_exceeded", Module: "fathomry", Component: "command_line", Revision: 1, Message: "A command invocation or output limit was exceeded."},
+		{Code: ErrCheck, Identifier: "fathomry.command_line.check_failed", Module: "fathomry", Component: "command_line", Revision: 1, Message: "The check did not pass. Consult the report for details."},
 	}
 }
 

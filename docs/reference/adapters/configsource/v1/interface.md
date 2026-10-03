@@ -50,6 +50,15 @@ strings, while explicit JSON preserves typed values/null/maps/lists. Duplicate
 or ancestor-overlapping paths and map-key/list-index addressing reject. The
 result is one bounded Variables layer consumed by the same preparation engine.
 
+ParseDotenv decodes at most 64 KiB / 64 literal assignments into a caller-owned
+map without filesystem or process access. ASCII environment names, single quotes,
+strict JSON double quotes and comments are supported. Duplicate/invalid names,
+export and multiline assignments reject; dollar signs remain literal. It does
+not authorize the names, choose a file, mutate environment or select a provider.
+The byte bound is inclusive whether or not the last line ends with LF or CRLF;
+line terminators count toward the same document bound.
+The composition root performs those explicit bindings before calling BindVariables.
+
 ## Prepare original layers
 
 `Prepare(ctx, Schema[T], layers)` supports complete nonrecursive struct schemas
@@ -60,9 +69,10 @@ slices and custom JSON/text codecs are refused. This decoder profile does not
 restrict the separate settings package's arbitrary owner-defined copy contract.
 
 Schema Version is nonzero, naming the selected schema, not inferred from source
-bytes or SDK/module versions. Each layer explicitly selects JSON or restricted
-YAML. No in-band version header, file discovery, environment scan or transcoding
-is inferred. TOML/dotenv native decoding belongs to Viper, not this strict profile.
+bytes or SDK/module versions. Each layer explicitly selects JSON, restricted YAML
+or strict TOML. No in-band version header, file discovery, environment scan or
+transcoding is inferred. Native Viper decoding remains a separate weak profile;
+dotenv is not an application-document encoding here.
 
 | Concern | Contract |
 | --- | --- |
@@ -75,6 +85,15 @@ is inferred. TOML/dotenv native decoding belongs to Viper, not this strict profi
 | Numbers | Lexical precision and target-width range checks; integer fractions/exponents reject |
 | Syntax | Duplicate decoded keys, invalid Unicode, multiple documents, YAML anchors/aliases/merge keys/explicit tags/timestamps reject |
 | Bounds | UTF-8 only; 1 MiB per document and resolved JSON, 64 child-depth steps, 32,768 structural nodes; bounded schema traversal |
+
+TOML uses the pinned parser's original AST scalar tokens and native grammar/table
+validation, not a decoded float64 map or a text-rewriting pass. Dotted keys,
+inline tables and arrays of tables are supported. Integer tokens must fit signed
+64-bit TOML range; floats retain lexical precision through target-width conversion.
+Dates/times and non-finite numbers reject rather than silently becoming strings.
+Duplicate/redefined tables and keys reject. Empty or comment-only TOML is a valid
+empty map; empty JSON/YAML is invalid. A present-empty document is never treated
+as a missing optional source slot.
 
 New nested objects start from Go zero values for missing fields. The validator
 receives a separate final candidate; mutations are discarded. Cancellation is
@@ -100,6 +119,7 @@ remain causes; default diagnostics do not format them.
 ## Executable contracts
 
 - [Preparation, bounds, isolation and fuzz tests](../../../../../adapters/configsource/v1/prepare_test.go).
+- [TOML native-structure comparison, numeric precision and fuzz tests](../../../../../adapters/configsource/v1/toml_test.go).
 - [Raw batch contracts](../../../../../adapters/configsource/v1/acquisition_test.go).
 - [Independent provider consumers and dependency/authority checks](../../../../../adapters/configsource/v1/integration_test.go).
 

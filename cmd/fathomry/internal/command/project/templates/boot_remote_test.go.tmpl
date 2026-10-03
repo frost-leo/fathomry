@@ -1,0 +1,67 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	"context"
+	"{{.Module}}/internal/setting"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestRemoteProjectDeclarations(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, environment := range []string{"development", "testing", "production"} {
+		options := Options{Bootstrap: filepath.Join(root, "bootstrap.example."+string(DocumentEncoding)), Environment: environment, Encoding: DocumentEncoding}
+		_, records, err := dependencies(context.Background(), options)
+		if err != nil || len(records) != 2 {
+			t.Fatal("explicit bootstrap preparation failed", err)
+		}
+		provider, err := configuration.Viper(configuration.ViperOptions{Documents: []configuration.File{
+			{Path: filepath.Join(root, "configs", "base."+string(DocumentEncoding)), Kind: configuration.Base, Encoding: DocumentEncoding},
+			{Path: filepath.Join(root, "configs", "environments", environment+"."+string(DocumentEncoding)), Kind: configuration.Environment, Encoding: DocumentEncoding},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := configuration.Load(context.Background(), configuration.Declaration[setting.Settings]{Schema: configuration.Schema[setting.Settings]{Version: 1, Defaults: setting.Defaults(), Validate: setting.Validate}}, configuration.Dependencies{Provider: provider})
+		if err != nil || result.State == nil {
+			t.Fatal("remote sample invalid", err)
+		}
+	}
+	options, err := ParseOptions(context.Background(), []string{"--bootstrap=explicit.yaml"}, func(name string) (string, bool) {
+		value, present := map[string]string{"FATHOMRY_NACOS_USERNAME": "explicit", "FATHOMRY_NACOS_PASSWORD": ""}[name]
+		return value, present
+	})
+	if err != nil || len(options.Credentials) != 2 || options.Credentials[1].Value != "" {
+		t.Fatal("credential presence lost", err)
+	}
+	if result, err := Boot(context.Background(), Options{}); err == nil || result.State != nil {
+		t.Fatal("missing remote options inferred")
+	}
+	if _, err := os.Stat(filepath.Join(root, "bootstrap.example."+string(DocumentEncoding))); err != nil {
+		t.Fatal(err)
+	}
+}

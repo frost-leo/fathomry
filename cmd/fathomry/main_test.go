@@ -68,11 +68,15 @@ func TestExecutable(t *testing.T) {
 		args     []string
 		language string
 		code     int
+		report   bool
 	}{
-		{"help", []string{"--help"}, "zh-CN", 0},
-		{"explain", []string{"error", "explain", "0xA0450001", "--lang", "en", "--output", "json"}, "private-invalid-locale", 0},
-		{"missing", []string{"error", "explain", "0xA7FFFFFF", "--output", "json"}, "en", 1},
-		{"version_deferred", []string{"--version"}, "en", 2},
+		{"help", []string{"--help"}, "zh-CN", 0, false},
+		{"explain", []string{"error", "explain", "0xA0450001", "--lang", "en", "--output", "json"}, "private-invalid-locale", 0, false},
+		{"missing", []string{"error", "explain", "0xA7FFFFFF", "--output", "json"}, "en", 1, false},
+		{"version_deferred", []string{"--version"}, "en", 2, false},
+		{"strict_missing", []string{"--output", "json", "i18n", "coverage", "fr", "--strict"}, "zh-CN", 1, true},
+		{"strict_complete", []string{"--output", "json", "i18n", "coverage", "zh-CN", "--strict"}, "en", 0, false},
+		{"render", []string{"--output", "json", "i18n", "render", "fathomry.failure.invalid_code", "--locale", "zh-CN"}, "en", 0, false},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -106,6 +110,17 @@ func TestExecutable(t *testing.T) {
 				}
 				if item.name == "explain" && !json.Valid(output.Bytes()) {
 					t.Fatal("machine result malformed")
+				}
+			} else if item.report {
+				var report struct {
+					Data struct {
+						Complete bool `json:"complete"`
+						Missing  int  `json:"missing"`
+					} `json:"data"`
+				}
+				if json.Unmarshal(output.Bytes(), &report) != nil || report.Data.Complete || report.Data.Missing == 0 ||
+					!json.Valid(diagnostic.Bytes()) || !strings.Contains(diagnostic.String(), "fathomry.command_line.check_failed") {
+					t.Fatal("failed process check lost its complete report or diagnostic")
 				}
 			} else if output.Len() != 0 || diagnostic.Len() == 0 {
 				t.Fatal("failed command streams mixed")
@@ -201,7 +216,7 @@ func TestSignalHelper(t *testing.T) {
 	err = command.Run(ctx, []string{"wait"}, command.Options{Input: os.Stdin, Output: os.Stdout, ErrorOutput: os.Stderr},
 		command.Catalogs{Errors: errorsCatalog, Messages: messages}, func(invocation *command.Invocation) *cobra.Command {
 			root := invocation.Group("fathomry", "fathomry.command_line.root")
-			wait := &cobra.Command{Use: "wait", Short: "fathomry.command_line.error_list", Args: cobra.NoArgs}
+			wait := &cobra.Command{Use: "wait", Short: "fathomry.command_line.root", Args: cobra.NoArgs}
 			invocation.Bind(wait, func(ctx context.Context, _ []string) error {
 				scope, err := invocation.Scope()
 				if err != nil {

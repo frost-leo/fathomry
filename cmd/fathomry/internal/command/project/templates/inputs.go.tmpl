@@ -1,0 +1,44 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"strings"
+)
+
+func applicationVariables(values configuration.Inputs) []configuration.Variable {
+	value, present := values.Lookup("locale")
+	if !present {
+		return nil
+	}
+	return []configuration.Variable{ {Path: "/application/i18n/locale", Value: value, Present: true}}
+}
+func environmentName(value string) bool {
+	if len(value) == 0 || len(value) > 64 || value[0] < 'a' || value[0] > 'z' {
+		return false
+	}
+	return !strings.ContainsFunc(value, func(char rune) bool {
+		return !(char >= 'a' && char <= 'z' || char >= '0' && char <= '9' || char == '_' || char == '-')
+	})
+}
+
+// DocumentEncoding is selected at creation, never inferred from a source.
+const DocumentEncoding = configuration.{{if eq .Encoding "yaml"}}YAML{{else}}TOML{{end}}
