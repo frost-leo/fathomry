@@ -82,6 +82,10 @@ const (
 	FacilityConfiguration Facility = 0x045
 	// FacilityProjectCreation owns independent project creation and its effects.
 	FacilityProjectCreation Facility = 0x00A
+	// FacilityPostgreSQL owns the public PostgreSQL database capability.
+	FacilityPostgreSQL Facility = 0x080
+	// FacilityMySQL owns the public MySQL database capability.
+	FacilityMySQL Facility = 0x081
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -121,6 +125,8 @@ func Allocations() []Allocation {
 		{Facility: FacilityConfiguration, Module: "fathomry", Component: "configuration"},
 		{Facility: FacilityCommandLine, Module: "fathomry", Component: "command_line"},
 		{Facility: FacilityProjectCreation, Module: "fathomry", Component: "project_creation"},
+		{Facility: FacilityPostgreSQL, Module: "fathomry", Component: "database_postgres"},
+		{Facility: FacilityMySQL, Module: "fathomry", Component: "database_mysql"},
 	}
 }
 

@@ -111,6 +111,12 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		if cliPackages[path] {
 			continue
 		}
+		switch path {
+		case "github.com/frost-leo/fathomry/adapters/database/v1",
+			"github.com/frost-leo/fathomry/adapters/database/postgres/v1",
+			"github.com/frost-leo/fathomry/adapters/database/mysql/v1":
+			continue
+		}
 		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") && path != "github.com/frost-leo/fathomry/failure/v1" && path != "github.com/frost-leo/fathomry/settings/v1" && path != "github.com/frost-leo/fathomry/i18n/v1" && path != "github.com/frost-leo/fathomry/resource/v1" && path != "github.com/frost-leo/fathomry/adapters/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/viper/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1" && path != "github.com/frost-leo/fathomry/framework/v1" && path != "github.com/frost-leo/fathomry/framework/configuration/v1" {
 			t.Errorf("unexpected public package: %s", path)
 		}

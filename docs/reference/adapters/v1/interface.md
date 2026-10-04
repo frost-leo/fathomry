@@ -23,8 +23,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 **Audience:** concrete Adapter authors, explicit application assembly and Framework
 evidence receivers.
-**Status:** implemented process-local public mechanisms; concrete service Adapters,
-Framework logging/recording facades and durable execution policy remain unimplemented.
+**Status:** implemented process-local public mechanisms, composed by concrete
+configuration/database Adapters and Framework. Durable execution policy remains
+separate and unimplemented.
 **Package:** `github.com/frost-leo/fathomry/adapters/v1`.
 
 ## Responsibilities and dependency direction
@@ -95,6 +96,16 @@ A handled child failure does not automatically become the parent's business fail
 Child contexts observe both the explicitly supplied context and parent cancellation.
 Admission/dispatch inspect the bounded ancestor chain without relying on the timing
 of asynchronous cancellation propagation.
+
+RunWithLifetime, ChildWithLifetime and UsingWithLifetime separate admission/setup
+from an explicit retained lifetime. Both contexts stop queued admission; after
+acceptance the call follows its lifetime, parent and runtime. The producer still
+uses the setup context for acquisition. This supports database preparations and
+PostgreSQL Begin without treating a canceled, already-completed setup as retained
+handle cancellation. MySQL Begin instead uses its caller context for the full
+transaction lifetime. No canceled parent can be revived, and no context is
+implicitly detached. UsingWithLifetime retains one source generation for the
+entire family, just like Using.
 
 Resolve copies present data outside locks and publishes once. It does not release
 guards, children or the submitting stack. Quiescent work without a supplied outcome

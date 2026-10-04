@@ -1,0 +1,90 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "database_mysql",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.database_mysql.invalid_input",
+      "source": "c8fef0c8049518ef9d9880374eb1d8cafe7aaca26dba07a229a6154f7250cf4f",
+      "forms": {
+        "other": "数据库输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.unsupported_profile",
+      "source": "d3fd26823a103fc5b172ba702f131dde4a3fb0c734825395f3b16b1ebeb45c39",
+      "forms": {
+        "other": "不支持所请求的数据库能力。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.connection_failed",
+      "source": "a3e920928636d7faaa5d27037dbefb81eaf7dd46f71aeb2c85229c0c04895c98",
+      "forms": {
+        "other": "数据库连接尝试失败。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.operation_failed",
+      "source": "a99905d101bdc26d639329c37c7a3caba850e9117dcf9e1523a3b3cedcb53273",
+      "forms": {
+        "other": "数据库操作失败；请检查其效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.limit_exceeded",
+      "source": "9536c6d09dd2c97f671ead7942529df92be024bb99b4f59779246f9cec7633d2",
+      "forms": {
+        "other": "超出数据库能力的限制。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.invalid_state",
+      "source": "59628a31c935b9945b02850dc8b86541d5bd6128dbae7847fbff06b4f59966a9",
+      "forms": {
+        "other": "数据库句柄在当前状态下无法执行该操作。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.cleanup_failed",
+      "source": "a2de29bec03d7a09e366d7c3f368d259e0ac4eb10c61e283fbba2a2190299186",
+      "forms": {
+        "other": "数据库清理报告失败；清理完成状态需单独检查。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.runtime_serialization",
+      "source": "b841ff815ace015ef1c63ece3e536962f9b8985d45517998b02fccd06c493e43",
+      "forms": {
+        "other": "不支持数据库运行时值序列化。"
+      }
+    },
+    {
+      "id": "fathomry.database_mysql.protocol_failed",
+      "source": "f98cb1669cba2e157ae731edc39569f362b7535304f573287981404fbd78e099",
+      "forms": {
+        "other": "MySQL 协议响应违反受支持的协议约束。"
+      }
+    }
+  ]
+}

@@ -209,6 +209,8 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | `adapters/v1` | Independent public operation admission, actual-work ownership and evidence custody; no Internal engine dependency |
 | `adapters/configsource/v1` | Raw source/batch contracts and independent strict preparation; no native provider or Internal dependency |
 | `adapters/configsource/{viper,nacos}/v1` | Full supported native capability translation, loadable settings, public evidence/lifecycle composition and selected raw profiles |
+| `adapters/database/v1` | Shared public budget, attribution and effective-profile data; no private/native engine or universal SQL client |
+| `adapters/database/{postgres,mysql}/v1` | Complete supported native SQL/preparation/transaction translation, source and retained-generation ownership, independent evidence and provider-specific results |
 | `framework/v1` | Composition of public runtime owners, released-evidence reception and bound presentation/logging; no SDK or Internal engine |
 | `framework/configuration/v1` | Explicit input binding and provider-owned typed Load/Watch; source/policy association, fenced publication, released facts and opt-in borrowed resource adoption |
 | `cmd/fathomry` | Official offline catalogs and exclusive project generation; private command implementation, not a public extension SDK |
@@ -226,6 +228,8 @@ resource/v1              -> failure/v1, settings/v1, standard library
 adapters/v1              -> failure/v1, resource/v1, standard library
 adapters/configsource/v1 -> failure/v1, settings/v1, YAML/TOML, standard library
 concrete configsource    -> public foundations, selected Internal configsource
+adapters/database/v1     -> public adapters/v1, standard library
+concrete database        -> public database/resource/operation/failure contracts, selected Internal database
 framework/v1             -> public failure/settings/i18n/resource/adapters
 framework/configuration  -> public configsource preparation, selected Adapter implementations and shared foundations
 internal/fault            -> standard library
@@ -246,6 +250,26 @@ There is no provider-name registry, ambient inference, global service locator or
 compatibility facade. Direct public Adapter use remains a separate supported path,
 not an extra assembly obligation on the generated Boot. Shared data contracts and
 scenario-specific policies must not expose native/runtime handles as settings.
+
+The public database packages organize source by core feature, with matching
+`<feature>_test.go` files. Configuration and dependency declarations stay in
+singular `option.go`; their focused controls stay in `option_test.go`. Cross-package,
+Framework and external-consumer checks live in `integration_test.go`. Separately
+authorized real-service tests retain independent build tags in
+`integration_service_test.go`. Review-round, stress and fuzz categories do not
+create parallel file taxonomies: those tests stay with the capability they test.
+Existing unrelated package layouts are not mechanically migrated by this change.
+
+Database Adapters reuse the original native pools. Their non-exported provider
+code translates private assemblies/receipts; no additional `adapters/database/internal`
+package or exported native bridge is introduced. A transaction/preparation borrows
+one public generation through final cleanup. Setup contexts, retained lifetimes,
+initial preparation readiness and final evidence remain distinct. Finalization
+uses existing reservations, and evidence redelivery never reruns SQL. Framework
+composition uses these same public capabilities rather than another database facade.
+The [PostgreSQL](../reference/adapters/database/postgres/v1/interface.md) and
+[MySQL](../reference/adapters/database/mysql/v1/interface.md) contracts preserve
+their different context, result, transaction and session-reset semantics.
 
 ## Pre-release API migration
 

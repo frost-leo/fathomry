@@ -38,16 +38,35 @@ func Using[R, T any](ctx context.Context, endpoint Endpoint[T], source resource.
 func StartUsing[R, T any](ctx context.Context, endpoint Endpoint[T], source resource.Ref[R], request Request, producer func(*Call[T], R)) (*Receipt[T], error) {
 	return using(ctx, endpoint, source, request, producer, true)
 }
+
+// UsingWithLifetime combines retained operation ownership with one generation
+// borrow. Both contexts fence admission; only lifetime controls accepted work.
+// The caller keeps using ctx for setup. The lease covers all retained descendants.
+func UsingWithLifetime[R, T any](ctx, lifetime context.Context, endpoint Endpoint[T], source resource.Ref[R], request Request, producer func(*Call[T], R)) (*Receipt[T], error) {
+	if ctx == nil || lifetime == nil || producer == nil {
+		return nil, failureOf(ErrOptions, "using", "", Details{})
+	}
+	admission, stop := admissionLifetime(ctx, lifetime)
+	defer stop()
+	return usingContexts(admission, lifetime, endpoint, source, request, producer, false)
+}
+
 func using[R, T any](ctx context.Context, endpoint Endpoint[T], source resource.Ref[R], request Request, producer func(*Call[T], R), async bool) (*Receipt[T], error) {
+	return usingContexts(ctx, ctx, endpoint, source, request, producer, async)
+}
+
+func usingContexts[R, T any](ctx, lifetime context.Context, endpoint Endpoint[T], source resource.Ref[R], request Request, producer func(*Call[T], R), async bool) (*Receipt[T], error) {
 	if producer == nil {
 		return nil, failureOf(ErrOptions, "using", "", Details{})
 	}
-	call, err := endpoint.begin(ctx, request, Scope{})
+	call, err := endpoint.beginContexts(ctx, lifetime, request, Scope{})
 	if err != nil {
 		return nil, err
 	}
 	run := func(call *Call[T]) {
-		lease, err := source.Acquire(call.Context())
+		acquisition, stop := admissionLifetime(ctx, call.Context())
+		lease, err := source.Acquire(acquisition)
+		stop()
 		if err != nil {
 			_ = call.Resolve(Outcome[T]{Primary: failureOf(ErrSource, request.Operation, call.state.node.owner.options.Name, Details{Sequence: call.state.node.sequence}, err)})
 			return
