@@ -114,6 +114,15 @@ custody, with explicit resource and localized-log composition.
 [Nacos](reference/adapters/configsource/nacos/v1/interface.md) now provide complete
 supported public configuration capabilities, selected raw sources and
 [independent strict preparation](reference/adapters/configsource/v1/interface.md).
+[PostgreSQL](reference/adapters/database/postgres/v1/interface.md) and
+[MySQL](reference/adapters/database/mysql/v1/interface.md) provide independently
+usable public SQL, preparation and transaction capabilities, with typed settings,
+required evidence, resource generation borrowing and provider-specific outcomes.
+The [shared database contracts](reference/adapters/database/v1/interface.md) expose
+budget/attribution data, not private engines. Public-path isolated acceptance covers
+PostgreSQL 18.6 over verified TLS and MySQL 8.4.11/InnoDB over a verified-TLS Unix
+socket, with independent effect read-back and unique fixture cleanup. This does
+not provide ORM, migrations, HA or production database qualification.
 [Framework common composition](reference/framework/v1/interface.md) now supplies
 explicit runtime coordination, released-evidence reception and a safe logging
 boundary. [Framework configuration](reference/framework/configuration/v1/interface.md)
@@ -275,6 +284,9 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`i18n/v1`](reference/i18n/v1/interface.md) | Component resources/coverage, explicit code explanations and settings-backed safe error presentation |
 | [`resource/v1`](reference/resource/v1/interface.md) | Typed runtime instance ownership, fixed/follow adoption, generation borrowing and cleanup continuation |
 | [`adapters/v1`](reference/adapters/v1/interface.md) | Independent public operation admission/ownership, typed outcomes, required evidence custody and optional diagnostics |
+| [`adapters/database/v1`](reference/adapters/database/v1/interface.md) | Shared database budget, source/operation attribution and profile contracts without native engines |
+| [`adapters/database/postgres/v1`](reference/adapters/database/postgres/v1/interface.md) | Bounded PostgreSQL SQL, preparation, transactions/savepoints, independent evidence and retained-generation ownership |
+| [`adapters/database/mysql/v1`](reference/adapters/database/mysql/v1/interface.md) | Bounded MySQL SQL, preparation, transactions, native effect distinctions and retained-generation ownership |
 | [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Complete raw batch/source contracts and independent strict layered preparation |
 | [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Explicit local acquisition, native live/captured queries, weak Decode and owned file Watch |
 | [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Complete supported remote reads/observations/management/search, effect evidence and resource-backed borrowing |

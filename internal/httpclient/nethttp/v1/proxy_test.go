@@ -82,14 +82,15 @@ func newRouteProxyTransport(t *testing.T, secure bool, target string, routes *sy
 			return
 		}
 		routes.Store(targetConn.LocalAddr().String(), route)
+		// Register before Hijack removes the connection from Server.Close's ownership.
+		bridges.Add(1)
+		defer bridges.Done()
 		client, buffer, err := writer.(http.Hijacker).Hijack()
 		if err != nil {
 			_ = targetConn.Close()
 			t.Error(err)
 			return
 		}
-		bridges.Add(1)
-		defer bridges.Done()
 		defer client.Close()
 		defer targetConn.Close()
 		_, _ = io.WriteString(buffer, "HTTP/1.1 200 Connection Established\r\n\r\n")

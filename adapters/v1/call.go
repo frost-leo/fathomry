@@ -129,11 +129,15 @@ func (value *node) infoLocked() Info {
 	return Info{value.owner.options.Name, value.request.Operation, value.request.ID, value.sequence, parent, value.depth, value.source, value.resolved, value.released}
 }
 func (endpoint Endpoint[T]) begin(ctx context.Context, request Request, parent Scope) (*Call[T], error) {
+	return endpoint.beginContexts(ctx, ctx, request, parent)
+}
+
+func (endpoint Endpoint[T]) beginContexts(ctx, lifetime context.Context, request Request, parent Scope) (*Call[T], error) {
 	if endpoint.state == nil {
 		return nil, failureOf(ErrHandle, "begin", "", Details{})
 	}
 	state := endpoint.state.runtime
-	if ctx == nil || !validRequest(request, parent.node != nil) {
+	if ctx == nil || lifetime == nil || !validRequest(request, parent.node != nil) {
 		return nil, failureOf(ErrRequest, "begin", state.options.Name, Details{})
 	}
 	if parent.node != nil && parent.node.owner != state {
@@ -154,7 +158,12 @@ func (endpoint Endpoint[T]) begin(ctx context.Context, request Request, parent S
 		}
 	}
 	state.mu.Lock()
-	control, err := state.newNodeLocked(ctx, request, parent.node, endpoint.state.declaration.Observer)
+	var control *node
+	if ctx.Err() != nil {
+		err = failureOf(ErrWait, "begin", state.options.Name, Details{}, ctx.Err(), context.Cause(ctx))
+	} else {
+		control, err = state.newNodeLocked(lifetime, request, parent.node, endpoint.state.declaration.Observer)
+	}
 	if err != nil {
 		if root {
 			state.releasePermitLocked(request.WorkBytes)

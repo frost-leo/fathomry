@@ -52,6 +52,14 @@ Public [Viper](docs/reference/adapters/configsource/viper/v1/interface.md) and
 [Nacos](docs/reference/adapters/configsource/nacos/v1/interface.md) configuration
 Adapters now provide independently usable native capabilities and selected raw
 sources, with [independent strict preparation](docs/reference/adapters/configsource/v1/interface.md).
+Public [PostgreSQL](docs/reference/adapters/database/postgres/v1/interface.md) and
+[MySQL](docs/reference/adapters/database/mysql/v1/interface.md) Adapters add bounded
+SQL, reusable preparation, transactions and provider-specific evidence. They reuse
+the public resource/operation owners and support direct or Framework composition;
+shared [database contracts](docs/reference/adapters/database/v1/interface.md) expose
+budget and attribution data without native engine dependencies. Isolated public
+service checks include independent effect read-back and unique fixture cleanup,
+not ORM, migration, HA or production qualification.
 [Framework common composition](docs/reference/framework/v1/interface.md) coordinates
 public operation/resource shutdown, released-evidence reception and once-bound
 safe localized logs. [Framework configuration](docs/reference/framework/configuration/v1/interface.md)
@@ -82,9 +90,10 @@ profile has local and isolated single-server verification, not production or
 multi-node certification. See the [Nacos contract](docs/reference/internal/configsource/nacos/v2/interface.md).
 
 The [internal PostgreSQL profile](docs/reference/internal/database/pgx/v5/interface.md)
-provides bounded parameterized access and explicit transactions. Its real-service
-acceptance gate remains separate from local protocol tests; no MySQL or control
-schema is included.
+and separate [MySQL profile](docs/reference/internal/database/mysql/v1/interface.md)
+provide the native pools, SQL and transaction protocols reused by the public
+Adapters. Real-service acceptance remains separate from protocol-peer tests;
+no control schema or migration engine is included.
 
 The [internal Zap integration](docs/reference/internal/logging/zap/v1/interface.md)
 provides typed/contextual logging, multi-sink evidence and bounded Linux file

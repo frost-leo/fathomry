@@ -1,0 +1,90 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "database_postgres",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.database_postgres.invalid_input",
+      "source": "1eca9b6012ab19663d20d77ab1dd7469da33a510b8e09d0cdbd6c33138598db7",
+      "forms": {
+        "other": "数据库输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.unsupported_profile",
+      "source": "307d7f4d8d0aa197e0766789e6da7bad4ef0a49112d09a8b6b0ebc885da65456",
+      "forms": {
+        "other": "不支持所请求的数据库能力。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.connection_failed",
+      "source": "bd4fb51f47f669e3be3323cf2ecbd46d7c0bdf068e17ee78ab06f2e94507521d",
+      "forms": {
+        "other": "数据库连接尝试失败。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.operation_failed",
+      "source": "fa5dd937e6ff68a665765aaddbf7af72fe72f632ea9d06687f3a54e0faf5fc33",
+      "forms": {
+        "other": "数据库操作失败；请检查其效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.limit_exceeded",
+      "source": "81f5b84a5bc45407fefca5ca3d4c6cbf3984887fa2d6433bac2939cbec1ebf0d",
+      "forms": {
+        "other": "超出数据库能力的限制。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.invalid_state",
+      "source": "35a73245749cd9d86c1c5c2520ca22e0163a4cace9026006bb23727b52f75815",
+      "forms": {
+        "other": "数据库句柄在当前状态下无法执行该操作。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.cleanup_failed",
+      "source": "fbcd8401a234c2b020038c63ab5c318a780739dde98994e1f28f9e4aadc1ed02",
+      "forms": {
+        "other": "数据库清理报告失败；清理完成状态需单独检查。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.runtime_serialization",
+      "source": "6b2ce85444be5a789406eec846a3455d3dd366dca89d24dc3bf34cbf9f1d4fc7",
+      "forms": {
+        "other": "不支持数据库运行时值序列化。"
+      }
+    },
+    {
+      "id": "fathomry.database_postgres.environment_refused",
+      "source": "95230c62139bf48c2c2534fb82e22651b3741617359331c4c3e9a6432c73f658",
+      "forms": {
+        "other": "PostgreSQL 解析环境未明确隔离。"
+      }
+    }
+  ]
+}

@@ -20,6 +20,8 @@
 package app
 
 import (
+	"github.com/frost-leo/fathomry/adapters/database/mysql/v1"
+	"github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages"
@@ -36,6 +38,8 @@ func catalogs() (command.Catalogs, error) {
 		errorcatalog.Component(),
 		messages.Component(),
 		project.Component(),
+		i18n.Component{Module: "fathomry", Name: "database_postgres", BaseLocale: "en", Resources: postgres.Resources(), Directory: "resources", Definitions: postgres.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "database_mysql", BaseLocale: "en", Resources: mysql.Resources(), Directory: "resources", Definitions: mysql.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {
