@@ -65,6 +65,12 @@ adds bounded object operations, owned multipart sessions, incremental version
 enumeration and restricted presigning. It consumes SDK-independent
 [object-storage contracts](docs/reference/adapters/objectstore/v1/interface.md)
 and supports direct or explicit Fixed/Follow composition with independent evidence.
+The public [Kafka Adapter](docs/reference/adapters/broker/kafka/v1/interface.md)
+adds asynchronous production, exact/direct reads, classic group sessions and
+explicit checkpoints, with the same direct/Framework ownership paths.
+[Broker contracts](docs/reference/adapters/broker/v1/interface.md) contain shared
+budget and attribution data, not a universal native client. Deployed TLS/SASL and
+failover qualification remain separate from isolated plaintext service checks.
 [Framework common composition](docs/reference/framework/v1/interface.md) coordinates
 public operation/resource shutdown, released-evidence reception and once-bound
 safe localized logs. [Framework configuration](docs/reference/framework/configuration/v1/interface.md)
@@ -117,9 +123,10 @@ or certified by the local protocol and TLS tests.
 
 The [internal Kafka integration](docs/reference/internal/broker/franz/v1/interface.md)
 provides bounded franz-go production, Kafka-only transactions, exact record reads,
-direct consumer cursors and explicit checkpoints, with independent evidence.
+direct consumer cursors, classic cooperative groups and explicit checkpoints,
+with independent evidence, five core codecs, keyed routing and static TLS/SASL.
 Its [tests and service profile](docs/reference/internal/broker/franz/v1/verification.md)
-do not certify consumer-group rebalances or the complete data/reference protocol.
+do not certify deployed TLS/SASL, failover or the complete data/reference protocol.
 
 ## Documentation
 

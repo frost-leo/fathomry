@@ -1,0 +1,139 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "broker_kafka",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.broker_kafka.invalid_input",
+      "source": "3c2279ee49c059592e27cd018a088cf551fd479e5b6020d5d5a5a7676c92fa16",
+      "forms": {
+        "other": "Kafka 输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.unsupported_profile",
+      "source": "0f29c88ae1ce4b95d89f34337761c8f3d1a3e32b6ee21bb46c1c00a1fd3c91ed",
+      "forms": {
+        "other": "不支持请求的 Kafka 配置。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.authority_refused",
+      "source": "45eeb885f1a8426d12484ce58fbb0069eb9682075832c338d824ff77873d3b62",
+      "forms": {
+        "other": "Kafka 端点不在授权范围内。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.connection_failed",
+      "source": "adb08b5331eea93f0a9ebf5d7bcc38efea6517aa17afb8593aa4f53caae2231c",
+      "forms": {
+        "other": "Kafka 连接或就绪检查失败。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.identity_mismatch",
+      "source": "490250fe31b27f2bbb82b4a6d3bd922fc9b1158ad6a963f7950a7f018e3c3229",
+      "forms": {
+        "other": "Kafka 集群、主题或分配标识不匹配。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.production_failed",
+      "source": "d8c390d7dfbf39ed34b11c877e232d1a7b3c7ec179382fba31e33a6107e0c747",
+      "forms": {
+        "other": "Kafka 生产失败；请检查每条记录的效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.read_failed",
+      "source": "27816b0970bdc3fc898c0c8a65e84e1d378251bfa6c9a1082fcaa0b2f3d18a9b",
+      "forms": {
+        "other": "Kafka 读取失败；可能保留了部分观测结果。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.record_missing",
+      "source": "c2ffc8df8c7549bdab37f75b7550ee394bd1a5d8fe458d48f39bcfcef903ab4f",
+      "forms": {
+        "other": "指定 Kafka 偏移量没有可见记录。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.record_unavailable",
+      "source": "e85625e4937114124d2acddbfc2aeefed2c4f58da2ed58809968f2a9d866cae7",
+      "forms": {
+        "other": "Kafka 数据或分配当前不可用。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.offset_expired",
+      "source": "f6c2f93c6d57c0e8a8d1f2c1fd8dc44c7150316ed4a018b0d82c9a9f048cea8c",
+      "forms": {
+        "other": "请求的 Kafka 偏移量超出观测到的日志范围。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.limit_exceeded",
+      "source": "df936e6a825be3c184ff1bd8b958b0116ba897ca74dd7e973e862478e9b3d76e",
+      "forms": {
+        "other": "超出了 Kafka 能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.invalid_state",
+      "source": "0290aed714d160def284b4a58528fc1fca291a12b78d8141d550bdd859b0429b",
+      "forms": {
+        "other": "Kafka 所有者或分配状态不允许执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.transaction_failed",
+      "source": "3ef19b8c14074d285e1e3b6bad1c5b389c8832b63b2ecdc95f72ced0a4e922ba",
+      "forms": {
+        "other": "Kafka 事务失败；最终结果需单独检查。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.checkpoint_failed",
+      "source": "f09364076e09f230fb0b88e89503331480d17d0f91cd8d91c68e240488e85ff2",
+      "forms": {
+        "other": "Kafka 检查点操作失败；请检查提交证据。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.cleanup_failed",
+      "source": "a9be01658f57f0ebb740101bb8c691e428e5466a29ba096036429bdbf5745272",
+      "forms": {
+        "other": "Kafka 清理失败；完成状态需单独检查。"
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.runtime_serialization",
+      "source": "e0e2b2c09fcdccf1c36be9651f5613bdcc2916f0eb17c594170c5edbf406b375",
+      "forms": {
+        "other": "不支持序列化 Kafka 运行时值。"
+      }
+    }
+  ]
+}

@@ -52,10 +52,11 @@ read reference and data. The integration test exercises this composition using
 | --- | --- | --- |
 | Configuration/connection/readiness | Strict prepared settings, explicit full endpoint set and cluster ID, topic metadata checks on control and actual producers | DNS/environment discovery, dynamic membership/endpoints, implicit topic creation, readiness as business acceptance |
 | Record content/coordinates | Bytes, nil versus empty key/value, ordered duplicate headers, millisecond timestamps, partition/offset and topic ID on reads | Business identity inferred from coordinates; producer ACK as atomic topic-incarnation proof |
-| Production/batching/order | Bounded asynchronous batches; per-input results; all-ISR ACKs and native idempotency; manual partitioning; none/gzip | acks=0/1, native callback injection, global ordering, process-restart/application retry deduplication |
+| Production/batching/order | Bounded asynchronous batches; per-input results; all-ISR ACKs, idempotency, manual/keyed routing and five core codecs | acks=0/1, native callback injection, global ordering, process-restart/application retry deduplication |
 | Exact/historical reads | `ReadExact`, bounded exact sets, ID-addressed Fetch v13, explicit missing/unavailable/expired outcomes | Automatic offset reset, timestamp search as exact lookup, reading arbitrary unsupported codecs/legacy message formats |
 | Range/direct consumption | Paginated physical intervals and lifetime-owned `Consumer` cursor; no whole-output materialization | Inferring logical batch membership from an interval; background prefetch or hidden polling retries |
-| Checkpoints/groups | Explicit `CommitOffsets`/`FetchOffsets`, or `Consumer.Commit`, in an exclusively configured non-member group; v10 topic IDs | Group subscriptions, heartbeat/membership/rebalance rights, autocommit, static membership, KIP-848 consumer sessions/share groups |
+| Checkpoints/groups | Standalone `CommitOffsets`/`FetchOffsets` and separate classic cooperative-sticky `ConsumeGroup` with assignment-bound whole-page commits; v10 topic IDs | Autocommit, static membership, KIP-848, share groups and group EOS |
+| Authentication | Explicit none/PLAIN/SCRAM-SHA-256/SCRAM-SHA-512; credentials require verified TLS | Plaintext credentials, environment discovery, OAuth/GSSAPI, refresh and arbitrary callbacks |
 | Transactions | Separate serialized transactional producer; atomic bounded Kafka-only batches; committed-read isolation | Arbitrary transaction callbacks, consume-transform-produce/group EOS, cross-service or whole-Run transactions |
 | Limits/backpressure/closure | Shared admission and nested leases, bounded copies/decode/evidence, asynchronous completion, permanent producer fencing after cancellation grace | Distributed quotas, exact SDK attempt counts, hard RSS/latency limits, automatic producer replacement |
 | Errors/evidence | Private fault identities, original causes, partial results, separate primary/cleanup facts; required Inbox independent of diagnostics | Logs as a completion ledger; durable evidence persistence/reconciliation |
@@ -63,6 +64,7 @@ read reference and data. The integration test exercises this composition using
 | Administration/Schema Registry | None in production API; tests create/delete only isolated owned resources | Topic/ACL/retention administration, group administration, Schema Registry/serialization policy, Connect/Streams |
 
 Group checkpoints are a technical facility, **not consumer-group membership**.
+This paragraph concerns `OffsetGroup`, not the distinct `ConsumerGroup` mode.
 Generation `-1` declares standalone offset storage. The framework must exclusively
 own the group and authorize each prefix; concurrent commits have no CAS,
 monotonicity or cross-partition atomicity guarantee. Committing next offset 3
@@ -104,6 +106,36 @@ inbox capacity; drain pages incrementally, not only at cursor close.
 See the [executable integration](../../../../../../internal/broker/franz/v1/integration_test.go)
 and [consumer tests](../../../../../../internal/broker/franz/v1/consumer_test.go).
 These are private composition examples, not bootstrap work assigned to business authors.
+
+## Managed classic groups
+
+`ConsumeGroup` uses a separate native membership client, cooperative-sticky
+balancing, no autocommit, no native Poll and no native data cursors. Assignment
+snapshots have monotonic revisions and expose coalesced event gaps. Existing
+ID-addressed preflight/decode serves one assigned partition per finite child.
+Initial/reset policy is explicit; stable-end unavailability does not trigger reset.
+
+Each partition has at most one outstanding whole-page token. `CommitBatch`
+declares that page processed, not arbitrary higher offsets or external effects.
+Every generation invalidates old tokens. Cooperatively retained partitions keep
+their selected local cursor, including outstanding pages; new/reacquired
+partitions initialize from broker checkpoints and the explicit start/reset policy.
+A code-owned native pre-commit guard checks actual member/generation/topic IDs
+after stripping caller context values. Unknown issued commits terminate the
+session rather than allowing a later write to race them.
+
+Loss/fatal group errors end the session and retain their cause. Explicit reopening
+rejoins. This bounds the selected SDK's otherwise retained fake-fetch errors
+without polling. Close stops new work and drives LeaveGroup with an independently
+live native context before joining active children and native closure; it never
+commits. LeaveGroup is pinned to v2 for this dynamic single-member profile,
+avoiding the selected SDK's unreported v3+ member-level errors. Leave errors remain
+separate cleanup facts. Callbacks do not execute
+sinks, public admission or application processing. Assignment topology growth
+outside the source's frozen partition count refuses.
+
+The [public Adapter](../../../../adapters/broker/kafka/v1/interface.md) supplies
+direct/Framework composition, retained generations and required public evidence.
 
 ## Results and effects
 

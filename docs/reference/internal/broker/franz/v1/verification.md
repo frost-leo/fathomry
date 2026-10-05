@@ -98,6 +98,8 @@ resource deletion is not an assertion of physical byte erasure.
 | Fetch/read tests | Exact offsets versus compaction holes, deleted-prefix/future-offset distinction, topic recreation, committed isolation, bounded prefixes and explicit refusal; local framing/codec controls |
 | Producer/lifecycle/transaction tests | Partial ACKs, retry budgets, late completion, inbox/admission saturation, producer fencing while the fault remains active, no false commit, separate cleanup failure, unknown duplicate-sequence offsets |
 | Consumer/checkpoint tests | Nested single-root cursor, final-page commit, cancellation between operations, no close-time autocommit, explicit checkpoint absence and prefix-versus-processing counterexample |
+| Group tests | Two classic members, revisions/stale-token guards, explicit whole-page commits, unknown outcomes, assignment limits and graceful native leave without polling |
+| Core profile tests | Five-codec interoperability/expansion/framing/CRC/header controls, keyed actual ACK positions, static SASL over verified TLS and credential/trust refusals |
 | Integration and optional bridge | Real shared mechanisms/native SDK/evidence path; explicit W3C context survives Kafka header round trip without native plugins |
 | Existing VM service | Real Kafka data/reference reads, cross-partition transaction commit/abort, deleted-prefix refusal, direct consumer and standalone v10 checkpoints, consumer lifetime timeout/source reuse, compressed expansion refusal, resource cleanup |
 | Benchmark/fuzz | Bounded valid payload round trips; a fixed local kfake batch workload with equal ACK/identity/evidence guarantees, allocations and latency samples—not production capacity |
@@ -115,9 +117,18 @@ not Apache Kafka: known timestamp/control-marker differences remain relevant.
 
 Not qualified: TLS/SASL/mTLS deployment, multiple replicas/ISR loss, leader or
 coordinator failover, broker restart/crash recovery, other broker products,
-consumer-group rebalances, cross-service/group EOS, seven-day duration guarantees,
+cross-service/group EOS, seven-day duration guarantees,
 million-target/whole-process resource capacity, and complete workflow recovery.
 No Temporal commands or durable schemas change here; replay is not applicable.
+
+The separate #105 [public service fixture](../../../../adapters/broker/kafka/v1/interface.md)
+uses only newly authorized gh105-<random> topics/groups. It verifies five codecs
+with independent effect read-back and real classic membership/redistribution,
+explicit commit, stale refusal, leave/rejoin and no automatic close commit.
+Its plaintext/no-auth RF1 profile does not close the deployed TLS/SASL gate.
+The first group lifecycle candidate canceled the native context before leave,
+stranding membership until broker timeout; a real-service counterexample led to
+separate native shutdown context ownership and a wire-level LeaveGroup regression.
 
 Use standard repository format/tidy/vet/build/full-race checks as well. The
 per-issue reference workspace records exact commands, source manifests, review

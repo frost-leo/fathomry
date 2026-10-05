@@ -187,7 +187,7 @@ func runDataReferenceIntegration(t *testing.T, options OptionsV1) {
 	if err != nil || report.Require(compatibility.Policy{}) == nil {
 		t.Fatal("build metadata manufactured tested compatibility")
 	}
-	conformance.Facade(t, client, "Metadata", "Produce", "ProduceTransaction", "ReadExact", "ReadPositions", "ReadRange", "Consume", "CommitOffsets", "FetchOffsets", "Profile", "EvidenceBytes",
+	conformance.Facade(t, client, "Metadata", "Produce", "ProduceTransaction", "ReadExact", "ReadPositions", "ReadRange", "Consume", "ConsumeGroup", "CommitOffsets", "FetchOffsets", "Profile", "EvidenceBytes",
 		"String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 }
 func TestDataReferenceIntegration(t *testing.T) {

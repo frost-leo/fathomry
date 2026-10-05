@@ -20,8 +20,6 @@
 package franz
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"net"
 	"net/netip"
 	"strconv"
@@ -60,6 +58,24 @@ type OptionsV1 struct {
 	// Composition exclusively owns this group name (1–128 bytes). Checkpoints
 	// require Kafka OffsetCommit/OffsetFetch v10; no name-only downgrade occurs.
 	OffsetGroup string
+	// ConsumerGroup selects classic cooperative-sticky membership, independently
+	// of OffsetGroup. InitialOffset and ResetOffset explicitly select "error",
+	// "earliest" or "latest". Loss terminates a session; rejoin is explicit.
+	ConsumerGroup string
+	InitialOffset string
+	ResetOffset   string
+	// MaxGroupSessions defaults to 1; MaxAssignments to 256. Each session also
+	// holds one MaxActive slot until its native membership client has closed.
+	MaxGroupSessions int
+	MaxAssignments   int
+	// Routing defaults to "manual". "keyed" selects native sticky-key routing
+	// and requires Partition=-1 on every submitted Message.
+	Routing string
+	// SASL defaults to "none"; PLAIN, SCRAM-SHA-256 and SCRAM-SHA-512 require
+	// verified TLS and explicit static credentials (no environment discovery).
+	SASL     string
+	User     string
+	Password string
 	// MaxActive defaults to 4 (1–16), QueuedCalls to 0 (0–64, reject overload).
 	MaxActive   int
 	QueuedCalls int
@@ -75,6 +91,7 @@ type OptionsV1 struct {
 	MaxDecodedBatchBytes int
 	// MaxDecodedRecords defaults to 4096 (1–65536). It bounds all decoded
 	// records, including control/aborted data, independently of output page size.
+	// It also bounds Fetch aborted-transaction metadata before native allocation.
 	// It must cover MaxActive*MaxRecords, because native batching may coalesce
 	// concurrently submitted records. Decoded bytes must cover record bytes+512.
 	MaxDecodedRecords int
@@ -88,7 +105,7 @@ type OptionsV1 struct {
 	// metadata/PID/coordinator recovery is not an exact attempt count or quota.
 	Retries int
 	// Linger defaults to zero, range 0–1 s; Compression defaults to "none".
-	// Only "none" and "gzip" are supported on production AND consumption.
+	// Supported codecs: none, gzip, snappy, lz4 and zstd.
 	Linger      time.Duration
 	Compression string
 }
@@ -101,6 +118,15 @@ type settings struct {
 	RootCAPEM            string        `json:"root_ca_pem"`
 	TransactionalID      string        `json:"transactional_id"`
 	OffsetGroup          string        `json:"offset_group"`
+	ConsumerGroup        string        `json:"consumer_group"`
+	InitialOffset        string        `json:"initial_offset"`
+	ResetOffset          string        `json:"reset_offset"`
+	MaxGroupSessions     int           `json:"max_group_sessions"`
+	MaxAssignments       int           `json:"max_assignments"`
+	Routing              string        `json:"routing"`
+	SASL                 string        `json:"sasl"`
+	User                 string        `json:"user"`
+	Password             string        `json:"password"`
 	MaxActive            int           `json:"max_active"`
 	QueuedCalls          int           `json:"queued_calls"`
 	MaxRecords           int           `json:"max_records"`
@@ -119,8 +145,11 @@ type settings struct {
 func defaults(input OptionsV1) settings {
 	value := settings{Brokers: input.Brokers, ClusterID: input.ClusterID, Topics: input.Topics,
 		Plaintext: input.Plaintext, RootCAPEM: input.RootCAPEM, TransactionalID: input.TransactionalID,
-		OffsetGroup: input.OffsetGroup,
-		MaxActive:   input.MaxActive, QueuedCalls: input.QueuedCalls, MaxRecords: input.MaxRecords,
+		OffsetGroup: input.OffsetGroup, ConsumerGroup: input.ConsumerGroup,
+		InitialOffset: input.InitialOffset, ResetOffset: input.ResetOffset,
+		MaxGroupSessions: input.MaxGroupSessions, MaxAssignments: input.MaxAssignments,
+		Routing: input.Routing, SASL: input.SASL, User: input.User, Password: input.Password,
+		MaxActive: input.MaxActive, QueuedCalls: input.QueuedCalls, MaxRecords: input.MaxRecords,
 		MaxRecordBytes: input.MaxRecordBytes, MaxBatchBytes: input.MaxBatchBytes, MaxWireBytes: input.MaxWireBytes,
 		MaxDecodedBatchBytes: input.MaxDecodedBatchBytes, Timeout: input.Timeout, CleanupTimeout: input.CleanupTimeout,
 		MaxDecodedRecords: input.MaxDecodedRecords,
@@ -154,6 +183,18 @@ func defaults(input OptionsV1) settings {
 	}
 	if value.Compression == "" {
 		value.Compression = "none"
+	}
+	if value.Routing == "" {
+		value.Routing = "manual"
+	}
+	if value.SASL == "" {
+		value.SASL = "none"
+	}
+	if value.MaxGroupSessions == 0 {
+		value.MaxGroupSessions = 1
+	}
+	if value.MaxAssignments == 0 {
+		value.MaxAssignments = 256
 	}
 	return value
 }
@@ -191,8 +232,30 @@ func validate(value settings) error {
 		value.Timeout < time.Second || value.Timeout > time.Minute || value.Timeout%time.Millisecond != 0 ||
 		value.CleanupTimeout < time.Millisecond || value.CleanupTimeout > 30*time.Second ||
 		value.Retries < 0 || value.Retries > 10 || value.Linger < 0 || value.Linger > time.Second ||
-		value.Compression != "none" && value.Compression != "gzip" {
+		!validCompression(value.Compression) ||
+		value.Routing != "manual" && value.Routing != "keyed" ||
+		value.MaxGroupSessions < 1 || value.MaxGroupSessions > value.MaxActive ||
+		value.MaxAssignments < 1 || value.MaxAssignments > 4096 {
 		return failure(ErrInput, "options")
+	}
+	if value.ConsumerGroup != "" && (!validText(value.ConsumerGroup, 128) || value.ConsumerGroup == value.OffsetGroup ||
+		!validOffsetPolicy(value.InitialOffset) || !validOffsetPolicy(value.ResetOffset)) {
+		return failure(ErrInput, "group-options")
+	}
+	if value.ConsumerGroup == "" && (value.InitialOffset != "" || value.ResetOffset != "") {
+		return failure(ErrInput, "group-options")
+	}
+	switch value.SASL {
+	case "none":
+		if value.User != "" || value.Password != "" {
+			return failure(ErrInput, "authentication")
+		}
+	case "PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512":
+		if value.Plaintext || !validText(value.User, 256) || !validText(value.Password, 4096) {
+			return failure(ErrInput, "authentication")
+		}
+	default:
+		return failure(ErrInput, "authentication")
 	}
 	seen := make(map[string]bool)
 	for _, address := range value.Brokers {
@@ -212,22 +275,6 @@ func validate(value settings) error {
 	_, err := tlsConfig(value)
 	return err
 }
-func tlsConfig(value settings) (*tls.Config, error) {
-	if value.Plaintext {
-		if value.RootCAPEM != "" {
-			return nil, failure(ErrInput, "tls")
-		}
-		return nil, nil
-	}
-	if len(value.RootCAPEM) == 0 || len(value.RootCAPEM) > 64<<10 {
-		return nil, failure(ErrInput, "tls")
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM([]byte(value.RootCAPEM)) {
-		return nil, failure(ErrInput, "tls")
-	}
-	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}, nil
-}
 func (value settings) allowed(address string) bool {
 	for _, permitted := range value.Brokers {
 		if permitted == address {
@@ -240,10 +287,20 @@ func brokerAddress(host string, port int32) string {
 	return net.JoinHostPort(host, strconv.Itoa(int(port)))
 }
 func (value settings) reservation() int64 {
-	return int64(2*value.MaxBatchBytes + 2*value.MaxWireBytes + 2*value.MaxDecodedBatchBytes + value.MaxRecords*4096 + value.MaxDecodedRecords*8192 + 65536)
+	base := int64(2*value.MaxBatchBytes + 2*value.MaxWireBytes + 2*value.MaxDecodedBatchBytes + value.MaxRecords*4096 + value.MaxDecodedRecords*8192 + 65536)
+	// Codec workspace is independent of the output cap (LZ4 blocks up to 4 MiB).
+	base += int64(8<<20 + 3*value.MaxDecodedBatchBytes)
+	if value.ConsumerGroup != "" {
+		base += int64(2*value.MaxWireBytes + value.MaxAssignments*1024)
+	}
+	return base
 }
 func (value settings) evidenceReservation() int64 {
-	return int64(value.MaxBatchBytes + value.MaxRecords*4096 + 65536)
+	bytes := int64(value.MaxBatchBytes + value.MaxRecords*4096 + 65536)
+	if value.ConsumerGroup != "" {
+		bytes += int64(value.MaxAssignments * 1024)
+	}
+	return bytes
 }
 func (value settings) limits() resource.Limits {
 	return resource.Limits{Active: value.MaxActive, Queued: value.QueuedCalls,
@@ -253,6 +310,10 @@ func (value settings) limits() resource.Limits {
 // LimitsV1 recommends limits for defaulted options. Composition must attach
 // resource.WithLimits; when overlays change bounds, use the resolved policy.
 func LimitsV1(options OptionsV1) resource.Limits { return defaults(options).limits() }
+
+// EvidenceBytesV1 reports the defaulted per-call retained envelope. Like LimitsV1,
+// it does not account for configuration overlays or caller-retained copies.
+func EvidenceBytesV1(options OptionsV1) int64 { return defaults(options).evidenceReservation() }
 
 // Profile reports effective, non-secret settings, not service qualification.
 func (client *Client) Profile() compatibility.Profile {
@@ -265,7 +326,8 @@ func (client *Client) Profile() compatibility.Profile {
 	}
 	options := []compatibility.Option{
 		{Name: "acks", Value: "all-isr"}, {Name: "idempotent", Value: "true"}, {Name: "isolation", Value: "read-committed"},
-		{Name: "partitioner", Value: "manual"}, {Name: "auto-create", Value: "false"}, {Name: "client-metrics", Value: "false"},
+		{Name: "partitioner", Value: value.Routing}, {Name: "auto-create", Value: "false"}, {Name: "client-metrics", Value: "false"},
+		{Name: "sasl", Value: value.SASL}, {Name: "group-profile", Value: "classic-cooperative-sticky-no-poll"},
 		{Name: "compression", Value: value.Compression}, {Name: "plaintext", Value: strconv.FormatBool(value.Plaintext)},
 		{Name: "transactions", Value: strconv.FormatBool(value.TransactionalID != "")},
 		{Name: "manual-offsets", Value: strconv.FormatBool(value.OffsetGroup != "")},

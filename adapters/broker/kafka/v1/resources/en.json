@@ -1,0 +1,187 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "broker_kafka",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.broker_kafka.invalid_input",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka input or settings are invalid."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.unsupported_profile",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.unsupported_profile.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested Kafka profile is unsupported."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.authority_refused",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.authority_refused.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka endpoint is outside the permitted authority."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.connection_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.connection_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka connection or readiness check failed."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.identity_mismatch",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.identity_mismatch.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka cluster, topic or assignment identity does not match."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.production_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.production_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Kafka production failed; inspect per-record effect evidence."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.read_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.read_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka read failed; partial observations may remain."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.record_missing",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.record_missing.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The exact Kafka offset has no visible record."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.record_unavailable",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.record_unavailable.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Kafka data or assignment is not currently available."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.offset_expired",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.offset_expired.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested Kafka offset is outside the observed log range."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A Kafka capability bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.invalid_state",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.invalid_state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka owner or assignment cannot perform this operation."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.transaction_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.transaction_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka transaction failed; its final outcome is separate."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.checkpoint_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.checkpoint_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Kafka checkpoint operation failed; inspect commit evidence."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Kafka cleanup reported a failure; completion is separate."
+      }
+    },
+    {
+      "id": "fathomry.broker_kafka.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.broker_kafka.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Kafka runtime value serialization is unsupported."
+      }
+    }
+  ]
+}

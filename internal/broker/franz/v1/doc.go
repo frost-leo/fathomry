@@ -27,10 +27,11 @@
 // reconfigure them. Required evidence is independent of receipt waiting and
 // optional lossy observations. Assembly.Close retains incomplete cleanup.
 //
-// Only explicit endpoints/topics, all-ISR idempotent writes, manual partitions,
-// read-committed direct reads and none/gzip compression are supported. Consumer
-// adds a lifetime-owned direct cursor; explicit checkpoints use an exclusively
-// configured, non-member OffsetGroup. Group subscriptions/rebalancing, arbitrary
-// native access and administration are absent. See the package interface in
+// Explicit endpoints/topics, all-ISR idempotent writes, manual/keyed routing and
+// read-committed bounded decoding support none/gzip/snappy/lz4/zstd. Static SASL
+// requires verified TLS. Consumer retains a direct cursor; OffsetGroup stores
+// non-member checkpoints. ConsumeGroup separately owns classic cooperative-sticky
+// membership and whole-page commit tokens. Native access, group EOS and
+// administration are absent. See the package interface in
 // docs/reference/internal/broker/franz/v1/interface.md.
 package franz

@@ -81,6 +81,7 @@ require (
 	github.com/nukilabs/tlsclient v1.8.8
 	github.com/nukilabs/utls v1.3.3
 	github.com/pelletier/go-toml/v2 v2.3.1
+	github.com/pierrec/lz4/v4 v4.1.26
 	github.com/quic-go/go-ossfuzz-seeds v0.1.0
 	github.com/quic-go/qpack v0.6.0
 	github.com/quic-go/quic-go v0.61.0
@@ -218,7 +219,6 @@ require (
 	github.com/nukilabs/socks v1.0.1 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
-	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pterm/pterm v0.12.83 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect

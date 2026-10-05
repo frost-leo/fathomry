@@ -37,7 +37,8 @@ type Header struct {
 
 // Message is borrowed during Produce/ProduceTransaction only. On acceptance its
 // bytes and headers are copied before return. Callers must not concurrently
-// mutate input during that method. Partition is explicit; key does not route.
+// mutate input during that method. Manual routing requires an explicit Partition;
+// keyed routing requires Partition=-1 and uses the native sticky-key partitioner.
 // A zero timestamp uses SDK time; nonzero is truncated to milliseconds.
 // Nil Value is a Kafka tombstone, NOT a framework successful-empty output.
 type Message struct {
@@ -127,7 +128,7 @@ func (owner *connection) validMessages(messages []Message) error {
 	}
 	var total int64
 	for _, message := range messages {
-		if _, ok := owner.topics[message.Topic]; !ok || message.Partition < 0 || len(message.Headers) > 64 ||
+		if _, ok := owner.topics[message.Topic]; !ok || value.Routing == "manual" && message.Partition < 0 || value.Routing == "keyed" && message.Partition != -1 || len(message.Headers) > 64 ||
 			!message.Timestamp.IsZero() && (message.Timestamp.Before(time.UnixMilli(0)) || message.Timestamp.After(time.UnixMilli(math.MaxInt64/1000000))) {
 			return failure(ErrInput, "record")
 		}

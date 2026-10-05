@@ -67,6 +67,8 @@ type resultData struct {
 	page        Page
 	checkpoints []CheckpointResult
 	consumer    ConsumerProgress
+	group       GroupSnapshot
+	batch       GroupBatch
 }
 
 func (result Result) WritesCopy() []Write {
@@ -191,7 +193,7 @@ func (client *Client) deliver(ctx context.Context, call *invocation.Call[Result]
 			failures = append(failures, write.Err)
 		} else {
 			write.State = WriteAcknowledged
-			write.PositionKnown = reply.offset >= 0 && reply.partition == write.Position.Partition
+			write.PositionKnown = reply.offset >= 0 && reply.partition >= 0 && (client.owner.settings.Routing == "keyed" || reply.partition == write.Position.Partition)
 			write.Position.Partition = reply.partition
 			write.Position.Offset = reply.offset
 			if !write.PositionKnown {

@@ -22,7 +22,9 @@ package franz
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"testing"
 	"unsafe"
@@ -175,5 +177,34 @@ func TestRecordOwnershipPositive(t *testing.T) {
 	first[2].Value[1] = 0
 	if frozen.HeadersCopy()[2].Value[1] != 255 {
 		t.Fatal("mutable returned header alias")
+	}
+}
+
+func TestValidatedExpansionsRemainCodecScoped(t *testing.T) {
+	input := []byte("same-frame")
+	digest := sha256.Sum256(input)
+	decoded := decodedBatches{
+		{codec: kgo.CodecGzip, digest: digest}:   []byte("gzip-expanded"),
+		{codec: kgo.CodecSnappy, digest: digest}: []byte("snappy-expanded"),
+	}
+	for _, item := range []struct {
+		codec kgo.CompressionCodecType
+		want  string
+	}{{kgo.CodecGzip, "gzip-expanded"}, {kgo.CodecSnappy, "snappy-expanded"}} {
+		got, err := decoded.Decompress(input, item.codec)
+		if err != nil || string(got) != item.want {
+			t.Fatal("a validated expansion crossed codec identity")
+		}
+	}
+	if _, err := decoded.Decompress(input, kgo.CodecZstd); err == nil {
+		t.Fatal("unvalidated codec expansion accepted")
+	}
+}
+
+func TestPreflightRejectsAdvertisedCountsBeforeMalformedPayload(t *testing.T) {
+	value := defaults(OptionsV1{})
+	raw := testBatch(0, int32(value.MaxDecodedRecords), int32(value.MaxDecodedRecords+1), testRecord([]byte("one")))
+	if _, _, err := prepareFetch(value, raw); !errors.Is(err, ErrLimit) {
+		t.Fatal("record-count admission did not precede record parsing", err)
 	}
 }

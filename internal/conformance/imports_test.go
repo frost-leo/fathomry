@@ -112,7 +112,9 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			continue
 		}
 		switch path {
-		case "github.com/frost-leo/fathomry/adapters/database/v1",
+		case "github.com/frost-leo/fathomry/adapters/broker/v1",
+			"github.com/frost-leo/fathomry/adapters/broker/kafka/v1",
+			"github.com/frost-leo/fathomry/adapters/database/v1",
 			"github.com/frost-leo/fathomry/adapters/database/postgres/v1",
 			"github.com/frost-leo/fathomry/adapters/database/mysql/v1",
 			"github.com/frost-leo/fathomry/adapters/objectstore/v1",

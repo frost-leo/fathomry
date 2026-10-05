@@ -128,6 +128,10 @@ object operations, owned multipart, incremental object/version enumeration and
 restricted delegation. The [shared object-storage contracts](reference/adapters/objectstore/v1/interface.md)
 contain budgets and evidence, not an SDK engine. Isolated HTTP/versioned service
 checks use a test-owned bucket and exact cleanup; production/TLS/AWS claims remain absent.
+[Kafka](reference/adapters/broker/kafka/v1/interface.md) provides public production,
+exact/direct reads, classic group sessions and checkpoints. Native-independent
+[broker contracts](reference/adapters/broker/v1/interface.md) hold budgets and attribution.
+Isolated plaintext/no-auth checks do not qualify deployed TLS/SASL or failover.
 [Framework common composition](reference/framework/v1/interface.md) now supplies
 explicit runtime coordination, released-evidence reception and a safe logging
 boundary. [Framework configuration](reference/framework/configuration/v1/interface.md)
@@ -155,7 +159,8 @@ deployment qualification remain separate from the implemented SDK contracts.
 
 The [Kafka integration](reference/internal/broker/franz/v1/interface.md) adds bounded
 franz-go production, Kafka-only atomic batches, exact historical reads, direct
-consumer cursors and explicit standalone checkpoints with independent evidence.
+consumer cursors, classic cooperative groups and explicit standalone checkpoints
+with independent evidence, five codecs, keyed routing and static TLS/SASL.
 Its [verification profile](reference/internal/broker/franz/v1/verification.md)
 distinguishes local SDK/fault tests from the owner-authorized Kafka service.
 It is not the framework's complete data/reference or workflow recovery protocol.
@@ -294,6 +299,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/database/mysql/v1`](reference/adapters/database/mysql/v1/interface.md) | Bounded MySQL SQL, preparation, transactions, native effect distinctions and retained-generation ownership |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |
+| [`adapters/broker/v1`](reference/adapters/broker/v1/interface.md) | Shared broker budgets and source/operation attribution without native dependencies |
+| [`adapters/broker/kafka/v1`](reference/adapters/broker/kafka/v1/interface.md) | Kafka production, exact/direct/group reads, checkpoints and retained native/public ownership |
 | [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Complete raw batch/source contracts and independent strict layered preparation |
 | [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Explicit local acquisition, native live/captured queries, weak Decode and owned file Watch |
 | [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Complete supported remote reads/observations/management/search, effect evidence and resource-backed borrowing |
