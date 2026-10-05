@@ -47,6 +47,10 @@ type CopyRequest struct {
 }
 
 func (response *controlResponse) copyFailure() error {
+	return response.terminalFailure("CopyObjectResult")
+}
+
+func (response *controlResponse) terminalFailure(expectedRoot string) error {
 	if response.statusCode != http.StatusOK {
 		return nil
 	}
@@ -77,7 +81,7 @@ func (response *controlResponse) copyFailure() error {
 		}
 	}
 	switch root.XMLName.Local {
-	case "CopyObjectResult":
+	case expectedRoot:
 		return nil
 	case "Error":
 		nativeErr := native.ErrorResponse{StatusCode: response.statusCode, Server: response.server}

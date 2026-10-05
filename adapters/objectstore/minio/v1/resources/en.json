@@ -1,0 +1,207 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "objectstore_minio",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.objectstore_minio.invalid_input",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The object-storage input or settings are invalid."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.unsupported_profile",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.unsupported_profile.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested object-storage capability is unsupported."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.authority_refused",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.authority_refused.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The selected source does not grant this object-storage operation."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.connection_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.connection_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Object-storage construction or readiness failed."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.read_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.read_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The object read failed; inspect partial data and cleanup evidence."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.write_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.write_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The object write failed; its remote effects may be unknown."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.enumeration_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.enumeration_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Object enumeration failed or is incomplete."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.removal_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.removal_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Object removal failed; inspect each target's evidence."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.object_missing",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.object_missing.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The service reported a missing object, version, bucket or upload."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.access_denied",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.access_denied.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The service denied object-storage access."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.credentials_expired",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.credentials_expired.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The service reported expired credentials."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.condition_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.condition_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "An object-storage condition was not satisfied."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.integrity_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.integrity_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Object integrity verification failed."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "An object-storage capability bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.protocol_invalid",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.protocol_invalid.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The object-storage response did not satisfy the selected protocol."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Object-storage cleanup failed; local release and remote effects are separate."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.invalid_state",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.invalid_state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The object-storage handle cannot perform this operation in its current state."
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.objectstore_minio.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Object-storage runtime value serialization is unsupported."
+      }
+    }
+  ]
+}

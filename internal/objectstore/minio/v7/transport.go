@@ -35,6 +35,7 @@ type cleanupKey struct{}
 type exchange struct {
 	mu              sync.Mutex
 	call            *invocation.Call[Result]
+	parent          *invocation.Call[Result]
 	maximum         int
 	requests        int
 	remaining       int64
@@ -60,6 +61,11 @@ func (state *exchange) attempt() error {
 	}
 	if state.call != nil {
 		if _, err := state.call.Attempt(); err != nil {
+			return err
+		}
+	}
+	if state.parent != nil {
+		if _, err := state.parent.Attempt(); err != nil {
 			return err
 		}
 	}
@@ -163,6 +169,20 @@ func (wire *transport) RoundTrip(request *http.Request) (*http.Response, error) 
 	state.mu.Unlock()
 	if capture, _ := request.Context().Value(controlResponseKey{}).(*controlResponseCapture); capture != nil {
 		response.Body = capture.observe(response.Body, response.StatusCode, response.Header.Get("Server"))
+		if capture.check != nil {
+			content, readErr := io.ReadAll(response.Body)
+			_ = response.Body.Close()
+			checkErr := capture.check(capture.pages[len(capture.pages)-1])
+			if !capture.keepPages {
+				capture.pages = nil
+			}
+			if checkErr != nil || readErr != nil {
+				err := errors.Join(checkErr, readErr)
+				state.note(err, cleanup)
+				return nil, err
+			}
+			response.Body = &replayedBody{Reader: bytes.NewReader(content)}
+		}
 	}
 	if input != nil {
 		// Drain the bounded reply before joining request-body closure: an early
@@ -224,7 +244,11 @@ func (body *replayedBody) Read(buffer []byte) (int, error) {
 func (*replayedBody) Close() error { return nil }
 
 type controlResponseKey struct{}
-type controlResponseCapture struct{ pages []*controlResponse }
+type controlResponseCapture struct {
+	pages     []*controlResponse
+	check     func(*controlResponse) error
+	keepPages bool
+}
 type controlResponse struct {
 	body       bytes.Buffer
 	statusCode int

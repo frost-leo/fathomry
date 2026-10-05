@@ -57,7 +57,7 @@ func TestReviewListingRejectsInvalidObjects(t *testing.T) {
 				if test.versions {
 					root = "ListVersionsResult"
 				}
-				_, _ = fmt.Fprintf(writer, "<%s><IsTruncated>false</IsTruncated>%s</%s>", root, test.body, root)
+				_, _ = fmt.Fprintf(writer, "<%s><Name>fixture</Name><IsTruncated>false</IsTruncated>%s</%s>", root, test.body, root)
 				return true
 			}
 			server.mu.Unlock()
@@ -109,7 +109,7 @@ func TestReviewUploadCursorRemainsOpaque(t *testing.T) {
 	receipt, err := fixture.client.ListUploads(deadline(t), correlation("opaque-upload-cursor"), UploadQuery{Prefix: "owned/"})
 	result := settle(t, receipt, err)
 	_, next := result.Outcome.Value.UploadCursor()
-	if result.Err() == nil && next != "opaque+id" {
+	if result.Err() != nil || next != "opaque+id" {
 		t.Fatal("URL decoding silently changed the opaque upload marker")
 	}
 	if result.Err() != nil && !errors.Is(result.Err(), ErrUnsupported) {
@@ -248,11 +248,11 @@ func TestReviewListingRetainsPriorPageWhenEmptyPageIsMalformed(t *testing.T) {
 	server.hook = func(writer http.ResponseWriter, request *http.Request) bool {
 		switch request.URL.Query().Get("continuation-token") {
 		case "":
-			_, _ = io.WriteString(writer, "<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>second</NextContinuationToken><Contents><Key>owned/a</Key><Size>1</Size></Contents></ListBucketResult>")
+			_, _ = io.WriteString(writer, "<ListBucketResult><Name>fixture</Name><IsTruncated>true</IsTruncated><NextContinuationToken>second</NextContinuationToken><Contents><Key>owned/a</Key><Size>1</Size></Contents></ListBucketResult>")
 		case "second":
 			_, _ = io.WriteString(writer, "<Unexpected><IsTruncated>true</IsTruncated><NextContinuationToken>third</NextContinuationToken></Unexpected>")
 		default:
-			_, _ = io.WriteString(writer, "<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>")
+			_, _ = io.WriteString(writer, "<ListBucketResult><Name>fixture</Name><IsTruncated>false</IsTruncated></ListBucketResult>")
 		}
 		return true
 	}
@@ -397,10 +397,10 @@ func TestReviewListingsRequireExplicitTerminalEvidence(t *testing.T) {
 		metadata string
 		call     func(*Client, context.Context) (*invocation.Receipt[Result], error)
 	}{
-		{"objects", "ListBucketResult", "", func(client *Client, ctx context.Context) (*invocation.Receipt[Result], error) {
+		{"objects", "ListBucketResult", "<Name>fixture</Name>", func(client *Client, ctx context.Context) (*invocation.Receipt[Result], error) {
 			return client.List(ctx, correlation("terminal-objects"), ListRequest{Prefix: "owned/"})
 		}},
-		{"versions", "ListVersionsResult", "", func(client *Client, ctx context.Context) (*invocation.Receipt[Result], error) {
+		{"versions", "ListVersionsResult", "<Name>fixture</Name>", func(client *Client, ctx context.Context) (*invocation.Receipt[Result], error) {
 			return client.List(ctx, correlation("terminal-versions"), ListRequest{Prefix: "owned/", Versions: true})
 		}},
 		{"uploads", "ListMultipartUploadsResult", "<Bucket>fixture</Bucket>", func(client *Client, ctx context.Context) (*invocation.Receipt[Result], error) {
@@ -450,9 +450,9 @@ func TestReviewMissingTerminalEvidencePreservesPriorPage(t *testing.T) {
 	server.mu.Lock()
 	server.hook = func(writer http.ResponseWriter, request *http.Request) bool {
 		if request.URL.Query().Get("continuation-token") == "" {
-			_, _ = io.WriteString(writer, "<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>next</NextContinuationToken><Contents><Key>owned/a</Key><Size>1</Size></Contents></ListBucketResult>")
+			_, _ = io.WriteString(writer, "<ListBucketResult><Name>fixture</Name><IsTruncated>true</IsTruncated><NextContinuationToken>next</NextContinuationToken><Contents><Key>owned/a</Key><Size>1</Size></Contents></ListBucketResult>")
 		} else {
-			_, _ = io.WriteString(writer, "<ListBucketResult><Contents><Key>owned/b</Key><Size>1</Size></Contents></ListBucketResult>")
+			_, _ = io.WriteString(writer, "<ListBucketResult><Name>fixture</Name><Contents><Key>owned/b</Key><Size>1</Size></Contents></ListBucketResult>")
 		}
 		return true
 	}
@@ -478,8 +478,8 @@ func TestReviewUploadCursorDecodeFailureOmitsPartiallyDecodedEntries(t *testing.
 	result := settle(t, receipt, err)
 	var nativeCause url.EscapeError
 	key, id := result.Outcome.Value.UploadCursor()
-	if !errors.Is(result.Err(), ErrUnsupported) || !errors.As(result.Err(), &nativeCause) || result.Outcome.Value.Complete() ||
-		len(result.Outcome.Value.UploadsCopy()) != 0 || key != "" || id != "" {
-		t.Fatal("native decode failure lost its cause or exposed partially transformed fields", result.Err())
+	if !errors.As(result.Err(), &nativeCause) || result.Outcome.Value.Complete() ||
+		len(result.Outcome.Value.UploadsCopy()) != 1 || key != "owned/key" || id != "opaque%" || result.Outcome.Value.UploadsCopy()[0].Key != key {
+		t.Fatal("native decode failure lost its cause or raw continuation", result.Err())
 	}
 }

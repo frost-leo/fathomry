@@ -60,6 +60,11 @@ shared [database contracts](docs/reference/adapters/database/v1/interface.md) ex
 budget and attribution data without native engine dependencies. Isolated public
 service checks include independent effect read-back and unique fixture cleanup,
 not ORM, migration, HA or production qualification.
+The public [MinIO Adapter](docs/reference/adapters/objectstore/minio/v1/interface.md)
+adds bounded object operations, owned multipart sessions, incremental version
+enumeration and restricted presigning. It consumes SDK-independent
+[object-storage contracts](docs/reference/adapters/objectstore/v1/interface.md)
+and supports direct or explicit Fixed/Follow composition with independent evidence.
 [Framework common composition](docs/reference/framework/v1/interface.md) coordinates
 public operation/resource shutdown, released-evidence reception and once-bound
 safe localized logs. [Framework configuration](docs/reference/framework/configuration/v1/interface.md)

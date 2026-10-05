@@ -60,6 +60,15 @@ type OptionsV1 struct {
 	Writes   bool
 	Versions bool
 	Tags     bool
+	// Presign grants are independent delegation authority. PUT also requires Writes.
+	PresignGET  bool
+	PresignHEAD bool
+	PresignPUT  bool
+	// MaxPresignExpiry defaults to 15 minutes (1 second–7 days, whole seconds).
+	MaxPresignExpiry time.Duration
+	// SessionTimeout bounds owned multipart/listing lifetimes; default 5 minutes,
+	// range 1 millisecond–1 hour. Timeout still bounds individual operations.
+	SessionTimeout time.Duration
 	// MaxActive defaults to 4 (1–16); QueuedCalls defaults to 0 (0–64).
 	MaxActive   int
 	QueuedCalls int
@@ -98,6 +107,11 @@ type settings struct {
 	Writes           bool          `json:"writes"`
 	Versions         bool          `json:"versions"`
 	Tags             bool          `json:"tags"`
+	PresignGET       bool          `json:"presign_get"`
+	PresignHEAD      bool          `json:"presign_head"`
+	PresignPUT       bool          `json:"presign_put"`
+	MaxPresignExpiry time.Duration `json:"max_presign_expiry_ns"`
+	SessionTimeout   time.Duration `json:"session_timeout_ns"`
 	MaxActive        int           `json:"max_active"`
 	QueuedCalls      int           `json:"queued_calls"`
 	MaxTransferBytes int64         `json:"max_transfer_bytes"`
@@ -121,6 +135,14 @@ func defaults(input OptionsV1) settings {
 		PartBytes: input.PartBytes, MaxParts: input.MaxParts, MaxEntries: input.MaxEntries,
 		MaxResponseBytes: input.MaxResponseBytes, MaxRequests: input.MaxRequests,
 		Timeout: input.Timeout, CleanupTimeout: input.CleanupTimeout}
+	value.PresignGET, value.PresignHEAD, value.PresignPUT = input.PresignGET, input.PresignHEAD, input.PresignPUT
+	value.MaxPresignExpiry, value.SessionTimeout = input.MaxPresignExpiry, input.SessionTimeout
+	if value.MaxPresignExpiry == 0 {
+		value.MaxPresignExpiry = 15 * time.Minute
+	}
+	if value.SessionTimeout == 0 {
+		value.SessionTimeout = 5 * time.Minute
+	}
 	if value.MaxActive == 0 {
 		value.MaxActive = 4
 	}
@@ -176,6 +198,10 @@ func validPath(value string, empty bool) bool {
 	return true
 }
 func validate(value settings) error {
+	if value.MaxPresignExpiry < time.Second || value.MaxPresignExpiry > 7*24*time.Hour || value.MaxPresignExpiry%time.Second != 0 ||
+		value.SessionTimeout < time.Millisecond || value.SessionTimeout > time.Hour || value.PresignPUT && !value.Writes {
+		return failure(ErrInput, "capabilities")
+	}
 	endpoint, err := url.Parse(value.Endpoint)
 	if err != nil || endpoint == nil || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" || endpoint.String() != value.Endpoint ||
 		endpoint.Path != "" || endpoint.Opaque != "" || endpoint.Scheme != "http" && endpoint.Scheme != "https" {
@@ -243,7 +269,7 @@ func tlsConfig(value settings) (*tls.Config, error) {
 	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}, nil
 }
 func (value settings) reservation() int64 {
-	return int64(2*value.PartBytes+2*value.MaxReadBytes+value.MaxEntries*4096+value.MaxRequests*1024+65536) + 8*value.MaxResponseBytes
+	return int64(2*value.PartBytes+2*value.MaxReadBytes+value.MaxEntries*4096+value.MaxRequests*4096+value.MaxParts*1024+65536+nativeListWorkBytes) + 8*value.MaxResponseBytes
 }
 func (value settings) evidenceReservation() int64 {
 	return int64(value.MaxReadBytes+value.MaxEntries*4096+value.MaxRequests*1024+65536) + 4*value.MaxResponseBytes
@@ -254,7 +280,19 @@ func (value settings) evidenceReservation() int64 {
 func LimitsV1(options OptionsV1) resource.Limits {
 	value := defaults(options)
 	return resource.Limits{Active: value.MaxActive, Queued: value.QueuedCalls,
-		Bytes: int64(value.MaxActive) * value.reservation(), QueuedBytes: int64(value.QueuedCalls) * value.reservation(), MaxLeases: 1}
+		Bytes: int64(value.MaxActive) * value.reservation(), QueuedBytes: int64(value.QueuedCalls) * value.reservation(), MaxLeases: 2}
+}
+
+// Budget describes defaulted native reservations, not measured memory use.
+type Budget struct {
+	WorkBytes, EvidenceBytes int64
+	Active, Queued           int
+}
+
+// BudgetV1 derives the same effective envelopes as admission. Validate with Select.
+func BudgetV1(options OptionsV1) Budget {
+	value := defaults(options)
+	return Budget{value.reservation(), value.evidenceReservation(), value.MaxActive, value.QueuedCalls}
 }
 
 // Profile describes effective local options, not tested service compatibility.
@@ -266,7 +304,10 @@ func (client *Client) Profile() compatibility.Profile {
 	opts := []compatibility.Option{{Name: "addressing", Value: "path-literal-ip"}, {Name: "credentials", Value: "static-v4"},
 		{Name: "sdk-retries", Value: "disabled"}, {Name: "multipart", Value: "serial-core"}, {Name: "plaintext", Value: strconv.FormatBool(value.Plaintext)},
 		{Name: "writes", Value: strconv.FormatBool(value.Writes)}, {Name: "versions", Value: strconv.FormatBool(value.Versions)},
-		{Name: "tags", Value: strconv.FormatBool(value.Tags)}}
+		{Name: "tags", Value: strconv.FormatBool(value.Tags)},
+		{Name: "presign-get", Value: strconv.FormatBool(value.PresignGET)},
+		{Name: "presign-head", Value: strconv.FormatBool(value.PresignHEAD)},
+		{Name: "presign-put", Value: strconv.FormatBool(value.PresignPUT)}}
 	for _, pair := range []struct {
 		name  string
 		value int64
@@ -274,7 +315,8 @@ func (client *Client) Profile() compatibility.Profile {
 		{"max-active", int64(value.MaxActive)}, {"queued-calls", int64(value.QueuedCalls)}, {"max-transfer-bytes", value.MaxTransferBytes},
 		{"max-read-bytes", int64(value.MaxReadBytes)}, {"part-bytes", int64(value.PartBytes)}, {"max-parts", int64(value.MaxParts)},
 		{"max-entries", int64(value.MaxEntries)}, {"max-response-bytes", value.MaxResponseBytes}, {"max-requests", int64(value.MaxRequests)},
-		{"timeout-ns", int64(value.Timeout)}, {"cleanup-timeout-ns", int64(value.CleanupTimeout)}} {
+		{"timeout-ns", int64(value.Timeout)}, {"cleanup-timeout-ns", int64(value.CleanupTimeout)},
+		{"session-timeout-ns", int64(value.SessionTimeout)}, {"max-presign-expiry-ns", int64(value.MaxPresignExpiry)}} {
 		opts = append(opts, compatibility.Option{Name: pair.name, Value: strconv.FormatInt(pair.value, 10)})
 	}
 	return compatibility.Profile{ImplementationModule: compatibility.FrameworkModule, SDKMode: "minio-bounded-http-core",

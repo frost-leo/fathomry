@@ -141,6 +141,7 @@ The authoritative first-party manifest is
 | 0x045 | fathomry / configuration | [Typed configuration acceptance and publication](../../framework/configuration/v1/interface.md) |
 | 0x080 | fathomry / database_postgres | [Public PostgreSQL SQL and ownership](../../adapters/database/postgres/v1/interface.md) |
 | 0x081 | fathomry / database_mysql | [Public MySQL SQL and ownership](../../adapters/database/mysql/v1/interface.md) |
+| 0x140 | fathomry / objectstore_minio | [Public MinIO object-storage operations and ownership](../../adapters/objectstore/minio/v1/interface.md) |
 
 Unlisted first-party facilities cannot be used by definitions. Future modules add
 reviewed entries in their capability range. The previous unreleased settings slot

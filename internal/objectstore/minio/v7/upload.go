@@ -308,7 +308,9 @@ func (client *Client) upload(ctx context.Context, state *exchange, request Write
 		}
 	}
 	data.transfer.CompletionAttempted = true
-	info, err := client.owner.native.CompleteMultipartUpload(ctx, value.Bucket, request.Key, data.transfer.UploadID, completed, opts)
+	capture := &controlResponseCapture{}
+	info, err := client.owner.native.CompleteMultipartUpload(context.WithValue(ctx, controlResponseKey{}, capture), value.Bucket, request.Key, data.transfer.UploadID, completed, opts)
+	err = errors.Join(err, completionResponseFailure(capture))
 	if err != nil {
 		return err
 	}
@@ -321,5 +323,22 @@ func (client *Client) upload(ctx context.Context, state *exchange, request Write
 	data.transfer.Effect = Acknowledged
 	data.transfer.Complete = true
 	data.complete = true
+	return nil
+}
+
+func completionResponseFailure(capture *controlResponseCapture) error {
+	if len(capture.pages) != 1 {
+		return failure(ErrProtocol, "completion-response")
+	}
+	response := capture.pages[0]
+	if err := response.terminalFailure("CompleteMultipartUploadResult"); err != nil {
+		return err
+	}
+	if response.statusCode == http.StatusOK {
+		var identity struct{ Bucket, Key, ETag []string }
+		if err := xml.Unmarshal(response.body.Bytes(), &identity); err != nil || len(identity.Bucket) != 1 || len(identity.Key) != 1 || len(identity.ETag) != 1 {
+			return failure(ErrProtocol, "completion-identity", err)
+		}
+	}
 	return nil
 }

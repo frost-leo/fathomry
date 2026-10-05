@@ -159,6 +159,7 @@ type resultData struct {
 	tags          map[string]string
 	parts         []native.ObjectPart
 	nextPart      int
+	delegation    *delegationData
 }
 
 func (result Result) Object() (Object, bool) {

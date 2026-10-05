@@ -86,6 +86,8 @@ const (
 	FacilityPostgreSQL Facility = 0x080
 	// FacilityMySQL owns the public MySQL database capability.
 	FacilityMySQL Facility = 0x081
+	// FacilityMinIO owns the public object-storage MinIO capability.
+	FacilityMinIO Facility = 0x140
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -127,6 +129,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityProjectCreation, Module: "fathomry", Component: "project_creation"},
 		{Facility: FacilityPostgreSQL, Module: "fathomry", Component: "database_postgres"},
 		{Facility: FacilityMySQL, Module: "fathomry", Component: "database_mysql"},
+		{Facility: FacilityMinIO, Module: "fathomry", Component: "objectstore_minio"},
 	}
 }
 

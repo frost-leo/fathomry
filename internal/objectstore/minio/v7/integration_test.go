@@ -171,7 +171,7 @@ func TestObjectStorageIntegration(t *testing.T) {
 	if err != nil || report.Require(compatibility.Policy{}) == nil {
 		t.Fatal("profile invented service qualification")
 	}
-	conformance.Facade(t, client, "Put", "Read", "Download", "Stat", "Copy", "List", "ListUploads", "ListParts", "Abort", "Remove", "GetTags", "SetTags", "Profile", "EvidenceBytes",
+	conformance.Facade(t, client, "Put", "Read", "Download", "Stat", "Copy", "List", "ListUploads", "ListParts", "Abort", "Remove", "GetTags", "SetTags", "Profile", "EvidenceBytes", "Presign", "BeginMultipart", "Enumerate",
 		"String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 }
 func TestInboxSaturationRejectsBeforeNativeIO(t *testing.T) {
