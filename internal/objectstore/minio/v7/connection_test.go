@@ -309,7 +309,7 @@ func (server *peer) serve(writer http.ResponseWriter, request *http.Request) {
 			maximum = 1000
 		}
 		end := min(len(keys), start+maximum)
-		fmt.Fprintf(writer, "<ListBucketResult><IsTruncated>%t</IsTruncated>", end < len(keys))
+		fmt.Fprintf(writer, "<ListBucketResult><Name>fixture</Name><IsTruncated>%t</IsTruncated>", end < len(keys))
 		if end < len(keys) {
 			fmt.Fprintf(writer, "<NextContinuationToken>%d</NextContinuationToken>", end)
 		}

@@ -1,0 +1,153 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "objectstore_minio",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.objectstore_minio.invalid_input",
+      "source": "ee6edf6a2ba14f49dea55a9d436b8ccfc25d68f1bee9fa3112057f8f36b637ce",
+      "forms": {
+        "other": "对象存储输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.unsupported_profile",
+      "source": "6360f452834846b4d8fa52e301b27debba885612966ec89ff590dfd6b677ba91",
+      "forms": {
+        "other": "不支持所请求的对象存储能力。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.authority_refused",
+      "source": "33dc062ee3bc4b96103874dbe8afc2ad53d39f784599ccbd2889e1778f5328dc",
+      "forms": {
+        "other": "所选来源未授予此对象存储操作权限。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.connection_failed",
+      "source": "8bd3d7470a0375aa33b8cbcbd9c2349cb554bbf003aa97c778973fdce8e60f48",
+      "forms": {
+        "other": "对象存储构造或就绪检查失败。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.read_failed",
+      "source": "7d9946d81b5603ef9749f6c6841c897449fd374ff0165ca831a8638e0e1f66ac",
+      "forms": {
+        "other": "对象读取失败；请检查部分数据和清理证据。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.write_failed",
+      "source": "a205a08cd2a8543e61e66f193372ea422f8b9a95e874cb63836b3718d57b7544",
+      "forms": {
+        "other": "对象写入失败；远端副作用可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.enumeration_failed",
+      "source": "bcc569fc3b702f8d7463396117b5d6f65b6aef005724ad48188c1a5abfd7e438",
+      "forms": {
+        "other": "对象枚举失败或尚未完成。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.removal_failed",
+      "source": "162995ca2983d249458ecafc48ca74a6d466565d56bfdedb60047b9e6600ad46",
+      "forms": {
+        "other": "对象删除失败；请检查各目标的证据。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.object_missing",
+      "source": "1580135b53a2658fc82ba26c07ae4c7072dae13a443a6cec80cba64fe1bf0baf",
+      "forms": {
+        "other": "服务报告对象、版本、存储桶或上传不存在。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.access_denied",
+      "source": "836e3af17631f09d576ff2dcfe6aa7a74ffaede8f142a053ad06cf70a7dc83a7",
+      "forms": {
+        "other": "服务拒绝对象存储访问。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.credentials_expired",
+      "source": "56bf3c851b5d97ca62554e184c8d6ce2f17634c71bf8d30462cc3f5d906d09b0",
+      "forms": {
+        "other": "服务报告凭据已过期。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.condition_failed",
+      "source": "053133538811c9c63dc4718f9bc8fd701adcdea6818dee9b861af003b593526d",
+      "forms": {
+        "other": "对象存储条件未满足。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.integrity_failed",
+      "source": "9b417dbb90f1d0077eb960933341d1a6ee0561ca7b7491921ac334ac92adbb1d",
+      "forms": {
+        "other": "对象完整性校验失败。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.limit_exceeded",
+      "source": "f127b8283b891a9c9d427d66a013fcfc4e8abd85322d6ec095647d18ff3c0c25",
+      "forms": {
+        "other": "超出对象存储能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.protocol_invalid",
+      "source": "d70e968bc2d933e7ca702d7ad9f9789f3854030a367d2fc5b167864fe4af8780",
+      "forms": {
+        "other": "对象存储响应不符合所选协议。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.cleanup_failed",
+      "source": "0de406a300f071e0584ffbfdf8c7087352fa13f879a686f31165a0e25d166500",
+      "forms": {
+        "other": "对象存储清理失败；本地释放与远端副作用需分别判断。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.invalid_state",
+      "source": "cf30117261a262ef1af049324d6a2384bad158b302a4c82b7c1d6e8734f7f3de",
+      "forms": {
+        "other": "对象存储句柄当前状态不允许执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.objectstore_minio.runtime_serialization",
+      "source": "89765e72fd0fcb218fbe00b898bf1f2c99df0dbff60649d31162ce4d8a08d04d",
+      "forms": {
+        "other": "不支持序列化对象存储运行时值。"
+      }
+    }
+  ]
+}

@@ -84,7 +84,7 @@ func TestVersionListingAndDeleteMarkerEvidence(t *testing.T) {
 	server.mu.Lock()
 	server.hook = func(writer http.ResponseWriter, request *http.Request) bool {
 		if _, ok := request.URL.Query()["versions"]; ok {
-			_, _ = io.WriteString(writer, "<ListVersionsResult><IsTruncated>false</IsTruncated><Version><Key>owned/a</Key><VersionId>old</VersionId><IsLatest>false</IsLatest><Size>3</Size><ETag>etag</ETag><LastModified>2026-09-14T00:00:00Z</LastModified></Version><DeleteMarker><Key>owned/a</Key><VersionId>marker</VersionId><IsLatest>true</IsLatest><LastModified>2026-09-14T00:00:00Z</LastModified></DeleteMarker></ListVersionsResult>")
+			_, _ = io.WriteString(writer, "<ListVersionsResult><Name>fixture</Name><IsTruncated>false</IsTruncated><Version><Key>owned/a</Key><VersionId>old</VersionId><IsLatest>false</IsLatest><Size>3</Size><ETag>etag</ETag><LastModified>2026-09-14T00:00:00Z</LastModified></Version><DeleteMarker><Key>owned/a</Key><VersionId>marker</VersionId><IsLatest>true</IsLatest><LastModified>2026-09-14T00:00:00Z</LastModified></DeleteMarker></ListVersionsResult>")
 			return true
 		}
 		if request.Method == "HEAD" {

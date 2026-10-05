@@ -49,6 +49,7 @@ const (
 	ErrLimit       fault.Kind = "fathomry." + ProviderID + ".limit"
 	ErrProtocol    fault.Kind = "fathomry." + ProviderID + ".protocol"
 	ErrCleanup     fault.Kind = "fathomry." + ProviderID + ".cleanup"
+	ErrState       fault.Kind = "fathomry." + ProviderID + ".state"
 )
 
 func failure(kind fault.Kind, operation string, causes ...error) error {
@@ -108,3 +109,7 @@ func (*WriteRequest) LogValue() slog.Value { return slog.StringValue("minio[rest
 func (*CopyRequest) LogValue() slog.Value  { return slog.StringValue("minio[restricted]") }
 func (*ListRequest) LogValue() slog.Value  { return slog.StringValue("minio[restricted]") }
 func (*UploadQuery) LogValue() slog.Value  { return slog.StringValue("minio[restricted]") }
+func (*SignRequest) LogValue() slog.Value  { return slog.StringValue("minio[restricted]") }
+func (*Delegation) LogValue() slog.Value   { return slog.StringValue("minio[restricted]") }
+func (*Multipart) LogValue() slog.Value    { return slog.StringValue("minio[restricted]") }
+func (*Cursor) LogValue() slog.Value       { return slog.StringValue("minio[restricted]") }

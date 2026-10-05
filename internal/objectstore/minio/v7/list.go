@@ -26,6 +26,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -107,16 +108,6 @@ func (response *controlResponse) listFailure(expectedRoot string) error {
 	return nil
 }
 
-func listResponsesFailure(capture *controlResponseCapture, after int, expectedRoot string) error {
-	var failures []error
-	for _, response := range capture.pages[after:] {
-		if err := response.listFailure(expectedRoot); err != nil {
-			failures = append(failures, err)
-		}
-	}
-	return errors.Join(failures...)
-}
-
 // List consumes the native synchronous iterator, never a channel producer.
 // Count, aggregate response bytes, HTTP exchanges and deadline are independent
 // limits. A truncated integration result retains partial objects with ErrLimit.
@@ -139,17 +130,11 @@ func (client *Client) List(ctx context.Context, id fault.Correlation, request Li
 		owner := false
 		opts := native.ListObjectsOptions{Prefix: request.Prefix, StartAfter: request.StartAfter, Recursive: true,
 			WithVersions: request.Versions, MaxKeys: client.owner.settings.MaxEntries, FetchOwner: &owner}
-		capture := &controlResponseCapture{}
-		root := "ListBucketResult"
-		if request.Versions {
-			root = "ListVersionsResult"
-		}
-		checked := 0
+		validation := &objectListing{bucket: client.owner.settings.Bucket, request: request, seen: make(map[string]bool)}
+		capture := &controlResponseCapture{check: validation.checkPage}
 		for info := range client.owner.native.ListObjectsIter(context.WithValue(work, controlResponseKey{}, capture), client.owner.settings.Bucket, opts) {
-			responseError := listResponsesFailure(capture, checked, root)
-			checked = len(capture.pages)
-			if info.Err != nil || responseError != nil {
-				return nativeFailure(ErrList, "iterate", work, errors.Join(info.Err, responseError)), nil
+			if info.Err != nil {
+				return nativeFailure(ErrList, "iterate", work, info.Err), nil
 			}
 			if len(data.objects) >= client.owner.settings.MaxEntries {
 				return failure(ErrLimit, "entries"), nil
@@ -159,9 +144,6 @@ func (client *Client) List(ctx context.Context, id fault.Correlation, request Li
 				return failure(ErrProtocol, "list-key"), nil
 			}
 			data.objects = append(data.objects, objectInfo(info))
-		}
-		if err := listResponsesFailure(capture, checked, root); err != nil {
-			return nativeFailure(ErrList, "iterate", work, err), nil
 		}
 		if err := work.Err(); err != nil {
 			return nativeFailure(ErrList, "iterate", work, err), nil
@@ -179,10 +161,9 @@ type UploadQuery struct {
 	UploadIDMarker string
 }
 
-// ListUploads inspects one bounded page. Truncated URL-encoded responses with
-// an upload marker retain validated entries but return ErrUnsupported: v7.3.0
-// changes that opaque marker during decoding. No guessed continuation escapes.
-// Native decoding failures retain their cause but omit partially decoded entries.
+// ListUploads inspects one bounded page, preserving opaque upload markers from
+// the validated wire response, not by reversing SDK decoding. A native marker
+// decoding error remains inspectable alongside a recovered valid continuation.
 func (client *Client) ListUploads(ctx context.Context, id fault.Correlation, query UploadQuery) (*invocation.Receipt[Result], error) {
 	if err := client.valid(ctx); err != nil {
 		return nil, err
@@ -195,16 +176,47 @@ func (client *Client) ListUploads(ctx context.Context, id fault.Correlation, que
 		return nil, failure(ErrInput, "upload-query")
 	}
 	return client.start(ctx, id, "list-uploads", false, func(work context.Context, state *exchange, data *resultData) (error, error) {
-		capture := &controlResponseCapture{}
-		page, err := client.owner.native.ListMultipartUploads(context.WithValue(work, controlResponseKey{}, capture), client.owner.settings.Bucket, query.Prefix, query.KeyMarker, query.UploadIDMarker, "", client.owner.settings.MaxEntries)
-		responseError := listResponsesFailure(capture, 0, "ListMultipartUploadsResult")
-		if responseError != nil {
-			return nativeFailure(ErrList, "uploads", work, errors.Join(err, responseError)), nil
-		}
-		if err != nil {
-			if page.IsTruncated && page.EncodingType == "url" {
-				return nativeFailure(ErrUnsupported, "upload-cursor-encoding", work, err), nil
+		capture := &controlResponseCapture{keepPages: true, check: func(response *controlResponse) error {
+			page, err := response.listPage("ListMultipartUploadsResult")
+			if err == nil && response.statusCode == http.StatusOK && page.fields["Bucket"] != client.owner.settings.Bucket {
+				return failure(ErrProtocol, "upload-bucket")
 			}
+			return err
+		}}
+		page, err := client.owner.native.ListMultipartUploads(context.WithValue(work, controlResponseKey{}, capture), client.owner.settings.Bucket, query.Prefix, query.KeyMarker, query.UploadIDMarker, "", client.owner.settings.MaxEntries)
+		if len(capture.pages) != 1 {
+			return failure(ErrProtocol, "upload-response", err), nil
+		}
+		var escape url.EscapeError
+		if err != nil && !errors.As(err, &escape) {
+			return nativeFailure(ErrList, "uploads", work, err), nil
+		}
+		var raw native.ListMultipartUploadsResult
+		if capture.pages[0].statusCode == http.StatusOK {
+			if decodeErr := xml.Unmarshal(capture.pages[0].body.Bytes(), &raw); decodeErr != nil {
+				return failure(ErrProtocol, "upload-response", err, decodeErr), nil
+			}
+			var markerErr error
+			if raw.EncodingType == "url" {
+				_, markerErr = url.QueryUnescape(raw.NextUploadIDMarker)
+			}
+			if err == nil || markerErr != nil && errors.As(err, &escape) {
+				var decodeErr error
+				raw.NextKeyMarker, decodeErr = decodeKey(raw.NextKeyMarker, raw.EncodingType)
+				if decodeErr != nil {
+					return failure(ErrProtocol, "upload-key", err, decodeErr), nil
+				}
+				for index := range raw.Uploads {
+					raw.Uploads[index].Key, decodeErr = decodeKey(raw.Uploads[index].Key, raw.EncodingType)
+					if decodeErr != nil {
+						return failure(ErrProtocol, "upload-key", err, decodeErr), nil
+					}
+				}
+				page = raw
+			} else if err != nil {
+				return nativeFailure(ErrList, "uploads", work, err), nil
+			}
+		} else if err != nil {
 			return nativeFailure(ErrList, "uploads", work, err), nil
 		}
 		if page.Bucket != client.owner.settings.Bucket {
@@ -224,12 +236,7 @@ func (client *Client) ListUploads(ctx context.Context, id fault.Correlation, que
 		}
 		if !page.IsTruncated {
 			data.complete = true
-			return nil, nil
-		}
-		if page.EncodingType == "url" && page.NextUploadIDMarker != "" {
-			// The SDK URL-decodes this opaque field even though S3 only encodes
-			// key fields. The original marker cannot be recovered without guessing.
-			return failure(ErrUnsupported, "upload-cursor-encoding"), nil
+			return nativeFailure(ErrList, "uploads", work, err), nil
 		}
 		if !validPath(page.NextKeyMarker, true) || page.NextKeyMarker != "" && !strings.HasPrefix(page.NextKeyMarker, query.Prefix) || !validText(page.NextUploadIDMarker, 1024, true) ||
 			page.IsTruncated && (page.NextKeyMarker == "" || page.NextKeyMarker == query.KeyMarker && page.NextUploadIDMarker == query.UploadIDMarker) {
@@ -238,7 +245,7 @@ func (client *Client) ListUploads(ctx context.Context, id fault.Correlation, que
 		data.nextKey = page.NextKeyMarker
 		data.nextUpload = page.NextUploadIDMarker
 		data.complete = !page.IsTruncated
-		return nil, nil
+		return nativeFailure(ErrList, "uploads", work, err), nil
 	})
 }
 func (client *Client) validUpload(upload Upload, write bool) error {
@@ -263,9 +270,14 @@ func (client *Client) ListParts(ctx context.Context, id fault.Correlation, uploa
 		return nil, failure(ErrInput, "part-marker")
 	}
 	return client.start(ctx, id, "list-parts", false, func(work context.Context, state *exchange, data *resultData) (error, error) {
-		capture := &controlResponseCapture{}
+		capture := &controlResponseCapture{check: func(response *controlResponse) error {
+			page, err := response.listPage("ListPartsResult")
+			if err == nil && response.statusCode == http.StatusOK && (page.fields["Bucket"] != client.owner.settings.Bucket || page.fields["Key"] != upload.Key || page.fields["UploadId"] != upload.ID) {
+				return failure(ErrProtocol, "part-upload")
+			}
+			return err
+		}}
 		page, err := client.owner.native.ListObjectParts(context.WithValue(work, controlResponseKey{}, capture), client.owner.settings.Bucket, upload.Key, upload.ID, after, client.owner.settings.MaxEntries)
-		err = errors.Join(err, listResponsesFailure(capture, 0, "ListPartsResult"))
 		if err != nil {
 			return nativeFailure(ErrList, "parts", work, err), nil
 		}

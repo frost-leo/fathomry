@@ -51,9 +51,10 @@ independent peer read-back and evidence reception with failed diagnostics.
 | Configuration/conformance | Defaults, invalid/unknown modes with no I/O, frozen overlays/maps, duplicate preflight, independent sources, credential separation, borrowing, private formatting |
 | Upload/wire | Single/serial multipart and empty/unknown-size controls; actual final conditions; independent hashes under concurrent calls; bounded exact input; no streaming signer or native retry amplification |
 | Read/metadata | Full checksum corruption, expected digest, ranges and exact versions, ignored-range/version refusal, metadata copies, successful empty versus missing, partial sinks |
-| List/remove/copy | Output and aggregate response/exchange limits; explicit terminal flags and XML roots; versions/delete markers, per-target partial removals, bounded upload/part inspection, unsafe upload-cursor refusal, opaque copy-version encoding and source conditions |
+| List/remove/copy | Output and aggregate response/exchange limits; explicit terminal flags and XML roots; versions/delete markers, per-target partial removals, bounded inspection with raw opaque markers, opaque copy-version encoding and source conditions |
 | Lifecycle/failure | Blocked caller reader/body close/dial holds admission; late dial callbacks are fenced; request-body closure precedes buffer reuse; abort and late close failures survive; dropped completion still has independently observed effects |
 | Consumer/fuzz | Actual consuming executable selects MinIO v7.3.0; bounded input/response byte arithmetic and malformed/EOF-bearing terminal outcomes |
+| Core additions | Restricted signing/grants/privacy; retained multipart setup, partial allocation, lost completion, failed abort and saturated finalization; contextual same-key versions, no-progress checks, non-monotonic marker pairs and joined body cleanup |
 
 `TestNativeCopyOptionsRequireExplicitEncoding` intentionally observes a native
 limitation. Its PASS is not qualification; the adjacent integration test must
@@ -62,6 +63,11 @@ Historical native probes/race failures remain in the issue reference workspace,
 not rewritten into passing integration claims.
 
 ## Real-service authorization and fixture
+
+The separate [public #104 fixture](../../../../adapters/objectstore/minio/v1/verification.md)
+requires explicit authorization to create/version/clean one random isolated bucket.
+It exercises new sessions, version continuation and actual bearer-capability use
+and denial. Its acceptance is not inferred from the older unversioned test below.
 
 The real test is disabled by default. Before enabling it, confirm:
 - the exact service/version and active account policy through read-only checks;

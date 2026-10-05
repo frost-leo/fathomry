@@ -25,10 +25,12 @@
 // Supported operations are bounded reads/downloads, stat, serial multipart and
 // single uploads, single-source server-side copy, bounded object/version listing,
 // incomplete-upload inspection/abort, per-target removal, and optional tags.
+// Owned serial multipart sessions and contextual resumable object/version cursors
+// retain native source responsibility. Explicit grants permit GET/HEAD/PUT signing.
 // Static V4 credentials, a fixed region, literal-IP endpoint, path addressing and
 // explicit TLS roots (or explicitly allowed HTTP) exclude ambient discovery.
 // Native retries, automatic multipart, ComposeObject, lazy Object handles,
-// privileged bucket controls, file helpers, presigning and native/RDMA modes
+// privileged bucket controls, file helpers, POST policies and native/RDMA modes
 // are not exposed. The package contract documents the remaining feature census.
 //
 // Accepted calls reserve independent invocation evidence before native work.

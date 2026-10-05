@@ -22,8 +22,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** framework composition and capability maintainers.
-**Status:** implemented private integration with local protocol qualification and
-an owner-authorized HTTP/unversioned service fixture; not unrestricted SDK support.
+**Status:** implemented bounded private integration with local protocol qualification;
+the public Adapter additionally exercises a fresh isolated HTTP/versioned service fixture.
+This is not unrestricted SDK support.
 **Package:** `github.com/frost-leo/fathomry/internal/objectstore/minio/v7`.
 
 ## Responsibility and call sequence
@@ -65,12 +66,12 @@ publication, schemas/manifests and durable evidence persistence are not supplied
 | Upload | Known length or `Size=-1`; successful empty; small single PUT; bounded serial Core multipart with one part buffer; final If-None-Match/If-Match | Native automatic/concurrent multipart, streamed V4 signing/trailers, arbitrary part workers/hashers/progress callbacks, force/fan-out/append, automatic replay |
 | Integrity | Precomputed per-request MD5 and SHA256; native full-object checksum checking when metadata supports it; separately computed digest and caller-supplied SHA256 comparison | ETag as universal MD5, early/partial/ranged/composite/absent-checksum reads as full-object verification, server ACK as persistence or independent read-back |
 | Copy/compose | One whole source within the same source scope, HEAD size check, source ETag condition and optional exact version, native metadata/tag COPY semantics | Destination-conditional copy, cross-bucket copy, multipart/range copy, ComposeObject, annotations policy, snapshot guarantees for mutable metadata with the same ETag |
-| Enumeration | Synchronous native recursive V2 or version iterator with bounded output, response bytes, requests and duration; lexical StartAfter | Unbounded channel producers, reverse-version buffering, V1/delimiter/owner/metadata extension selection, atomic snapshots, stable cross-call version cursors |
-| Incomplete multipart | One bounded page of uploads or parts with explicit safe next markers; one explicitly requested exact-ID abort | Ambiguous URL-encoded upload continuations; enumeration as ownership proof; automatic adoption/garbage collection; independently controlled multipart construction sessions |
+| Enumeration | Finite List and owned contextual Enumerate/Next for recursive V2/versions; bounded incremental results and exact native continuation | Unbounded producers, reverse-version buffering, V1/delimiter/owner/metadata selection, atomic snapshots or durable cross-process cursors |
+| Incomplete multipart | Bounded inspection with exact opaque markers; explicit Abort; owned BeginMultipart with serial Part/Complete/Abort | Enumeration as ownership proof, automatic adoption/garbage collection or durable upload recovery |
 | Removal | Bounded serial individual DELETEs, one outcome per input, optional exact version and observed delete-marker headers | Failure-only bulk-delete inference, recursive deletion, governance bypass, force delete, automatic historical-version removal |
 | Metadata/tags | Bounded copied user metadata on PUT; copied stat headers; optional bounded get/replace/remove tag sets | Arbitrary reserved headers, metadata-only self-copy/update protocol, tag-derived business identity |
 | Encryption/versioning/retention | Explicit SSE-S3 PUT over HTTPS; passive header/checksum/version/delete-marker observations; server-default encryption remains server-owned | SSE-C/KMS credentials or key management, bucket encryption/versioning changes, lock/retention/legal-hold mutation or governance bypass; dedicated GetObjectAttributes/ACL/retention APIs |
-| Delegation/files/notifications | None | Presigned URLs/POST forms, file helpers, background notification subscriptions or bucket notification configuration |
+| Delegation/files/notifications | Explicitly granted GET/HEAD/PUT Presign with bounded expiry and typed signed conditions | POST policies, arbitrary method/header/query escape, file helpers or notifications |
 | Administration/specialized servers | None | Bucket create/remove/policy/CORS/lifecycle/replication/inventory/QoS controls, madmin-go, Select/Restore/Prompt/Snowball, S3 Express/directory buckets, RDMA/native buffers |
 
 `Writes`, `Versions` and `Tags` are explicit source capability grants, not IAM
@@ -134,20 +135,29 @@ measurement of server work.
 Control byte limits are enforced while reading HTTP bodies **before native XML
 decoding**. A one-byte overflow probe detects an over-limit response and the
 remaining budget cannot underflow or be reset by another response. Native page
-decoding precedes output-entry projection; entry limits do not claim to count
-every native allocation. XML/object overhead, HTTP/TLS/socket buffers and caller
+decoding precedes output-entry projection. All listing families now validate
+bounded XML structure before SDK decoding: at most 1000 native entries per page,
+64032 elements, depth four, eight attributes per element, 32 distinct fields per
+container and 8 KiB per scalar control field. Repeated scalar fields reject;
+ChecksumAlgorithm permits at most 16 occurrences. Recursive CommonPrefixes and
+unrequested Grant/UserMetadata/UserTags extensions reject before SDK allocations.
+The working envelope includes a separate 1000-entry allowance even when MaxEntries
+requests or returns smaller chunks. XML/object overhead, HTTP/TLS/socket buffers and caller
 retention are not a process RSS limit. Admission/evidence byte reservations are
 declared working/retention envelopes, not allocator telemetry or a global quota.
 
 List responses require one explicit valid `IsTruncated` value; a missing flag
-cannot manufacture complete-empty output. Version listings require actual version
-IDs, and part continuations must match the last observed part. Truncated upload
-pages using `EncodingType=url` with an upload marker return `ErrUnsupported`:
-v7.3.0 decodes a field that S3 treats as opaque. Valid entries remain available
-when native decoding succeeded; a native decoding failure may leave mixed
-encoded/decoded fields, so those entries are deliberately not exposed. No
-corrupted or inferred next marker escapes. Narrow the inspected prefix or use
-an explicitly known upload ID rather than treating partial inspection as complete.
+cannot manufacture complete-empty output. Object/version pages require one matching
+bucket Name; multipart inspection requires unambiguous matching Bucket/Key/UploadId
+where applicable. Required entry identity and size fields cannot be missing or
+last-wins duplicates. Version listings require actual version
+IDs, and part continuations must match the last observed part. ListUploads now
+reads opaque upload markers from the original validated bounded control response,
+not by reversing v7.3.0's inappropriate URL decoding. Key fields are independently
+decoded using the observed encoding. A native opaque-marker escape error remains
+inspectable alongside recovered validated entries/continuation; no mixed partially
+decoded native fields or guessed ID escapes. This intentionally replaces the old
+blanket refusal of encoded upload continuations.
 
 `Result` is immutable shared in-process evidence. Returned payload/maps/headers/
 lists copy mutable storage. Returned `Object` values contain private immutable
@@ -163,6 +173,41 @@ Arbitrary native/caller error graphs are borrowed for deliberate inspection and
 are not deep-copied or bounded by an encoded-result byte reservation.
 
 ## Cancellation, cleanup and truthful effects
+
+### Owned sessions and delegation
+
+`BeginMultipart(setup, lifetime, cleanup, correlation, request)` owns a serial
+upload and unresolved root receipt. Part calls use nested independent results.
+The root permits one child lease (`LimitsV1.MaxLeases` is now 2); duplicate or
+non-consecutive parts reject, a short part must be final, and any failed accepted
+part poisons the session. Complete/Abort use the existing root slot at saturation.
+Setup cancellation after acquisition does not end retained lifetime. SessionTimeout
+defaults to 5m (1ms..1h); each operation retains Timeout and cleanup its independent
+CleanupTimeout/context. MaxRequests bounds setup/parts/Complete cumulatively;
+one additional abort is independently reserved. Control bytes are bounded per phase.
+Explicit Close or lifetime cancellation joins actual users before final evidence.
+Close native sessions before assembly shutdown; an assembly cannot discard live leases.
+
+`Enumerate` owns the contextual SDK iterator; Next emits at most MaxEntries
+observations. It can require one additional empty Next to observe native EOF.
+Both key/version markers remain inside the iterator. Marker pairs are checked for
+repetition, not lexical monotonicity, which real-service testing disproved.
+MaxRequests and MaxResponseBytes are cursor-wide cumulative ceilings. Limit
+exhaustion is incomplete evidence, not EOF or a safe cross-process restart token.
+Canceling an admitted fetch ends the cursor; Close joins the iterator and bodies.
+
+`PresignGET`, `PresignHEAD` and `PresignPUT` are independent explicit grants;
+PUT also requires Writes. Presign permits only these methods, the frozen scope,
+whole-second expiry, exact GET/HEAD versions and typed ETag/IfAbsent conditions.
+MaxPresignExpiry defaults to 15m and accepts 1s..7d. Issuance performs no HTTP I/O
+after readiness and is not an object effect. Explicit URL/header extraction is
+sensitive. Static-token validity is unknown, and source closure does not revoke
+an issued URL. Transfer limits do not bound later external bearer traffic.
+
+The [public Adapter contract](../../../../adapters/objectstore/minio/v1/interface.md)
+describes direct use, Framework composition and public evidence translation.
+
+### Ordinary transfers and transport
 
 The assembly owns its transport, without SDK health-check workers, credential
 refresh, environment proxy/CA discovery or cookie retention. Caller context

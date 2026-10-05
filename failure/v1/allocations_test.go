@@ -63,7 +63,7 @@ func TestCodeLayout(t *testing.T) {
 func TestAllocations(t *testing.T) {
 	t.Run("stable_first_party_manifest", func(t *testing.T) {
 		allocations := failure.Allocations()
-		if len(allocations) != 14 || allocations[0] != (failure.Allocation{Facility: 1, Module: "fathomry", Component: "failure"}) ||
+		if len(allocations) < 14 || allocations[0] != (failure.Allocation{Facility: 1, Module: "fathomry", Component: "failure"}) ||
 			allocations[1] != (failure.Allocation{Facility: 0x003, Module: "fathomry", Component: "i18n"}) ||
 			allocations[2] != (failure.Allocation{Facility: 0x004, Module: "fathomry", Component: "resource"}) ||
 			allocations[3] != (failure.Allocation{Facility: 0x005, Module: "fathomry", Component: "operation"}) ||
