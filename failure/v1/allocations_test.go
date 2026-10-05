@@ -21,6 +21,7 @@ package failure_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/frost-leo/fathomry/failure/v1"
@@ -78,6 +79,9 @@ func TestAllocations(t *testing.T) {
 			allocations[12] != (failure.Allocation{Facility: 0x080, Module: "fathomry", Component: "database_postgres"}) ||
 			allocations[13] != (failure.Allocation{Facility: 0x081, Module: "fathomry", Component: "database_mysql"}) {
 			t.Fatal("allocation manifest changed without migration")
+		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityKafka, Module: "fathomry", Component: "broker_kafka"}) || failure.FacilityKafka != 0x180 || failure.FacilityKafka.Domain() != failure.DomainMessaging {
+			t.Fatal("Kafka capability allocation changed")
 		}
 		if failure.ErrCode != 0xA0010001 || failure.ErrSerialization != 0xA0010007 {
 			t.Fatal("published local numbers changed")

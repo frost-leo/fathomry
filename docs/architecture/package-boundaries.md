@@ -211,6 +211,8 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | `adapters/configsource/{viper,nacos}/v1` | Full supported native capability translation, loadable settings, public evidence/lifecycle composition and selected raw profiles |
 | `adapters/database/v1` | Shared public budget, attribution and effective-profile data; no private/native engine or universal SQL client |
 | `adapters/database/{postgres,mysql}/v1` | Complete supported native SQL/preparation/transaction translation, source and retained-generation ownership, independent evidence and provider-specific results |
+| `adapters/broker/v1` | Shared public broker budget and attribution data; no native engine or universal client |
+| `adapters/broker/kafka/v1` | Kafka-specific production, exact/direct/group consumption, checkpoints and retained source/evidence ownership |
 | `framework/v1` | Composition of public runtime owners, released-evidence reception and bound presentation/logging; no SDK or Internal engine |
 | `framework/configuration/v1` | Explicit input binding and provider-owned typed Load/Watch; source/policy association, fenced publication, released facts and opt-in borrowed resource adoption |
 | `cmd/fathomry` | Official offline catalogs and exclusive project generation; private command implementation, not a public extension SDK |
@@ -251,7 +253,7 @@ compatibility facade. Direct public Adapter use remains a separate supported pat
 not an extra assembly obligation on the generated Boot. Shared data contracts and
 scenario-specific policies must not expose native/runtime handles as settings.
 
-The public database packages organize source by core feature, with matching
+The public database and broker packages organize source by core feature, with matching
 `<feature>_test.go` files. Configuration and dependency declarations stay in
 singular `option.go`; their focused controls stay in `option_test.go`. Cross-package,
 Framework and external-consumer checks live in `integration_test.go`. Separately

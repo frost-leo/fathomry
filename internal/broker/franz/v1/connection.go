@@ -51,6 +51,8 @@ type connection struct {
 	poisoned    atomic.Bool
 	closeOnce   sync.Once
 	closed      chan struct{}
+	groupMu     sync.Mutex
+	groups      int
 }
 
 // Select validates and freezes configuration with resource's existing overlay
@@ -147,7 +149,7 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 	return &Client{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil
 }
 
-func (owner *connection) newClient(transaction bool) (*kgo.Client, error) {
+func (owner *connection) newClient(transaction bool, extra ...kgo.Opt) (*kgo.Client, error) {
 	value := owner.settings
 	trust, err := tlsConfig(value)
 	if err != nil {
@@ -168,6 +170,14 @@ func (owner *connection) newClient(transaction bool) (*kgo.Client, error) {
 	if value.Compression == "gzip" {
 		compression = kgo.GzipCompression()
 	}
+	switch value.Compression {
+	case "snappy":
+		compression = kgo.SnappyCompression()
+	case "lz4":
+		compression = kgo.Lz4Compression()
+	case "zstd":
+		compression = kgo.ZstdCompression()
+	}
 	minimum := new(kversion.Versions)
 	minimum.SetMaxKeyVersion(int16(kmsg.Metadata), 10)
 	minimum.SetMaxKeyVersion(int16(kmsg.Fetch), 13)
@@ -176,11 +186,17 @@ func (owner *connection) newClient(transaction bool) (*kgo.Client, error) {
 	maximum.SetMaxKeyVersion(int16(kmsg.Metadata), 12)
 	maximum.SetMaxKeyVersion(int16(kmsg.Fetch), 13)
 	maximum.SetMaxKeyVersion(int16(kmsg.ListOffsets), 7)
-	if value.OffsetGroup != "" {
+	if value.OffsetGroup != "" || value.ConsumerGroup != "" {
 		minimum.SetMaxKeyVersion(int16(kmsg.OffsetCommit), 10)
 		minimum.SetMaxKeyVersion(int16(kmsg.OffsetFetch), 10)
 		maximum.SetMaxKeyVersion(int16(kmsg.OffsetCommit), 10)
 		maximum.SetMaxKeyVersion(int16(kmsg.OffsetFetch), 10)
+	}
+	if value.ConsumerGroup != "" {
+		// Dynamic single-member leave has only a top-level error in v2. The
+		// selected SDK does not report v3+ per-member leave errors to its caller.
+		minimum.SetMaxKeyVersion(int16(kmsg.LeaveGroup), 2)
+		maximum.SetMaxKeyVersion(int16(kmsg.LeaveGroup), 2)
 	}
 	opts := []kgo.Opt{
 		kgo.SeedBrokers(value.Brokers...), kgo.ClientID("fathomry"), kgo.Dialer(dial),
@@ -200,6 +216,13 @@ func (owner *connection) newClient(transaction bool) (*kgo.Client, error) {
 	if transaction {
 		opts = append(opts, kgo.TransactionalID(value.TransactionalID), kgo.TransactionTimeout(value.Timeout))
 	}
+	if value.Routing == "keyed" {
+		opts = append(opts, kgo.RecordPartitioner(kgo.StickyKeyPartitioner(nil)))
+	}
+	if mechanism := staticSASL(value); mechanism != nil {
+		opts = append(opts, kgo.SASL(mechanism))
+	}
+	opts = append(opts, extra...)
 	native, err := kgo.NewClient(opts...)
 	if err != nil {
 		return nil, failure(ErrConnect, "construct", err)

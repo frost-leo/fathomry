@@ -216,10 +216,14 @@ func (client *Client) commitCheckpoints(ctx context.Context, data *resultData, i
 	return joinFailures(ErrOffsets, "commit-offsets", failures)
 }
 func (client *Client) fetchCheckpoints(ctx context.Context, data *resultData, indices map[checkpointKey]int) error {
+	return client.fetchCheckpointsFor(ctx, client.owner.settings.OffsetGroup, data, indices)
+}
+
+func (client *Client) fetchCheckpointsFor(ctx context.Context, groupID string, data *resultData, indices map[checkpointKey]int) error {
 	request := kmsg.NewPtrOffsetFetchRequest()
 	request.RequireStable = true
 	group := kmsg.NewOffsetFetchRequestGroup()
-	group.Group = client.owner.settings.OffsetGroup
+	group.Group = groupID
 	topics := make(map[[16]byte]int)
 	for _, item := range data.checkpoints {
 		checkpoint := item.Checkpoint

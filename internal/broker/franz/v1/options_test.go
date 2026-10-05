@@ -50,7 +50,7 @@ func TestOptionsValidationAndExplicitDefaults(t *testing.T) {
 		{"active", func(v *OptionsV1) { v.MaxActive = 17 }},
 		{"negative-queue", func(v *OptionsV1) { v.QueuedCalls = -1 }},
 		{"retries", func(v *OptionsV1) { v.Retries = 11 }},
-		{"codec", func(v *OptionsV1) { v.Compression = "snappy" }},
+		{"codec", func(v *OptionsV1) { v.Compression = "unknown" }},
 		{"bytes", func(v *OptionsV1) { v.MaxBatchBytes = 1024 }},
 		{"wire", func(v *OptionsV1) { v.MaxWireBytes = 1024 }},
 	}
@@ -67,7 +67,7 @@ func TestOptionsValidationAndExplicitDefaults(t *testing.T) {
 	if value.Retries != 0 || value.Linger != 0 || value.Compression != "none" || value.MaxActive != 4 || value.MaxRecords != 256 {
 		t.Fatal("hidden defaults")
 	}
-	for _, layer := range []string{"unknown: true", "acks: 0", "consumer_group: bad", "timeout_ns: 0", "max_active: 0", "max_records: -1", "compression: snappy", "brokers: null", "max_active: 1\nmax_active: 2"} {
+	for _, layer := range []string{"unknown: true", "acks: 0", "consumer_group: bad", "timeout_ns: 0", "max_active: 0", "max_records: -1", "compression: unknown", "brokers: null", "max_active: 1\nmax_active: 2"} {
 		if _, err := Select(valid, resource.Layer{Kind: resource.Local, Content: []byte(layer)}); err == nil {
 			t.Fatalf("invalid layer accepted: %s", layer)
 		}

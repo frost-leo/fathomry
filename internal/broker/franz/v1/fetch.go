@@ -46,11 +46,12 @@ func (client *Client) fetchPartition(ctx context.Context, position Position, lea
 	partition := kmsg.NewFetchRequestTopicPartition()
 	partition.Partition, partition.FetchOffset, partition.PartitionMaxBytes = position.Partition, position.Offset, request.MaxBytes
 	request.Topics = []kmsg.FetchRequestTopic{{TopicID: position.TopicID, Partitions: []kmsg.FetchRequestTopicPartition{partition}}}
-	response, err := client.owner.native.Broker(int(leader)).Request(nativeContext{context.WithoutCancel(ctx)}, request)
+	bounded := &boundedFetchRequest{FetchRequest: request, wireBytes: client.owner.settings.MaxWireBytes, maxAborted: client.owner.settings.MaxDecodedRecords}
+	response, err := client.owner.native.Broker(int(leader)).Request(nativeContext{context.WithoutCancel(ctx)}, bounded)
 	if err != nil {
 		return kmsg.FetchResponseTopicPartition{}, nativeFailure(ErrRead, "fetch", ctx, err)
 	}
-	fetched := response.(*kmsg.FetchResponse)
+	fetched := response.(*boundedFetchResponse).FetchResponse
 	if fetched.Version != 13 {
 		return kmsg.FetchResponseTopicPartition{}, failure(ErrUnsupported, "fetch-version")
 	}
@@ -69,13 +70,17 @@ func (client *Client) fetchPartition(ctx context.Context, position Position, lea
 
 // Decoding is staged before SDK record allocation. The map owns only this
 // response's validated expansions; it is not a cross-call cache or pool.
-type decodedBatches map[[32]byte][]byte
+type decodedKey struct {
+	codec  kgo.CompressionCodecType
+	digest [32]byte
+}
+type decodedBatches map[decodedKey][]byte
 
 func (decoded decodedBatches) Decompress(src []byte, codec kgo.CompressionCodecType) ([]byte, error) {
-	if codec != kgo.CodecGzip {
+	if codec < kgo.CodecGzip || codec > kgo.CodecZstd {
 		return nil, failure(ErrUnsupported, "compression")
 	}
-	data, ok := decoded[sha256.Sum256(src)]
+	data, ok := decoded[decodedKey{codec, sha256.Sum256(src)}]
 	if !ok {
 		return nil, failure(ErrRead, "decode-state")
 	}
@@ -166,6 +171,9 @@ func validateRecords(data []byte, count int32, lastDelta int32, baseTimestamp in
 
 func prepareFetch(value settings, raw []byte) ([]byte, decodedBatches, error) {
 	decoded := make(decodedBatches)
+	if len(raw) > value.MaxWireBytes {
+		return nil, nil, failure(ErrLimit, "wire-bytes")
+	}
 	remaining := value.MaxDecodedBatchBytes
 	remainingRecords := value.MaxDecodedRecords
 	position, batches := 0, 0
@@ -221,16 +229,16 @@ func prepareFetch(value settings, raw []byte) ([]byte, decodedBatches, error) {
 		records := batch.Records
 		switch kgo.CompressionCodecType(batch.Attributes & 7) {
 		case kgo.CodecNone:
-		case kgo.CodecGzip:
+		case kgo.CodecGzip, kgo.CodecSnappy, kgo.CodecLz4, kgo.CodecZstd:
 			var err error
-			records, err = expandGzip(records, remaining)
+			records, err = expandCodec(records, kgo.CompressionCodecType(batch.Attributes&7), remaining)
 			if err != nil {
 				if position > 0 && errors.Is(err, ErrLimit) {
 					return raw[:position], decoded, nil
 				}
 				return nil, nil, err
 			}
-			decoded[sha256.Sum256(batch.Records)] = records
+			decoded[decodedKey{kgo.CompressionCodecType(batch.Attributes & 7), sha256.Sum256(batch.Records)}] = records
 		default:
 			return nil, nil, failure(ErrUnsupported, "compression")
 		}

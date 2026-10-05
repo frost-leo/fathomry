@@ -199,3 +199,34 @@ func TestProduceInterleavingAndPartitionOrder(t *testing.T) {
 		t.Fatal("physical interval was falsely filtered or incomplete", result.Err())
 	}
 }
+
+func TestKeyRoutingUsesAcknowledgedPartition(t *testing.T) {
+	cluster := localCluster(t)
+	options := clusterOptions(cluster)
+	options.Routing = "keyed"
+	fixture := bindFixture(t, options, 4)
+	if _, err := fixture.client.Produce(deadline(t), correlation("ambiguous"), []Message{{Topic: "records", Partition: 0, Key: []byte("key")}}); !errors.Is(err, ErrInput) {
+		t.Fatal("keyed routing silently ignored an explicit partition")
+	}
+	messages := make([]Message, 12)
+	for index := range messages {
+		messages[index] = Message{Topic: "records", Partition: -1, Key: []byte("fixed-key"), Value: []byte{byte(index)}}
+	}
+	result := produce(t, fixture.client, "keyed", messages...)
+	var partition int32 = -1
+	for index, write := range result.WritesCopy() {
+		if !write.PositionKnown || !write.IdentityChecked || write.Position.Partition < 0 {
+			t.Fatal("native routing position lost")
+		}
+		if partition < 0 {
+			partition = write.Position.Partition
+		}
+		if write.Position.Partition != partition {
+			t.Fatal("stable topology changed same-key partition")
+		}
+		raw := observe(t, cluster.ListenAddrs(), "records", partition, write.Position.Offset, 1)[0]
+		if !bytes.Equal(raw.Value, messages[index].Value) {
+			t.Fatal("ACK not independently observed")
+		}
+	}
+}
