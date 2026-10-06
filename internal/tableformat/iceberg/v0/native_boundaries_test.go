@@ -71,7 +71,7 @@ func TestNativeArrowOwnershipOnEarlyExitCancellationAndReadError(t *testing.T) {
 					limit = 3
 				}
 				data := &resultData{}
-				err = collectRecords(data, schema, records, limit, optionsOrDefaultBatchBytes(options))
+				err = collectRecords(ctx, data, schema, records, limit, optionsOrDefaultBatchBytes(options))
 				if mode == "full" {
 					if err != nil {
 						t.Fatal(err)
@@ -123,7 +123,7 @@ func TestPartialRecordsRemainDecodableAfterFailure(t *testing.T) {
 				maximum = reference.Len()
 			}
 			data := &resultData{}
-			err := collectRecords(data, first.Schema(), records, 100, maximum)
+			err := collectRecords(context.Background(), data, first.Schema(), records, 100, maximum)
 			if err == nil || data.complete {
 				t.Fatal("partial scan certified complete")
 			}
