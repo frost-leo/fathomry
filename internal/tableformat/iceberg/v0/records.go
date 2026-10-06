@@ -197,11 +197,18 @@ func joinBatches(ctx context.Context, schema *arrow.Schema, batches []arrow.Reco
 	}
 	return array.NewRecordBatch(schema, columns, rows), nil
 }
-func coalesceRecords(ctx context.Context, s settings, schema *arrow.Schema, records iter.Seq2[arrow.RecordBatch, error]) (arrow.RecordBatch, error) {
+func coalesceRecords(ctx context.Context, s settings, schema *arrow.Schema, records iter.Seq2[arrow.RecordBatch, error]) (combined arrow.RecordBatch, resultErr error) {
 	var batches []arrow.RecordBatch
 	defer func() {
 		for _, batch := range batches {
 			batch.Release()
+		}
+		if err := ctx.Err(); err != nil {
+			if combined != nil {
+				combined.Release()
+				combined = nil
+			}
+			resultErr = errors.Join(resultErr, err, context.Cause(ctx))
 		}
 	}()
 	var rows, bytesUsed int64

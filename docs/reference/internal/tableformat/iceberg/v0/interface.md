@@ -145,6 +145,14 @@ A valid IPC prefix can accompany a later failure; a failed oversized record is
 not advertised as delivered. Returned metadata/IPC/names/file-effect copy methods
 provide independent storage. These are runtime values, not Fathomry durable DTOs.
 
+Record consumers check the call's execution context after native iterator drain
+and owned Arrow/IPC cleanup. A canceled or expired iterator cannot certify complete
+empty success merely because the SDK ended without yielding an error. Reads retain
+decodable partial IPC and row facts with `Complete=false`; rewrite consumers return
+no usable partial record. The cancellation cause remains inspectable alongside
+other errors. This fence does not reinterpret Catalog acknowledgement, staging
+or file effects, and normal empty or deliberately limited reads remain valid.
+
 ## Effects, errors and cleanup
 
 - File acknowledgement proves an object request was acknowledged, not a table commit.
@@ -172,7 +180,8 @@ inexact/unobserved attempts.
 See [verification](verification.md), the
 [SDK integration architecture](../../../../../architecture/sdk-integration.md),
 [source](../../../../../../internal/tableformat/iceberg/v0/),
-[composition tests](../../../../../../internal/tableformat/iceberg/v0/integration_test.go)
+[composition tests](../../../../../../internal/tableformat/iceberg/v0/integration_test.go),
+[cancellation/cleanup regressions](../../../../../../internal/tableformat/iceberg/v0/cancellation_test.go),
 and [Issue #43](https://github.com/frost-leo/fathomry/issues/43).
 
 No business schema, Item/Run terminal policy, automatic business retry, durable

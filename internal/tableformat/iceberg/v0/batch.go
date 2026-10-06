@@ -448,10 +448,10 @@ func (client *Client) Read(ctx context.Context, id fault.Correlation, name strin
 		if err != nil {
 			return err
 		}
-		return collectRecords(data, outputSchema, wrap(records), request.Limit, s.MaxBatchBytes)
+		return collectRecords(ctx, data, outputSchema, wrap(records), request.Limit, s.MaxBatchBytes)
 	})
 }
-func collectRecords(data *resultData, schema *arrow.Schema, records iter.Seq2[arrow.RecordBatch, error], limit, maximum int) error {
+func collectRecords(ctx context.Context, data *resultData, schema *arrow.Schema, records iter.Seq2[arrow.RecordBatch, error], limit, maximum int) error {
 	buffer := &limitedBuffer{maximum: maximum - 8}
 	writer := ipc.NewWriter(buffer, ipc.WithSchema(schema))
 	var primary error
@@ -507,6 +507,12 @@ func collectRecords(data *resultData, schema *arrow.Schema, records iter.Seq2[ar
 	}
 	if closeErr != nil {
 		data.complete = false
+	}
+	// Native cancellation may end the iterator silently. Fence the execution
+	// context only after iterator draining and IPC cleanup have completed.
+	if err := ctx.Err(); err != nil {
+		data.complete = false
+		primary = errors.Join(primary, err, context.Cause(ctx))
 	}
 	return errors.Join(primary, closeErr)
 }

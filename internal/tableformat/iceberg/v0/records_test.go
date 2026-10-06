@@ -108,7 +108,7 @@ func TestSparseReadAndRewriteReleaseArrowReferences(t *testing.T) {
 					t.Fatal(err)
 				}
 				data := &resultData{}
-				if err = collectRecords(data, arrowSchema, wrap(records), 65536, defaults(options).MaxBatchBytes); err != nil {
+				if err = collectRecords(ctx, data, arrowSchema, wrap(records), 65536, defaults(options).MaxBatchBytes); err != nil {
 					t.Fatal(err)
 				}
 				inspectRows(t, Result{data: data}, expectedRows(1, 1, "rows"))
