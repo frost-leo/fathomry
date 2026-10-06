@@ -173,6 +173,7 @@ func (client *Client) Subscribe(ctx, cleanupCtx context.Context, id fault.Correl
 // Value is an Array: ["message", channel, pattern, payload],
 // ["subscribe"|"psubscribe"|"ssubscribe", channel, count], or ["pong", payload].
 // Empty payload is present text, not a missing reply.
+// Native array payloads remain an Array in the payload position, not empty text.
 func (subscription *Subscription) Receive(ctx context.Context, id fault.Correlation) (receipt *invocation.Receipt[Result], err error) {
 	if subscription == nil || subscription.subscriptionState == nil || ctx == nil || !subscription.mu.TryLock() {
 		return nil, failure(ErrState, "subscription")
@@ -220,7 +221,19 @@ func (subscription *Subscription) Receive(ctx context.Context, id fault.Correlat
 		var data []any
 		switch message := raw.(type) {
 		case *sdk.Message:
-			data = []any{"message", message.Channel, message.Pattern, message.Payload}
+			var payload any = message.Payload
+			if message.PayloadSlice != nil {
+				if len(message.PayloadSlice) > subscription.client.owner.settings.MaxReplyElements {
+					err = failure(ErrLimit, "message")
+					break
+				}
+				items := make([]any, len(message.PayloadSlice))
+				for index, item := range message.PayloadSlice {
+					items[index] = item
+				}
+				payload = items
+			}
+			data = []any{"message", message.Channel, message.Pattern, payload}
 		case *sdk.Subscription:
 			data = []any{message.Kind, message.Channel, int64(message.Count)}
 		case *sdk.Pong:
@@ -228,7 +241,14 @@ func (subscription *Subscription) Receive(ctx context.Context, id fault.Correlat
 		default:
 			err = failure(ErrProtocol, "message")
 		}
-		result.replies[0] = Reply{state: Replied, value: freeze(data), err: nativeFailure(work, err)}
+		if err == nil {
+			err = checkReply(data, subscription.client.owner.settings.MaxReplyBytes, subscription.client.owner.settings.MaxReplyElements)
+		}
+		reply := Reply{state: Replied, err: nativeFailure(work, err)}
+		if err == nil {
+			reply.value, reply.present = freeze(data), true
+		}
+		result.replies[0] = reply
 	}
 	call.Complete(invocation.Outcome[Result]{Present: err == nil, Value: result, Primary: nativeFailure(work, err)})
 	returned = true

@@ -67,6 +67,8 @@ func (command Command) routingPosition() (int8, error) {
 	}
 	var err error
 	switch name {
+	case "XNACK", "XCFGSET":
+		position = 1
 	case "FCALL", "FCALL_RO":
 		if len(args) < 3 {
 			return 0, failure(ErrInput, "arguments")

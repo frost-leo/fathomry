@@ -102,6 +102,19 @@ access and original causes are also sensitive.
 
 [Load/query/ownership tests](../../../../../../adapters/configsource/viper/v1/load_test.go),
 [Watch and privacy tests](../../../../../../adapters/configsource/viper/v1/watch_test.go),
-[raw Source tests](../../../../../../adapters/configsource/viper/v1/source_test.go) and the
+[raw Source tests](../../../../../../adapters/configsource/viper/v1/acquisition_test.go) and the
 [independent consumer](../../../../../../adapters/configsource/viper/v1/testdata/consumer/consumer_test.go)
 exercise both native and strict use. Selecting Viper does not import Nacos.
+
+## Package organization
+
+The [Adapter tree map](../../../../../../adapters/README.md) defines this package's role
+and file responsibilities; shared mechanisms, capability vocabulary, preparation
+and concrete providers do not acquire identical APIs by convention.
+
+Error definitions/resources remain offline. Runtime construction, translation
+and native inspection live in `error.go`; formatting/serialization guards live
+in `diagnostics.go`. Bare or transparently wrapped/joined public errors retain
+existing ownership, details and causes. Explicit native frames keep their
+provider classification; bounded internal graph search does not imply that
+external `errors.Is/As` on arbitrary caller graphs is bounded.

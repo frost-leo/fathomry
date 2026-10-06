@@ -20,10 +20,8 @@
 package mysql
 
 import (
-	"database/sql"
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/database/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/database/mysql/v1"
 )
@@ -42,8 +40,6 @@ const (
 	MaxArgumentBytes      = native.MaxArgumentBytes
 	MaxColumns            = native.MaxColumns
 	MaxPreparedStatements = native.MaxPreparedStatements
-
-	familyRecords = MaxPreparedStatements + 2
 )
 
 // Settings is loadable data covering the supported native profile, not a DSN
@@ -125,40 +121,4 @@ func options(value Settings) native.OptionsV1 {
 func Validate(value Settings) error {
 	_, err := native.Select(options(value))
 	return translate(err, "validate")
-}
-
-// Recommend validates settings and derives budgets from the supported native
-// reservation model. The extra 64 KiB covers bounded public attribution.
-func Recommend(value Settings) (database.Policy, error) {
-	if err := Validate(value); err != nil {
-		return database.Policy{}, err
-	}
-	limits := native.LimitsV1(options(value))
-	rows, result, wire := value.MaxRows, value.MaxResultBytes, value.MaxPacketBytes
-	if rows == 0 {
-		rows = 1024
-	}
-	if result == 0 {
-		result = 4 << 20
-	}
-	if wire == 0 {
-		wire = 1 << 20
-	}
-	evidence := int64(result+3*wire) + int64(rows)*(MaxColumns*24+48) + 128<<10
-	budget := database.Budget{WorkBytes: limits.Bytes/int64(limits.Active) + 64<<10, EvidenceBytes: evidence + 64<<10}
-	capacity := 1 + limits.Active*familyRecords + limits.Queued
-	return database.Policy{
-		Budget: budget,
-		Runtime: adapters.Options{MaxActive: 1 + limits.Active, MaxQueued: limits.Queued,
-			MaxWorkBytes:   sourceWorkBytes + int64(limits.Active)*budget.WorkBytes,
-			MaxQueuedBytes: int64(limits.Queued) * budget.WorkBytes},
-		Evidence: adapters.EvidenceOptions{Capacity: capacity, MaxBytes: sourceEvidenceBytes + int64(capacity-1)*budget.EvidenceBytes},
-	}, nil
-}
-
-// TxOptions supports the native default and four MySQL isolation levels.
-// All tables and trigger effects must satisfy the declared InnoDB profile.
-type TxOptions struct {
-	Isolation sql.IsolationLevel
-	ReadOnly  bool
 }

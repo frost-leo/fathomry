@@ -116,10 +116,7 @@ func Open(ctx context.Context, settings Settings, deps Dependencies) (*Owner, er
 		}
 		state := &sourceState{selection: selected, assembly: assembly, policy: policy, call: call, guard: guard, releaseIdentity: releaseIdentity,
 			primary: primary, gate: make(chan struct{}, 1), idle: make(chan struct{})}
-		state.maxRecords = settings.MaxRecords
-		if state.maxRecords == 0 {
-			state.maxRecords = 256
-		}
+		state.maxRecords = native.BudgetV1(options(settings)).MaxRecords
 		if snapshot := assembly.Snapshot(); len(snapshot.Sources) == 1 {
 			state.info = sourceInfo(snapshot.Sources[0].Info)
 		}

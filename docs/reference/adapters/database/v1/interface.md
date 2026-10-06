@@ -89,3 +89,9 @@ The common package's dependency boundary is checked in
 The concrete provider tests exercise
 the actual public/native translation separately. Protocol peers and successful
 dependency checks are not real database acceptance.
+
+## Package organization
+
+The [Adapter tree map](../../../../../adapters/README.md) defines this package's role
+and file responsibilities; shared mechanisms, capability vocabulary, preparation
+and concrete providers do not acquire identical APIs by convention.

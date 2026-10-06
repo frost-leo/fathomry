@@ -83,6 +83,18 @@ func TestAllocations(t *testing.T) {
 		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityKafka, Module: "fathomry", Component: "broker_kafka"}) || failure.FacilityKafka != 0x180 || failure.FacilityKafka.Domain() != failure.DomainMessaging {
 			t.Fatal("Kafka capability allocation changed")
 		}
+		for _, expected := range []failure.Allocation{
+			{Facility: failure.FacilityRedisCache, Module: "fathomry", Component: "cache_redis"},
+			{Facility: failure.FacilityRedisMessaging, Module: "fathomry", Component: "messaging_redis"},
+		} {
+			if !slices.Contains(allocations, expected) {
+				t.Fatal("Redis capability allocation missing")
+			}
+		}
+		if failure.FacilityRedisCache != 0x100 || failure.FacilityRedisMessaging != 0x181 ||
+			failure.FacilityRedisCache.Domain() != failure.DomainCache || failure.FacilityRedisMessaging.Domain() != failure.DomainMessaging {
+			t.Fatal("Redis capability domain changed")
+		}
 		if failure.ErrCode != 0xA0010001 || failure.ErrSerialization != 0xA0010007 {
 			t.Fatal("published local numbers changed")
 		}
@@ -116,7 +128,7 @@ func TestAllocations(t *testing.T) {
 			},
 			"reserved_domain":               func(d *failure.Definition) { d.Code = 0xA7800001 },
 			"steal_assigned":                func(d *failure.Definition) { d.Code = 0xA0010010 },
-			"use_unassigned":                func(d *failure.Definition) { d.Code = 0xA1000001 },
+			"use_unassigned":                func(d *failure.Definition) { d.Code = 0xA1010001 },
 			"first_party_name_in_extension": func(d *failure.Definition) { d.Module = "fathomry"; d.Identifier = "fathomry.source.read_failed" },
 			"first_party_submodule_in_extension": func(d *failure.Definition) {
 				d.Module = "fathomry.custom"

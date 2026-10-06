@@ -22,6 +22,7 @@ package nacos
 import (
 	"time"
 
+	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/configsource/nacos/v2"
 )
 
@@ -118,3 +119,11 @@ func options(value Settings) (native.OptionsV1, error) {
 }
 func nativeKey(value Key) native.KeyV1 { return native.KeyV1{Group: value.Group, DataID: value.DataID} }
 func publicKey(value native.KeyV1) Key { return Key{Group: value.Group, DataID: value.DataID} }
+
+// Dependencies binds caller-owned operation admission and required evidence.
+// The caller owns runtime shutdown and evidence delivery/acknowledgement.
+type Dependencies struct {
+	Runtime  *adapters.Runtime
+	Evidence *adapters.Inbox[Evidence]
+	Observer *adapters.Observer
+}

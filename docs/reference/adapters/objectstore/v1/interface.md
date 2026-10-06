@@ -71,8 +71,14 @@ delegation, retained multipart/cursor handles and provider error definitions.
 Shared contracts do not expose an Internal bridge or unify future SDK methods.
 
 [Metadata tests](../../../../../adapters/objectstore/v1/metadata_test.go),
-[option tests](../../../../../adapters/objectstore/v1/option_test.go) and
+[policy tests](../../../../../adapters/objectstore/v1/policy_test.go) and
 [integration tests](../../../../../adapters/objectstore/v1/integration_test.go)
 check copying, diagnostics, overlap arithmetic and the actual dependency graph.
 The [independent consumer](../../../../../adapters/objectstore/minio/v1/testdata/consumer/main.go)
 uses both shared contracts and a selected concrete provider.
+
+## Package organization
+
+The [Adapter tree map](../../../../../adapters/README.md) defines this package's role
+and file responsibilities; shared mechanisms, capability vocabulary, preparation
+and concrete providers do not acquire identical APIs by convention.

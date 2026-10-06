@@ -37,9 +37,12 @@ public framework API, or generic client abstraction.
    go-redis client is started. This deliberately uses the official SDK's global
    logging API. Do not call it concurrently or re-enable raw native logging while
    Providers run. Source constructors never silently change process logging.
-2. Prepare `OptionsV1` with `Select` (or `SelectWithPassword`), attach
-   `resource.WithLimits(selected, LimitsV1(options))`, then assemble. If strict
-   resource overlays change bounds, attach the corresponding resolved policy.
+2. Resolve `OptionsV1` and overlays once with `PrepareV1`. Its `Metadata`
+   exposes authoritative work/evidence/source reservations and limits;
+   `Selection` attaches that same resolved policy. `Select` and
+   `SelectWithPassword` also use this preparation path. `LimitsV1` remains a
+   bootstrap-only helper; do not override a resolved selection with unresolved
+   default arithmetic. Public composition consumes Metadata, not private formulas.
    Construction does not prove connectivity or perform application readiness I/O.
    Native Ring heartbeat/background initialization can establish connections.
 3. `Bind` joins the exact selection, authoritative admission and a separately
@@ -146,6 +149,9 @@ raw handles/writers and deferred mutable Cmder accessors are not exposed.
 return independent outer storage. Nested values are immutable and concurrent-read
 safe. No native mutable result is published. Null, empty text, zero numbers,
 arrays/maps, booleans, doubles and decimal big integers remain distinct.
+`Reply.HasValue` independently reports successful bounded value retention:
+decoded null is present, while missing/invalid/oversized data and a top-level
+server error without a value are not. ReplyState remains independent.
 Top-level `redis.Nil`, `redis.TxFailedErr`, server and transport errors retain
 intentional `errors.Is/As` inspection. Nested RESP errors stay in `Value.Err()`.
 
@@ -155,6 +161,20 @@ intentional `errors.Is/As` inspection. Nested RESP errors stay in `Value.Err()`.
 `Unknown` after SDK entry includes missing acknowledgements, framing failures
 and timeouts. These states do not prove durability, uniqueness, rollback or retry
 safety. Scripts and transaction runtime errors may leave partial mutations.
+Validated partial non-null values may accompany errors; HasValue does not assert
+completeness. Pub/Sub native array payloads stay arrays in the normalized payload
+position rather than becoming empty text. XNACK and XCFGSET have ordinary exact
+grants and explicit stream-key routing; service-version support remains separate.
+
+`Stats.AutomaticBatches` and `AutomaticMaxWidth` report observed native
+auto-pipeline dispatch shape, not successful effects or a performance claim.
+Tracking is source-owned, bounded by admitted deferred calls and removed before
+their local completion. Ordinary pipelines do not increment these diagnostics.
+For batched Submit/Automatic work, the pinned SDK ignores per-command contexts
+after enqueue, including during Close. Native phase timeouts and a separate
+30-second batch-permit backstop are not a total queue-to-completion deadline.
+Accepted work and its evidence stay owned through actual completion; cancellation
+cannot revoke queued mutations or erase a later known successful reply.
 
 ## Bounds, cancellation and cleanup
 

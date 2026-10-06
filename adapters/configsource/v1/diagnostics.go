@@ -36,3 +36,23 @@ func (Schema[T]) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("co
 func (Schema[T]) LogValue() slog.Value           { return slog.StringValue("configsource.Schema") }
 func (Schema[T]) MarshalJSON() ([]byte, error)   { return nil, fail(ErrSerialization, "marshal_schema") }
 func (*Schema[T]) UnmarshalJSON([]byte) error    { return fail(ErrSerialization, "unmarshal_schema") }
+
+func (Raw) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("configsource.Raw[restricted]"))
+}
+func (Raw) LogValue() slog.Value             { return slog.StringValue("configsource.Raw[restricted]") }
+func (Batch) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("configsource.Batch")) }
+func (Batch) LogValue() slog.Value           { return slog.StringValue("configsource.Batch") }
+func (Batch) MarshalJSON() ([]byte, error)   { return nil, fail(ErrSerialization, "marshal") }
+func (*Batch) UnmarshalJSON([]byte) error    { return fail(ErrSerialization, "unmarshal") }
+func (Observation) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("configsource.Observation"))
+}
+func (Observation) LogValue() slog.Value { return slog.StringValue("configsource.Observation") }
+
+func (Prepared[T]) Format(state fmt.State, _ rune) {
+	_, _ = state.Write([]byte("configsource.Prepared"))
+}
+func (Prepared[T]) LogValue() slog.Value         { return slog.StringValue("configsource.Prepared") }
+func (Prepared[T]) MarshalJSON() ([]byte, error) { return nil, fail(ErrSerialization, "marshal") }
+func (*Prepared[T]) UnmarshalJSON([]byte) error  { return fail(ErrSerialization, "unmarshal") }

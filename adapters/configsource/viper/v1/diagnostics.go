@@ -20,42 +20,9 @@
 package viper
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
-
-	"github.com/frost-leo/fathomry/failure/v1"
-	native "github.com/frost-leo/fathomry/internal/configsource/viper/v1"
 )
-
-func translate(err error, operation string) error {
-	if err == nil {
-		return nil
-	}
-	code := ErrRead
-	if operation == "close" {
-		code = ErrClose
-	}
-	if direct, ok := err.(interface{ Is(error) bool }); ok {
-		for _, entry := range []struct {
-			native error
-			public failure.Code
-		}{
-			{native.ErrInput, ErrInput}, {native.ErrLimit, ErrLimit}, {native.ErrRead, ErrRead},
-			{native.ErrDecode, ErrDecode}, {native.ErrClose, ErrClose}, {native.ErrClosed, ErrClosed}, {native.ErrState, ErrState},
-		} {
-			if direct.Is(entry.native) {
-				code = entry.public
-				break
-			}
-		}
-	} else if errors.Is(err, native.ErrClose) {
-		// Owned file reads can join a read failure and a close failure. Do not
-		// search through an already-classified outer native occurrence.
-		code = ErrClose
-	}
-	return fail(code, operation, err)
-}
 
 type private struct{}
 

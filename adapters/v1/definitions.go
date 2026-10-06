@@ -40,14 +40,6 @@ const (
 	ErrSerialization failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityOperation)<<16 | 0x000E
 )
 
-// Details is direct local operation evidence. Zero sequence/parent means
-// unspecified; Pending is occurrence-time local responsibility, not rollback.
-type Details struct {
-	Sequence uint64
-	Parent   uint64
-	Pending  bool
-}
-
 // Definitions returns detached declarations for explicit failure/i18n composition.
 func Definitions() []failure.Definition {
 	result := make([]failure.Definition, 0, 14)
@@ -90,11 +82,4 @@ func definition(code failure.Code) failure.Definition {
 	}
 	return failure.Definition{Code: code, Identifier: failure.Identifier("fathomry.operation." + reason), Module: "fathomry", Component: "operation",
 		Revision: 1, Message: message, Details: failure.Contract{ID: "fathomry.operation.details", Version: 1}}
-}
-func failureOf(code failure.Code, operation, scope string, details Details, causes ...error) error {
-	value, err := failure.NewDetailed(definition(code), failure.Location{Operation: operation, Instance: scope}, details, func(value Details) Details { return value }, causes...)
-	if err != nil {
-		return err
-	}
-	return value
 }

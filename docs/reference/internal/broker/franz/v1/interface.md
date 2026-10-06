@@ -73,6 +73,12 @@ business completion or absence of an execution.
 
 ## Construction and call sequence
 
+`BudgetV1(options)` exposes the same defaulted work/evidence limits and record
+bound as native construction, plus the declared persistent client/socket/codec
+envelope. It is offline, not measured RSS or service capacity. Validate options
+with `Select`; like `LimitsV1`, this helper does not resolve later source layers.
+Public composition adds only its own bridge and evidence overhead.
+
 1. `Select(OptionsV1, layers...)` calls `resource.Prepare` once. Attach
    `resource.WithLimits` before `resource.Assemble`; `LimitsV1` recommends
    limits for defaulted options, **not differently overlaid settings**.

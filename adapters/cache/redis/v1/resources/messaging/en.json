@@ -1,0 +1,118 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>.",
+    ""
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "messaging_redis",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.messaging_redis.invalid_input",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Redis input or settings are invalid."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.authority_refused",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.authority_refused.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Redis capability or endpoint authority was refused."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.unsupported_profile",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.unsupported_profile.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested Redis profile is unsupported."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A Redis capability bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.protocol_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.protocol_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A Redis reply was malformed or could not be retained."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.command_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.command_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A Redis command failed; inspect individual reply and effect facts."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.invalid_state",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.invalid_state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Redis owner cannot perform this operation."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Redis cleanup failed; actual release is reported separately."
+      }
+    },
+    {
+      "id": "fathomry.messaging_redis.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.messaging_redis.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Redis runtime value serialization is unsupported."
+      }
+    }
+  ]
+}

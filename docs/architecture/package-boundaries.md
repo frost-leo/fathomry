@@ -253,14 +253,14 @@ compatibility facade. Direct public Adapter use remains a separate supported pat
 not an extra assembly obligation on the generated Boot. Shared data contracts and
 scenario-specific policies must not expose native/runtime handles as settings.
 
-The public database and broker packages organize source by core feature, with matching
-`<feature>_test.go` files. Configuration and dependency declarations stay in
-singular `option.go`; their focused controls stay in `option_test.go`. Cross-package,
-Framework and external-consumer checks live in `integration_test.go`. Separately
-authorized real-service tests retain independent build tags in
-`integration_service_test.go`. Review-round, stress and fuzz categories do not
+The [Adapter tree map](../../adapters/README.md) owns the role-specific file
+conventions for every current Adapter package. Source follows cohesive
+responsibilities with matching focused tests; shared contracts and configuration
+providers do not acquire the data-provider API merely to match a file template.
+Cross-package, Framework and external-consumer checks live in
+`integration_test.go`. Separately authorized service tests retain explicit
+opt-in/build-tag boundaries. Review-round, stress and fuzz categories do not
 create parallel file taxonomies: those tests stay with the capability they test.
-Existing unrelated package layouts are not mechanically migrated by this change.
 
 Database Adapters reuse the original native pools. Their non-exported provider
 code translates private assemblies/receipts; no additional `adapters/database/internal`

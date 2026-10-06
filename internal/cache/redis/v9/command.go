@@ -87,7 +87,7 @@ func ordinary(name string) bool {
 		"SADD SREM SMEMBERS SCARD SISMEMBER SMISMEMBER SPOP SRANDMEMBER SMOVE SINTER SUNION SDIFF SINTERSTORE SUNIONSTORE SDIFFSTORE SINTERCARD SUNIONCARD SDIFFCARD SSCAN " +
 		"ZADD ZREM ZCARD ZCOUNT ZINCRBY ZSCORE ZMSCORE ZRANK ZREVRANK ZRANGE ZRANGEBYSCORE ZREVRANGE ZREVRANGEBYSCORE ZRANGEBYLEX ZREVRANGEBYLEX ZREMRANGEBYRANK ZREMRANGEBYSCORE ZREMRANGEBYLEX ZLEXCOUNT ZPOPMIN ZPOPMAX BZPOPMIN BZPOPMAX ZMPOP BZMPOP ZRANDMEMBER ZDIFF ZDIFFSTORE ZINTER ZINTERCARD ZINTERSTORE ZUNION ZUNIONSTORE ZRANGESTORE ZSCAN " +
 		"SETBIT GETBIT BITCOUNT BITPOS BITOP BITFIELD BITFIELD_RO GEOADD GEODIST GEOHASH GEOPOS GEORADIUS GEORADIUS_RO GEORADIUSBYMEMBER GEORADIUSBYMEMBER_RO GEOSEARCH GEOSEARCHSTORE PFADD PFCOUNT PFMERGE " +
-		"SCAN SORT SORT_RO XADD XDEL XLEN XRANGE XREVRANGE XREAD XREADGROUP XGROUP XINFO XACK XPENDING XCLAIM XAUTOCLAIM XTRIM XSETID XACKDEL XDELEX " +
+		"SCAN SORT SORT_RO XADD XDEL XLEN XRANGE XREVRANGE XREAD XREADGROUP XGROUP XINFO XACK XNACK XCFGSET XPENDING XCLAIM XAUTOCLAIM XTRIM XSETID XACKDEL XDELEX " +
 		"PUBLISH SPUBLISH PUBSUB EVAL EVAL_RO EVALSHA EVALSHA_RO FCALL FCALL_RO WAIT WAITAOF "
 	return strings.Contains(names, " "+name+" ")
 }
@@ -172,14 +172,19 @@ const (
 // A server error does not prove that a script or module made no partial mutation.
 type Reply struct {
 	private
-	state ReplyState
-	value Value
-	err   error
+	state   ReplyState
+	value   Value
+	present bool
+	err     error
 }
 
 func (reply Reply) State() ReplyState { return reply.state }
 func (reply Reply) Value() Value      { return reply.value }
-func (reply Reply) Err() error        { return reply.err }
+
+// HasValue distinguishes a validated decoded value (including Redis null) from
+// no reply, a server error without a value, or a value discarded for bounds.
+func (reply Reply) HasValue() bool { return reply.present }
+func (reply Reply) Err() error     { return reply.err }
 
 // Result is immutable and concurrently readable. Commands returns independent
 // slice storage; neither native Cmder nor mutable values are published.
@@ -220,8 +225,9 @@ func collect(ctx context.Context, commands []*sdk.Cmd, entered, cached bool, lim
 				reply.state = CacheOrReply
 			}
 			boundErr := checkReply(raw, limits.MaxReplyBytes, limits.MaxReplyElements)
-			if boundErr == nil {
+			if boundErr == nil && !untouched && (raw != nil || err == nil || errors.Is(err, sdk.Nil)) {
 				reply.value = freeze(raw)
+				reply.present = true
 			}
 			bounds = errors.Join(bounds, boundErr)
 			reply.err = nativeFailure(ctx, errors.Join(err, boundErr))

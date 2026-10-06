@@ -185,3 +185,15 @@ classic members, redistribution, explicit commits, stale refusal, leave/rejoin
 and no close-time commit. It changes no service configuration or business data.
 Its PLAINTEXT/no-auth RF1 profile does not qualify deployed TLS/SASL, multi-replica
 failover or production capacity.
+
+## Error boundary organization
+
+Maintenance follows the shared [public Adapter contract](../../../../../development/public-adapters.md):
+configuration and policy are separate, native budgets are authoritative, and
+this provider's readiness, context and result semantics remain distinct.
+
+Stable declarations, runtime mapping, diagnostics and locale embedding follow
+[the public adapter error boundary](../../../../../development/adapter-errors.md).
+Transparent public-error wrappers retain their existing core and original causes
+without exposing wrapper text; explicit native semantic frames remain provider-owned.
+This changes neither public APIs, numeric identities nor locale resources.

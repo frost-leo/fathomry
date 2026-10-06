@@ -62,7 +62,7 @@ supplies an isolated protocol peer, not a PostgreSQL server.
 ## Complete supported settings
 
 Settings is ordinary loadable data, not the private runtime Options type.
-Its [JSON/mapstructure names](../../../../../../adapters/database/postgres/v1/option.go)
+Its [JSON/mapstructure names](../../../../../../adapters/database/postgres/v1/options.go)
 are explicit. Durations are integer **nanoseconds**, not strings or seconds.
 After strict preparation, typed zero uses the defaults below; this public route
 does not forward private raw overlays with different explicit-zero semantics.
@@ -264,3 +264,15 @@ SQL, distributed quota, cross-database transaction, HA, automatic mutation retry
 or Workflow execution is implemented. The issue's implementation lineage is
 [#102](https://github.com/frost-leo/fathomry/issues/102); local qualification does
 not mean a PR has been merged.
+
+## Error boundary organization
+
+Maintenance follows the shared [public Adapter contract](../../../../../development/public-adapters.md):
+configuration and policy are separate, native budgets are authoritative, and
+this provider's readiness, context and result semantics remain distinct.
+
+Stable declarations, runtime mapping, diagnostics and locale embedding follow
+[the public adapter error boundary](../../../../../development/adapter-errors.md).
+Transparent public-error wrappers retain their existing core and original causes
+without exposing wrapper text; explicit native semantic frames remain provider-owned.
+This changes neither public APIs, numeric identities nor locale resources.

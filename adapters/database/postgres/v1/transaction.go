@@ -29,6 +29,31 @@ import (
 	sdk "github.com/jackc/pgx/v5"
 )
 
+// Isolation selects one supported PostgreSQL isolation level.
+type Isolation string
+
+const (
+	ReadCommitted  Isolation = "read committed"
+	RepeatableRead Isolation = "repeatable read"
+	Serializable   Isolation = "serializable"
+)
+
+// Access selects explicit PostgreSQL transaction access.
+type Access string
+
+const (
+	ReadOnly  Access = "read only"
+	ReadWrite Access = "read write"
+)
+
+// TxOptions requires explicit isolation/access. Deferrable requires serializable
+// read-only. It accepts no custom BEGIN/COMMIT SQL or retry policy.
+type TxOptions struct {
+	Isolation  Isolation
+	Access     Access
+	Deferrable bool
+}
+
 // Transaction retains one source generation and connection through finalization.
 // Overlapping use, including statements and savepoints, is refused.
 type Transaction struct {

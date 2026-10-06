@@ -24,8 +24,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
-	"log/slog"
 	"reflect"
 	"slices"
 
@@ -207,9 +205,3 @@ func fields(shape *shape, object map[string]any, prefix string) []string {
 	}
 	return result
 }
-func (Prepared[T]) Format(state fmt.State, _ rune) {
-	_, _ = state.Write([]byte("configsource.Prepared"))
-}
-func (Prepared[T]) LogValue() slog.Value         { return slog.StringValue("configsource.Prepared") }
-func (Prepared[T]) MarshalJSON() ([]byte, error) { return nil, fail(ErrSerialization, "marshal") }
-func (*Prepared[T]) UnmarshalJSON([]byte) error  { return fail(ErrSerialization, "unmarshal") }

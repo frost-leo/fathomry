@@ -22,122 +22,163 @@ package nacos
 import (
 	"context"
 	"slices"
+	"sync/atomic"
 
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/configsource/nacos/v2"
+	"github.com/frost-leo/fathomry/resource/v1"
 )
 
-// Source is a complete original-document profile over a selected Client.
-// It retains no application schema, defaults, required/optional or layer policy.
-type Source struct {
+// Handle is opaque non-owning instance access for resource bindings. It grants
+// neither native client access nor shutdown/operation authority by itself.
+type Handle struct {
 	private
-	client  *Client
-	keys    []Key
-	options ObserveOptions
+	state *ownerState
 }
 
-// Source freezes explicit keys, or selects the client's default set when none are
-// supplied. Native permission admission occurs on use. No service I/O happens here.
-func (client *Client) Source(options ObserveOptions, keys ...Key) (*Source, error) {
-	if client == nil || len(keys) > MaxKeys || options.QueueCapacity < 0 || options.QueueCapacity > 16 {
-		return nil, fail(ErrInput, "source")
-	}
-	return &Source{client: client, keys: slices.Clone(keys), options: options}, nil
+// Owner retains native ownership through cancellation, failures and cleanup.
+// Do not discard it after a timed-out Close. Its common runtime remains borrowed.
+type Owner struct {
+	private
+	state  *ownerState
+	client *Client
+}
+type ownerState struct {
+	native   *native.Client
+	call     *adapters.Call[Evidence]
+	guard    adapters.Guard
+	gate     chan struct{}
+	complete atomic.Bool
+	final    error
+	primary  error
+	info     Info
 }
 
-// Capture uses native ReadRawAll for default keys and ordered independent raw
-// reads for explicit keys. Neither route is a same-time transaction. An error
-// returns no usable prefix; explicit-key failure identifies that selected call.
-func (source *Source) Capture(ctx context.Context) (configsource.Batch, int, error) {
-	if source == nil || source.client == nil {
-		return configsource.Batch{}, -1, fail(ErrInput, "capture")
-	}
-	var values []*Document
-	if len(source.keys) == 0 {
-		var failed int
-		var err error
-		values, failed, err = source.client.ReadRawAll(ctx)
-		if err != nil {
-			return configsource.Batch{}, failed, err
-		}
-	} else {
-		failed := -1
-		err := source.client.run(ctx, "capture", func(ctx context.Context, client *native.Client) (Evidence, error) {
-			total := 0
-			for index, key := range source.keys {
-				value, err := client.ReadRaw(ctx, nativeKey(key))
-				if err != nil {
-					failed = index
-					return Evidence{FailedIndex: failed}, err
-				}
-				total += len(value.RawCopy())
-				if total > MaxTotalBytes {
-					failed = index
-					return Evidence{FailedIndex: failed}, fail(ErrLimit, "capture")
-				}
-				values = append(values, &Document{native: value})
-			}
-			return Evidence{Documents: len(values), FailedIndex: -1}, nil
-		})
-		if err != nil {
-			return configsource.Batch{}, failed, err
-		}
-	}
-	batch, err := rawBatch(values)
-	return batch, -1, err
-}
-func rawBatch(documents []*Document) (configsource.Batch, error) {
-	values := make([]configsource.Raw, len(documents))
-	for index, document := range documents {
-		values[index] = configsource.Raw{Content: document.RawCopy(), Missing: document.Missing()}
-	}
-	return configsource.NewBatch(values)
-}
-
-// Observe consumes native already-acquired batches; it never starts another
-// acquisition, polling or recovery path.
-func (source *Source) Observe(ctx context.Context) (configsource.Observer, error) {
-	if source == nil || source.client == nil {
-		return nil, fail(ErrInput, "observe")
-	}
-	var observation *Observation
-	var err error
-	if len(source.keys) == 0 {
-		observation, err = source.client.ObserveRaw(ctx, source.options)
-	} else {
-		observation, err = source.client.ObserveRawKeys(ctx, source.keys, source.options)
-	}
+// Open validates and freezes technical settings, acquiring local ownership only.
+// ctx owns the entire lifetime. A non-nil Owner must be closed even with an error.
+func Open(ctx context.Context, settings Settings, dependencies Dependencies) (*Owner, error) {
+	endpoint, err := bind(dependencies)
 	if err != nil {
 		return nil, err
 	}
-	return &sourceObserver{observation: observation}, nil
-}
-
-type sourceObserver struct {
-	private
-	observation *Observation
-}
-
-func (observer *sourceObserver) Next(ctx context.Context) (configsource.Observation, error) {
-	if observer == nil {
-		return configsource.Observation{}, fail(ErrInput, "next")
-	}
-	value, err := observer.observation.Next(ctx)
+	var owner *Owner
+	var primary error
+	receipt, err := endpoint.Run(ctx, request("open", 1<<20), func(call *adapters.Call[Evidence]) {
+		selected, err := options(settings)
+		if err != nil {
+			primary = err
+			_ = call.Resolve(adapters.Outcome[Evidence]{Primary: err})
+			return
+		}
+		guard, err := call.Hold()
+		if err != nil {
+			primary = err
+			_ = call.Resolve(adapters.Outcome[Evidence]{Primary: err})
+			return
+		}
+		client, err := native.Open(call.Context(), selected)
+		primary = translate(err, "open")
+		if client == nil {
+			_ = call.Resolve(adapters.Outcome[Evidence]{Primary: primary})
+			_ = guard.Release()
+			return
+		}
+		info := client.Info()
+		projection := Info{Scope: info.Scope, Provider: info.Configuration.Identity.Provider, Name: info.Configuration.Identity.Name, Format: info.Configuration.Format, Revision: info.Configuration.Revision}
+		for _, layer := range info.Configuration.Provenance {
+			projection.Provenance = append(projection.Provenance, LayerInfo{uint8(layer.Kind), slices.Clone(layer.Fields)})
+		}
+		state := &ownerState{native: client, call: call, guard: guard, gate: make(chan struct{}, 1), primary: primary, info: projection}
+		owner = &Owner{state: state, client: &Client{endpoint: endpoint, direct: Handle{state: state}}}
+		go func() { <-call.Context().Done(); _, _ = state.close(context.Background()) }()
+	})
 	if err != nil {
-		return configsource.Observation{}, err
+		return nil, err
 	}
-	result := configsource.Observation{FailedIndex: value.FailedIndex(), Err: value.Err(), Gap: value.Gap()}
-	if value.Err() == nil {
-		result.Batch, result.Err = rawBatch(value.DocumentsCopy())
+	if owner == nil {
+		if primary != nil {
+			return nil, primary
+		}
+		snapshot, _ := receipt.Snapshot()
+		return nil, snapshot.Err()
 	}
-	return result, nil
+	return owner, primary
 }
-func (observer *sourceObserver) Close(ctx context.Context) error {
-	if observer == nil {
+
+// Client returns direct non-owning operation access, not another lifetime owner.
+func (owner *Owner) Client() *Client {
+	if owner == nil {
+		return nil
+	}
+	return owner.client
+}
+
+// Handle returns the opaque value used by a public resource.Instance declaration.
+func (owner *Owner) Handle() Handle {
+	if owner == nil {
+		return Handle{}
+	}
+	return Handle{state: owner.state}
+}
+
+// Info returns detached native preparation metadata, without probing a service.
+func (owner *Owner) Info() Info { return owner.Handle().Info() }
+func (handle Handle) Info() Info {
+	if handle.state == nil {
+		return Info{}
+	}
+	value := handle.state.info
+	value.Provenance = slices.Clone(value.Provenance)
+	for index := range value.Provenance {
+		value.Provenance[index].Fields = slices.Clone(value.Provenance[index].Fields)
+	}
+	return value
+}
+
+// Close requests stop, joins native work, and reports retained cleanup errors.
+// An error can coexist with ShutdownComplete; neither result proves remote effects.
+func (owner *Owner) Close(ctx context.Context) error {
+	if owner == nil || owner.state == nil || ctx == nil {
 		return fail(ErrInput, "close")
 	}
-	return observer.observation.Close(ctx)
+	_ = owner.state.call.Cancel(nil)
+	_, err := owner.state.close(ctx)
+	return err
 }
 
-var _ configsource.Source = (*Source)(nil)
-var _ configsource.Observer = (*sourceObserver)(nil)
+// ShutdownComplete reports confirmed local cleanup, not an error-free history.
+func (owner *Owner) ShutdownComplete() bool {
+	return owner != nil && owner.state != nil && owner.state.complete.Load()
+}
+
+// Release adapts the explicit owner to public resource cleanup continuation.
+func (owner *Owner) Release(ctx context.Context) resource.ReleaseResult {
+	err := owner.Close(ctx)
+	return resource.ReleaseResult{Complete: owner.ShutdownComplete(), Err: err}
+}
+func (state *ownerState) close(ctx context.Context) (bool, error) {
+	if state.complete.Load() {
+		return true, state.final
+	}
+	select {
+	case state.gate <- struct{}{}:
+		defer func() { <-state.gate }()
+	case <-ctx.Done():
+		return state.complete.Load(), fail(ErrState, "close", ctx.Err(), context.Cause(ctx))
+	}
+	if state.complete.Load() {
+		return true, state.final
+	}
+	err := translate(state.native.Close(ctx), "close")
+	if !state.native.ShutdownComplete() {
+		if err == nil {
+			err = fail(ErrState, "close")
+		}
+		return false, err
+	}
+	state.final = err
+	_ = state.call.Resolve(adapters.Outcome[Evidence]{Value: Evidence{FailedIndex: -1}, Present: true, Primary: state.primary, Cleanup: err})
+	state.complete.Store(true)
+	_ = state.guard.Release()
+	return true, err
+}

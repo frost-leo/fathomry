@@ -123,3 +123,16 @@ boundary, without implicit locale/settings lookup during operations.
 [independent consumer](../../../../../../adapters/configsource/nacos/v1/testdata/consumer/consumer_test.go)
 are executable evidence. Existing Internal service qualification is not a claim
 that every public service/deployment scenario has been exercised.
+
+## Package organization
+
+The [Adapter tree map](../../../../../../adapters/README.md) defines this package's role
+and file responsibilities; shared mechanisms, capability vocabulary, preparation
+and concrete providers do not acquire identical APIs by convention.
+
+Error definitions/resources remain offline. Runtime construction, translation
+and native inspection live in `error.go`; formatting/serialization guards live
+in `diagnostics.go`. Bare or transparently wrapped/joined public errors retain
+existing ownership, details and causes. Explicit native frames keep their
+provider classification; bounded internal graph search does not imply that
+external `errors.Is/As` on arbitrary caller graphs is bounded.

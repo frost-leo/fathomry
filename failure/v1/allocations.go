@@ -90,6 +90,10 @@ const (
 	FacilityMinIO Facility = 0x140
 	// FacilityKafka owns the public Kafka broker capability.
 	FacilityKafka Facility = 0x180
+	// FacilityRedisCache owns Redis key-value/cache semantics.
+	FacilityRedisCache Facility = 0x100
+	// FacilityRedisMessaging owns Redis Streams and messaging semantics.
+	FacilityRedisMessaging Facility = 0x181
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -133,6 +137,8 @@ func Allocations() []Allocation {
 		{Facility: FacilityMySQL, Module: "fathomry", Component: "database_mysql"},
 		{Facility: FacilityMinIO, Module: "fathomry", Component: "objectstore_minio"},
 		{Facility: FacilityKafka, Module: "fathomry", Component: "broker_kafka"},
+		{Facility: FacilityRedisCache, Module: "fathomry", Component: "cache_redis"},
+		{Facility: FacilityRedisMessaging, Module: "fathomry", Component: "messaging_redis"},
 	}
 }
 

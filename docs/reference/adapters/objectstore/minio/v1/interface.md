@@ -233,3 +233,15 @@ See the executable
 and [verification](verification.md). Facility 0x140 belongs to
 `fathomry/objectstore_minio`; English/zh-CN resources are included in the existing
 offline CLI catalog, without constructing a service client.
+
+## Error boundary organization
+
+Maintenance follows the shared [public Adapter contract](../../../../../development/public-adapters.md):
+configuration and policy are separate, native budgets are authoritative, and
+this provider's readiness, context and result semantics remain distinct.
+
+Stable declarations, runtime mapping, diagnostics and locale embedding follow
+[the public adapter error boundary](../../../../../development/adapter-errors.md).
+Transparent public-error wrappers retain their existing core and original causes
+without exposing wrapper text; explicit native semantic frames remain provider-owned.
+This changes neither public APIs, numeric identities nor locale resources.
