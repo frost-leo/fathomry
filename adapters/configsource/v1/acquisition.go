@@ -21,8 +21,6 @@ package configsource
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
 	"slices"
 	"unicode/utf8"
 )
@@ -114,16 +112,3 @@ type Observation struct {
 	Err         error
 	Gap         bool
 }
-
-func (Raw) Format(state fmt.State, _ rune) {
-	_, _ = state.Write([]byte("configsource.Raw[restricted]"))
-}
-func (Raw) LogValue() slog.Value             { return slog.StringValue("configsource.Raw[restricted]") }
-func (Batch) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("configsource.Batch")) }
-func (Batch) LogValue() slog.Value           { return slog.StringValue("configsource.Batch") }
-func (Batch) MarshalJSON() ([]byte, error)   { return nil, fail(ErrSerialization, "marshal") }
-func (*Batch) UnmarshalJSON([]byte) error    { return fail(ErrSerialization, "unmarshal") }
-func (Observation) Format(state fmt.State, _ rune) {
-	_, _ = state.Write([]byte("configsource.Observation"))
-}
-func (Observation) LogValue() slog.Value { return slog.StringValue("configsource.Observation") }

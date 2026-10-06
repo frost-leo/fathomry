@@ -20,76 +20,9 @@
 package nacos
 
 import (
-	"errors"
 	"fmt"
 	"log/slog"
-
-	"github.com/frost-leo/fathomry/failure/v1"
-	native "github.com/frost-leo/fathomry/internal/configsource/nacos/v2"
 )
-
-// NativeEvidence is explicit supported RPC/HTTP evidence projected without an
-// Internal import. Message is sensitive. It does not describe an unrelated outer
-// failure or determine mutation state/retry policy. Original cause objects remain
-// intact in the supplied error, including third-party transport/status errors.
-type NativeEvidence struct {
-	private
-	resultCode, errorCode, httpStatus int
-	message                           string
-}
-
-func (value NativeEvidence) ResultCode() int { return value.resultCode }
-func (value NativeEvidence) ErrorCode() int  { return value.errorCode }
-func (value NativeEvidence) HTTPStatus() int { return value.httpStatus }
-func (value NativeEvidence) Message() string { return value.message }
-
-// InspectError projects the first supported native RPC/HTTP cause. False means no
-// such evidence was found, not proof of a request's absence or lack of effects.
-func InspectError(err error) (NativeEvidence, bool) {
-	var remote *native.RemoteError
-	var status native.HTTPStatus
-	rpc := errors.As(err, &remote) && remote != nil
-	http := errors.As(err, &status)
-	value := NativeEvidence{}
-	if rpc {
-		value.resultCode = remote.ResultCode()
-		value.errorCode = remote.ErrorCode()
-		value.message = remote.Message()
-	}
-	if http {
-		value.httpStatus = int(status)
-	}
-	return value, rpc || http
-}
-
-func translate(err error, operation string) error {
-	if err == nil {
-		return nil
-	}
-	if _, ok := err.(failure.Occurrence); ok {
-		return err
-	}
-	code := ErrRead
-	if operation == "close" {
-		code = ErrClose
-	}
-	if direct, ok := err.(interface{ Is(error) bool }); ok {
-		for _, entry := range []struct {
-			native error
-			public failure.Code
-		}{
-			{native.ErrInput, ErrInput}, {native.ErrLimit, ErrLimit}, {native.ErrRead, ErrRead}, {native.ErrWrite, ErrWrite},
-			{native.ErrDecode, ErrDecode}, {native.ErrDenied, ErrDenied}, {native.ErrMissing, ErrMissing}, {native.ErrEmpty, ErrEmpty},
-			{native.ErrClosed, ErrClosed}, {native.ErrState, ErrState}, {native.ErrUnavailable, ErrUnavailable}, {native.ErrUnsupported, ErrUnsupported},
-		} {
-			if direct.Is(entry.native) {
-				code = entry.public
-				break
-			}
-		}
-	}
-	return fail(code, operation, err)
-}
 
 type private struct{}
 

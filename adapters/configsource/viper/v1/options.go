@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/configsource/viper/v1"
 )
 
@@ -176,4 +177,12 @@ func options(value Settings) (native.OptionsV1, error) {
 		result.EnvKeyReplacements = append(result.EnvKeyReplacements, native.Replacement{Old: entry.Old, New: entry.New})
 	}
 	return result, nil
+}
+
+// Dependencies are borrowed once. The caller owns runtime shutdown and evidence
+// reception; retrying a failed receiver never repeats the native operation.
+type Dependencies struct {
+	Runtime  *adapters.Runtime
+	Evidence *adapters.Inbox[Evidence]
+	Observer *adapters.Observer
 }

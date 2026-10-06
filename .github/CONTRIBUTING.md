@@ -183,6 +183,12 @@ For documentation changes, follow [Writing documentation](../docs/development/do
 and update the [documentation map](../docs/README.md). That guide is the canonical
 policy for topic organization, package `interface.md` contracts and verification.
 
+For public Adapter changes, follow [Public Adapter maintenance](../docs/development/public-adapters.md).
+It defines shared contract checks while preserving provider-specific readiness,
+context, result and ownership semantics.
+The [Adapter tree map](../adapters/README.md) classifies every current package
+and owns its role-specific file conventions, including shared/configuration layers.
+
 ## Labels
 
 The canonical label catalog is [`labels.json`](labels.json).

@@ -1,0 +1,91 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>.",
+    ""
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "cache_redis",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.cache_redis.invalid_input",
+      "source": "a748539819587e2ece31896c0eea2a09eafa238239fc4918a16408aa498eaa0c",
+      "forms": {
+        "other": "Redis 输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.authority_refused",
+      "source": "e4e6d39d4c62d9cd9e3b835ddbb3100a87ed5201374e22dcaa50d8879a26f861",
+      "forms": {
+        "other": "Redis 能力或端点授权被拒绝。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.unsupported_profile",
+      "source": "cbc447d4b32c396985a00db57a6caec5a5cef4ed0bb1fc79c8c0ca5766dd5ccc",
+      "forms": {
+        "other": "不支持请求的 Redis 配置组合。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.limit_exceeded",
+      "source": "bfccc68b9fe41cd07d47b709b04cd7e7301548f497a5a75f5ad6b575e5954c35",
+      "forms": {
+        "other": "超出 Redis 能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.protocol_failed",
+      "source": "c7943ce6cd64cfa7dbbb50e84e067f7da11544d18c70040f69664c4ea3d03bf1",
+      "forms": {
+        "other": "Redis 回复格式无效或无法保留。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.command_failed",
+      "source": "511457fd8d044e2ae834256b2304a6aee9404de2bddbf27d7a067d13b5aef0d3",
+      "forms": {
+        "other": "Redis 命令失败；请检查各条回复及效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.invalid_state",
+      "source": "e14e0253b4df32d2e1971cd18c5b0d48722b6f37d09748f346096ba8c9dee470",
+      "forms": {
+        "other": "Redis 所有者状态不允许此操作。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.cleanup_failed",
+      "source": "5f5b37911a5280b5ddd574e63e0b4c1c050b7f9f6b447728273334cad8321169",
+      "forms": {
+        "other": "Redis 清理失败；实际释放状态单独报告。"
+      }
+    },
+    {
+      "id": "fathomry.cache_redis.runtime_serialization",
+      "source": "e9d357595c86f3470214b81649cb788b740dbcf783e20e18a756e87e49b9e9f0",
+      "forms": {
+        "other": "不支持序列化 Redis 运行时值。"
+      }
+    }
+  ]
+}

@@ -269,3 +269,9 @@ These checks do not qualify arbitrary native SDK migration, real service Adapter
 production throughput, crash recovery, durable exactly-once evidence, Temporal
 failure transport or deterministic Workflow replay. Runtime goroutines and mutable
 process preferences belong in Activities/process-local code, not Workflow logic.
+
+## Package organization
+
+The [Adapter tree map](../../../../adapters/README.md) defines this package's role
+and file responsibilities; shared mechanisms, capability vocabulary, preparation
+and concrete providers do not acquire identical APIs by convention.

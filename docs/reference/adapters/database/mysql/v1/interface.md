@@ -56,7 +56,7 @@ provide an executable complete local recipe. Their protocol peer is not MySQL.
 
 ## Complete supported settings
 
-The public [Settings declaration](../../../../../../adapters/database/mysql/v1/option.go)
+The public [Settings declaration](../../../../../../adapters/database/mysql/v1/options.go)
 has explicit JSON/mapstructure names and no runtime/DSN alias. Strict preparation
 rejects unknown, null, duplicate, coerced and overflowing values. Durations are
 integer **nanoseconds**. Typed zero chooses bootstrap defaults, not the private
@@ -269,3 +269,15 @@ quota, cross-database transaction, automatic mutation retry, HA, arbitrary engin
 or Workflow execution is added. Implementation lineage is
 [#102](https://github.com/frost-leo/fathomry/issues/102); local qualification does
 not establish merged/released status.
+
+## Error boundary organization
+
+Maintenance follows the shared [public Adapter contract](../../../../../development/public-adapters.md):
+configuration and policy are separate, native budgets are authoritative, and
+this provider's readiness, context and result semantics remain distinct.
+
+Stable declarations, runtime mapping, diagnostics and locale embedding follow
+[the public adapter error boundary](../../../../../development/adapter-errors.md).
+Transparent public-error wrappers retain their existing core and original causes
+without exposing wrapper text; explicit native semantic frames remain provider-owned.
+This changes neither public APIs, numeric identities nor locale resources.

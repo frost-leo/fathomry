@@ -125,3 +125,9 @@ remain causes; default diagnostics do not format them.
 
 These are process-local contracts, not durable Workflow execution or a complete
 Framework loading/Watch scenario.
+
+## Package organization
+
+The [Adapter tree map](../../../../../adapters/README.md) defines this package's role
+and file responsibilities; shared mechanisms, capability vocabulary, preparation
+and concrete providers do not acquire identical APIs by convention.

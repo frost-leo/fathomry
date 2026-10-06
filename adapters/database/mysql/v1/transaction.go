@@ -21,12 +21,20 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/database/mysql/v1"
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
 )
+
+// TxOptions supports the native default and four MySQL isolation levels.
+// All tables and trigger effects must satisfy the declared InnoDB profile.
+type TxOptions struct {
+	Isolation sql.IsolationLevel
+	ReadOnly  bool
+}
 
 // Transaction retains one source generation and connection through finalization.
 // Overlapping use, including statements and savepoints, is refused.

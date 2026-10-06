@@ -20,10 +20,6 @@
 package broker
 
 import (
-	"errors"
-	"fmt"
-	"log/slog"
-
 	"github.com/frost-leo/fathomry/adapters/v1"
 )
 
@@ -49,17 +45,4 @@ type Attribution struct {
 type Attempts struct {
 	Observed uint64
 	Exact    bool
-}
-
-type private struct{}
-
-func (private) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("broker[restricted]")) }
-func (private) LogValue() slog.Value           { return slog.StringValue("broker[restricted]") }
-func (*Info) LogValue() slog.Value             { return private{}.LogValue() }
-func (*Attribution) LogValue() slog.Value      { return private{}.LogValue() }
-func (private) MarshalJSON() ([]byte, error) {
-	return nil, errors.New("broker: runtime serialization unsupported")
-}
-func (*private) UnmarshalJSON([]byte) error {
-	return errors.New("broker: runtime reconstruction unsupported")
 }

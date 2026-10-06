@@ -79,6 +79,11 @@ lifetime worker. A later finalizer cannot replace the original receipt.
 
 ## Configuration and limits
 
+`EvidenceBytesV1(options)` exposes the native per-call retained envelope rather
+than requiring public composition to copy its formula. Like `LimitsV1`, it
+describes validated, defaulted options without later layers. A caller using
+overrides must account for the actual resolved settings instead.
+
 Options are process-local bootstrap, not durable DTOs. Caller-owned byte slices
 and mutable overlays are borrowed only during Select; SQL arguments are borrowed
 synchronously for the call and must not be mutated concurrently. There is no

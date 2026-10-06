@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-package postgres
+package mysql
 
 import (
 	"bytes"
@@ -26,6 +26,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -33,15 +34,15 @@ import (
 
 	"github.com/frost-leo/fathomry/adapters/configsource/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	native "github.com/frost-leo/fathomry/internal/database/pgx/v5"
+	native "github.com/frost-leo/fathomry/internal/database/mysql/v1"
 )
 
 func FuzzSettingsPolicy(f *testing.F) {
 	for _, seed := range []string{
 		"{}",
-		`{"max_connections":1,"max_rows":1,"max_result_bytes":1024,"max_message_bytes":1024}`,
-		`{"max_connections":32,"queued_calls":64,"max_rows":65536,"max_result_bytes":16777216,"max_message_bytes":4194304}`,
-		`{"timeout_ns":0,"max_idle_time_ns":0,"max_lifetime_ns":0}`,
+		`{"max_connections":1,"max_rows":1,"max_result_bytes":1024,"max_packet_bytes":1024}`,
+		`{"max_connections":32,"queued_calls":64,"max_rows":65536,"max_result_bytes":16777216,"max_packet_bytes":4194304}`,
+		`{"timeout_ns":0,"max_idle_time_ns":0,"max_idle_connections":-1,"max_lifetime_ns":0}`,
 		`{"max_connections":33}`, `{"timeout_ns":-1}`, `{"port":65536}`,
 		`{"unknown":1}`, `{"plaintext":null}`, `{"max_rows":1,"max_rows":2}`,
 		`{"password":"synthetic\u0000value"}`, `{"root_ca_pem":"invalid"}`,
@@ -112,7 +113,7 @@ func FuzzSettingsPolicy(f *testing.F) {
 }
 
 func TestSettings(t *testing.T) {
-	peer := newProtocolPeer(t, true)
+	peer := newPeer(t, true, false)
 	original := peer.options()
 	original.MaxConnections = 3
 	original.MaxIdleTime = 24 * time.Millisecond
@@ -122,9 +123,23 @@ func TestSettings(t *testing.T) {
 	original.CloseTimeout = 12 * time.Millisecond
 	original.MaxRows = 17
 	original.MaxResultBytes = 8192
-	original.MaxMessageBytes = 8192
+	original.Network = "tcp"
+	original.ParseTime = true
+	original.ClientFoundRows = true
+	original.ColumnsWithAlias = true
+	original.Authentication = "mysql_native_password"
+	original.MaxIdleConnections = 2
+	original.ReadTimeout = 13 * time.Millisecond
+	original.WriteTimeout = 14 * time.Millisecond
+	original.TransactionTimeout = 15 * time.Millisecond
+	original.MaxPacketBytes = 8192
+	original.MaxResponseBytes = 16384
 	variants := []Settings{original}
 
+	pinned := original
+	pinned.ServerName = ""
+	pinned.ServerCertificateSHA256 = strings.Repeat("ab", 32)
+	variants = append(variants, pinned)
 	for _, expected := range variants {
 		raw, err := json.Marshal(expected)
 		if err != nil {
@@ -161,12 +176,12 @@ func TestSettings(t *testing.T) {
 			t.Fatal("malformed settings accepted")
 		}
 	}
-	yaml, err := configsource.Prepare(context.Background(), configsource.Schema[Settings]{Version: 1, Defaults: original}, []configsource.Layer{{Kind: configsource.Base, Encoding: configsource.YAML, Content: []byte("max_connections: 1\nmax_idle_time_ns: 0\nmax_lifetime_ns: 0\ntimeout_ns: 1000000\n")}})
+	yaml, err := configsource.Prepare(context.Background(), configsource.Schema[Settings]{Version: 1, Defaults: original}, []configsource.Layer{{Kind: configsource.Base, Encoding: configsource.YAML, Content: []byte("max_connections: 1\nmax_idle_connections: -1\nmax_idle_time_ns: 0\ntimeout_ns: 1000000\n")}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	decoded, err := yaml.ValueCopy()
-	if err != nil || decoded.MaxConnections != 1 || decoded.MaxIdleTime != 0 || decoded.Timeout != time.Millisecond || decoded.MaxLifetime != 0 {
+	if err != nil || decoded.MaxConnections != 1 || decoded.MaxIdleTime != 0 || decoded.Timeout != time.Millisecond || decoded.MaxIdleConnections != -1 {
 		t.Fatal("zero/sentinel/unit semantics changed", err)
 	}
 	for _, change := range []func(*Settings){
@@ -190,14 +205,21 @@ func TestSettings(t *testing.T) {
 }
 
 func TestRecommendedDefaultsAndBounds(t *testing.T) {
-	defaults := Settings{Name: "settings", Address: "127.0.0.1", Port: 1, Database: "settings", User: "user", Password: "secret", Plaintext: true}
+	defaults := Settings{Name: "settings", Address: "127.0.0.1", Port: 1, User: "user", Plaintext: true}
 	explicit := defaults
 	explicit.MaxConnections = 4
 	explicit.Timeout = 10 * time.Second
 	explicit.CloseTimeout = 5 * time.Second
 	explicit.MaxRows = 1024
 	explicit.MaxResultBytes = 4 << 20
-	explicit.MaxMessageBytes = 1 << 20
+	explicit.Network = "tcp"
+	explicit.Authentication = "caching_sha2_password"
+	explicit.MaxIdleConnections = 4
+	explicit.ReadTimeout = 10 * time.Second
+	explicit.WriteTimeout = 10 * time.Second
+	explicit.TransactionTimeout = time.Minute
+	explicit.MaxPacketBytes = 1 << 20
+	explicit.MaxResponseBytes = 8 << 20
 	before, err := Recommend(defaults)
 	if err != nil {
 		t.Fatal(err)
@@ -211,14 +233,17 @@ func TestRecommendedDefaultsAndBounds(t *testing.T) {
 	maximum.QueuedCalls = 64
 	maximum.MaxRows = 65536
 	maximum.MaxResultBytes = 16 << 20
-	maximum.MaxMessageBytes = 4 << 20
+	maximum.MaxPacketBytes = 4 << 20
+	maximum.MaxResponseBytes = 32 << 20
 	for _, input := range []Settings{defaults, maximum} {
 		policy, err := Recommend(input)
 		if err != nil {
 			t.Fatal(err)
 		}
 		limits := native.LimitsV1(options(input))
-		if policy.Budget.WorkBytes != limits.Bytes/int64(limits.Active)+64<<10 || policy.Runtime.MaxWorkBytes != sourceWorkBytes+int64(limits.Active)*policy.Budget.WorkBytes {
+		if policy.Budget.WorkBytes != limits.Bytes/int64(limits.Active)+64<<10 ||
+			policy.Budget.EvidenceBytes != native.EvidenceBytesV1(options(input))+64<<10 ||
+			policy.Runtime.MaxWorkBytes != sourceWorkBytes+int64(limits.Active)*policy.Budget.WorkBytes {
 			t.Fatal("root budget mapping changed")
 		}
 		if policy.Runtime.MaxQueuedBytes != int64(limits.Queued)*policy.Budget.WorkBytes || policy.Evidence.Capacity != 1+limits.Active*familyRecords+limits.Queued || policy.Evidence.MaxBytes != sourceEvidenceBytes+int64(policy.Evidence.Capacity-1)*policy.Budget.EvidenceBytes {
@@ -247,7 +272,14 @@ func TestEffectiveSettingsProfile(t *testing.T) {
 	defaults.CloseTimeout = 0
 	defaults.MaxRows = 0
 	defaults.MaxResultBytes = 0
-	defaults.MaxMessageBytes = 0
+	defaults.Network = ""
+	defaults.Authentication = ""
+	defaults.MaxIdleConnections = 0
+	defaults.ReadTimeout = 0
+	defaults.WriteTimeout = 0
+	defaults.TransactionTimeout = 0
+	defaults.MaxPacketBytes = 0
+	defaults.MaxResponseBytes = 0
 	owner, _, _ := testOwner(t, defaults, 0)
 	profile, err := owner.Client().Profile(context.Background())
 	if err != nil {
@@ -261,7 +293,10 @@ func TestEffectiveSettingsProfile(t *testing.T) {
 		"max-connections": "4", "max-idle-time-ns": "0", "max-lifetime-ns": "0",
 		"queued-calls": "0", "timeout-ns": "10000000000", "close-timeout-ns": "5000000000",
 		"max-rows": "1024", "max-result-bytes": "4194304", "plaintext": "true",
-		"max-message-bytes": "1048576",
+		"authentication-policy": "caching_sha2_password", "network": "tcp",
+		"max-idle-connections": "4", "read-timeout-ns": "10000000000", "write-timeout-ns": "10000000000",
+		"transaction-timeout-ns": "60000000000", "max-packet-bytes": "1048576", "max-response-bytes": "8388608",
+		"parse-time": "false", "client-found-rows": "false", "columns-with-alias": "false",
 	}
 	for name, want := range expected {
 		if observed[name] != want {
@@ -280,7 +315,7 @@ func TestEffectiveSettingsProfile(t *testing.T) {
 
 func TestRecommendedQueueEvidence(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		settings := Settings{Name: "settings", Address: "127.0.0.1", Port: 1, Database: "settings", User: "user", Password: "secret", Plaintext: true}
+		settings := Settings{Name: "settings", Address: "127.0.0.1", Port: 1, User: "user", Plaintext: true}
 		settings.MaxConnections = 1
 		settings.QueuedCalls = 64
 		policy, err := Recommend(settings)

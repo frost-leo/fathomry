@@ -94,7 +94,7 @@ func fixtureNamespace(t *testing.T) string {
 	if _, err := rand.Read(random[:]); err != nil {
 		t.Fatal("random fixture identity unavailable")
 	}
-	return "fathomry:gh62:" + hex.EncodeToString(random[:]) + ":"
+	return "fathomry:gh108:" + hex.EncodeToString(random[:]) + ":"
 }
 func mustNative(t *testing.T, err error) {
 	t.Helper()

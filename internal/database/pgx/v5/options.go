@@ -243,6 +243,11 @@ func (value settings) evidenceReservation() int64 {
 	return int64(value.MaxResultBytes+2*value.MaxMessageBytes) +
 		int64(value.MaxRows)*(MaxColumns*24+2*24) + 64<<10
 }
+
+// EvidenceBytesV1 reports the defaulted per-call retained envelope. Like LimitsV1,
+// it requires validated, unoverridden options; it does not apply source layers.
+func EvidenceBytesV1(options OptionsV1) int64 { return defaults(options).evidenceReservation() }
+
 func (value settings) limits() resource.Limits {
 	return resource.Limits{Active: value.MaxConnections, Queued: value.QueuedCalls,
 		Bytes: int64(value.MaxConnections) * value.reservation(), QueuedBytes: int64(value.QueuedCalls) * value.reservation(), MaxLeases: MaxPreparedStatements + MaxSavepoints + 2}

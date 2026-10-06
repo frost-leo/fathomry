@@ -40,5 +40,11 @@ borrowed generation are different identities. Inexact zero attempts is not proof
 of no request or effect. Runtime metadata is deliberately inspectable but
 redacted in ordinary formatting/logging and refuses implicit JSON serialization.
 
-See the Kafka [policy tests](../../../../../adapters/broker/kafka/v1/option_test.go)
+See the Kafka [policy tests](../../../../../adapters/broker/kafka/v1/options_test.go)
 and [public-only executable](../../../../../adapters/broker/kafka/v1/testdata/consumer/main.go).
+
+## Package organization
+
+The [Adapter tree map](../../../../../adapters/README.md) defines this package's role
+and file responsibilities; shared mechanisms, capability vocabulary, preparation
+and concrete providers do not acquire identical APIs by convention.

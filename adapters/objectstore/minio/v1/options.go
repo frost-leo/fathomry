@@ -22,7 +22,6 @@ package minio
 import (
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/objectstore/minio/v7"
 )
@@ -114,20 +113,4 @@ func options(value Settings) native.OptionsV1 {
 func Validate(value Settings) error {
 	_, err := native.Select(options(value))
 	return translate(err, "validate")
-}
-
-// Recommend supplies ceilings for one source generation at its native capacity.
-// For Follow overlap, request ForGenerations before constructing shared owners.
-func Recommend(value Settings) (objectstore.Policy, error) {
-	if err := Validate(value); err != nil {
-		return objectstore.Policy{}, err
-	}
-	nativeBudget := native.BudgetV1(options(value))
-	budget := objectstore.Budget{WorkBytes: nativeBudget.WorkBytes + 3*nativeBudget.EvidenceBytes + 256<<10, EvidenceBytes: nativeBudget.EvidenceBytes + 64<<10}
-	capacity := 1 + 2*nativeBudget.Active + nativeBudget.Queued
-	return objectstore.Policy{Budget: budget, Runtime: adapters.Options{
-		MaxActive: 1 + nativeBudget.Active, MaxQueued: nativeBudget.Queued,
-		MaxWorkBytes:   sourceWorkBytes + int64(nativeBudget.Active)*budget.WorkBytes,
-		MaxQueuedBytes: int64(nativeBudget.Queued) * budget.WorkBytes, MaxTasks: 2, MaxDepth: 2, MaxHolds: 4,
-	}, Evidence: adapters.EvidenceOptions{Capacity: capacity, MaxBytes: sourceEvidenceBytes + int64(capacity-1)*budget.EvidenceBytes}}, nil
 }

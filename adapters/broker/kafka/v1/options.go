@@ -22,7 +22,6 @@ package kafka
 import (
 	"time"
 
-	"github.com/frost-leo/fathomry/adapters/broker/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/broker/franz/v1"
 )
@@ -120,56 +119,4 @@ type Dependencies struct {
 	Evidence     *adapters.Inbox[Result]
 	Observer     *adapters.Observer
 	Transactions *TransactionIDs
-}
-
-const sourceEvidenceBytes int64 = 64 << 10
-
-// Recommend derives explicit source/work/evidence reservations for one source.
-func Recommend(value Settings) (broker.Policy, error) { return Compose(value) }
-
-// Compose reserves the listed source instances concurrently, including retired
-// Fixed/Follow generations that can still be borrowed. List overlapping
-// generations separately. It never enlarges an already created Runtime.
-func Compose(values ...Settings) (broker.Policy, error) {
-	if len(values) == 0 || len(values) > 16 {
-		return broker.Policy{}, fail(ErrInput, "policy")
-	}
-	policy := broker.Policy{}
-	for _, value := range values {
-		if err := Validate(value); err != nil {
-			return broker.Policy{}, err
-		}
-		nativeOptions := options(value)
-		limits := native.LimitsV1(nativeOptions)
-		evidence := native.EvidenceBytesV1(nativeOptions)
-		work := limits.Bytes/int64(limits.Active) + 2*evidence + 64<<10
-		policy.Budget.WorkBytes = max(policy.Budget.WorkBytes, work)
-		policy.Budget.EvidenceBytes = max(policy.Budget.EvidenceBytes, evidence+64<<10)
-		wire, batch := value.MaxWireBytes, value.MaxBatchBytes
-		if wire == 0 {
-			wire = 8 << 20
-		}
-		if batch == 0 {
-			batch = 4 << 20
-		}
-		clients := 2
-		if value.TransactionalID != "" {
-			clients++
-		}
-		// Persistent native codec buffers and per-broker socket buffers remain source
-		// owned after a producer root ends. Group membership clients live in roots.
-		sourceWork := int64(clients)*(int64(2*wire*len(value.Brokers))+int64(limits.Active)*int64(2*batch+8<<20)) + 4<<20
-		policy.SourceWorkBytes += sourceWork
-		policy.Runtime.MaxActive += 1 + limits.Active
-		policy.Runtime.MaxQueued += limits.Queued
-		capacity := 2*limits.Active + limits.Queued
-		policy.Evidence.Capacity += 1 + capacity
-	}
-	policy.Runtime.MaxTasks = 2
-	policy.Runtime.MaxWorkBytes = policy.SourceWorkBytes + int64(policy.Runtime.MaxActive-len(values))*policy.Budget.WorkBytes
-	policy.Runtime.MaxQueuedBytes = int64(policy.Runtime.MaxQueued) * policy.Budget.WorkBytes
-	policy.Evidence.MaxBytes = int64(len(values))*sourceEvidenceBytes + int64(policy.Evidence.Capacity-len(values))*policy.Budget.EvidenceBytes
-	policy.Runtime.MaxDepth = 2
-	policy.Runtime.MaxHolds = 2
-	return policy, nil
 }

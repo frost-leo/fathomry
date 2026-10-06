@@ -20,9 +20,6 @@
 package database
 
 import (
-	"errors"
-	"fmt"
-	"log/slog"
 	"slices"
 
 	"github.com/frost-leo/fathomry/adapters/v1"
@@ -88,27 +85,4 @@ type Profile struct {
 	ImplementationModule, SDKMode                 string
 	ServiceMode, ServiceVersion, Protocol, Native Fact
 	Options                                       []Option
-}
-
-// These observations are process-local values, not a durable serialization format.
-type private struct{}
-
-func (private) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("database[restricted]")) }
-
-func (private) LogValue() slog.Value { return slog.StringValue("database[restricted]") }
-
-func (*Info) LogValue() slog.Value { return private{}.LogValue() }
-
-func (*Attribution) LogValue() slog.Value { return private{}.LogValue() }
-
-func (*Fact) LogValue() slog.Value { return private{}.LogValue() }
-
-func (*Profile) LogValue() slog.Value { return private{}.LogValue() }
-
-func (private) MarshalJSON() ([]byte, error) {
-	return nil, errors.New("database: runtime serialization unsupported")
-}
-
-func (*private) UnmarshalJSON([]byte) error {
-	return errors.New("database: runtime reconstruction unsupported")
 }

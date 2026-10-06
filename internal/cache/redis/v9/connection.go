@@ -39,14 +39,15 @@ type Source struct {
 	owner *owner
 }
 type owner struct {
-	settings  settings
-	native    sdk.UniversalClient
-	transport *transport
-	automatic *sdk.AutoPipeliner
-	closeOnce sync.Once
-	closed    chan struct{}
-	closeErr  error
-	password  *Password
+	settings       settings
+	native         sdk.UniversalClient
+	transport      *transport
+	automatic      *sdk.AutoPipeliner
+	closeOnce      sync.Once
+	closed         chan struct{}
+	closeErr       error
+	password       *Password
+	automaticStats batchStats
 }
 
 // Password is an explicitly shared composition-owned credential snapshot.
@@ -99,10 +100,25 @@ func SelectWithPassword(options OptionsV1, password *Password, layers ...resourc
 	return selectSource(options, password, layers...)
 }
 func selectSource(options OptionsV1, password *Password, layers ...resource.Layer) (resource.Selection[Source], error) {
+	prepared, err := PrepareV1(options, password, layers...)
+	if err != nil {
+		return resource.Selection[Source]{}, err
+	}
+	return prepared.Selection(), nil
+}
+
+// PrepareV1 resolves and freezes configuration once, including overlays. A nil
+// password selects static credentials. Metadata and Selection always describe
+// these same resolved settings; no constructor or native logging runs here.
+func PrepareV1(options OptionsV1, password *Password, layers ...resource.Layer) (Prepared, error) {
+	if password != nil && password.passwordState == nil {
+		return Prepared{}, failure(ErrInput, "credentials")
+	}
 	version := options.Version
 	if version == 0 {
 		version = 1
 	}
+	var resolved settings
 	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: func(value settings) error {
 		if password != nil && (value.ExperimentalCache || value.Password != "") {
 			return failure(ErrUnsupported, "credentials")
@@ -110,18 +126,27 @@ func selectSource(options OptionsV1, password *Password, layers ...resource.Laye
 		if password == nil && emptyNamedCredential(value.Username, value.Password) || emptyNamedCredential(value.SentinelUsername, value.SentinelPassword) {
 			return failure(ErrUnsupported, "credentials")
 		}
-		return validate(value)
+		if err := validate(value); err != nil {
+			return err
+		}
+		resolved = value
+		return nil
 	}}, resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
 	if err != nil {
-		return resource.Selection[Source]{}, err
+		return Prepared{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
+	return Prepared{configuration: prepared, metadata: resolved.metadata(), password: password}, nil
+}
+
+func (prepared Prepared) Selection() resource.Selection[Source] {
+	password := prepared.password
+	return resource.WithLimits(resource.Select(prepared.configuration, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
 		if ctx.Err() != nil {
 			return resource.Resource[Source]{}, nativeFailure(ctx, ctx.Err())
 		}
 		owned := &owner{settings: value, transport: newTransport(value), closed: make(chan struct{}), password: password}
 		owned.native = owned.construct(password)
-		owned.native.AddHook(batchEvidenceHook{})
+		owned.native.AddHook(batchEvidenceHook{automatic: &owned.automaticStats})
 		result := resource.Resource[Source]{Acquired: true, Capability: Source{owner: owned}, Release: owned.close}
 		if value.ExperimentalAutoPipeline {
 			var autoErr error
@@ -134,7 +159,7 @@ func selectSource(options OptionsV1, password *Password, layers ...resource.Laye
 			}
 		}
 		return result, nil
-	}), nil
+	}), prepared.metadata.Limits)
 }
 func (owned *owner) construct(password *Password) sdk.UniversalClient {
 	value := owned.settings
@@ -313,6 +338,10 @@ type Stats struct {
 	CacheHits, CacheMisses uint64
 	CacheEntries           int
 	CacheBytes             int64
+	// AutomaticBatches/AutomaticMaxWidth observe native pipeline dispatch shape,
+	// not command success, latency, or a performance guarantee.
+	AutomaticBatches  uint64
+	AutomaticMaxWidth uint32
 }
 
 func (client *Client) Stats() Stats {
@@ -321,6 +350,8 @@ func (client *Client) Stats() Stats {
 	}
 	native := client.owner.native.PoolStats()
 	result := Stats{Hits: native.Hits, Misses: native.Misses, Timeouts: native.Timeouts, Total: native.TotalConns, Idle: native.IdleConns, Stale: native.StaleConns}
+	result.AutomaticBatches = client.owner.automaticStats.batches.Load()
+	result.AutomaticMaxWidth = client.owner.automaticStats.width.Load()
 	transport := client.owner.transport
 	transport.mu.Lock()
 	result.Sockets = len(transport.sockets)

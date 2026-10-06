@@ -20,9 +20,6 @@
 package objectstore
 
 import (
-	"errors"
-	"fmt"
-	"log/slog"
 	"slices"
 
 	"github.com/frost-leo/fathomry/adapters/v1"
@@ -82,16 +79,3 @@ type Attempts struct {
 	Observed uint64
 	Exact    bool
 }
-
-type private struct{}
-
-func (private) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("objectstore[restricted]")) }
-func (private) LogValue() slog.Value           { return slog.StringValue("objectstore[restricted]") }
-func (private) MarshalJSON() ([]byte, error) {
-	return nil, errors.New("objectstore: runtime serialization unsupported")
-}
-func (*private) UnmarshalJSON([]byte) error {
-	return errors.New("objectstore: runtime reconstruction unsupported")
-}
-func (*Info) LogValue() slog.Value        { return private{}.LogValue() }
-func (*Attribution) LogValue() slog.Value { return private{}.LogValue() }

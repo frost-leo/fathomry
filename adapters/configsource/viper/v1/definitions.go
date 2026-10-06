@@ -68,10 +68,3 @@ func definition(code failure.Code) failure.Definition {
 	}
 	return failure.Definition{Code: code, Identifier: failure.Identifier("fathomry.configsource_viper." + identifier), Module: "fathomry", Component: "configsource_viper", Revision: 1, Message: message}
 }
-func fail(code failure.Code, operation string, causes ...error) error {
-	value, err := failure.New(definition(code), failure.Location{Operation: operation}, causes...)
-	if err != nil {
-		return err
-	}
-	return value
-}

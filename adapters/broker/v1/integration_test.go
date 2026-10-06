@@ -28,7 +28,7 @@ import (
 )
 
 func TestBrokerCategoryHasNoNativeDependency(t *testing.T) {
-	for _, name := range []string{"option.go", "metadata.go", "doc.go"} {
+	for _, name := range []string{"policy.go", "metadata.go", "diagnostics.go", "doc.go"} {
 		parsed, err := parser.ParseFile(token.NewFileSet(), name, nil, parser.ImportsOnly)
 		if err != nil {
 			t.Fatal(err)

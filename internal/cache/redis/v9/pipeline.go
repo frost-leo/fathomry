@@ -22,18 +22,65 @@ package redis
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	sdk "github.com/redis/go-redis/v9"
 )
 
-type batchEvidenceHook struct{}
+type batchStats struct {
+	batches atomic.Uint64
+	width   atomic.Uint32
+	mu      sync.Mutex
+	pending map[*sdk.Cmd]struct{}
+}
+
+func (stats *batchStats) track(cmd *sdk.Cmd) {
+	stats.mu.Lock()
+	defer stats.mu.Unlock()
+	if stats.pending == nil {
+		stats.pending = make(map[*sdk.Cmd]struct{})
+	}
+	stats.pending[cmd] = struct{}{}
+}
+func (stats *batchStats) untrack(cmd *sdk.Cmd) {
+	stats.mu.Lock()
+	delete(stats.pending, cmd)
+	stats.mu.Unlock()
+}
+
+type batchEvidenceHook struct{ automatic *batchStats }
 
 func (batchEvidenceHook) DialHook(next sdk.DialHook) sdk.DialHook          { return next }
 func (batchEvidenceHook) ProcessHook(next sdk.ProcessHook) sdk.ProcessHook { return next }
-func (batchEvidenceHook) ProcessPipelineHook(next sdk.ProcessPipelineHook) sdk.ProcessPipelineHook {
+func (hook batchEvidenceHook) ProcessPipelineHook(next sdk.ProcessPipelineHook) sdk.ProcessPipelineHook {
 	return func(ctx context.Context, commands []sdk.Cmder) error {
+		var width uint32
+		if hook.automatic != nil {
+			hook.automatic.mu.Lock()
+			for _, command := range commands {
+				if cmd, ok := command.(*sdk.Cmd); ok {
+					if _, tracked := hook.automatic.pending[cmd]; tracked {
+						width++
+					}
+				}
+			}
+			hook.automatic.mu.Unlock()
+		}
+		if hook.automatic != nil && width > 0 {
+			for count := hook.automatic.batches.Load(); count != ^uint64(0); count = hook.automatic.batches.Load() {
+				if hook.automatic.batches.CompareAndSwap(count, count+1) {
+					break
+				}
+			}
+			for prior := hook.automatic.width.Load(); width > prior; prior = hook.automatic.width.Load() {
+				if hook.automatic.width.CompareAndSwap(prior, width) {
+					break
+				}
+			}
+		}
 		err := next(ctx, commands)
 		if err != nil {
 			for _, command := range commands {
@@ -57,6 +104,9 @@ func (client *Client) Pipeline(ctx context.Context, id fault.Correlation, comman
 // Submit uses the opt-in native deferred autopipeliner. Its one owned waiter
 // retains admission and evidence until actual native completion. Canceling a
 // Receipt.Wait does not cancel accepted work. At most MaxActive waiters exist.
+// The pinned SDK also ignores the operation context after native enqueue for
+// batched commands, including during shutdown. Source wire/pool timeouts and the
+// native batch-permit backstop bound phases, not a total per-command deadline.
 func (client *Client) Submit(ctx context.Context, id fault.Correlation, command Command) (*invocation.Receipt[Result], error) {
 	if client == nil || client.owner == nil || client.owner.automatic == nil {
 		return nil, failure(ErrUnsupported, "automatic")
@@ -79,12 +129,14 @@ func (client *Client) Submit(ctx context.Context, id fault.Correlation, command 
 		return call.Receipt(), nil
 	}
 	cmd := command.native(work)
+	client.owner.automaticStats.track(cmd)
 	_, _ = call.Attempt()
 	future := client.owner.automatic.Submit(work, cmd)
 	go func() {
 		defer cancel()
 		err := future.Wait()
 		result, bounds := collect(work, []*sdk.Cmd{cmd}, true, client.owner.settings.ExperimentalCache, client.owner.settings, err)
+		client.owner.automaticStats.untrack(cmd)
 		call.Complete(invocation.Outcome[Result]{Present: true, Value: result, Primary: nativeFailure(work, errors.Join(err, bounds))})
 	}()
 	return call.Receipt(), nil

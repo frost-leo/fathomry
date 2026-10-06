@@ -132,6 +132,12 @@ checks use a test-owned bucket and exact cleanup; production/TLS/AWS claims rema
 exact/direct reads, classic group sessions and checkpoints. Native-independent
 [broker contracts](reference/adapters/broker/v1/interface.md) hold budgets and attribution.
 Isolated plaintext/no-auth checks do not qualify deployed TLS/SASL or failover.
+[Redis](reference/adapters/cache/redis/v1/interface.md) provides public bounded
+commands, mixed-capability batches, pinned sessions/transactions, Streams,
+subscriptions and experimental caching/batching. Cache and messaging retain
+separate error owners while sharing source authority and public ownership.
+[Shared cache contracts](reference/adapters/cache/v1/interface.md) contain only
+budget and attribution vocabulary. Service and deployment limits remain explicit.
 [Framework common composition](reference/framework/v1/interface.md) now supplies
 explicit runtime coordination, released-evidence reception and a safe logging
 boundary. [Framework configuration](reference/framework/configuration/v1/interface.md)
@@ -259,6 +265,9 @@ current internal safeguards and their limits.
 | --- | --- |
 | Understand responsibilities and design | [Package boundaries](architecture/package-boundaries.md), then the relevant architecture topic |
 | Declare, inspect or extend a public error | [Numeric failure contract](reference/failure/v1/interface.md) |
+| Maintain provider error declarations, mapping and redaction | [Adapter error boundaries](development/adapter-errors.md) |
+| Change a public Adapter without drifting contracts or ownership | [Public Adapter maintenance](development/public-adapters.md) |
+| Find every Adapter package's role and file responsibilities | [Adapter tree map](../adapters/README.md) |
 | Publish or read extensible project configuration data | [Shared settings contract](reference/settings/v1/interface.md) |
 | Hold component instances and follow selected configuration changes | [Runtime resource ownership](reference/resource/v1/interface.md) |
 | Add translations or explain an error code in another language | [Internationalization contract](reference/i18n/v1/interface.md) |
@@ -301,6 +310,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |
 | [`adapters/broker/v1`](reference/adapters/broker/v1/interface.md) | Shared broker budgets and source/operation attribution without native dependencies |
 | [`adapters/broker/kafka/v1`](reference/adapters/broker/kafka/v1/interface.md) | Kafka production, exact/direct/group reads, checkpoints and retained native/public ownership |
+| [`adapters/cache/v1`](reference/adapters/cache/v1/interface.md) | Shared cache source identity, attribution and declared budgets |
+| [`adapters/cache/redis/v1`](reference/adapters/cache/redis/v1/interface.md) | Redis cache/messaging views, mixed commands, sessions, subscriptions and experimental profiles |
 | [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Complete raw batch/source contracts and independent strict layered preparation |
 | [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Explicit local acquisition, native live/captured queries, weak Decode and owned file Watch |
 | [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Complete supported remote reads/observations/management/search, effect evidence and resource-backed borrowing |
@@ -347,6 +358,9 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
+- [Maintain public adapter errors](development/adapter-errors.md), including the private forwarding seam and contract checks.
+- [Maintain public Adapter contracts](development/public-adapters.md), including provider differences, authoritative budgets and executable change checks.
+- [Adapter tree map](../adapters/README.md), covering shared mechanisms, capability contracts, configuration preparation/providers, data providers and private helpers.
 - [Write documentation](development/documentation.md), the canonical writing policy.
 - [Contribution policy](../.github/CONTRIBUTING.md), the canonical branch/signing/review rules.
 

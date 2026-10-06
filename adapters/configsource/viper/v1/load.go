@@ -23,40 +23,8 @@ import (
 	"context"
 	"io"
 
-	"github.com/frost-leo/fathomry/adapters/v1"
 	native "github.com/frost-leo/fathomry/internal/configsource/viper/v1"
 )
-
-// Evidence contains bounded non-payload facts. Lifecycle records resolve at
-// actual subscription cleanup. Errors remain in the independent common receipt.
-type Evidence struct {
-	Documents int
-	Missing   bool
-}
-
-// Dependencies are borrowed once. The caller owns runtime shutdown and evidence
-// reception; retrying a failed receiver never repeats the native operation.
-type Dependencies struct {
-	Runtime  *adapters.Runtime
-	Evidence *adapters.Inbox[Evidence]
-	Observer *adapters.Observer
-}
-
-// Client is a non-owning concurrent-safe capability entry. It owns no transport
-// and cannot close the common runtime. Copies share the same binding.
-type Client struct {
-	private
-	endpoint adapters.Endpoint[Evidence]
-}
-
-// New performs no source I/O or implicit global lookup.
-func New(dependencies Dependencies) (*Client, error) {
-	endpoint, err := adapters.Bind(dependencies.Runtime, adapters.Declaration[Evidence]{Evidence: dependencies.Evidence, Observer: dependencies.Observer, Copy: func(value Evidence) Evidence { return value }})
-	if err != nil {
-		return nil, err
-	}
-	return &Client{endpoint: endpoint}, nil
-}
 
 // Input selects exactly one literal absolute File or borrowed Reader. Load never
 // closes Readers or forcibly interrupts blocked Read/Open/Stat/Close calls.
@@ -114,21 +82,4 @@ func (client *Client) RawFile(ctx context.Context, path string, limit int) ([]by
 		return nil, false, err
 	}
 	return raw, missing, nil
-}
-func (client *Client) run(ctx context.Context, operation string, work func(context.Context) (Evidence, error)) error {
-	if client == nil {
-		return fail(ErrInput, operation)
-	}
-	receipt, err := client.endpoint.Run(ctx, request(operation), func(call *adapters.Call[Evidence]) {
-		facts, err := work(call.Context())
-		_ = call.Resolve(adapters.Outcome[Evidence]{Value: facts, Present: true, Primary: err})
-	})
-	if err != nil {
-		return err
-	}
-	snapshot, _ := receipt.Snapshot()
-	return snapshot.Err()
-}
-func request(operation string) adapters.Request {
-	return adapters.Request{Operation: "config.viper." + operation, WorkBytes: 8 << 20, EvidenceBytes: 64 << 10}
 }

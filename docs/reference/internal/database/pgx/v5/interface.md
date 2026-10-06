@@ -95,6 +95,11 @@ a nil transaction and completed failure receipt. Handle both cases.
 
 ## Options, preparation and implicit-input refusal
 
+`EvidenceBytesV1(options)` exposes the native per-call retained envelope rather
+than requiring public composition to copy its formula. Like `LimitsV1`, it
+describes validated, defaulted options without later layers. A caller using
+overrides must account for the actual resolved settings instead.
+
 OptionsV1 is a process-local contract, separate from SDK major v5 and the private
 resource schema format 1. Unknown raw fields/types and invalid effective options
 are rejected. Typed zero timeout/size values request bootstrap defaults; a raw

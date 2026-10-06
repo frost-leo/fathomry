@@ -315,6 +315,26 @@ func LimitsV1(options OptionsV1) resource.Limits { return defaults(options).limi
 // it does not account for configuration overlays or caller-retained copies.
 func EvidenceBytesV1(options OptionsV1) int64 { return defaults(options).evidenceReservation() }
 
+// Budget describes defaulted native reservations and the retained record bound.
+// SourceBytes covers persistent codec/socket storage through source shutdown;
+// group clients belong to operation roots. These are envelopes, not measured heap.
+type Budget struct {
+	WorkBytes, EvidenceBytes, SourceBytes int64
+	Active, Queued, MaxRecords            int
+}
+
+// BudgetV1 uses the same defaults as native construction. Validate with Select;
+// like LimitsV1, this describes unoverridden options, not later source layers.
+func BudgetV1(options OptionsV1) Budget {
+	value := defaults(options)
+	clients := int64(2)
+	if value.TransactionalID != "" {
+		clients++
+	}
+	sourceBytes := clients*(2*int64(value.MaxWireBytes)*int64(len(value.Brokers))+int64(value.MaxActive)*(2*int64(value.MaxBatchBytes)+8<<20)) + 4<<20
+	return Budget{value.reservation(), value.evidenceReservation(), sourceBytes, value.MaxActive, value.QueuedCalls, value.MaxRecords}
+}
+
 // Profile reports effective, non-secret settings, not service qualification.
 func (client *Client) Profile() compatibility.Profile {
 	if client == nil || client.owner == nil {

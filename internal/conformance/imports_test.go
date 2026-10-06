@@ -72,7 +72,7 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatalf("independent module smoke compilation failed: %v\n%s", err, output)
 	}
 	t.Logf("independent module public-failure/settings smoke compilation:\n%s", output)
-	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1", "configsource/nacos/v2", "database/pgx/v5", "database/mysql/v1"} {
+	for _, name := range []string{"fault", "resource", "invocation", "compatibility", "conformance", "configsource/viper/v1", "configsource/nacos/v2", "database/pgx/v5", "database/mysql/v1", "cache/redis/v9"} {
 		t.Run("reject-internal-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/internal/" + name
 			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
@@ -95,6 +95,14 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			}
 		})
 	}
+	t.Run("reject-adapter-errorbridge", func(t *testing.T) {
+		path := "github.com/frost-leo/fathomry/adapters/internal/errorbridge"
+		write("forbidden.go", []byte(notice+"package consumer\nimport _ "+fmt.Sprintf("%q", path)+"\n"))
+		output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
+		if err == nil || !strings.Contains(string(output), "use of internal package "+path+" not allowed") {
+			t.Fatalf("private adapter helper escaped: %v\n%s", err, output)
+		}
+	})
 	output, err = run(root, "list", "./...")
 	if err != nil {
 		t.Fatal("package inventory could not be inspected")
@@ -111,9 +119,14 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		if cliPackages[path] {
 			continue
 		}
+		if path == "github.com/frost-leo/fathomry/adapters/internal/errorbridge" {
+			continue // Private integration helper, not another public capability.
+		}
 		switch path {
 		case "github.com/frost-leo/fathomry/adapters/broker/v1",
 			"github.com/frost-leo/fathomry/adapters/broker/kafka/v1",
+			"github.com/frost-leo/fathomry/adapters/cache/v1",
+			"github.com/frost-leo/fathomry/adapters/cache/redis/v1",
 			"github.com/frost-leo/fathomry/adapters/database/v1",
 			"github.com/frost-leo/fathomry/adapters/database/postgres/v1",
 			"github.com/frost-leo/fathomry/adapters/database/mysql/v1",
