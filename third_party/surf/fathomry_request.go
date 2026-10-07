@@ -23,8 +23,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"sync"
 
+	"github.com/enetx/g"
 	"github.com/enetx/http"
 	"github.com/enetx/surf/internal/specclone"
 	"github.com/enetx/surf/profiles"
@@ -35,7 +37,50 @@ import (
 // Fathomry profile catalog. The caller transfers each returned container; callbacks
 // are borrowed and must return fresh per-use mutable values.
 func (builder *Builder) FathomryApplyVariant(variant profiles.Variant, os profiles.OSKey) *Builder {
-	return (&Impersonate{builder: builder, os: os}).applyVariant(variant)
+	var rejected error
+	build := variant.BuildHeaders
+	variant.BuildHeaders = func(os profiles.OSKey) *g.MapOrd[g.String, g.String] {
+		value := build(os)
+		if value == nil {
+			rejected = errors.New("surf: profile returned nil headers")
+		} else {
+			var size int64
+			for key, text := range value.Iter() {
+				size += int64(len(key)+len(text)) + 64
+			}
+			control := builder.cli.fathomry.control
+			if control.MaxRequestHeaderBytes > 0 && size > control.MaxRequestHeaderBytes || control.MaxProfileBytes > 0 && size > control.MaxProfileBytes {
+				rejected = ErrFathomryProfileLimit
+			}
+		}
+		if rejected != nil {
+			empty := g.NewMapOrd[g.String, g.String]()
+			return &empty
+		}
+		return value
+	}
+	result := (&Impersonate{builder: builder, os: os}).applyVariant(variant)
+	return result.addCliMW(func(*Client) error {
+		if rejected != nil {
+			return rejected
+		}
+		if err := fathomryValidateH2(builder.http2settings); err != nil {
+			return err
+		}
+		if settings := builder.http3settings; settings != nil {
+			var size int64
+			for key, value := range settings.settings.Iter() {
+				size += 32
+				if key > (1<<62)-1 || value > (1<<62)-1 {
+					return ErrFathomryProfileLimit
+				}
+			}
+			if maximum := builder.cli.fathomry.control.MaxProfileBytes; maximum > 0 && size > maximum {
+				return ErrFathomryProfileLimit
+			}
+		}
+		return nil
+	}, math.MinInt)
 }
 
 type fathomryFraming struct {

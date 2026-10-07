@@ -19,14 +19,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Local Surf compatibility corrections
 
-**Status:** local replacement for `internal/httpclient/surf/v1`, issue #50.
+**Status:** local replacement for `internal/httpclient/surf/v1`, issues #50 and #119.
 No production, arbitrary-profile or full upstream-suite qualification is implied.
 
 ## Exact source
 
 - Module `github.com/enetx/surf v1.0.206`.
 - Immutable origin `7da0502899af06f8318f95e632797cb2ac0c6c20`.
-- Local compatibility revision `v1`.
+- Local compatibility revision `v2`.
 - Original file hashes and module/ZIP identity: [UPSTREAM.json](UPSTREAM.json).
 - The original [MIT LICENSE](LICENSE) is retained unchanged. Project-authored
   additions have their own complete project notices and do not relicense upstream.
@@ -71,6 +71,39 @@ SOCKS5 association ownership includes the TCP control connection, UDP socket and
 QUIC transport. Datagram deadlines delegate through the managed packet interface,
 rather than depending on a concrete `*net.UDPConn`. Remote QUIC termination also
 retires its association; this is native cleanup, not business Provider eviction.
+
+## Issue119 controlled protocol and upload corrections
+
+Compatibility revision v2 adds managed prior-knowledge h2c dialing and receive
+limits, preserves HTTP-only Variants without installing an empty JA transport,
+and bounds owned lazy profile outputs without evaluating them during preparation.
+The explicit HTTP3-client reservation counts cached, pending and retiring native
+clients separately from shared UDP sockets.
+
+An explicit remote H3_VERSION_FALLBACK survives the selected H3 error conversion
+and selects an independently configured H1-only managed transport, as described
+by [RFC 9114 section8.1](https://www.rfc-editor.org/rfc/rfc9114.html#section-8.1).
+It shares physical TCP admission and cleanup, without mutating ordinary fallback
+ALPN or authorizing one-shot/non-fallback-error replay.
+
+Configured Resolver.Dial callbacks and returned DNS connections retain existing
+work and TCP/UDP admission through actual Close. PacketConn framing is preserved.
+Native lookup-group cancellation closes the connection without discarding shared
+lookup semantics. Panic uses the bounded route-failure channel so Go's DNSError
+conversion cannot erase its cause; ordinary DNS refusals remain native retry inputs.
+
+FathomryMultipart reuses the native encoder and field/file ordering without
+DrainBody or Multipart.Retry materialization. One boundary is chosen per logical
+upload. Each producer retains existing work before launch; cancellation closes
+the pipe and all acquired inputs before joining production. Every replay body is
+registered, even when redirect policy declines to send it. GetBody closes the
+previous managed input before acquiring fresh inputs; native status retries use
+those fresh bodies. Opaque readers/factories remain cooperative and must obey
+their transfer/concurrent-close contracts. No raw filesystem input is added.
+
+These are locally maintained corrections for
+[issue119](https://github.com/frost-leo/fathomry/issues/119), not an SDK upgrade,
+upstream release claim or new distribution permission.
 
 ## Verification and maintenance
 

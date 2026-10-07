@@ -81,7 +81,7 @@ func (im *Impersonate) applyVariant(v profiles.Variant) *Builder {
 		ja := im.builder.JA()
 		ja.shuffle = v.ShuffleExtensions
 		ja.SetHelloSpec(*v.HelloSpec)
-	} else {
+	} else if v.HelloID.Client != "" || v.HelloID.Version != "" || v.HelloID.Seed != nil || v.HelloID.Weights != nil {
 		im.builder.JA().SetHelloID(v.HelloID)
 	}
 

@@ -26,10 +26,13 @@ import (
 )
 
 // FathomryCompatibilityRevision identifies the local changes, not SDK provenance.
-const FathomryCompatibilityRevision = "v1"
+const FathomryCompatibilityRevision = "v2"
 
 // ErrFathomryBodyLimit rejects a prefix that cannot represent a complete body.
 var ErrFathomryBodyLimit = errors.New("surf: response body limit exceeded")
+
+// ErrFathomryProfileLimit identifies an owned lazy output outside its declaration.
+var ErrFathomryProfileLimit = errors.New("surf: profile output exceeds configured limit")
 
 // FathomryFailure retains distinct native operation and cleanup occurrences.
 // Unwrap preserves both original causes for intentional inspection.
@@ -62,7 +65,20 @@ func fathomryValidateH2(settings *HTTP2Settings) error {
 	}
 	maximum := settings.builder.cli.fathomry.control.MaxHeaderBytes
 	if maximum > 0 && (int64(settings.maxHeaderListSize) > maximum || int64(settings.headerTableSize) > maximum || int64(settings.maxFrameSize) > maximum) {
-		return errors.New("surf: native HTTP/2 receive settings exceed configured limit")
+		return ErrFathomryProfileLimit
+	}
+	control := settings.builder.cli.fathomry.control
+	window := int64(4 << 20)
+	if settings.headerTableSize != 0 || settings.usePush || settings.maxConcurrentStreams != 0 || settings.initialWindowSize != 0 || settings.maxFrameSize != 0 || settings.maxHeaderListSize != 0 || settings.noRFC7540Priorities != 0 {
+		window = 65535
+		if settings.initialWindowSize != 0 {
+			window = int64(settings.initialWindowSize)
+		}
+	}
+	if settings.initialWindowSize > (1<<31)-1 || settings.connectionFlow > (1<<31)-1-65535 ||
+		control.MaxHTTP2StreamBytes > 0 && window > control.MaxHTTP2StreamBytes ||
+		control.MaxProfileBytes > 0 && int64(len(settings.priorityFrames))*32+256 > control.MaxProfileBytes {
+		return ErrFathomryProfileLimit
 	}
 	return nil
 }

@@ -374,15 +374,22 @@ func h2cMW(client *Client) error {
 	}
 
 	t2 := new(http2.Transport)
+	t1 := client.GetTransport().(*http.Transport)
+	if err := fathomryValidateH2(client.builder.http2settings); err != nil {
+		return err
+	}
 
 	// Configure H2C specific settings
 	t2.AllowHTTP = true
-	t2.DisableCompression = client.GetTransport().(*http.Transport).DisableCompression
-	t2.IdleConnTimeout = client.transport.(*http.Transport).IdleConnTimeout
+	t2.DisableCompression = t1.DisableCompression
+	t2.IdleConnTimeout = t1.IdleConnTimeout
+	if limit := client.fathomry.control.MaxHeaderBytes; limit > 0 {
+		t2.MaxHeaderListSize = uint32(limit)
+	}
 
 	// Override TLS dial to use plain text connections
 	t2.DialTLSContext = func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, network, addr)
+		return t1.DialContext(ctx, network, addr)
 	}
 
 	// Apply HTTP/2 settings if configured

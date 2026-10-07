@@ -802,6 +802,11 @@ func (t *Transport) NewClientConn(c net.Conn) (*ClientConn, error) {
 }
 
 func (t *Transport) newClientConn(c net.Conn, singleUse bool, internalStateHook func()) (*ClientConn, error) {
+	for _, setting := range t.Settings {
+		if err := setting.Valid(); err != nil {
+			return nil, errors.Join(err, c.Close())
+		}
+	}
 	conf := configFromTransport(t)
 	cc := &ClientConn{
 		t:                           t,
@@ -855,11 +860,16 @@ func (t *Transport) newClientConn(c net.Conn, singleUse bool, internalStateHook 
 	}
 	maxHeaderTableSize := conf.MaxDecoderHeaderTableSize
 	maxHeaderListSize := t.MaxHeaderListSize
+	if len(t.Settings) != 0 {
+		cc.initialStreamRecvWindowSize = initialWindowSize
+	}
 
 	for _, setting := range t.Settings {
 		switch setting.ID {
 		case SettingMaxFrameSize:
-			cc.maxFrameSize = setting.Val
+			cc.fr.SetMaxReadFrameSize(setting.Val)
+		case SettingInitialWindowSize:
+			cc.initialStreamRecvWindowSize = int32(setting.Val)
 		case SettingMaxHeaderListSize:
 			maxHeaderListSize = setting.Val
 		case SettingHeaderTableSize:
