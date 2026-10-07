@@ -60,6 +60,11 @@ func (prepared Prepared) Description() resource.Description {
 func (value settings) budget(native NativeOptionsV1, config *tls.Config) Budget {
 	work := value.reservation()
 	perConnection := int64(128<<10) + 2*value.MaxHeaderBytes + 8192
+	// Selected Go 1.27 TLS admits 256 KiB certificate messages and 64 KiB
+	// other handshake messages. Peer DER/cache/decoded state remains resident
+	// on idle connections. Reserve both possible native TLS layers (HTTPS
+	// proxy and origin), separately from caller-borrowed TLS configuration.
+	perConnection += 2 * (4*(256<<10) + 2*(64<<10))
 	if value.HTTP2 || value.UnencryptedHTTP2 {
 		stream, frame, decoder, encoder := int64(4<<20), int64(1<<20), int64(4096), int64(4096)
 		if h2 := native.HTTP2; h2 != nil {

@@ -52,7 +52,12 @@ does not authorize constructing another source or replaying a request.
 The public bridge adds two native result slots and 64 KiB metadata per root, and
 64 KiB per independent public result/source owner. Internal separately accounts
 effective H2 receive windows, transport/header-table buffers, copied containers,
-routes and sockets. Borrowed callback/key/cache/jar memory, Go/kernel overhead
+routes and sockets. Idle peer DER and native TLS handshake/state storage are
+source-resident, not caller-borrowed certificates or completed-root storage.
+The per-socket declaration allows two native TLS layers using selected Go 1.27
+256 KiB certificate-message / 64 KiB other-handshake limits. Its conservative
+state multiplier is a declared allowance, not an exact x509 allocation or heap
+upper-bound proof. Borrowed callback/key/cache/jar memory, Go/kernel overhead
 and arbitrary foreign allocations are not hard RSS guarantees.
 
 ## Settings and native dependencies
