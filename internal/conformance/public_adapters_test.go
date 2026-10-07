@@ -31,6 +31,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/bogdanfinn/tls-client/profiles"
+
 	kafka "github.com/frost-leo/fathomry/adapters/broker/kafka/v1"
 	broker "github.com/frost-leo/fathomry/adapters/broker/v1"
 	redis "github.com/frost-leo/fathomry/adapters/cache/redis/v1"
@@ -40,6 +42,7 @@ import (
 	postgres "github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	database "github.com/frost-leo/fathomry/adapters/database/v1"
 	nethttp "github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1"
+	tlsclient "github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
@@ -65,6 +68,16 @@ type adapterOwner interface {
 
 func TestPublicAdapterContracts(t *testing.T) {
 	const canary = "adapter-contract-private-canary"
+	t.Run("tlsclient", func(t *testing.T) {
+		profile := profiles.Chrome_144
+		native := tlsclient.NativeOptions{Profile: &profile}
+		value := tlsclient.Settings{Name: "contract", ProxyURL: "http://" + canary + "@127.0.0.1:1"}
+		checkPublicAdapter(t, value, tlsclient.Validate, func(value tlsclient.Settings) (httpclient.Policy, error) { return tlsclient.Recommend(value, native) },
+			func(value httpclient.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[tlsclient.Result]) tlsclient.Dependencies {
+				return tlsclient.Dependencies{Runtime: runtime, Evidence: inbox, Native: native}
+			}, tlsclient.Open, canary)
+	})
 	t.Run("nethttp", func(t *testing.T) {
 		zero := time.Duration(0)
 		disabled := false

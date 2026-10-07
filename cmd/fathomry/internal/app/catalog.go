@@ -25,6 +25,7 @@ import (
 	"github.com/frost-leo/fathomry/adapters/database/mysql/v1"
 	"github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	"github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1"
+	"github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
@@ -55,6 +56,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "database_doris", BaseLocale: "en", Resources: doris.Resources(), Directory: "resources", Definitions: doris.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "objectstore_minio", BaseLocale: "en", Resources: minio.Resources(), Directory: "resources", Definitions: minio.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "http_nethttp", BaseLocale: "en", Resources: nethttp.Resources(), Directory: "resources", Definitions: nethttp.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "http_tlsclient", BaseLocale: "en", Resources: tlsclient.Resources(), Directory: "resources", Definitions: tlsclient.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {

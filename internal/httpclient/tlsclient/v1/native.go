@@ -41,6 +41,15 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 		return NativeOptionsV1{}, failure(ErrLimit, "native-headers")
 	}
 	result := input
+	var err error
+	result.Dialer, err = copyDialer(input.Dialer)
+	if err != nil {
+		return NativeOptionsV1{}, err
+	}
+	result.LocalAddr, err = copyLocalAddr(input.LocalAddr)
+	if err != nil {
+		return NativeOptionsV1{}, err
+	}
 	profile := *input.Profile
 	if len(profile.GetSettings()) > 256 || len(profile.GetSettingsOrder()) > 256 || len(profile.GetPriorities()) > 256 || len(profile.GetPseudoHeaderOrder()) > 32 ||
 		len(profile.GetHttp3Settings()) > 256 || len(profile.GetHttp3SettingsOrder()) > 256 || len(profile.GetHttp3PseudoHeaderOrder()) > 32 {
@@ -180,7 +189,7 @@ func validateNative(value settings, native NativeOptionsV1) error {
 		(id.Client == tls.HelloRandomized.Client || id.Client == tls.HelloRandomizedALPN.Client) {
 		return failure(ErrUnsupported, "native-randomized-http1")
 	}
-	if value.Mode == HTTP3Racing && (native.DialContext != nil || native.ProxyDialerFactory != nil || len(native.CertificatePins) > 0 || value.DisableIPV4 || value.DisableIPV6 ||
+	if value.Mode == HTTP3Racing && (native.DialContext != nil || native.Dialer != nil || native.LocalAddr != nil || native.ProxyDialerFactory != nil || len(native.CertificatePins) > 0 || value.DisableIPV4 || value.DisableIPV6 ||
 		native.Transport != nil && (native.Transport.KeyLogWriter != nil || native.Transport.DisableKeepAlives)) {
 		return failure(ErrUnsupported, "tcp-only-native-option")
 	}
@@ -201,6 +210,10 @@ func validateNative(value settings, native NativeOptionsV1) error {
 	}
 	if value.ProxyURL != "" && (native.DialContext != nil || native.ProxyDialerFactory != nil) || native.DialContext != nil && native.ProxyDialerFactory != nil {
 		return failure(ErrInput, "native-proxy-conflict")
+	}
+	if native.DialContext != nil && (native.Dialer != nil || native.LocalAddr != nil) ||
+		native.Dialer != nil && native.ProxyDialerFactory != nil {
+		return failure(ErrInput, "native-dialer-conflict")
 	}
 	if value.InsecureSkipVerify && len(native.CertificatePins) > 0 {
 		return failure(ErrInput, "certificate-pins")
@@ -241,6 +254,20 @@ func (own *owner) profile() profiles.ClientProfile {
 			spec, err := factory()
 			if len(spec.Extensions) > 256 || len(spec.CipherSuites) > 512 || len(spec.CompressionMethods) > 64 {
 				return tls.ClientHelloSpec{}, failure(ErrLimit, "profile-spec", err)
+			}
+			size := int64(len(spec.CipherSuites)*2 + len(spec.CompressionMethods) + 512)
+			for _, extension := range spec.Extensions {
+				if extension == nil || nilLike(extension) {
+					return tls.ClientHelloSpec{}, failure(ErrInput, "profile-extension", err)
+				}
+				length := extension.Len()
+				if length < 0 || int64(length) > own.settings.MaxProfileBytes-size {
+					return tls.ClientHelloSpec{}, failure(ErrLimit, "profile-bytes", err)
+				}
+				size += int64(length)
+			}
+			if size > own.settings.MaxProfileBytes {
+				return tls.ClientHelloSpec{}, failure(ErrLimit, "profile-bytes", err)
 			}
 			return spec, err
 		}

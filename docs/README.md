@@ -252,6 +252,10 @@ The [tls-client v1 integration](reference/internal/httpclient/tlsclient/v1/inter
 adds externally configured native/custom profiles, controlled H1/H2/H3-racing
 requests and streams, runtime proxy isolation and shared native resource bounds.
 Its local SDK compatibility patch and Provider have separate version axes.
+The [public tls-client Adapter](reference/adapters/httpclient/tlsclient/v1/interface.md)
+adds frozen native-aware preparation, effective-origin credential isolation,
+controlled built-in TCP proxy dialing/local binding, native TLS/TCP counters and
+public-only direct/Fixed/Follow consumption without exposing SDK ownership.
 Upstream license compatibility remains unresolved; implementation delivery does
 not establish distribution permission or production/arbitrary-profile qualification.
 
@@ -340,6 +344,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/sqlengine/doris/v1`](reference/adapters/sqlengine/doris/v1/interface.md) | Finite/incremental SQL, strict Stream Load, label observations and independent source/evidence ownership |
 | [`adapters/httpclient/v1`](reference/adapters/httpclient/v1/interface.md) | HTTP accounting, preparation and attribution vocabulary; no runtime/client |
 | [`adapters/httpclient/nethttp/v1`](reference/adapters/httpclient/nethttp/v1/interface.md) | Standard HTTP finite/stream/direct-connection use with exact preparation and ownership |
+| [`adapters/httpclient/tlsclient/v1`](reference/adapters/httpclient/tlsclient/v1/interface.md) | Explicit native profiles, H3 racing, finite/stream HTTP and protocol-qualified counters |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

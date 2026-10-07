@@ -111,6 +111,23 @@ func qualifyProject(t *testing.T, directory string, environment []string, mode s
 
 }
 
+func executeHTTPConsumer(t testing.TB, directory string, environment []string, binary, expected string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	process := exec.CommandContext(ctx, binary)
+	process.Dir, process.Env = directory, environment
+	var diagnostics bytes.Buffer
+	process.Stderr = &diagnostics
+	output, err := process.Output()
+	if err != nil || ctx.Err() != nil || string(output) != expected {
+		t.Fatalf("versioned HTTP consumer failed: %v\n%s\n%s", err, output, diagnostics.String())
+	}
+	if diagnostics.Len() != 0 {
+		t.Logf("native protocol diagnostics: %s", diagnostics.String())
+	}
+}
+
 func TestIndependentProjects(t *testing.T) {
 	if testing.Short() {
 		t.Skip("independent generated-module qualification")
@@ -170,6 +187,9 @@ func TestVersionedProjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	manifest := "module example.org/configuration-tool\n\ngo 1.27.0\nrequire " + frameworkModule + " " + fixtureVersion + "\n"
+	for _, pin := range sdkPins() {
+		manifest += "replace " + pin.original + " => " + frameworkModule + "/" + pin.directory + " " + pin.version + "\n"
+	}
 	if err := os.WriteFile(filepath.Join(toolDirectory, "go.mod"), []byte(manifest), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -177,6 +197,7 @@ func TestVersionedProjects(t *testing.T) {
 	environment := consumerEnvironment("GOMODCACHE="+cache, "GOPROXY="+proxyURL+",https://proxy.golang.org", "GONOSUMDB="+frameworkModule, "GOFLAGS=-modcacherw")
 	cli := filepath.Join(job, "fathomry")
 	runConsumer(t, toolDirectory, environment, goTool(), "build", "-mod=mod", "-o", cli, frameworkModule+"/cmd/fathomry")
+	verifyHTTPReplacement(t, toolDirectory, environment)
 	for _, mode := range []string{"local", "remote"} {
 		for _, encoding := range []string{"yaml", "toml"} {
 			t.Run(mode+"/"+encoding, func(t *testing.T) {
@@ -207,31 +228,32 @@ func TestVersionedProjects(t *testing.T) {
 				}
 				t.Logf("%s/%s: generated, tidied, vetted, race-tested and built from the isolated module cache; local programs executed, remote programs reject absent bootstrap", mode, encoding)
 				if mode == "local" && encoding == "yaml" {
-					for _, variant := range []string{"direct", "framework"} {
-						fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/httpclient/nethttp/v1/testdata", variant, "main.go"))
-						if err != nil {
-							t.Fatal(err)
-						}
-						directory := filepath.Join(destination, "cmd", "http-"+variant)
-						if err := os.MkdirAll(directory, 0700); err != nil {
-							t.Fatal(err)
-						}
-						if err := os.WriteFile(filepath.Join(directory, "main.go"), fixture, 0600); err != nil {
-							t.Fatal(err)
-						}
-						runConsumer(t, destination, environment, goTool(), "mod", "tidy")
-						runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
-						binary := filepath.Join(job, "http-"+variant)
-						runConsumer(t, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/http-"+variant)
-						output := runConsumer(t, destination, environment, binary)
-						if string(output) != "nethttp "+variant+" public consumer passed\n" {
-							t.Fatal("versioned HTTP consumer did not verify its behavior", string(output))
+					for _, provider := range []string{"nethttp", "tlsclient"} {
+						for _, variant := range []string{"direct", "framework"} {
+							fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/httpclient", provider, "v1/testdata", variant, "main.go"))
+							if err != nil {
+								t.Fatal(err)
+							}
+							name := "http-" + provider + "-" + variant
+							directory := filepath.Join(destination, "cmd", name)
+							if err := os.MkdirAll(directory, 0700); err != nil {
+								t.Fatal(err)
+							}
+							if err := os.WriteFile(filepath.Join(directory, "main.go"), fixture, 0600); err != nil {
+								t.Fatal(err)
+							}
+							runConsumer(t, destination, environment, goTool(), "mod", "tidy")
+							runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
+							binary := filepath.Join(job, name)
+							runConsumer(t, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
+							executeHTTPConsumer(t, destination, environment, binary, provider+" "+variant+" public consumer passed\n")
 						}
 					}
 					selected := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
 					if bytes.Contains(selected, []byte("\"Replace\"")) {
 						t.Fatal("HTTP consumer acquired checkout replacement")
 					}
+					verifyHTTPReplacement(t, destination, environment)
 				}
 			})
 		}
@@ -239,4 +261,22 @@ func TestVersionedProjects(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repository(t), "scripts", "install-cli.sh")); err == nil {
 		t.Fatal("unrequested installer appeared")
 	}
+}
+
+func verifyHTTPReplacement(t testing.TB, directory string, environment []string) {
+	t.Helper()
+	for _, pin := range sdkPins() {
+		if pin.original != "github.com/bogdanfinn/tls-client" {
+			continue
+		}
+		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", pin.original)
+		var selected struct {
+			Replace *struct{ Path, Version, Sum string }
+		}
+		if json.Unmarshal(raw, &selected) != nil || selected.Replace == nil || selected.Replace.Path != frameworkModule+"/"+pin.directory || selected.Replace.Version != pin.version || selected.Replace.Sum != pin.sum {
+			t.Fatal("actual downloaded HTTP replacement differs from qualified immutable bytes")
+		}
+		return
+	}
+	t.Fatal("HTTP replacement policy missing")
 }

@@ -1,0 +1,90 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "http_tlsclient",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.http_tlsclient.invalid_input",
+      "source": "ca8a9cfbf2dd5069b8169b15d77e5272c8cb7a3693fe4fbd1acd4dfe10197d29",
+      "forms": {
+        "other": "HTTP 输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.unsupported_profile",
+      "source": "5a9df1b6b7634cb8252b8d0c21cef0b9662237a3ad16d7b7694649533bd57bfd",
+      "forms": {
+        "other": "请求的 HTTP 能力不受支持。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.transport_failed",
+      "source": "0ff42b547fdcfe6a6f413e02bf189bb1bf9285d2646c1bec0de9ee34718404f9",
+      "forms": {
+        "other": "HTTP 传输失败，远端效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.read_failed",
+      "source": "62a772d2716e09f7c0b9102fef8ee55c3308f073e6da652cea1ba5fbe31c3982",
+      "forms": {
+        "other": "读取 HTTP 输入或响应失败。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.integrity_failed",
+      "source": "e6d8114abab30b51c6fac5ce6f95a193a3945695a49a4a3b2c80579db0c5ee8f",
+      "forms": {
+        "other": "HTTP 响应不完整或格式无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.limit_exceeded",
+      "source": "39a11e7792135667ab5a968d727c9e1ee4b7f97df15f9673441529295dd9605a",
+      "forms": {
+        "other": "超出 HTTP 能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.invalid_state",
+      "source": "d7398bb7f857f43522bcf0a37dd0175737863fcc186dfd4bb1625151cbc28124",
+      "forms": {
+        "other": "HTTP 句柄在当前状态下无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.cleanup_failed",
+      "source": "c1f21a28df789a560fb0a7afe259c39726ec509b38be3df7ee6f73e326bff2db",
+      "forms": {
+        "other": "HTTP 清理报告失败，完成状态需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.http_tlsclient.runtime_serialization",
+      "source": "b061e52ef82a90dd82062f7d3fc6d153c41f69d788c1a6037c936b0c4f87bf3a",
+      "forms": {
+        "other": "不支持序列化 HTTP 运行时值。"
+      }
+    }
+  ]
+}

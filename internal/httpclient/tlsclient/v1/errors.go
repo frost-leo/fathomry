@@ -60,3 +60,4 @@ func (*Client) LogValue() slog.Value           { return private{}.LogValue() }
 func (*Stream) LogValue() slog.Value           { return private{}.LogValue() }
 func (*Metadata) LogValue() slog.Value         { return private{}.LogValue() }
 func (*Result) LogValue() slog.Value           { return private{}.LogValue() }
+func (*Bandwidth) LogValue() slog.Value        { return private{}.LogValue() }
