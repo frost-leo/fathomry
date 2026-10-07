@@ -22,8 +22,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** trusted composition and adapter maintainers.
-**Status:** implemented and tested against local protocol peers and an isolated
-Doris 4.1.4 native-table profile. This is not production or whole-engine support.
+**Status:** implemented with local actual-driver/protocol tests and limited
+on-demand #111 cursor/public-Adapter service verification. Historical #42
+finite-operation Doris 4.1.4 evidence remains separate; neither qualifies
+production or the whole engine.
 **Package:** `github.com/frost-leo/fathomry/internal/sqlengine/doris/v1`.
 
 ## Responsibilities and selected clients
@@ -49,6 +51,8 @@ The boundary implements:
   transaction/visibility evidence, never an external Iceberg commit.
 - `InspectLabel`: one retained-label observation, without polling or resubmission.
 - `Query`: one bounded, fully retained SQL result.
+- `QueryCursor`: one owned incrementally consumed SQL result, without SQL
+  pagination or a whole-result buffer.
 - `Exec`: one authorized SQL text command with protocol acknowledgement and
   affected-row evidence, not an inferred commit/visibility certificate.
 - `Profile`: copied effective declarations for `compatibility`, not readiness
@@ -67,10 +71,13 @@ not create another engine or storage implementation inside this package.
 
 ## Composition and calling sequence
 
-1. Supply explicit `OptionsV1` to `Select`, with any strict `resource.Layer`
-   overlays. Selection freezes configuration and performs no network I/O.
-2. Attach `resource.WithLimits`. `LimitsV1` recommends limits for the supplied
-   defaulted options; overlays changing bounds require matching composition policy.
+1. Supply explicit `OptionsV1` to `PrepareV1`, with any strict `resource.Layer`
+   overlays. Its `Selection` and `Reservation` describe the same validated
+   resolution. `OptionsCopy` is deliberate sensitive access to a detached copy.
+   Preparation performs no network I/O. `Select` remains a convenience wrapper.
+2. Attach `resource.WithLimits` using that preparation's `Reservation().Limits`.
+   The reservation includes source, work and independent evidence bytes. Legacy
+   `LimitsV1` describes typed defaults only, not a differently overlaid resolution.
 3. `resource.Assemble` owns the selected source. Separate assemblies construct
    independent owners; `resource.Borrow` or `Delegate` explicitly shares/transfers
    the original source and its admission allowance.
@@ -83,7 +90,7 @@ not create another engine or storage implementation inside this package.
    Receiving without releasing does not free evidence capacity. Close the owning
    assembly after live calls and borrowers have ended.
 
-Calls are synchronous; there is no asynchronous uploader, user callback,
+Finite calls and cursor setup/pages are synchronous; there is no asynchronous uploader, user callback,
 untracked queue, polling worker, or retained transaction/statement handle.
 Source admission is the only queue and bounds both active and queued calls.
 The source owns immutable settings; each admitted call owns its sockets and
@@ -92,6 +99,41 @@ transport. Cleanup needs no additional admission/evidence slot.
 Assembly close does not cancel accepted callers. A close deadline with live users
 is incomplete, not release or rollback; callers retain the finite operation
 context and the owner can continue cleanup through `resource`.
+
+### Incremental SQL lifecycle
+
+`QueryCursor(setup, lifetime, ...)` admits one root. `Timeout` bounds admission
+and setup separately; `CursorTimeout` bounds the full accepted lifetime.
+The MySQL driver's `QueryContext` retains the owning lifetime, **not** setup.
+Successful setup cancellation cannot invalidate accepted Rows. Failed setup
+retires the connection and reports through the accepted root receipt.
+
+`Next(ctx, childCorrelation)` reserves independent evidence within the root's
+existing lease; its correlation names that root as Parent. Each page is bounded
+by `MaxPageRows` and `MaxPageBytes` (including metadata). One copied lookahead row
+recognizes exact-bound EOF without dropping/reordering data. A too-large row
+fails rather than being truncated. Whole-response `MaxCursorRows` and
+`MaxResponseBytes` are never reset between pages. Finite Query and JSON batches
+still use `MaxRows`; finite retention still uses `MaxResultBytes`.
+
+Only positive framed EOF sets Complete on the last page and terminal root.
+Intermediate pages are not complete business outputs. Root evidence contains
+metadata/cumulative counters but no accumulated rows. RowsRead counts decoded
+rows including lookahead; BytesRead counts their copied value bytes plus one
+metadata copy. ResponseBytes includes protocol framing and authentication.
+
+Next is serial; overlapping use is refused. Every admitted page has a fresh
+Timeout bounded by its caller context; cancellation terminates the cursor.
+Admission refusal leaves it usable. Close can cancel an in-flight page, joins
+local native use, and uses the existing root reservation even at saturation.
+Its context and Timeout bound waiting, not ownership; repeated Close observes
+the same terminal facts. One bounded cursor worker performs automatic lifetime
+finalization. The socket is retired before Rows.Close can drain unread results.
+Released is local evidence, not remote SQL termination or rollback.
+
+Claim the live root's inbox delivery before receiving pages, then release each
+page incrementally and the root after actual release. Recommended MaxLeases=2
+supports the root plus one synchronous page; smaller trees refuse cursor setup.
 
 ## Explicit transport, input and memory limits
 
@@ -128,6 +170,10 @@ this exception does not relax origin, scheme, path, query or hop validation.
 | MySQL packet payload | 1 MiB | 1 KiB–4 MiB |
 | MySQL response including handshake/framing | 8 MiB | 1 KiB–32 MiB |
 | HTTP response body | 64 KiB | 1 KiB–1 MiB |
+| Cursor lifetime | 1 minute | 1 millisecond–1 hour |
+| Rows per incremental page | 128 | 1–65536 |
+| Page cell/name/type bytes | 256 KiB | 1 KiB–16 MiB |
+| Rows across a complete cursor response | 65536 | 1–1048576 |
 | SQL text / SQL columns | 64 KiB / 64 | Fixed ceilings |
 | HTTP response headers | 32 KiB | Fixed transport ceiling |
 
@@ -255,7 +301,7 @@ mutation outcomes retain the table for owner reconciliation rather than racing
 an unresolved remote writer with DROP. Cleanup drops only the exact test-owned
 table and checks exact Doris metadata absence, not physical storage purge.
 
-The qualified isolated profile is one FE and one BE from the verified Apache
+The historical #42 qualified isolated profile was one FE and one BE from the verified Apache
 4.1.4 distribution, reporting `doris-4.1.4-rc04-ad35a140c7f`, with
 `mysql_native_password`, explicit plaintext endpoints over an owner-controlled
 SSH tunnel, replication 1, DUPLICATE KEY and UNIQUE KEY tables. Tests cover:
@@ -276,3 +322,14 @@ or a prerequisite for the ordinary Doris test suite.
 
 [Issue #42](https://github.com/frost-leo/fathomry/issues/42) records the selected
 scope, corrective review and qualification limits.
+
+[Issue #111](https://github.com/frost-leo/fathomry/issues/111) adds resolved
+preparation and incremental consumption, with [cursor tests](../../../../../../internal/sqlengine/doris/v1/cursor_test.go)
+and a [public Adapter](../../../../adapters/sqlengine/doris/v1/interface.md).
+The owner later authorized a limited on-demand run against the existing isolated
+single-FE/single-BE fixture. An external public-only consumer passed race-enabled
+finite/incremental, strict-load/label and Framework Fixed/Follow tests on small
+DUPLICATE KEY tables, with exact cleanup. See the
+[public qualification boundary](../../../../adapters/sqlengine/doris/v1/interface.md#capability-coverage-and-qualification).
+This does not qualify other table models, external catalogs, deployment TLS,
+failover, service performance or production for the changed Adapter.

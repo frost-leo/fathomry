@@ -84,6 +84,9 @@ type resultData struct {
 	serverVersion string
 	load          LoadEvidence
 	loadPresent   bool
+	rowsRead      int
+	bytesRead     int
+	responseBytes int
 }
 
 func (r Result) ColumnsCopy() []Column {
@@ -99,6 +102,30 @@ func (r Result) RowsCopy() []Row {
 	return append([]Row{}, r.data.rows...)
 }
 func (r Result) Complete() bool { return r.data != nil && r.data.complete }
+
+// RowsRead and BytesRead are cumulative cursor observations, including bounded
+// lookahead. BytesRead counts copied values and one metadata copy, not wire bytes.
+// They are zero for the legacy finite/HTTP paths.
+func (r Result) RowsRead() int {
+	if r.data == nil {
+		return 0
+	}
+	return r.data.rowsRead
+}
+func (r Result) BytesRead() int {
+	if r.data == nil {
+		return 0
+	}
+	return r.data.bytesRead
+}
+
+// ResponseBytes counts cursor-wide framed bytes, including authentication.
+func (r Result) ResponseBytes() int {
+	if r.data == nil {
+		return 0
+	}
+	return r.data.responseBytes
+}
 
 // Dispatched means client entry was attempted; it does not prove server receipt.
 func (r Result) Dispatched() bool      { return r.data != nil && r.data.dispatched }

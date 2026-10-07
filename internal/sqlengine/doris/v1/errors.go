@@ -43,6 +43,7 @@ const (
 	ErrRowQuality  fault.Kind = "fathomry." + ProviderID + ".row_quality"
 	ErrDuplicate   fault.Kind = "fathomry." + ProviderID + ".duplicate"
 	ErrCleanup     fault.Kind = "fathomry." + ProviderID + ".cleanup"
+	ErrState       fault.Kind = "fathomry." + ProviderID + ".state"
 )
 
 func failure(kind fault.Kind, operation string, causes ...error) error {
@@ -73,3 +74,5 @@ func (*Result) LogValue() slog.Value       { return slog.StringValue("doris[rest
 func (*Row) LogValue() slog.Value          { return slog.StringValue("doris[restricted]") }
 func (*Batch) LogValue() slog.Value        { return slog.StringValue("doris[restricted]") }
 func (*LoadEvidence) LogValue() slog.Value { return slog.StringValue("doris[restricted]") }
+func (*Cursor) LogValue() slog.Value       { return slog.StringValue("doris[restricted]") }
+func (*Preparation) LogValue() slog.Value  { return slog.StringValue("doris[restricted]") }

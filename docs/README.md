@@ -219,12 +219,16 @@ separates the product API from independent native Iceberg REST probes; external
 catalogs and Arrow are not exposed by this provider.
 
 The [Doris integration](reference/internal/sqlengine/doris/v1/interface.md) adds
-strict labeled JSON Stream Load, retained-label inspection and bounded single-use
-SQL with independent effect and cleanup evidence. Native-table ingestion and SQL
-DML are qualified on an isolated Doris 4.1.4 profile; the
+strict labeled JSON Stream Load, retained-label inspection, resolved budgets and
+bounded finite/incremental SQL with independent effect and cleanup evidence.
+Its [public Adapter](reference/adapters/sqlengine/doris/v1/interface.md) consumes
+the SQL-engine contracts and supports direct/Fixed/Follow routes. Historical #42
+native-table evidence does not by itself qualify the newer cursor/Adapter; the
 [capability classification](reference/internal/sqlengine/doris/v1/capabilities.md)
 preserves external-catalog restrictions without adding backend SDKs or storage
-management. SQL acknowledgement is not a visibility or external-commit certificate.
+management. A later owner-authorized on-demand run separately verifies the small
+native DUPLICATE KEY public/cursor profile, not other table models or deployments.
+SQL acknowledgement is not a visibility or external-commit certificate.
 
 The [net/http v1 integration](reference/internal/httpclient/nethttp/v1/interface.md)
 adds independently configured standard HTTP clients, bounded response streams and
@@ -325,6 +329,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/database/mysql/v1`](reference/adapters/database/mysql/v1/interface.md) | Bounded MySQL SQL, preparation, transactions, native effect distinctions and retained-generation ownership |
 | [`adapters/sqlengine/duckdb/v1`](reference/adapters/sqlengine/duckdb/v1/interface.md) | Local embedded SQL, parameter batches, Appender, ordered transactions and owned bounded incremental result consumption |
 | [`adapters/sqlengine/trino/v1`](reference/adapters/sqlengine/trino/v1/interface.md) | Exact finite Query, full Execute/physical Insert, bounded provisional pages, independent evidence and retained-generation ownership |
+| [`adapters/sqlengine/doris/v1`](reference/adapters/sqlengine/doris/v1/interface.md) | Finite/incremental SQL, strict Stream Load, label observations and independent source/evidence ownership |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

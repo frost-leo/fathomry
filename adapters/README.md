@@ -53,6 +53,7 @@ automatically own or construct the packages below it.
 | `database/mysql/v1` | data-provider | [MySQL ownership, SQL, preparation and provider-specific transactions](../docs/reference/adapters/database/mysql/v1/interface.md) |
 | `sqlengine/duckdb/v1` | data-provider | [Embedded SQL, parameter batches, Appender, transactions and bounded incremental results](../docs/reference/adapters/sqlengine/duckdb/v1/interface.md) |
 | `sqlengine/trino/v1` | data-provider | [Coordinator Query/Execute/Insert, provisional page consumption and independent effect evidence](../docs/reference/adapters/sqlengine/trino/v1/interface.md) |
+| `sqlengine/doris/v1` | data-provider | [Finite/incremental SQL, strict labeled Stream Load, label observations and independent cleanup evidence](../docs/reference/adapters/sqlengine/doris/v1/interface.md) |
 | `objectstore/minio/v1` | data-provider | [Objects, multipart, versions/listing and restricted delegation](../docs/reference/adapters/objectstore/minio/v1/interface.md) |
 | `broker/kafka/v1` | data-provider | [Production, direct/classic-group consumption and checkpoints](../docs/reference/adapters/broker/kafka/v1/interface.md) |
 | `cache/redis/v1` | data-provider | [Commands, sessions, Streams/subscriptions and supported experimental modes](../docs/reference/adapters/cache/redis/v1/interface.md) |
@@ -148,6 +149,9 @@ does not become a hard RSS guarantee.
 Trino retains coordinator readiness, exact direct JSON, single-statement Insert,
 provisional page transfer and independent terminal/cleanup evidence; a page is
 not a completed business range or a durable resume token.
+Doris retains local-only construction, single-use SQL connections, bounded
+cursor lifetime and strict Stream Load. Load visibility, row quality and label/
+payload identity are distinct; an admitted canceled page ends its cursor.
 
 Redis additionally has real `preparation.go`, `credentials.go`,
 `logging.go` and `profile.go` responsibilities. Do not manufacture empty

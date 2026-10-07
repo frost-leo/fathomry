@@ -99,7 +99,8 @@ func TestDomains(t *testing.T) {
 		if !reflect.DeepEqual(failure.Domains(), expected) ||
 			failure.ErrCode.Domain() != failure.DomainCore ||
 			failure.FacilitySettings.Domain() != failure.DomainConfiguration ||
-			failure.FacilityTrino.Domain() != failure.DomainDatabase {
+			failure.FacilityTrino.Domain() != failure.DomainDatabase ||
+			failure.FacilityDoris.Domain() != failure.DomainDatabase {
 			t.Fatal("mutable domain registry")
 		}
 	})

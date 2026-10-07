@@ -157,8 +157,8 @@ func newSQLPeer(t testing.TB, secure bool) *sqlPeer {
 	})
 	return peer
 }
-func (p *sqlPeer) options() OptionsV1 {
-	o := OptionsV1{Name: "doris", SQLAddress: p.listener.Addr().String(), Database: "gh42", User: "synthetic", Password: "credential-canary",
+func (p *sqlPeer) options() Settings {
+	o := Settings{Name: "doris", SQLAddress: p.listener.Addr().String(), Database: "gh42", User: "synthetic", Password: "credential-canary",
 		Plaintext: p.tls == nil, Timeout: 2 * time.Second}
 	if p.tls != nil {
 		o.RootCAPEM = p.roots
@@ -353,12 +353,6 @@ func (p *sqlPeer) serve(raw net.Conn) {
 		return
 	}
 	seq++
-	if query == "SELECT page-partial-stall" {
-		p.once.Do(func() { close(p.entered) })
-		var tail [1]byte
-		_, _ = conn.Read(tail[:])
-		return
-	}
 	if query == "SELECT partial" {
 		_ = sendPacket(conn, seq, append([]byte{0xff, 0x35, 0x04, '#', 'H', 'Y', '0', '0', '0'}, []byte("native-error-canary")...))
 		return

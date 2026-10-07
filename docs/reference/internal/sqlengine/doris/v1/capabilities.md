@@ -22,9 +22,11 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / [Doris interface](interface.md)
 
 **Audience:** maintainers selecting native-table or external-catalog operations.
-**Status:** implemented client classification plus an isolated Doris 4.1.4
-native-table qualification. External catalogs and whole-engine support are not
-certified by that result.
+**Status:** implemented client classification. Doris 4.1.4 finite-operation
+evidence below remains historical #42 qualification. The later #111
+[on-demand public profile](../../../../adapters/sqlengine/doris/v1/interface.md#capability-coverage-and-qualification)
+separately verifies small native DUPLICATE KEY finite/incremental operations.
+Other deployments, external catalogs and whole-engine support remain unqualified.
 
 ## How to read the matrix
 
@@ -48,6 +50,7 @@ roles, deploy services or create catalogs. The client does not keyword-filter SQ
 | Operation | Client boundary | Native Doris table | External Iceberg through Doris |
 | --- | --- | --- | --- |
 | Batch query | Supported: bounded copied text result | Qualified 4.1.4 value/metadata and partial-result profile | Generic Doris SQL; catalog/cache/snapshot/type profile unverified |
+| Incremental SQL result | Supported: owned QueryCursor, bounded Next, terminal EOF and saturated Close | Actual-driver protocol controls plus small #111 DUPLICATE KEY service reads, local abandonment and retained Framework generation; other table models unqualified | Same authorized Doris SQL route; no direct backend SDK or snapshot/restart promise |
 | JSON-array Stream Load | Supported: one labeled strict physical batch | Qualified strict DUPLICATE KEY load; aggregation/upsert is still table-model dependent | Unsupported write path: it does not commit Iceberg |
 | CSV/Parquet/ORC Stream Load, partial updates or merge/delete headers | Unsupported here | Additional native formats/modes need independent qualification | Not an external-table writer |
 | INSERT VALUES / INSERT SELECT | Restricted single SQL command | 64-row VALUES qualified on UNIQUE KEY; SELECT unverified; Group Commit/strict settings remain server-owned | Candidate external append through Doris; backend persistence unqualified |
