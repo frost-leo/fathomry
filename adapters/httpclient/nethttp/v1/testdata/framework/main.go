@@ -31,6 +31,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -329,7 +330,30 @@ type constructedSource struct {
 	tracker *socketTracker
 }
 
+func cloneSettings(value nethttp.Settings) nethttp.Settings {
+	data, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	var copy nethttp.Settings
+	if err := json.Unmarshal(data, &copy); err != nil {
+		panic(err)
+	}
+	return copy
+}
+
 func fixedFollow(ctx context.Context) error {
+	enabled := true
+	original := nethttp.Settings{Name: "copy-control", HTTP1: &enabled, ProxyConnectHeader: map[string][]string{"X-Copy": {"original"}}}
+	copied := cloneSettings(original)
+	if !reflect.DeepEqual(original, copied) {
+		return errors.New("Settings clone changed field values")
+	}
+	*copied.HTTP1 = false
+	copied.ProxyConnectHeader["X-Copy"][0] = "changed"
+	if !*original.HTTP1 || original.ProxyConnectHeader["X-Copy"][0] != "original" {
+		return errors.New("Settings clone retained mutable pointer/map aliases")
+	}
 	peer := newPeer()
 	defer peer.close()
 	first := nethttp.Settings{Name: "first"}
@@ -370,8 +394,8 @@ func fixedFollow(ctx context.Context) error {
 				}
 				return snapshot.ValueCopy()
 			},
-			Clone: func(value nethttp.Settings) nethttp.Settings { return value },
-			Equal: func(left, right nethttp.Settings) bool { return left.Name == right.Name },
+			Clone: cloneSettings,
+			Equal: func(left, right nethttp.Settings) bool { return reflect.DeepEqual(left, right) },
 			Build: func(ctx context.Context, value nethttp.Settings) (*resource.Instance[nethttp.Handle], error) {
 				tracker := &socketTracker{}
 				deps := dependencies
@@ -600,6 +624,45 @@ func fixedFollow(ctx context.Context) error {
 	if err := requestResult(follow, "last-good", "second", currentStatus.Generation); err != nil {
 		return err
 	}
+	largerBytes := int64(16 << 20)
+	if err := apply(nethttp.Settings{Name: "oversized", MaxResponseBytes: &largerBytes}); err != nil {
+		return err
+	}
+	larger, err := nextConstructed()
+	if err != nil {
+		return err
+	}
+	if larger.name != "oversized" || larger.tracker.dials.Load() != 0 {
+		return errors.New("larger generation did not remain inert before use")
+	}
+	before := peer.requests.Load()
+	rejected, rejectedErr := follow.Do(ctx, ctx, peer.request("/finite", "must-not-send"))
+	if rejectedErr != nil || rejected == nil {
+		return fmt.Errorf("larger generation refusal lost admitted evidence: %w", rejectedErr)
+	}
+	if err := ledger.expect(rejected); err != nil {
+		return err
+	}
+	rejection, err := rejected.WaitReleased(ctx)
+	if err != nil || !errors.Is(rejection.Err(), nethttp.ErrLimit) || peer.requests.Load() != before || larger.tracker.dials.Load() != 0 {
+		return errors.New("larger generation bypassed its frozen Using budget before native dispatch")
+	}
+	if _, present := rejection.ValueCopy(); present {
+		return errors.New("undispatched larger generation invented a native result")
+	}
+	for {
+		if _, seen := ledger.seen[rejection.Info().Sequence]; seen {
+			break
+		}
+		if err := ledger.take(ctx, false, nil); err != nil {
+			return err
+		}
+	}
+	if err := awaitReleased(current.owner); err != nil {
+		return err
+	}
+	current = larger
+	currentStatus, _ = followRef.Inspect()
 	obsoleteUpdate, err := beginApply(nethttp.Settings{Name: "obsolete"})
 	if err != nil {
 		return err

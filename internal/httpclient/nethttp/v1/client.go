@@ -21,6 +21,7 @@ package nethttp
 
 import (
 	"context"
+	"crypto/tls"
 	"sync"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -68,6 +69,7 @@ func PrepareV1(options OptionsV1, layers ...resource.Layer) (Prepared, error) {
 		version = 1
 	}
 	var metadata Budget
+	var config *tls.Config
 	schema := resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: func(value settings) error {
 		if err := validate(value); err != nil {
 			return err
@@ -76,14 +78,22 @@ func PrepareV1(options OptionsV1, layers ...resource.Layer) (Prepared, error) {
 			native.Proxy != nil && value.ProxyURL != "" {
 			return failure(ErrInput, "native-options")
 		}
-		metadata = value.budget(native)
+		config = native.TLS
+		if config == nil {
+			var err error
+			config, err = configuredTLS(value)
+			if err != nil {
+				return err
+			}
+		}
+		metadata = value.budget(native, config)
 		return nil
 	}}
 	prepared, err := resource.Prepare(schema, resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
 	if err != nil {
 		return Prepared{}, err
 	}
-	return Prepared{configuration: prepared, native: native, metadata: metadata}, nil
+	return Prepared{configuration: prepared, native: native, tls: config, metadata: metadata}, nil
 }
 
 // Select constructs only from the already prepared configuration and native
@@ -93,7 +103,7 @@ func (prepared Prepared) Select() resource.Selection[Source] {
 		if err := ctx.Err(); err != nil {
 			return resource.Resource[Source]{}, failure(ErrState, "construct", err, context.Cause(ctx))
 		}
-		instance, err := newOwner(value, prepared.native)
+		instance, err := newOwner(value, prepared.native, prepared.tls, prepared.metadata)
 		if err != nil {
 			return resource.Resource[Source]{}, err
 		}

@@ -20,6 +20,7 @@
 package nethttp
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -242,8 +243,7 @@ func validate(value settings) error {
 			return failure(ErrInput, "proxy", err)
 		}
 	}
-	_, err := configuredTLS(value)
-	return err
+	return nil
 }
 
 func validProxy(proxy *url.URL) bool {
@@ -263,15 +263,15 @@ func configuredTLS(value settings) (*tls.Config, error) {
 	}
 	if value.RootCAPEM != "" {
 		config.RootCAs = x509.NewCertPool()
-		remaining := strings.TrimSpace(value.RootCAPEM)
-		if remaining == "" {
+		remaining := bytes.TrimSpace([]byte(value.RootCAPEM))
+		if len(remaining) == 0 {
 			return nil, failure(ErrInput, "roots")
 		}
-		for remaining != "" {
-			if !strings.HasPrefix(remaining, "-----BEGIN CERTIFICATE-----") {
+		for len(remaining) != 0 {
+			if !bytes.HasPrefix(remaining, []byte("-----BEGIN CERTIFICATE-----")) {
 				return nil, failure(ErrInput, "roots")
 			}
-			block, rest := pem.Decode([]byte(remaining))
+			block, rest := pem.Decode(remaining)
 			if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
 				return nil, failure(ErrInput, "roots")
 			}
@@ -280,7 +280,7 @@ func configuredTLS(value settings) (*tls.Config, error) {
 				return nil, failure(ErrInput, "roots", err)
 			}
 			config.RootCAs.AddCert(certificate)
-			remaining = strings.TrimSpace(string(rest))
+			remaining = bytes.TrimSpace(rest)
 		}
 	}
 	if value.ClientCertPEM != "" || value.ClientKeyPEM != "" {

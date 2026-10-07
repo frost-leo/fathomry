@@ -51,20 +51,20 @@ type owner struct {
 	releaseDone chan struct{}
 }
 
-func newOwner(value settings, native NativeOptionsV1) (*owner, error) {
+func newOwner(value settings, native NativeOptionsV1, preparedTLS *tls.Config, budget Budget) (*owner, error) {
 	native, err := copyNative(native)
 	if err != nil {
 		return nil, err
 	}
 	config := native.TLS
 	if config == nil {
-		config, err = configuredTLS(value)
+		config, err = copyTLS(preparedTLS)
 		if err != nil {
 			return nil, err
 		}
 	}
 	own := &owner{settings: value, native: native, callbacks: newActivity(), sockets: make(map[*socket]struct{}), bindings: make(map[string]*transportBinding)}
-	own.budget = value.budget(native)
+	own.budget = budget
 	own.callbacks.limit = 4 * value.MaxConnections
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(value.HTTP1)

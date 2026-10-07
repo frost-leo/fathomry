@@ -35,6 +35,7 @@ type Prepared struct {
 	private
 	configuration resource.Prepared[settings]
 	native        NativeOptionsV1
+	tls           *tls.Config
 	metadata      Budget
 }
 
@@ -56,7 +57,7 @@ func (prepared Prepared) Description() resource.Description {
 	return prepared.configuration.Description()
 }
 
-func (value settings) budget(native NativeOptionsV1) Budget {
+func (value settings) budget(native NativeOptionsV1, config *tls.Config) Budget {
 	work := value.reservation()
 	perConnection := int64(128<<10) + 2*value.MaxHeaderBytes + 8192
 	if value.HTTP2 || value.UnencryptedHTTP2 {
@@ -82,9 +83,7 @@ func (value settings) budget(native NativeOptionsV1) Budget {
 	// Frozen serialized preparation and independently decoded owner settings
 	// coexist. Textual TLS additionally owns parsed trust/certificate data.
 	configuration := 2*int64(len(encoded)) + 2*value.MaxHeaderBytes + 64<<10
-	config := native.TLS
-	if config == nil {
-		config, _ = configuredTLS(value)
+	if native.TLS == nil {
 		configuration += 4 * int64(len(value.RootCAPEM)+len(value.ClientCertPEM)+len(value.ClientKeyPEM))
 	}
 	configuration += tlsContainerBytes(config)
