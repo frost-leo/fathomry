@@ -95,6 +95,16 @@ func TestAllocations(t *testing.T) {
 			failure.FacilityRedisCache.Domain() != failure.DomainCache || failure.FacilityRedisMessaging.Domain() != failure.DomainMessaging {
 			t.Fatal("Redis capability domain changed")
 		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityDuckDB, Module: "fathomry", Component: "database_duckdb"}) || failure.FacilityDuckDB != 0x082 || failure.FacilityDuckDB.Domain() != failure.DomainDatabase {
+			t.Fatal("DuckDB capability allocation changed")
+		}
+		for index, allocation := range allocations {
+			for _, earlier := range allocations[:index] {
+				if allocation.Facility == earlier.Facility || allocation.Module == earlier.Module && allocation.Component == earlier.Component {
+					t.Fatal("first-party facility ownership is not unique")
+				}
+			}
+		}
 		if failure.ErrCode != 0xA0010001 || failure.ErrSerialization != 0xA0010007 {
 			t.Fatal("published local numbers changed")
 		}

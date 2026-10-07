@@ -123,6 +123,14 @@ budget/attribution data, not private engines. Public-path isolated acceptance co
 PostgreSQL 18.6 over verified TLS and MySQL 8.4.11/InnoDB over a verified-TLS Unix
 socket, with independent effect read-back and unique fixture cleanup. This does
 not provide ORM, migrations, HA or production database qualification.
+[DuckDB](reference/adapters/sqlengine/duckdb/v1/interface.md) supplies public local
+embedded SQL, prepared parameter batches, Appender, ordered transactions and owned
+incremental result consumption. Exact public values and direct/Framework consumers
+preserve effect, evidence and generation ownership. Incremental Go delivery does
+not remove native materialization or impose a hard RSS bound; CGO is required.
+The independent [SQL-engine common layer](reference/adapters/sqlengine/v1/interface.md)
+owns its source/operation metadata and source/work/evidence budget contracts,
+without database-layer aliases or a universal SQL client.
 [MinIO](reference/adapters/objectstore/minio/v1/interface.md) supplies public bounded
 object operations, owned multipart, incremental object/version enumeration and
 restricted delegation. The [shared object-storage contracts](reference/adapters/objectstore/v1/interface.md)
@@ -306,6 +314,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/database/v1`](reference/adapters/database/v1/interface.md) | Shared database budget, source/operation attribution and profile contracts without native engines |
 | [`adapters/database/postgres/v1`](reference/adapters/database/postgres/v1/interface.md) | Bounded PostgreSQL SQL, preparation, transactions/savepoints, independent evidence and retained-generation ownership |
 | [`adapters/database/mysql/v1`](reference/adapters/database/mysql/v1/interface.md) | Bounded MySQL SQL, preparation, transactions, native effect distinctions and retained-generation ownership |
+| [`adapters/sqlengine/duckdb/v1`](reference/adapters/sqlengine/duckdb/v1/interface.md) | Local embedded SQL, parameter batches, Appender, ordered transactions and owned bounded incremental result consumption |
+| [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |
 | [`adapters/broker/v1`](reference/adapters/broker/v1/interface.md) | Shared broker budgets and source/operation attribution without native dependencies |

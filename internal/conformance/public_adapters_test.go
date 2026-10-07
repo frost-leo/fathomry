@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -40,6 +41,8 @@ import (
 	database "github.com/frost-leo/fathomry/adapters/database/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
+	duckdb "github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
+	sqlengine "github.com/frost-leo/fathomry/adapters/sqlengine/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/internal/conformance"
 	"github.com/frost-leo/fathomry/resource/v1"
@@ -98,6 +101,17 @@ func TestPublicAdapterContracts(t *testing.T) {
 			func(runtime *adapters.Runtime, inbox *adapters.Inbox[redis.Result]) redis.Dependencies {
 				return redis.Dependencies{Runtime: runtime, Evidence: inbox}
 			}, redis.Open, canary)
+	})
+	t.Run("duckdb", func(t *testing.T) {
+		value := duckdb.Settings{Name: "contract", Path: filepath.Join(t.TempDir(), canary+".duckdb")}
+		checkPublicAdapter(t, value, duckdb.Validate, duckdb.Recommend,
+			func(value sqlengine.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[duckdb.Result]) duckdb.Dependencies {
+				return duckdb.Dependencies{Runtime: runtime, Evidence: inbox}
+			}, duckdb.Open, canary)
+		if _, err := os.Stat(value.Path); !os.IsNotExist(err) {
+			t.Fatal("offline preparation or pre-admission rejection touched the native file", err)
+		}
 	})
 }
 

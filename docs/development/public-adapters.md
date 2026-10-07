@@ -87,8 +87,9 @@ overlays. For overlaid settings, consume resolved preparation metadata.
 | MinIO | `BudgetV1`, validated and without later layers |
 | Kafka | `BudgetV1`, including persistent clients and the defaulted record bound |
 | Redis | Frozen `Prepared.Metadata`, after explicit-zero overlays resolve |
+| DuckDB | Frozen `PrepareV1` / `PrepareResolvedV1` metadata, including finite/reader and source reservations |
 
-This table covers the five data providers, not every Adapter role. Configuration
+This table covers data providers, not every Adapter role. Configuration
 providers retain documented fixed public route envelopes and selected native
 ceilings; they have no invented generic recommendation API. Core/capability/
 preparation packages do not wrap a native service and must not copy provider
@@ -109,7 +110,7 @@ implicitly or let a larger adopted source bypass its frozen `Using` budget.
 
 ## PA-04 — Preserve owning and borrowing routes
 
-The five data providers share these roles:
+The data providers share these roles:
 
 - `Open(ctx, settings, dependencies)` returns an `Owner`. The context owns the
   source lifetime, not just setup waiting. A non-nil owner returned with an error
@@ -151,6 +152,7 @@ give all methods one signature.
 | MinIO | Open performs bucket HEAD, not proof of write/version/delegation authority. Multipart/list/delegation handles preserve object/version/stream obligations. |
 | Kafka | Open observes metadata, not producer/group readiness. Async production, transactions, direct reads and classic groups retain distinct outcomes; checkpoints are not business acknowledgements. |
 | Redis | Construction may start topology/cache background work; Open is not readiness. Cache/messaging views share ownership but retain separate error domains, including mixed batches and lifecycle roots. |
+| DuckDB | Open initializes a real embedded engine and may create the authorized database/WAL. Incremental Go consumption retains native materialization; Appender flush, transaction commit and complete result decoding remain distinct facts. |
 | Viper | New only binds public dependencies; per-call Load acquires explicit files/readers. Native weak decoding/live environment differ from strict preparation. Borrowed readers remain caller-owned. |
 | Nacos | Open acquires local ownership, not readiness. A complete capture/subscription retains one generation; already-acquired observation batches are not refetched on Next. |
 
@@ -203,7 +205,7 @@ guards do not replace provider-specific protocol/effect/lifetime tests.
 The [whole-tree inventory and role checks](../../internal/conformance/adapter_packages_test.go)
 cover every production package, its README entry/calling contract, foundational
 dependency boundaries and declaration/presentation locations. An unclassified
-new package or a stale entry fails the gate. The five-data-provider behavior
+new package or a stale entry fails the gate. The data-provider behavior
 matrix is intentionally narrower than this all-role structural gate.
 
 Retain a requirement → native authority → public path → test matrix. Verify

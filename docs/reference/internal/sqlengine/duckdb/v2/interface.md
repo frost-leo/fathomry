@@ -30,9 +30,11 @@ or external Iceberg integration. See [qualification](verification.md).
 
 This independently selectable provider owns one native database and finite calls
 on its connections. It provides native Appender batches, reusable preparation
-within parameter batches, many-row SQL results, and ordered local transactions.
-There is no common engine API, public framework facade, deployment service,
-background maintenance, automatic retry, or Workflow-side I/O.
+within parameter batches, many-row SQL results, ordered local transactions, and
+owned incremental consumption of one materialized native SELECT result. There is
+no common engine API, deployment service, background maintenance, automatic retry,
+or Workflow-side I/O. Independent and Framework callers use the separate
+[public Adapter](../../../../adapters/sqlengine/duckdb/v1/interface.md).
 
 The directory's `v2` denotes the **Go driver's SDK major**.
 `OptionsV1` and configuration format 1 are separate contracts. The selected
@@ -41,10 +43,13 @@ core is `v1.5.5`. A version string is not compatibility certification.
 
 ## Capabilities and call sequence
 
-1. Call `Select(OptionsV1, layers...)` to freeze explicit settings with
-   `resource.Prepare`. No native database is opened during selection.
-2. Attach `resource.WithLimits`; `LimitsV1` describes defaulted options only.
-   Overridden bounds require a matching explicit policy.
+1. Call `PrepareV1(OptionsV1, layers...)` to freeze explicit settings with
+   `resource.Prepare`, without native I/O. Options are defaulted once before
+   strict layers; explicit zero bounds in a layer reject. `PrepareResolvedV1`
+   instead validates already-resolved typed options without re-defaulting.
+2. Use the preparation's `Select`, `Limits`, `Budget` and detached `Options` to
+   construct and charge exactly the same effective source. The older `Select`
+   delegates to this preparation; `LimitsV1` still describes unoverridden defaults.
 3. `resource.Assemble` opens the native database and seals its configuration.
    The assembly exclusively owns database close. Borrow/delegate through
    `resource`, not by extracting SDK handles or independently opening the same file.
@@ -55,6 +60,13 @@ core is `v1.5.5`. A version string is not compatibility certification.
 6. Inspect the returned receipt's final result **and its `Err()`**. Receive and
    explicitly release the independent inbox delivery even if the caller ignores
    its receipt. Close the assembly with a separately supplied cleanup context.
+
+Preparation rejects a bootstrap Path whose raw size already exceeds the 1 MiB
+configuration-document ceiling before serializing that input. Defaults within
+that ceiling still follow the existing strict UTF-8/JSON and layer rules; valid
+overlays may repair semantically invalid defaults before final validation.
+The resolved Path limit remains 4096 bytes. This bounds preparation copying of
+known oversized input, not native decoding, materialization or process RSS.
 
 | Mode | Inputs and behavior |
 | --- | --- |
@@ -68,7 +80,7 @@ preparation/schema validation and transaction completion; it does not invent
 inserted rows. Append without a column list uses all table columns. A selected
 column list preserves its order and permits native defaults for omitted columns.
 
-Statements, appenders, result readers and fresh native connections never escape.
+Raw statements, appenders, result readers and fresh native connections never escape.
 There is no exported long-lived prepared-statement/session handle, borrowed raw
 SDK connection, callback-owned stream, or implicit `database/sql` pool/retry loop.
 Preparation reuse is scoped to `ExecuteMany`. Query-driven batch mutations can
@@ -138,7 +150,8 @@ decimal width/scale and timestamp precision loss before buffering.
   TIME input remains available, but raw TIME output is not exact in this SDK:
   24:00 and 00:00 both decode to midnight. `CAST(time_column AS VARCHAR)` preserves
   the distinction; the provider does not guess after information has been lost.
-- Decimal values retain an integer coefficient and scale, not a float conversion.
+- Decimal values retain an integer coefficient and scale, not a float conversion;
+  the coefficient's magnitude must fit its declared width before binding.
   Timestamp inputs must fit the selected precision; native time transport is
   limited to UTC years 1–9999. TIMESTAMP_NS inputs additionally require year 1678
   or later for this SDK, a roundtrippable Unix nanosecond count and a native finite
@@ -200,6 +213,41 @@ context interruption. The stable driver's execution cancellation can add about
 500 ms after an interrupt; neither cancellation nor a configured timeout proves
 native termination. Calls remain synchronous until ownership actually ends.
 There are no detached native goroutines or early resource-lease releases.
+
+## Owned incremental SELECT results
+
+`Database.Read(setup, lifetime, correlation, Request{Mode: Query, ...})` owns one
+SELECT-shaped native result, statement and connection. Its terminal receipt is
+reserved before setup. A rejected admission returns no reader; accepted setup
+failure returns a closed reader and terminal failure evidence. Setup cancellation
+after successful return does not revoke the separately owned lifetime. SELECT
+can advance a sequence, so it is neither an effect-free promise nor retry permission.
+
+`Reader.Next` uses nested invocation admission and reserves evidence before
+advancing. Release each received chunk record to bound backlog. Columns and
+values are detached; only one byte-bound lookahead row is held, not prior chunks.
+`Progress.Reader` records chunk/offset, chunk rows/bytes, totals and local closure.
+The terminal result retains schema and counters only. Per-chunk bytes include
+metadata; total bytes include metadata once. Actual native EOF establishes
+`Step.Complete`, including empty success. A full chunk, early Close, cancellation,
+or limit is not EOF. At a total bound, one lookahead distinguishes EOF from an
+incomplete prefix. No SQL re-execution or durable cursor token is supplied.
+
+Reader defaults are 256 rows / 1 MiB per chunk, 1,000,000 rows / 1 GiB total,
+and five minutes lifetime; exact ranges belong to `OptionsV1`. The authoritative
+Budget includes source allowance, chunk/lookahead/copy costs and separately
+charged evidence. `MaxLeases=2` permits the reader root and one serialized Next.
+Next/Close overlap is refused; a lifetime watcher reclaims an abandoned reader.
+Close needs no new admission or evidence slot and joins actual native destruction
+even if its supplied cleanup wait has expired. Closed cleanup is idempotent.
+
+This bounds retained Go delivery, **not native materialization or process RSS**.
+Oversized scalar decoding can allocate before inspection. Provisional chunks are
+not completed business ranges. The [reader tests](../../../../../../internal/sqlengine/duckdb/v2/reader_test.go)
+exercise the real engine, 70,001 ordered rows, EOF/lookahead, saturation,
+abandonment and cleanup; the [equal-work benchmark](../../../../../../internal/sqlengine/duckdb/v2/reader_bench_test.go)
+fully consumes the same 4,096 rows on both paths. These #109 checks are separate
+from the historical [#40 qualification](verification.md).
 
 ## Effects, errors and independent evidence
 

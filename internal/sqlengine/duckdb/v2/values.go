@@ -100,7 +100,10 @@ func scalarSize(value any) (int64, error) {
 	case sdk.Decimal:
 		if value.Value != nil && value.Width >= 1 && value.Width <= 38 && value.Scale <= value.Width &&
 			value.Value.BitLen() <= 127 {
-			return 128, nil
+			bound := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(value.Width)), nil)
+			if new(big.Int).Abs(value.Value).Cmp(bound) < 0 {
+				return 128, nil
+			}
 		}
 		return 0, failure(ErrInput, "decimal")
 	default:

@@ -141,6 +141,7 @@ The authoritative first-party manifest is
 | 0x045 | fathomry / configuration | [Typed configuration acceptance and publication](../../framework/configuration/v1/interface.md) |
 | 0x080 | fathomry / database_postgres | [Public PostgreSQL SQL and ownership](../../adapters/database/postgres/v1/interface.md) |
 | 0x081 | fathomry / database_mysql | [Public MySQL SQL and ownership](../../adapters/database/mysql/v1/interface.md) |
+| 0x082 | fathomry / database_duckdb | [Public embedded DuckDB SQL and ownership](../../adapters/sqlengine/duckdb/v1/interface.md) |
 | 0x140 | fathomry / objectstore_minio | [Public MinIO object-storage operations and ownership](../../adapters/objectstore/minio/v1/interface.md) |
 | 0x180 | fathomry / broker_kafka | [Public Kafka broker and ownership](../../adapters/broker/kafka/v1/interface.md) |
 | 0x100 | fathomry / cache_redis | [Redis key-value/cache and source ownership](../../adapters/cache/redis/v1/interface.md) |

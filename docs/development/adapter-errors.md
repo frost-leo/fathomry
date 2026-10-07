@@ -23,7 +23,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 **Audience:** maintainers of public adapters.
 **Status:** implemented responsibility checks across the whole Adapter tree,
-including the public mechanism, configuration preparation, Viper/Nacos and five
+including the public mechanism, configuration preparation, Viper/Nacos and the
 data providers. This is not a new error system or a prescription to invent error
 catalogs for capability-only packages or private helpers.
 
