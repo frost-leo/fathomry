@@ -53,6 +53,10 @@ type exchange struct {
 	resultBytes int
 	seenRows    int
 	signatures  []signature
+	transfer    chan Result
+	pageJSON    []byte
+	pageRows    int
+	pageFailed  bool
 	stopped     bool
 	dials       sync.WaitGroup
 	sockets     map[*ownedSocket]struct{}
@@ -230,7 +234,12 @@ func (e *exchange) RoundTrip(request *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	locked := true
+	defer func() {
+		if locked {
+			e.mu.Unlock()
+		}
+	}()
 	e.data.pages++
 	if response.StatusCode != http.StatusOK {
 		e.primary = failure(ErrOperation, "http-status", &native.ErrQueryFailed{StatusCode: response.StatusCode})
@@ -251,6 +260,26 @@ func (e *exchange) RoundTrip(request *http.Request) (*http.Response, error) {
 			name == "x-trino-started-transaction-id" {
 			e.primary = failure(ErrUnsupported, "session-response")
 			return nil, e.primary
+		}
+	}
+	if e.transfer != nil && !e.pageFailed {
+		data := e.data
+		data.json = e.pageJSON
+		if data.json == nil {
+			data.json = []byte("[]")
+		}
+		data.offset, data.sequence = e.data.rows, e.data.pages
+		data.rows, data.effect = e.pageRows, ReadOnly
+		e.pageJSON = nil
+		e.mu.Unlock()
+		locked = false
+		select {
+		case e.transfer <- Result{data: &data}:
+			e.mu.Lock()
+			e.data.rows += data.rows
+			e.mu.Unlock()
+		case <-request.Context().Done():
+			return nil, failure(ErrOperation, "page-transfer", request.Context().Err(), context.Cause(request.Context()))
 		}
 	}
 	response.Body = io.NopCloser(bytes.NewReader(body))

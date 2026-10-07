@@ -26,6 +26,7 @@ import (
 	"github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
+	"github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages"
@@ -48,6 +49,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "database_postgres", BaseLocale: "en", Resources: postgres.Resources(), Directory: "resources", Definitions: postgres.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "database_mysql", BaseLocale: "en", Resources: mysql.Resources(), Directory: "resources", Definitions: mysql.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "database_duckdb", BaseLocale: "en", Resources: duckdb.Resources(), Directory: "resources", Definitions: duckdb.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "database_trino", BaseLocale: "en", Resources: trino.Resources(), Directory: "resources", Definitions: trino.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "objectstore_minio", BaseLocale: "en", Resources: minio.Resources(), Directory: "resources", Definitions: minio.Definitions()},
 	)
 	var definitions []failure.Definition

@@ -140,6 +140,7 @@ func queryID(value string) bool {
 	return true
 }
 func (e *exchange) page(body []byte) error {
+	e.pageJSON, e.pageRows, e.pageFailed = nil, 0, false
 	if err := jsonDocument(body); err != nil {
 		return err
 	}
@@ -156,6 +157,7 @@ func (e *exchange) page(body []byte) error {
 	}
 	e.next = page.NextURI
 	hasError := len(page.Error) != 0 && string(page.Error) != "null"
+	e.pageFailed = hasError
 	if hasError {
 		var nativeError native.ErrTrino
 		if json.Unmarshal(page.Error, &nativeError) != nil || !queryID(nativeError.ErrorName) ||
@@ -188,31 +190,27 @@ func (e *exchange) page(body []byte) error {
 				return failure(ErrProtocol, "columns-changed")
 			}
 			old := e.data.columns[i]
-			var left, right any
-			_ = json.Unmarshal(old.Signature, &left)
-			_ = json.Unmarshal(column.Signature, &right)
-			if old.Name != column.Name || old.Type != column.Type || !reflect.DeepEqual(left, right) {
+			left, leftErr := signatureJSON(old.Signature)
+			right, rightErr := signatureJSON(column.Signature)
+			if old.Name != column.Name || old.Type != column.Type || leftErr != nil || rightErr != nil || !reflect.DeepEqual(left, right) {
 				return failure(ErrProtocol, "columns-changed")
+			}
+			if _, err := columnSignature(column); err != nil {
+				return err
 			}
 		}
 	}
 	if len(e.data.columns) == 0 && len(page.Columns) != 0 {
 		for _, column := range page.Columns {
-			var sig signature
-			if json.Unmarshal(column.Signature, &sig) != nil {
-				return failure(ErrProtocol, "type-signature")
-			}
-			if err := validateSignature(sig, 0); err != nil {
-				return err
-			}
-			if !matchingType(column.Type, sig) {
-				return failure(ErrProtocol, "column-type")
-			}
 			e.resultBytes += len(column.Name) + len(column.Type) + len(column.Signature) + 64
 			if e.resultBytes > e.settings.MaxResultBytes {
 				return failure(ErrLimit, "result-metadata")
 			}
 			e.data.columns = append(e.data.columns, Column{Name: column.Name, Type: column.Type, Signature: column.Signature})
+			sig, err := columnSignature(column)
+			if err != nil {
+				return err
+			}
 			e.signatures = append(e.signatures, sig)
 		}
 	}
@@ -260,8 +258,56 @@ func (e *exchange) page(body []byte) error {
 		}
 		e.seenRows++
 	}
+	if e.transfer != nil {
+		e.pageJSON, e.pageRows = data, len(rows)
+	}
 	return nil
 }
+
+func columnSignature(column columnEnvelope) (signature, error) {
+	var sig signature
+	if json.Unmarshal(column.Signature, &sig) != nil {
+		return sig, failure(ErrProtocol, "type-signature")
+	}
+	if err := validateSignature(sig, 0); err != nil {
+		return sig, err
+	}
+	if !matchingType(column.Type, sig) {
+		return sig, failure(ErrProtocol, "column-type")
+	}
+	return sig, nil
+}
+
+func signatureJSON(raw json.RawMessage) (any, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	return signatureNumbers(value), nil
+}
+
+// The page's JSON guard bounds this tree. Canonical integer values keep LONG
+// -0 equivalent to 0 without rounding large integers through float64.
+func signatureNumbers(value any) any {
+	switch value := value.(type) {
+	case json.Number:
+		if number, err := value.Int64(); err == nil {
+			return number
+		}
+	case []any:
+		for index, child := range value {
+			value[index] = signatureNumbers(child)
+		}
+	case map[string]any:
+		for name, child := range value {
+			value[name] = signatureNumbers(child)
+		}
+	}
+	return value
+}
+
 func child(argument signatureArgument) (signature, error) {
 	var sig signature
 	raw := argument.Value
@@ -452,21 +498,4 @@ func decimalCell(text string, sig signature) bool {
 	_ = json.Unmarshal(sig.Arguments[1].Value, &scale)
 	whole, fraction, _ := strings.Cut(strings.TrimPrefix(text, "-"), ".")
 	return int64(len(fraction)) == scale && int64(len(strings.TrimLeft(whole, "0"))) <= precision-scale
-}
-
-func matchingType(text string, sig signature) bool {
-	text = strings.ToLower(text)
-	if opening := strings.IndexByte(text, '('); opening >= 0 {
-		base := text[:opening]
-		if base == "time" || base == "timestamp" {
-			closing := strings.IndexByte(text[opening:], ')')
-			if closing < 0 {
-				return false
-			}
-			text = base + text[opening+closing+1:]
-		} else {
-			text = base
-		}
-	}
-	return text == sig.RawType
 }

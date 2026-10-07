@@ -131,6 +131,15 @@ not remove native materialization or impose a hard RSS bound; CGO is required.
 The independent [SQL-engine common layer](reference/adapters/sqlengine/v1/interface.md)
 owns its source/operation metadata and source/work/evidence budget contracts,
 without database-layer aliases or a universal SQL client.
+[Trino](reference/adapters/sqlengine/trino/v1/interface.md) provides SQL-engine
+capabilities using its own
+[public common contracts](reference/adapters/sqlengine/v1/interface.md), independent
+of the database layer. Its provider-specific operations include finite exact
+JSON queries, full admitted execution, one-physical-batch inserts and owned
+bounded page consumption. Provisional pages require successful terminal evidence
+before complete-output publication; direct and Framework consumers use the same
+public ownership and evidence contracts. Controlled native-client peers are not
+arbitrary-connector or production qualification.
 [MinIO](reference/adapters/objectstore/minio/v1/interface.md) supplies public bounded
 object operations, owned multipart, incremental object/version enumeration and
 restricted delegation. The [shared object-storage contracts](reference/adapters/objectstore/v1/interface.md)
@@ -315,6 +324,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/database/postgres/v1`](reference/adapters/database/postgres/v1/interface.md) | Bounded PostgreSQL SQL, preparation, transactions/savepoints, independent evidence and retained-generation ownership |
 | [`adapters/database/mysql/v1`](reference/adapters/database/mysql/v1/interface.md) | Bounded MySQL SQL, preparation, transactions, native effect distinctions and retained-generation ownership |
 | [`adapters/sqlengine/duckdb/v1`](reference/adapters/sqlengine/duckdb/v1/interface.md) | Local embedded SQL, parameter batches, Appender, ordered transactions and owned bounded incremental result consumption |
+| [`adapters/sqlengine/trino/v1`](reference/adapters/sqlengine/trino/v1/interface.md) | Exact finite Query, full Execute/physical Insert, bounded provisional pages, independent evidence and retained-generation ownership |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

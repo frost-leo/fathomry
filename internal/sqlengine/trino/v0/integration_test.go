@@ -54,7 +54,7 @@ func TestControlledCompositionAndIndependentEvidence(t *testing.T) {
 	conformance.Result(t, settle(t, receipt, err), want)
 	conformance.Receive(t, deadline(t), f.inbox, []conformance.Expected[Result]{want})
 	conformance.Accounting(t, f.assembly.Snapshot().Sources[0].Usage, LimitsV1(o), f.inbox.Usage(), 2, 2*f.client.EvidenceBytes())
-	conformance.Facade(t, f.client, "Query", "Execute", "Insert", "Profile", "EvidenceBytes", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, f.client, "Query", "QueryPages", "Execute", "Insert", "Profile", "EvidenceBytes", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	conformance.Runtime(t, Statement{SQL: "private-sql", Args: []any{"private-value"}}, &Statement{}, "private-sql", "private-value")
 	conformance.Runtime(t, Result{}, &Result{}, "private-value")
 	build, err := compatibility.Inspect(compatibility.BuildRequest{SDKModules: []string{"github.com/trinodb/trino-go-client"}})

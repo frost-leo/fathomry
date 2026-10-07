@@ -48,15 +48,14 @@ type connection struct {
 // An incomplete readiness query retains its first cancellation for Assembly's
 // separate cleanup authority; an attempted cancellation is never replayed.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	version := options.Version
-	if version == 0 {
-		version = 1
-	}
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: validate},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
+	return prepared.Select(), nil
+}
+
+func selectPrepared(prepared resource.Prepared[settings]) resource.Selection[Source] {
 	return resource.Select(prepared, func(ctx context.Context, s settings) (resource.Resource[Source], error) {
 		owner := &connection{settings: s}
 		result := resource.Resource[Source]{Acquired: true, Capability: Source{owner: owner}, Release: owner.release}
@@ -82,7 +81,7 @@ func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Sou
 			return nil
 		}
 		return result, nil
-	}), nil
+	})
 }
 
 func (owner *connection) release(ctx context.Context) resource.ReleaseResult {
@@ -123,7 +122,7 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 		return nil, failure(ErrInput, "bind")
 	}
 	s, limits := source.owner.settings, access.Limits()
-	if limits.Active > s.MaxActive || limits.Queued != 0 || limits.Bytes < s.reservation() {
+	if limits.Active > s.MaxActive || limits.Queued != 0 || limits.Bytes < max(s.reservation(), s.readerReservation()) {
 		return nil, failure(ErrInput, "limits")
 	}
 	return &Client{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil
@@ -175,8 +174,16 @@ func (owner *connection) run(ctx, cleanup context.Context, statement Statement, 
 
 func (owner *connection) execute(ctx context.Context, statement Statement, read, collect bool,
 	call *invocation.Call[Result]) (*exchange, error) {
-	work, cancel := context.WithCancel(ctx)
 	exchange := newExchange(owner.settings, collect, read, call)
+	err := exchange.executeNative(ctx, statement)
+	if err != nil {
+		err = failed(ErrOperation, "native", err, ctx.Err(), context.Cause(ctx))
+	}
+	return exchange, err
+}
+
+func (exchange *exchange) executeNative(ctx context.Context, statement Statement) error {
+	work, cancel := context.WithCancel(ctx)
 	conn, err := exchange.open()
 	var stmt driver.Stmt
 	if err == nil {
@@ -196,10 +203,7 @@ func (owner *connection) execute(ctx context.Context, statement Statement, read,
 	if conn != nil {
 		exchange.noteCleanup(conn.Close())
 	}
-	if err != nil {
-		err = failed(ErrOperation, "native", err, ctx.Err(), context.Cause(ctx))
-	}
-	return exchange, err
+	return err
 }
 
 func (e *exchange) outcome(err error) (*resultData, error, error) {
@@ -238,6 +242,14 @@ func (c *Client) Profile() compatibility.Profile {
 		{"max-rows", int64(s.MaxRows)}, {"max-columns", int64(s.MaxColumns)}, {"max-page-bytes", int64(s.MaxPageBytes)},
 		{"max-result-bytes", int64(s.MaxResultBytes)}, {"max-pages", int64(s.MaxPages)}, {"max-wire-bytes", s.MaxWireBytes},
 		{"timeout-ns", int64(s.Timeout)}, {"cleanup-timeout-ns", int64(s.CleanupTimeout)}} {
+		options = append(options, compatibility.Option{Name: pair.name, Value: strconv.FormatInt(pair.value, 10)})
+	}
+	for _, pair := range []struct {
+		name  string
+		value int64
+	}{
+		{"max-read-rows", int64(s.MaxReadRows)}, {"max-read-pages", int64(s.MaxReadPages)},
+		{"max-read-wire-bytes", s.MaxReadWireBytes}, {"read-timeout-ns", int64(s.ReadTimeout)}} {
 		options = append(options, compatibility.Option{Name: pair.name, Value: strconv.FormatInt(pair.value, 10)})
 	}
 	version := compatibility.Fact{}

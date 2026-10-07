@@ -98,6 +98,9 @@ func TestAllocations(t *testing.T) {
 		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityDuckDB, Module: "fathomry", Component: "database_duckdb"}) || failure.FacilityDuckDB != 0x082 || failure.FacilityDuckDB.Domain() != failure.DomainDatabase {
 			t.Fatal("DuckDB capability allocation changed")
 		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityTrino, Module: "fathomry", Component: "database_trino"}) || failure.FacilityTrino != 0x083 || failure.FacilityTrino.Domain() != failure.DomainDatabase {
+			t.Fatal("Trino capability allocation changed")
+		}
 		for index, allocation := range allocations {
 			for _, earlier := range allocations[:index] {
 				if allocation.Facility == earlier.Facility || allocation.Module == earlier.Module && allocation.Component == earlier.Component {

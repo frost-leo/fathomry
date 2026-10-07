@@ -26,6 +26,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,7 +62,30 @@ func column(name, kind string, args ...any) map[string]any {
 	if args == nil {
 		args = []any{}
 	}
-	return map[string]any{"name": name, "type": kind, "typeSignature": map[string]any{"rawType": kind, "arguments": args}}
+	sig := map[string]any{"rawType": kind, "arguments": args}
+	return map[string]any{"name": name, "type": testTypeText(sig), "typeSignature": sig}
+}
+func testTypeText(sig map[string]any) string {
+	kind := sig["rawType"].(string)
+	args := sig["arguments"].([]any)
+	if len(args) == 0 {
+		return kind
+	}
+	parts := make([]string, len(args))
+	for index, arg := range args {
+		value := arg.(map[string]any)
+		if value["kind"] == "LONG" {
+			parts[index] = strconv.FormatInt(value["value"].(int64), 10)
+		} else {
+			parts[index] = testTypeText(value["value"].(map[string]any))
+		}
+	}
+	base, suffix, _ := strings.Cut(kind, " with time zone")
+	text := base + "(" + strings.Join(parts, ",") + ")"
+	if suffix != "" || base != kind {
+		text += " with time zone"
+	}
+	return text
 }
 func long(value int64) map[string]any { return map[string]any{"kind": "LONG", "value": value} }
 func typed(kind string) map[string]any {

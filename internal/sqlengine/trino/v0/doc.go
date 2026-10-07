@@ -18,21 +18,29 @@
  */
 
 // Package trino provides independently selected, bounded SQL statements and
-// finite direct-protocol results using the official trino-go-client major 0.
+// finite and bounded page-transfer results using the official trino-go-client major 0.
 // It imports no other engine or table-format integration.
 //
-// Select freezes OptionsV1; composition attaches LimitsV1, assembles the Source,
+// PrepareV1 resolves and freezes OptionsV1 without I/O, with authoritative source,
+// work and evidence byte reservations. PrepareResolvedV1 preserves strict resolved
+// zero semantics. Select remains the convenience preparation route.
+// Composition attaches effective Limits, assembles the Source,
 // owns an invocation.Inbox[Result], and binds a non-owning Client. Assembly
 // readiness executes SELECT version(), not the native no-network Ping.
 // Query, Execute and Insert synchronously return receipts whose technical and
 // cleanup failures also remain in the independent evidence inbox.
+// QueryPages returns an owned Reader and one compact terminal receipt. Next
+// transfers provisional exact pages under backpressure; only terminal completeness
+// permits treating all pages as successful output. Reader.Close or the bounded
+// caller-owned lifetime cancels and joins cleanup even when no pages are consumed.
 //
 // Each statement owns a fresh native logical connection, statement and HTTP
 // transport. No mutable SQL session, database/sql pool, raw SDK handle, callback,
 // or live Rows escapes. Contexts are caller-owned: work and cleanup are separate.
 // Results preserve bounded direct JSON rows and exact type metadata rather than
 // silently applying lossy native datetime or numeric conversion. Consumers own
-// copies after return; slow consumers hold no native resources.
+// copies after return. Finite consumers hold no native resources; readers retain
+// their original source until actual native cleanup, not merely a timed-out wait.
 //
 // One statement is one physical batch, never automatically split or replayed.
 // DDL, CTAS and ordinary DML are not restricted to append-only, but connector

@@ -131,7 +131,7 @@ func TestNativeBoundaryCaseAliasCannotEraseServerError(t *testing.T) {
 func TestNativeBoundaryCaseSensitiveMapAndNumericPositiveControls(t *testing.T) {
 	_, options := peer(t, func(w http.ResponseWriter, request *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = io.WriteString(w, `{"id":"valid_cells","columns":[{"name":"map","type":"map(varchar,bigint)","typeSignature":{"rawType":"map","arguments":[{"kind":"TYPE","value":{"rawType":"varchar","arguments":[{"kind":"LONG","value":8}]}},{"kind":"TYPE","value":{"rawType":"bigint","arguments":[]}}]}},{"name":"decimal","type":"decimal(2,1)","typeSignature":{"rawType":"decimal","arguments":[{"kind":"LONG","value":2},{"kind":"LONG","value":1}]}},{"name":"real","type":"real","typeSignature":{"rawType":"real","arguments":[]}}],"data":[[{"A":1,"a":2},"-9.9",3.4028235e38],[{},"0.0","Infinity"]]}`)
+		_, _ = io.WriteString(w, `{"id":"valid_cells","columns":[{"name":"map","type":"map(varchar(8),bigint)","typeSignature":{"rawType":"map","arguments":[{"kind":"TYPE","value":{"rawType":"varchar","arguments":[{"kind":"LONG","value":8}]}},{"kind":"TYPE","value":{"rawType":"bigint","arguments":[]}}]}},{"name":"decimal","type":"decimal(2,1)","typeSignature":{"rawType":"decimal","arguments":[{"kind":"LONG","value":2},{"kind":"LONG","value":1}]}},{"name":"real","type":"real","typeSignature":{"rawType":"real","arguments":[]}}],"data":[[{"A":1,"a":2},"-9.9",3.4028235e38],[{},"0.0","Infinity"]]}`)
 	})
 	f := bindFixture(t, options, 1)
 	receipt, err := f.client.Query(deadline(t), deadline(t), correlation("valid-cells"), Statement{SQL: "SELECT * FROM data"})
