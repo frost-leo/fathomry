@@ -1,0 +1,118 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "database_doris",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.database_doris.invalid_input",
+      "source": "cc1c7d52f2eee04c300c567149519919ce7ab4fe45172e1439c621a53ee14344",
+      "forms": {
+        "other": "Doris 输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.unsupported_profile",
+      "source": "885c1346789450748905a10ca9662367f0ee7a35eb86a696557c5ed5505d36be",
+      "forms": {
+        "other": "当前客户端配置不支持请求的 Doris 能力。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.limit_exceeded",
+      "source": "3729c008dc95fea6faf9fc9ed99d2e23170b7c6068cdf7ab89cfc532bf7a310d",
+      "forms": {
+        "other": "超出了 Doris 能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.protocol_failed",
+      "source": "197ec79f2865390e5051c4fc124e597e9a7e9e807901fc79a59889a2782763ac",
+      "forms": {
+        "other": "Doris 响应违反了受支持的协议约束。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.transport_failed",
+      "source": "61d16c16db60c330433afac74ec7b704dd2d40e2d3a4cf71b6932f0b8632f0d3",
+      "forms": {
+        "other": "Doris 传输失败；远端效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.sql_failed",
+      "source": "dab537fe4e1f3b6dd9a9f540ffbcfbdaa7bda664beb44f881852156d8a7f06af",
+      "forms": {
+        "other": "Doris SQL 操作失败；请检查其效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.load_failed",
+      "source": "b0b74e3d65ccadbf23386d1c42801ab8120e51651672392ef8cfe9b9fe28d2bb",
+      "forms": {
+        "other": "Doris 导入或标签观察失败。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.effect_uncertain",
+      "source": "d3c6debc2366822b64596d4bd494c6c8f150c7ef17142e7908341062724bcd0d",
+      "forms": {
+        "other": "Doris 可见性或效果仍未确认；这不构成重放授权。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.row_quality_failed",
+      "source": "5ba3ed52af54aa4b1a555a1743e2814744ebe912eeecc91c431f8086a0defdac",
+      "forms": {
+        "other": "Doris 行质量不满足严格导入契约；效果须单独判断。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.duplicate_label",
+      "source": "f75cfb686e82d26fe97bff0d310b5b74b3c4d0158bf2b7071771606c6c0ea159",
+      "forms": {
+        "other": "Doris 标签已存在；尚未证明与当前载荷匹配。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.cleanup_failed",
+      "source": "d17e011adaefd0c7803b85f1409d487d58f69dcd150ff601ca7a37172067b858",
+      "forms": {
+        "other": "Doris 清理报告失败；本地释放状态须单独判断。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.invalid_state",
+      "source": "7196b23e3a2cbc3da4d25473a27b2162024a66b2632be8783c1b60ad692ad1e0",
+      "forms": {
+        "other": "Doris 所有者或游标的当前状态不允许执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.database_doris.runtime_serialization",
+      "source": "9d25f8133042cddb119dcada48dd792f4ee4a42d21dd8b649feb553a37ebcb90",
+      "forms": {
+        "other": "不支持序列化 Doris 运行时值。"
+      }
+    }
+  ]
+}

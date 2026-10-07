@@ -19,7 +19,7 @@
 
 // Package doris provides bounded native Stream Load and single-command SQL using
 // go-sql-driver/mysql major 1 and standard HTTP. The path does not version Doris.
-// Select, resource.WithLimits, resource.Assemble and Bind attach explicit source
+// PrepareV1, Selection, resource.WithLimits, resource.Assemble and Bind attach explicit source
 // ownership, admission and an independently owned invocation.Inbox.
 //
 // StreamLoad sends one caller-labeled JSON batch without mutation retries.
@@ -27,7 +27,9 @@
 // Accepted, committed, visible and row-quality evidence remain distinct; UNKNOWN,
 // malformed replies and cancellation never establish that a load had no effect.
 //
-// Query fully retains bounded copied rows. Exec accepts authorized SQL without
+// Query fully retains bounded copied rows. QueryCursor owns incremental pages,
+// a separate bounded lifetime, whole-response guards and the original source.
+// Exec accepts authorized SQL without
 // inferring native-table or external-catalog durability from an OK packet.
 // Each SQL call owns one fresh framed connection; no preparation, retained
 // sessions, multi-statements, transactions, pool, or raw SDK handles are supplied.
@@ -36,8 +38,9 @@
 // Catalog access stays behind Doris SQL; this package does not use a backing
 // table-format SDK, object-store client, Java process, or catalog administration.
 //
-// Calls run synchronously with caller-owned finite contexts. Resource admission
-// is the only queue; no uploader, callback or background mutation worker exists.
+// Finite calls and cursor setup/page reads run synchronously. One cursor worker
+// finalizes abandoned/canceled local work. Resource admission is the only queue;
+// no uploader, caller callback or background mutation worker exists.
 // Receipts and required inbox deliveries preserve partial/unknown evidence and
 // local cleanup independently of optional diagnostics. Results are immutable;
 // explicit copy/inspection methods can disclose data and are not log-safe.

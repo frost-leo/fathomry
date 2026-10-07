@@ -90,6 +90,8 @@ const (
 	FacilityDuckDB Facility = 0x082
 	// FacilityTrino owns the public Trino database capability.
 	FacilityTrino Facility = 0x083
+	// FacilityDoris owns the public Doris SQL-engine capability.
+	FacilityDoris Facility = 0x084
 	// FacilityMinIO owns the public object-storage MinIO capability.
 	FacilityMinIO Facility = 0x140
 	// FacilityKafka owns the public Kafka broker capability.
@@ -140,6 +142,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityPostgreSQL, Module: "fathomry", Component: "database_postgres"},
 		{Facility: FacilityMySQL, Module: "fathomry", Component: "database_mysql"},
 		{Facility: FacilityTrino, Module: "fathomry", Component: "database_trino"},
+		{Facility: FacilityDoris, Module: "fathomry", Component: "database_doris"},
 		{Facility: FacilityMinIO, Module: "fathomry", Component: "objectstore_minio"},
 		{Facility: FacilityKafka, Module: "fathomry", Component: "broker_kafka"},
 		{Facility: FacilityRedisCache, Module: "fathomry", Component: "cache_redis"},

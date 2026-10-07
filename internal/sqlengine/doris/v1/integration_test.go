@@ -138,7 +138,7 @@ func TestIndependentCompositionEvidenceAndCompatibility(t *testing.T) {
 	if f.client.Profile().Options[0].Value == "changed" {
 		t.Fatal("profile aliases caller")
 	}
-	conformance.Facade(t, f.client, "Query", "Exec", "StreamLoad", "InspectLabel", "Profile", "Format", "MarshalJSON", "UnmarshalJSON", "LogValue")
+	conformance.Facade(t, f.client, "Query", "QueryCursor", "Exec", "StreamLoad", "InspectLabel", "Profile", "Format", "MarshalJSON", "UnmarshalJSON", "LogValue")
 	conformance.Runtime(t, f.client, new(Client), "credential-canary")
 	conformance.Runtime(t, options, new(OptionsV1), "credential-canary")
 	conformance.Runtime(t, result.Outcome.Value, new(Result), "row-canary", "native-error-canary")

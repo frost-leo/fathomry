@@ -47,17 +47,20 @@ func (nativeContext) Value(any) any { return nil }
 // Select freezes typed options and strict overlays without connecting or probing.
 // Every assembly constructs independent ownership. No global transport is used.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: validate},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: 1, Layers: layers})
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, s settings) (resource.Resource[Source], error) {
+	return prepared.Selection(), nil
+}
+
+func (prepared Preparation) Selection() resource.Selection[Source] {
+	return resource.Select(prepared.prepared, func(ctx context.Context, s settings) (resource.Resource[Source], error) {
 		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: &owner{settings: s}},
 			Release: func(context.Context) resource.ReleaseResult {
 				return resource.ReleaseResult{Quiescent: true, Released: true}
 			}}, nil
-	}), nil
+	})
 }
 
 // Client is a concurrent non-owning facade. Copies and borrowed bindings share
@@ -152,17 +155,7 @@ func (c *Client) executeSQL(ctx context.Context, call *invocation.Call[Result], 
 			primary = joined(ErrSQL, "execute", primary, wireErr, ctx.Err(), context.Cause(ctx))
 		}
 	}()
-	cfg := sdk.NewConfig()
-	cfg.User, cfg.Passwd, cfg.DBName = s.User, s.Password, s.Database
-	cfg.Net, cfg.Addr = "tcp", s.SQLAddress
-	cfg.Logger = &sdk.NopLogger{}
-	cfg.Collation = "utf8mb4_general_ci"
-	cfg.AllowNativePasswords = true
-	cfg.CheckConnLiveness = false
-	cfg.MaxAllowedPacket = MaxSQLBytes + 1024
-	cfg.ReadTimeout, cfg.WriteTimeout = s.Timeout, s.Timeout
-	cfg.DialFunc = func(context.Context, string, string) (net.Conn, error) { return w, nil }
-	connector, err := sdk.NewConnector(cfg)
+	connector, err := sqlConnector(s, w)
 	if err != nil {
 		return failure(ErrSQL, "config", err), nil
 	}
@@ -198,4 +191,18 @@ func (c *Client) executeSQL(ctx context.Context, call *invocation.Call[Result], 
 		return failure(ErrSQL, "execute", err), nil
 	}
 	return nil, nil
+}
+
+func sqlConnector(s settings, w *wire) (driver.Connector, error) {
+	cfg := sdk.NewConfig()
+	cfg.User, cfg.Passwd, cfg.DBName = s.User, s.Password, s.Database
+	cfg.Net, cfg.Addr = "tcp", s.SQLAddress
+	cfg.Logger = &sdk.NopLogger{}
+	cfg.Collation = "utf8mb4_general_ci"
+	cfg.AllowNativePasswords = true
+	cfg.CheckConnLiveness = false
+	cfg.MaxAllowedPacket = MaxSQLBytes + 1024
+	cfg.ReadTimeout, cfg.WriteTimeout = s.Timeout, s.Timeout
+	cfg.DialFunc = func(context.Context, string, string) (net.Conn, error) { return w, nil }
+	return sdk.NewConnector(cfg)
 }

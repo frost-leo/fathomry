@@ -53,6 +53,7 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"database/mysql/v1":     {"data-provider", true, nil},
 	"sqlengine/duckdb/v1":   {"data-provider", true, nil},
 	"sqlengine/trino/v1":    {"data-provider", true, nil},
+	"sqlengine/doris/v1":    {"data-provider", true, nil},
 	"objectstore/minio/v1":  {"data-provider", true, nil},
 	"broker/kafka/v1":       {"data-provider", true, nil},
 	"cache/redis/v1":        {"data-provider", true, nil},

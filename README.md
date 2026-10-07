@@ -60,6 +60,10 @@ shared [database contracts](docs/reference/adapters/database/v1/interface.md) ex
 budget and attribution data without native engine dependencies. Isolated public
 service checks include independent effect read-back and unique fixture cleanup,
 not ORM, migration, HA or production qualification.
+The public [Doris Adapter](docs/reference/adapters/sqlengine/doris/v1/interface.md)
+adds finite/incremental SQL, strict labeled Stream Load and label observations
+through independent SQL-engine contracts. Source/evidence ownership supports
+direct and Fixed/Follow routes; deployed qualification remains profile-specific.
 The public [MinIO Adapter](docs/reference/adapters/objectstore/minio/v1/interface.md)
 adds bounded object operations, owned multipart sessions, incremental version
 enumeration and restricted presigning. It consumes SDK-independent

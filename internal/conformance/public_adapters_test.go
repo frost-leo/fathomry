@@ -41,6 +41,7 @@ import (
 	database "github.com/frost-leo/fathomry/adapters/database/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
+	doris "github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	duckdb "github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
 	trino "github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
 	sqlengine "github.com/frost-leo/fathomry/adapters/sqlengine/v1"
@@ -121,6 +122,14 @@ func TestPublicAdapterContracts(t *testing.T) {
 			func(runtime *adapters.Runtime, inbox *adapters.Inbox[trino.Result]) trino.Dependencies {
 				return trino.Dependencies{Runtime: runtime, Evidence: inbox}
 			}, trino.Open, canary)
+	})
+	t.Run("doris", func(t *testing.T) {
+		value := doris.Settings{Name: "contract", SQLAddress: "127.0.0.1:1", Database: "fixture", User: "fixture", Password: canary, Plaintext: true}
+		checkPublicAdapter(t, value, doris.Validate, doris.Recommend,
+			func(value sqlengine.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[doris.Result]) doris.Dependencies {
+				return doris.Dependencies{Runtime: runtime, Evidence: inbox}
+			}, doris.Open, canary)
 	})
 }
 

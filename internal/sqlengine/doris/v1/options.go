@@ -66,6 +66,15 @@ type OptionsV1 struct {
 	MaxPacketBytes       int
 	MaxResponseBytes     int
 	MaxHTTPResponseBytes int
+	// CursorTimeout bounds the entire accepted SQL cursor (default 1min,
+	// 1ms–1h). Timeout separately bounds setup, each page and cleanup waiting.
+	CursorTimeout time.Duration
+	// MaxPageRows/MaxPageBytes bound one retained page, including metadata.
+	// Defaults are 128 rows/256KiB. MaxCursorRows defaults to 65536 and bounds
+	// the whole wire result; MaxResponseBytes also remains cursor-wide.
+	MaxPageRows   int
+	MaxPageBytes  int
+	MaxCursorRows int
 }
 type settings struct {
 	SQLAddress           string        `json:"sql_address"`
@@ -85,6 +94,10 @@ type settings struct {
 	MaxPacketBytes       int           `json:"max_packet_bytes"`
 	MaxResponseBytes     int           `json:"max_response_bytes"`
 	MaxHTTPResponseBytes int           `json:"max_http_response_bytes"`
+	CursorTimeout        time.Duration `json:"cursor_timeout_ns"`
+	MaxPageRows          int           `json:"max_page_rows"`
+	MaxPageBytes         int           `json:"max_page_bytes"`
+	MaxCursorRows        int           `json:"max_cursor_rows"`
 }
 
 func defaults(o OptionsV1) settings {
@@ -93,7 +106,8 @@ func defaults(o OptionsV1) settings {
 		User: o.User, Password: o.Password, RootCAPEM: o.RootCAPEM, Plaintext: o.Plaintext,
 		Active: o.Active, Queued: o.Queued, Timeout: o.Timeout, MaxBatchBytes: o.MaxBatchBytes,
 		MaxRows: o.MaxRows, MaxResultBytes: o.MaxResultBytes, MaxPacketBytes: o.MaxPacketBytes,
-		MaxResponseBytes: o.MaxResponseBytes, MaxHTTPResponseBytes: o.MaxHTTPResponseBytes}
+		MaxResponseBytes: o.MaxResponseBytes, MaxHTTPResponseBytes: o.MaxHTTPResponseBytes,
+		CursorTimeout: o.CursorTimeout, MaxPageRows: o.MaxPageRows, MaxPageBytes: o.MaxPageBytes, MaxCursorRows: o.MaxCursorRows}
 	if s.Active == 0 {
 		s.Active = 4
 	}
@@ -117,6 +131,18 @@ func defaults(o OptionsV1) settings {
 	}
 	if s.MaxHTTPResponseBytes == 0 {
 		s.MaxHTTPResponseBytes = 64 << 10
+	}
+	if s.CursorTimeout == 0 {
+		s.CursorTimeout = time.Minute
+	}
+	if s.MaxPageRows == 0 {
+		s.MaxPageRows = 128
+	}
+	if s.MaxPageBytes == 0 {
+		s.MaxPageBytes = 256 << 10
+	}
+	if s.MaxCursorRows == 0 {
+		s.MaxCursorRows = 65536
 	}
 	return s
 }
@@ -173,7 +199,10 @@ func validate(s settings) error {
 		s.MaxResultBytes < 1024 || s.MaxResultBytes > 16<<20 ||
 		s.MaxPacketBytes < 1024 || s.MaxPacketBytes > 4<<20 ||
 		s.MaxResponseBytes < 1024 || s.MaxResponseBytes > 32<<20 ||
-		s.MaxHTTPResponseBytes < 1024 || s.MaxHTTPResponseBytes > 1<<20 {
+		s.MaxHTTPResponseBytes < 1024 || s.MaxHTTPResponseBytes > 1<<20 ||
+		s.CursorTimeout < time.Millisecond || s.CursorTimeout > time.Hour ||
+		s.MaxPageRows < 1 || s.MaxPageRows > 65536 || s.MaxPageBytes < 1024 || s.MaxPageBytes > 16<<20 ||
+		s.MaxCursorRows < 1 || s.MaxCursorRows > 1<<20 {
 		return failure(ErrInput, "options")
 	}
 	if s.SQLAddress != "" {
@@ -218,16 +247,20 @@ func (s settings) reservation() int64 {
 	// Both JSON decoders can grow buffers to nearly twice their input. Reserve
 	// those alongside the frozen payload, raw rows/fields, keys and decode copies,
 	// independently of the SQL/result limits (which can be configured smaller).
-	return int64(12*s.MaxBatchBytes+4*s.MaxResponseBytes+4*s.MaxResultBytes+8*s.MaxHTTPResponseBytes+MaxSQLBytes+256<<10) + int64(s.MaxRows)*MaxColumns*64
+	return int64(12*s.MaxBatchBytes+4*s.MaxResponseBytes+4*max(s.MaxResultBytes, s.MaxPageBytes+s.MaxPacketBytes)+8*s.MaxHTTPResponseBytes+MaxSQLBytes+256<<10) + int64(max(s.MaxRows, s.MaxPageRows+1))*MaxColumns*64
 }
 func (s settings) evidenceReservation() int64 {
-	return int64(s.MaxResultBytes+s.MaxPacketBytes+4*s.MaxHTTPResponseBytes+64<<10) + int64(s.MaxRows)*MaxColumns*48
+	return int64(max(s.MaxResultBytes, s.MaxPageBytes)+s.MaxPacketBytes+4*s.MaxHTTPResponseBytes+64<<10) + int64(max(s.MaxRows, s.MaxPageRows))*MaxColumns*48
 }
 
 // LimitsV1 recommends policy for defaulted options, not differently overlaid bounds.
 func LimitsV1(options OptionsV1) resource.Limits {
 	s := defaults(options)
-	return resource.Limits{Active: s.Active, Queued: s.Queued, Bytes: int64(s.Active) * s.reservation(), QueuedBytes: int64(s.Queued) * s.reservation(), MaxLeases: 1}
+	return s.limits()
+}
+
+func (s settings) limits() resource.Limits {
+	return resource.Limits{Active: s.Active, Queued: s.Queued, Bytes: int64(s.Active) * s.reservation(), QueuedBytes: int64(s.Queued) * s.reservation(), MaxLeases: 2}
 }
 
 // Profile returns copied, non-secret declarations, never inferred service support.
@@ -252,6 +285,9 @@ func (c *Client) Profile() compatibility.Profile {
 			{Name: "max-batch-bytes", Value: strconv.Itoa(s.MaxBatchBytes)}, {Name: "max-rows", Value: strconv.Itoa(s.MaxRows)},
 			{Name: "max-result-bytes", Value: strconv.Itoa(s.MaxResultBytes)}, {Name: "max-packet-bytes", Value: strconv.Itoa(s.MaxPacketBytes)},
 			{Name: "max-response-bytes", Value: strconv.Itoa(s.MaxResponseBytes)}, {Name: "max-http-response-bytes", Value: strconv.Itoa(s.MaxHTTPResponseBytes)},
+			{Name: "cursor-timeout-ns", Value: strconv.FormatInt(int64(s.CursorTimeout), 10)},
+			{Name: "max-page-rows", Value: strconv.Itoa(s.MaxPageRows)}, {Name: "max-page-bytes", Value: strconv.Itoa(s.MaxPageBytes)},
+			{Name: "max-cursor-rows", Value: strconv.Itoa(s.MaxCursorRows)},
 		}}
 }
 

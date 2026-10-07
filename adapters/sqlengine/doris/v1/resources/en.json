@@ -1,0 +1,157 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "database_doris",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.database_doris.invalid_input",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Doris input or settings are invalid."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.unsupported_profile",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.unsupported_profile.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested Doris capability is unsupported by this client profile."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A Doris capability bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.protocol_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.protocol_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Doris response violated the supported protocol profile."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.transport_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.transport_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Doris transport failed; remote effects may be unknown."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.sql_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.sql_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Doris SQL operation failed; inspect its effect evidence."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.load_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.load_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Doris load or label observation failed."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.effect_uncertain",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.effect_uncertain.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Doris visibility or effects remain unconfirmed; this does not authorize replay."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.row_quality_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.row_quality_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Doris row quality did not meet the strict load contract; effects are separate."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.duplicate_label",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.duplicate_label.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Doris label already exists; matching this payload is unproven."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Doris cleanup reported a failure; local release is separate."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.invalid_state",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.invalid_state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Doris owner or cursor cannot perform this operation in its current state."
+      }
+    },
+    {
+      "id": "fathomry.database_doris.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.database_doris.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Doris runtime value serialization is unsupported."
+      }
+    }
+  ]
+}
