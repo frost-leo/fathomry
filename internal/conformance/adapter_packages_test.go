@@ -46,6 +46,7 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"broker/v1":             {"capability", false, []string{"policy.go", "metadata.go"}},
 	"cache/v1":              {"capability", false, []string{"policy.go", "metadata.go"}},
 	"objectstore/v1":        {"capability", false, []string{"policy.go", "metadata.go"}},
+	"httpclient/v1":         {"capability", false, []string{"policy.go", "metadata.go"}},
 	"configsource/v1":       {"preparation", true, []string{"options.go", "schema.go", "prepare.go", "decode.go", "acquisition.go"}},
 	"configsource/viper/v1": {"configuration-provider", true, []string{"options.go", "client.go", "load.go", "document.go", "watch.go", "acquisition.go"}},
 	"configsource/nacos/v1": {"configuration-provider", true, []string{"options.go", "client.go", "source.go", "metadata.go", "read.go", "watch.go", "acquisition.go"}},
@@ -57,6 +58,7 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"objectstore/minio/v1":  {"data-provider", true, nil},
 	"broker/kafka/v1":       {"data-provider", true, nil},
 	"cache/redis/v1":        {"data-provider", true, nil},
+	"httpclient/nethttp/v1": {"data-provider", true, nil},
 	"internal/errorbridge":  {"private", false, []string{"bridge.go", "containment.go", "details.go"}},
 }
 

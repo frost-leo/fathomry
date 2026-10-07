@@ -100,6 +100,8 @@ const (
 	FacilityRedisCache Facility = 0x100
 	// FacilityRedisMessaging owns Redis Streams and messaging semantics.
 	FacilityRedisMessaging Facility = 0x181
+	// FacilityNetHTTP owns the public standard-library HTTP capability.
+	FacilityNetHTTP Facility = 0x200
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -148,6 +150,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityRedisCache, Module: "fathomry", Component: "cache_redis"},
 		{Facility: FacilityRedisMessaging, Module: "fathomry", Component: "messaging_redis"},
 		{Facility: FacilityDuckDB, Module: "fathomry", Component: "database_duckdb"},
+		{Facility: FacilityNetHTTP, Module: "fathomry", Component: "http_nethttp"},
 	}
 }
 

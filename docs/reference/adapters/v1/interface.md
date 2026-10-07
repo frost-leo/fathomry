@@ -172,6 +172,12 @@ There are no exporter callbacks in producer or locked paths.
 ## Options, bounds and copying
 
 Options/EvidenceOptions are loadable JSON data, separate from runtime declarations.
+
+Runtime.Options and Inbox.Options return detached normalized configured ceilings,
+including after shutdown/sealing. They neither resize mechanisms nor reserve
+available capacity. Providers can reject unrepresentable preparation before
+construction; normal admission and explicit overlapping-generation composition
+remain necessary. Inspect continues to report usage, not configured limits.
 Zero selects defaults except MaxQueued, where zero deliberately means no queue.
 
 | Bound | Default | Accepted non-default range |

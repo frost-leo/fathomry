@@ -49,14 +49,25 @@ type Client struct {
 // until assembly release. Explicitly supplying the same object permits sharing it.
 // Apply resource.WithLimits before assembly; LimitsV1 is the no-layer convenience.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	native, err := copyNative(options.Native)
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
+	}
+	return prepared.Select(), nil
+}
+
+// PrepareV1 freezes the exact resolved selection and its preconstruction budget.
+// It invokes no runtime dependency and performs no network I/O.
+func PrepareV1(options OptionsV1, layers ...resource.Layer) (Prepared, error) {
+	native, err := copyNative(options.Native)
+	if err != nil {
+		return Prepared{}, err
 	}
 	version := options.Version
 	if version == 0 {
 		version = 1
 	}
+	var metadata Budget
 	schema := resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: func(value settings) error {
 		if err := validate(value); err != nil {
 			return err
@@ -65,22 +76,29 @@ func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Sou
 			native.Proxy != nil && value.ProxyURL != "" {
 			return failure(ErrInput, "native-options")
 		}
+		metadata = value.budget(native)
 		return nil
 	}}
 	prepared, err := resource.Prepare(schema, resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
 	if err != nil {
-		return resource.Selection[Source]{}, err
+		return Prepared{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
+	return Prepared{configuration: prepared, native: native, metadata: metadata}, nil
+}
+
+// Select constructs only from the already prepared configuration and native
+// snapshot. Reuse grants separate owners while borrowing the same dependencies.
+func (prepared Prepared) Select() resource.Selection[Source] {
+	return resource.Select(prepared.configuration, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
 		if err := ctx.Err(); err != nil {
 			return resource.Resource[Source]{}, failure(ErrState, "construct", err, context.Cause(ctx))
 		}
-		instance, err := newOwner(value, native)
+		instance, err := newOwner(value, prepared.native)
 		if err != nil {
 			return resource.Resource[Source]{}, err
 		}
 		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: instance}, Release: instance.release}, nil
-	}), nil
+	})
 }
 
 // LimitsV1 validates the unoverridden Go options and returns a recommended local
@@ -90,11 +108,13 @@ func LimitsV1(options OptionsV1) (resource.Limits, error) {
 	if options.Version != 0 && options.Version != 1 {
 		return resource.Limits{}, failure(ErrInput, "version")
 	}
-	value := defaults(options)
-	if err := validate(value); err != nil {
+	// This no-layer helper historically did not require a source identity.
+	options.Name = "limits"
+	prepared, err := PrepareV1(options)
+	if err != nil {
 		return resource.Limits{}, err
 	}
-	return value.limits(), nil
+	return prepared.Metadata().Limits, nil
 }
 
 // Bind joins the exact source selection, authoritative admission and independent
@@ -112,8 +132,8 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 		return nil, failure(ErrInput, "bind")
 	}
 	value, limits := source.owner.settings, access.Limits()
-	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < value.reservation() ||
-		limits.Queued > 0 && limits.QueuedBytes < value.reservation() {
+	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < source.owner.budget.WorkBytes ||
+		limits.Queued > 0 && limits.QueuedBytes < source.owner.budget.WorkBytes {
 		return nil, failure(ErrInput, "limits")
 	}
 	return &Client{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil
@@ -144,7 +164,7 @@ func (client *Client) begin(ctx context.Context, id fault.Correlation, shape inv
 	}
 	value := client.owner.settings
 	request := invocation.Request{Name: "request", Correlation: id, Shape: shape,
-		Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(),
+		Bytes: client.owner.budget.WorkBytes, EvidenceBytes: client.owner.budget.EvidenceBytes,
 		Admission: invocation.Budget{Limit: value.AdmissionTimeout}}
 	if shape == invocation.Session {
 		request.Name = "connect"

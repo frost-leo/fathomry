@@ -206,6 +206,33 @@ func TestVersionedProjects(t *testing.T) {
 					}
 				}
 				t.Logf("%s/%s: generated, tidied, vetted, race-tested and built from the isolated module cache; local programs executed, remote programs reject absent bootstrap", mode, encoding)
+				if mode == "local" && encoding == "yaml" {
+					for _, variant := range []string{"direct", "framework"} {
+						fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/httpclient/nethttp/v1/testdata", variant, "main.go"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						directory := filepath.Join(destination, "cmd", "http-"+variant)
+						if err := os.MkdirAll(directory, 0700); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(filepath.Join(directory, "main.go"), fixture, 0600); err != nil {
+							t.Fatal(err)
+						}
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy")
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
+						binary := filepath.Join(job, "http-"+variant)
+						runConsumer(t, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/http-"+variant)
+						output := runConsumer(t, destination, environment, binary)
+						if string(output) != "nethttp "+variant+" public consumer passed\n" {
+							t.Fatal("versioned HTTP consumer did not verify its behavior", string(output))
+						}
+					}
+					selected := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
+					if bytes.Contains(selected, []byte("\"Replace\"")) {
+						t.Fatal("HTTP consumer acquired checkout replacement")
+					}
+				}
 			})
 		}
 	}

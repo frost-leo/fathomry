@@ -54,7 +54,7 @@ func TestActualConsumerBuildAndIndependentImports(t *testing.T) {
 	if err := json.Unmarshal(output, &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Go != runtime.Version() || result.Provider != ProviderID || result.Framework != compatibility.FrameworkModule || result.SDKCount != 0 {
+	if result.Go != runtime.Version() || result.Provider != ProviderID || result.Framework != compatibility.FrameworkModule || result.SDKCount != 1 {
 		t.Fatal("actual consuming build facts differ")
 	}
 	command = exec.CommandContext(ctx, goBinary, "list", "-deps", "-f", "{{.ImportPath}}", "./testdata/consumer")

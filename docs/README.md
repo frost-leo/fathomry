@@ -240,6 +240,14 @@ production-site qualification; business credential and Provider-selection polici
 are not supplied. The integration/configuration versions are distinct from Go's
 standard-library version.
 
+Its [public nethttp Adapter](reference/adapters/httpclient/nethttp/v1/interface.md)
+adds offline exact preparation, native-aware accounting, independent continue
+waiting and bounded authenticated CONNECT metadata. Direct and Framework
+Fixed/Follow consumers use finite responses, retained streams and controlled
+connections without importing Internal. The
+[HTTP vocabulary](reference/adapters/httpclient/v1/interface.md) shares accounting
+and attribution only, not native request/context/stream/completion semantics.
+
 The [tls-client v1 integration](reference/internal/httpclient/tlsclient/v1/interface.md)
 adds externally configured native/custom profiles, controlled H1/H2/H3-racing
 requests and streams, runtime proxy isolation and shared native resource bounds.
@@ -330,6 +338,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/sqlengine/duckdb/v1`](reference/adapters/sqlengine/duckdb/v1/interface.md) | Local embedded SQL, parameter batches, Appender, ordered transactions and owned bounded incremental result consumption |
 | [`adapters/sqlengine/trino/v1`](reference/adapters/sqlengine/trino/v1/interface.md) | Exact finite Query, full Execute/physical Insert, bounded provisional pages, independent evidence and retained-generation ownership |
 | [`adapters/sqlengine/doris/v1`](reference/adapters/sqlengine/doris/v1/interface.md) | Finite/incremental SQL, strict Stream Load, label observations and independent source/evidence ownership |
+| [`adapters/httpclient/v1`](reference/adapters/httpclient/v1/interface.md) | HTTP accounting, preparation and attribution vocabulary; no runtime/client |
+| [`adapters/httpclient/nethttp/v1`](reference/adapters/httpclient/nethttp/v1/interface.md) | Standard HTTP finite/stream/direct-connection use with exact preparation and ownership |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

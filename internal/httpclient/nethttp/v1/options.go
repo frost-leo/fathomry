@@ -51,6 +51,13 @@ type NativeOptionsV1 struct {
 	Proxy         func(*http.Request) (*url.URL, error)
 	CheckRedirect func(*http.Request, []*http.Request) error
 	Jar           http.CookieJar
+	// GetProxyConnectHeader replaces ProxyConnectHeader for HTTPS through an HTTP(S)
+	// proxy. It runs before route-pool selection, including when a connection may
+	// be reused. Returned metadata is bounded and copied before native dispatch.
+	GetProxyConnectHeader func(context.Context, *url.URL, string) (http.Header, error)
+	// OnProxyConnectResponse observes only bounded, detached tunnel metadata.
+	// It may reject establishment, but receives no body or connection authority.
+	OnProxyConnectResponse func(context.Context, ConnectResponse) error
 }
 
 // OptionsV1 is configuration contract version 1, independent of the integration
@@ -72,10 +79,14 @@ type OptionsV1 struct {
 	// Otherwise ProxyURL is a default, not a mandatory egress restriction. A
 	// configured native Proxy hook keeps its own per-destination semantics.
 	RoutingLocked bool
-	RootCAPEM     string
-	ServerName    string
-	ClientCertPEM string
-	ClientKeyPEM  string
+	// ProxyConnectHeader is proxy-only CONNECT metadata, never origin headers.
+	// GetProxyConnectHeader, when supplied, replaces it. MaxHeaderBytes bounds
+	// each snapshot; proxy URL credentials retain native precedence.
+	ProxyConnectHeader http.Header
+	RootCAPEM          string
+	ServerName         string
+	ClientCertPEM      string
+	ClientKeyPEM       string
 	// Native TLS cannot be combined with the four textual TLS configuration fields.
 	Native NativeOptionsV1
 	// MaxActive defaults to 8; QueuedCalls to zero; MaxConnections to 32.
@@ -105,6 +116,9 @@ type OptionsV1 struct {
 	DialTimeout           time.Duration
 	TLSHandshakeTimeout   time.Duration
 	ResponseHeaderTimeout time.Duration
+	// ExpectContinueTimeout defaults to one second for Go options. Resolved zero
+	// means immediate body transmission, independently of ResponseHeaderTimeout.
+	ExpectContinueTimeout time.Duration
 	IdleConnTimeout       time.Duration
 	// DisableCompression and DisableKeepAlives retain native transport meanings.
 	DisableCompression bool
@@ -117,6 +131,7 @@ type settings struct {
 	UnencryptedHTTP2      bool          `json:"unencrypted_http2"`
 	ProxyURL              string        `json:"proxy_url"`
 	RoutingLocked         bool          `json:"routing_locked"`
+	ProxyConnectHeader    http.Header   `json:"proxy_connect_header"`
 	RootCAPEM             string        `json:"root_ca_pem"`
 	ServerName            string        `json:"server_name"`
 	ClientCertPEM         string        `json:"client_cert_pem"`
@@ -133,6 +148,7 @@ type settings struct {
 	DialTimeout           time.Duration `json:"dial_timeout_ns"`
 	TLSHandshakeTimeout   time.Duration `json:"tls_handshake_timeout_ns"`
 	ResponseHeaderTimeout time.Duration `json:"response_header_timeout_ns"`
+	ExpectContinueTimeout time.Duration `json:"expect_continue_timeout_ns"`
 	IdleConnTimeout       time.Duration `json:"idle_conn_timeout_ns"`
 	DisableCompression    bool          `json:"disable_compression"`
 	DisableKeepAlives     bool          `json:"disable_keep_alives"`
@@ -142,13 +158,15 @@ func defaults(options OptionsV1) settings {
 	value := settings{
 		HTTP1: options.HTTP1, HTTP2: options.HTTP2, UnencryptedHTTP2: options.UnencryptedHTTP2,
 		ProxyURL: options.ProxyURL, RoutingLocked: options.RoutingLocked, RootCAPEM: options.RootCAPEM, ServerName: options.ServerName,
-		ClientCertPEM: options.ClientCertPEM, ClientKeyPEM: options.ClientKeyPEM,
+		ProxyConnectHeader: options.ProxyConnectHeader,
+		ClientCertPEM:      options.ClientCertPEM, ClientKeyPEM: options.ClientKeyPEM,
 		MaxActive: options.MaxActive, QueuedCalls: options.QueuedCalls, MaxConnections: options.MaxConnections,
 		MaxRequestBytes: options.MaxRequestBytes, MaxResponseBytes: options.MaxResponseBytes,
 		MaxHeaderBytes: options.MaxHeaderBytes, MaxExchanges: options.MaxExchanges,
 		AdmissionTimeout: options.AdmissionTimeout, Timeout: options.Timeout, DialTimeout: options.DialTimeout,
 		TLSHandshakeTimeout: options.TLSHandshakeTimeout, ResponseHeaderTimeout: options.ResponseHeaderTimeout,
-		IdleConnTimeout: options.IdleConnTimeout, DisableCompression: options.DisableCompression,
+		ExpectContinueTimeout: options.ExpectContinueTimeout,
+		IdleConnTimeout:       options.IdleConnTimeout, DisableCompression: options.DisableCompression,
 		DisableKeepAlives: options.DisableKeepAlives,
 	}
 	if !value.HTTP1 && !value.HTTP2 && !value.UnencryptedHTTP2 {
@@ -187,6 +205,9 @@ func defaults(options OptionsV1) settings {
 	if value.ResponseHeaderTimeout == 0 {
 		value.ResponseHeaderTimeout = 30 * time.Second
 	}
+	if value.ExpectContinueTimeout == 0 {
+		value.ExpectContinueTimeout = time.Second
+	}
 	if value.IdleConnTimeout == 0 {
 		value.IdleConnTimeout = 90 * time.Second
 	}
@@ -208,6 +229,12 @@ func validate(value settings) error {
 		if duration <= 0 || duration > 24*time.Hour {
 			return failure(ErrInput, "timeout")
 		}
+	}
+	if value.ExpectContinueTimeout < 0 || value.ExpectContinueTimeout > 24*time.Hour {
+		return failure(ErrInput, "continue-timeout")
+	}
+	if !connectHeadersFit(value.ProxyConnectHeader, value.MaxHeaderBytes) {
+		return failure(ErrInput, "connect-headers")
 	}
 	if value.ProxyURL != "" {
 		proxy, err := url.Parse(value.ProxyURL)

@@ -26,9 +26,10 @@ import (
 )
 
 // Build inspects the actual consuming executable. net/http is part of its Go
-// toolchain, not a separately versioned SDK module. Missing facts stay unknown.
+// toolchain, not a separately versioned SDK module. The pinned x/net module
+// supplies owned SOCKS establishment and IDNA; missing facts stay unknown.
 func Build() (compatibility.Build, error) {
-	return compatibility.Inspect(compatibility.BuildRequest{})
+	return compatibility.Inspect(compatibility.BuildRequest{SDKModules: []string{"golang.org/x/net"}})
 }
 
 // Profile reports effective non-secret local choices, not tested compatibility.
@@ -46,10 +47,14 @@ func (client *Client) Profile() compatibility.Profile {
 		value bool
 	}{
 		{"http1", value.HTTP1}, {"http2", value.HTTP2}, {"unencrypted-http2", value.UnencryptedHTTP2},
+		{"owned-socks-establishment", true},
 		{"disable-compression", value.DisableCompression}, {"disable-keep-alives", value.DisableKeepAlives},
 		{"native-tls", native.TLS != nil}, {"native-http2", native.HTTP2 != nil},
 		{"native-dial", native.DialContext != nil}, {"native-proxy", native.Proxy != nil},
 		{"native-redirect", native.CheckRedirect != nil}, {"native-jar", native.Jar != nil},
+		{"native-connect-headers", native.GetProxyConnectHeader != nil},
+		{"native-connect-response", native.OnProxyConnectResponse != nil},
+		{"configured-connect-headers", len(value.ProxyConnectHeader) != 0},
 		{"configured-proxy", value.ProxyURL != ""}, {"configured-roots", value.RootCAPEM != ""},
 		{"routing-locked", value.RoutingLocked},
 		{"configured-client-certificate", value.ClientCertPEM != ""}, {"configured-server-name", value.ServerName != ""},
@@ -68,6 +73,7 @@ func (client *Client) Profile() compatibility.Profile {
 		{"admission-timeout-ns", int64(value.AdmissionTimeout)}, {"timeout-ns", int64(value.Timeout)},
 		{"dial-timeout-ns", int64(value.DialTimeout)}, {"tls-handshake-timeout-ns", int64(value.TLSHandshakeTimeout)},
 		{"response-header-timeout-ns", int64(value.ResponseHeaderTimeout)}, {"idle-conn-timeout-ns", int64(value.IdleConnTimeout)},
+		{"expect-continue-timeout-ns", int64(value.ExpectContinueTimeout)},
 	} {
 		options = append(options, compatibility.Option{Name: entry.name, Value: strconv.FormatInt(entry.value, 10)})
 	}

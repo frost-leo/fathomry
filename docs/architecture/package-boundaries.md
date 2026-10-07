@@ -69,6 +69,11 @@ their public contracts and private technical capabilities; Providers depend on
 technical contracts/shared foundations, not public framework attribution, concrete
 Adapters or business implementations. Composition
 may know selected concrete implementations. All dependencies must remain acyclic.
+
+The HTTP capability vocabulary in `adapters/httpclient/v1` shares declared
+accounting and attribution only. The nethttp provider retains native request,
+context, stream and direct-connection semantics; later HTTP providers must not
+depend on its implementation or infer a universal Complete meaning.
 Fathomry, not each independent business project, supplies composition. Business
 authors declare configuration, choose permitted capabilities/named sources and
 write workflow/node logic. The generated project Boot declares those choices through Framework scenario
