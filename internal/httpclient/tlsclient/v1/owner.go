@@ -47,18 +47,23 @@ type binding struct {
 	released bool
 }
 type owner struct {
-	settings    settings
-	native      NativeOptionsV1
-	callbacks   *activity
-	mu          sync.Mutex
-	bindings    map[bindingKey]*binding
-	held        map[*binding]struct{}
-	retiring    int
-	tcp, h3     int
-	stopping    bool
-	cleanup     error
-	releaseMu   sync.Mutex
-	releaseDone chan struct{}
+	settings                        settings
+	budget                          Budget
+	native                          NativeOptionsV1
+	lifetime                        context.Context
+	stopLifetime                    func() bool
+	callbacks                       *activity
+	mu                              sync.Mutex
+	bindings                        map[bindingKey]*binding
+	held                            map[*binding]struct{}
+	retiring                        int
+	tcp, h3                         int
+	stopping                        bool
+	cleanup                         error
+	bandwidthRead, bandwidthWritten int64
+	bandwidthUnknown                bool
+	releaseMu                       sync.Mutex
+	releaseDone                     chan struct{}
 }
 
 func (own *owner) acquire(h3 bool) (func(), error) {
@@ -139,6 +144,16 @@ func (own *owner) nativeClient(key bindingKey, route routeChoice) (sdk.HttpClien
 	if own.settings.DisableIPV6 {
 		options = append(options, sdk.WithDisableIPV6())
 	}
+	if own.native.Dialer != nil {
+		options = append(options, sdk.WithDialer(own.dialer()))
+	}
+	if own.native.LocalAddr != nil {
+		address, _ := copyLocalAddr(own.native.LocalAddr)
+		options = append(options, sdk.WithLocalAddr(*address))
+	}
+	if own.settings.Bandwidth {
+		options = append(options, sdk.WithBandwidthTracker())
+	}
 	if own.native.DialContext != nil {
 		options = append(options, sdk.WithDialContext(func(ctx context.Context, network, address string) (net.Conn, error) {
 			done, err := own.enterCallback(ctx)
@@ -185,7 +200,16 @@ func (own *owner) nativeClient(key bindingKey, route routeChoice) (sdk.HttpClien
 	if err != nil {
 		return nil, err
 	}
-	if err := sdk.ConfigureFathomry(client, sdk.FathomryControlV1{AcquireTCP: func() (func(), error) { return own.acquire(false) }, AcquireHTTP3: func() (func(), error) { return own.acquire(true) }, MaxProxyHeaderBytes: own.settings.MaxHeaderBytes}); err != nil {
+	if err := sdk.ConfigureFathomry(client, sdk.FathomryControlV1{AcquireTCP: func() (func(), error) { return own.acquire(false) }, AcquireHTTP3: func() (func(), error) { return own.acquire(true) }, RetainWork: func(ctx context.Context) (func(), error) {
+		call, _ := ctx.Value(callKey{}).(*activity)
+		if call == nil {
+			return func() {}, nil
+		}
+		if !call.enter() {
+			return nil, failure(ErrState, "native-work")
+		}
+		return call.leave, nil
+	}, MaxProxyHeaderBytes: own.settings.MaxHeaderBytes}); err != nil {
 		own.recordCleanup(sdk.Close(client))
 		return nil, err
 	}
@@ -276,6 +300,7 @@ func (own *owner) getBinding(ctx context.Context, address *url.URL, route routeC
 		}
 		delete(own.bindings, retire.key)
 		own.retiring++
+		own.held[retire] = struct{}{}
 		own.mu.Unlock()
 		own.retire(retire)
 	}
@@ -292,6 +317,7 @@ func (own *owner) retire(current *binding) {
 	own.mu.Lock()
 	if complete {
 		if !current.released {
+			own.retainBandwidth(current)
 			own.retiring--
 			current.released = true
 		}
@@ -304,28 +330,44 @@ func (own *owner) retire(current *binding) {
 func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 	own.releaseMu.Lock()
 	if own.releaseDone == nil {
+		if own.stopLifetime != nil {
+			own.stopLifetime()
+		}
 		done := make(chan struct{})
 		own.releaseDone = done
 		own.mu.Lock()
 		own.stopping = true
 		var targets []*binding
-		for _, current := range own.bindings {
-			targets = append(targets, current)
-			own.retiring++
-		}
-		clear(own.bindings)
 		for current := range own.held {
 			targets = append(targets, current)
 		}
+		for _, current := range own.bindings {
+			targets = append(targets, current)
+			own.retiring++
+			own.held[current] = struct{}{}
+		}
+		clear(own.bindings)
 		own.mu.Unlock()
 		own.callbacks.stop()
 		go func() {
+			var retirements sync.WaitGroup
 			for _, current := range targets {
-				<-current.ready
-				if current.native != nil {
-					own.retire(current)
-				}
+				retirements.Go(func() {
+					<-current.ready
+					if current.native != nil {
+						own.retire(current)
+					} else {
+						own.mu.Lock()
+						if !current.released {
+							own.retiring--
+							current.released = true
+						}
+						delete(own.held, current)
+						own.mu.Unlock()
+					}
+				})
 			}
+			retirements.Wait()
 			<-own.callbacks.done
 			close(done)
 		}()

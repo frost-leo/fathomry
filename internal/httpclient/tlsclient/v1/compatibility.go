@@ -56,6 +56,8 @@ func (client *Client) Profile() compatibility.Profile {
 		{"routing-locked", value.RoutingLocked}, {"configured-proxy", value.ProxyURL != ""},
 		{"insecure-skip-verify", value.InsecureSkipVerify}, {"configured-server-name", value.ServerName != ""},
 		{"native-dial", native.DialContext != nil}, {"native-proxy-factory", native.ProxyDialerFactory != nil},
+		{"native-dialer", native.Dialer != nil}, {"native-local-address", native.LocalAddr != nil},
+		{"native-tls-tcp-bandwidth", value.Bandwidth},
 		{"native-jar", native.Jar != nil}, {"native-redirect", native.CheckRedirect != nil},
 		{"native-pins", len(native.CertificatePins) > 0}, {"native-hooks", len(native.PreHooks)+len(native.PostHooks) > 0},
 		{"random-tcp-tls-extension-order", value.RandomTLSExtensionOrder}, {"disable-session-tickets", value.DisableSessionTickets},
@@ -89,6 +91,7 @@ func (client *Client) Profile() compatibility.Profile {
 		{"max-tcp-handles", int64(value.MaxTCPConnections)}, {"max-http3-transports", int64(value.MaxHTTP3Transports)},
 		{"max-request-bytes", value.MaxRequestBytes}, {"max-response-bytes", value.MaxResponseBytes}, {"max-header-bytes", value.MaxHeaderBytes},
 		{"max-native-header-bytes", value.MaxNativeHeaderBytes}, {"native-http2-header-limit", h2HeaderLimit}, {"native-h1-h3-header-limit", headers},
+		{"declared-profile-bytes", value.MaxProfileBytes},
 		{"max-exchanges", int64(value.MaxExchanges)}, {"max-replays", int64(value.MaxReplays)},
 		{"admission-timeout-ns", int64(value.AdmissionTimeout)}, {"timeout-ns", int64(value.Timeout)}, {"tcp-idle-timeout-ns", int64(idle)},
 	} {

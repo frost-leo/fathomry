@@ -31,8 +31,11 @@ import (
 // confirmed native release. TCP counts managed handles/dials, including proxy
 // layers; HTTP3 counts native transports, not a claimed exact QUIC attempt count.
 type FathomryControlV1 struct {
-	AcquireTCP          func() (func(), error)
-	AcquireHTTP3        func() (func(), error)
+	AcquireTCP   func() (func(), error)
+	AcquireHTTP3 func() (func(), error)
+	// RetainWork preserves a context-bearing provider operation through native
+	// asynchronous setup, including profile factories without a context argument.
+	RetainWork          func(context.Context) (func(), error)
 	MaxProxyHeaderBytes int64
 }
 

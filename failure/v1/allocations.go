@@ -102,6 +102,8 @@ const (
 	FacilityRedisMessaging Facility = 0x181
 	// FacilityNetHTTP owns the public standard-library HTTP capability.
 	FacilityNetHTTP Facility = 0x200
+	// FacilityTLSClient owns the public tls-client HTTP capability.
+	FacilityTLSClient Facility = 0x201
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -151,6 +153,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityRedisMessaging, Module: "fathomry", Component: "messaging_redis"},
 		{Facility: FacilityDuckDB, Module: "fathomry", Component: "database_duckdb"},
 		{Facility: FacilityNetHTTP, Module: "fathomry", Component: "http_nethttp"},
+		{Facility: FacilityTLSClient, Module: "fathomry", Component: "http_tlsclient"},
 	}
 }
 

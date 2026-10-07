@@ -116,7 +116,7 @@ func TestProviderConcurrentNativeIntegration(t *testing.T) {
 		if err != nil || report.Require(compatibility.Policy{}) == nil {
 			t.Fatal("unknown compatibility certified", err)
 		}
-		conformance.Facade(t, client, "Format", "LogValue", "MarshalJSON", "UnmarshalJSON", "Open", "Do", "EvidenceBytes", "Profile")
+		conformance.Facade(t, client, "Format", "LogValue", "MarshalJSON", "UnmarshalJSON", "Open", "Do", "EvidenceBytes", "Profile", "Bandwidth")
 	})
 }
 func TestProviderPreflightRacingInputDoesNotAcquireReader(t *testing.T) {

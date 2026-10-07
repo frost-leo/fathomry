@@ -21,6 +21,7 @@ package tlsclient
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -47,35 +48,75 @@ type Client struct {
 // Select copies native containers and prepares explicit configuration without
 // network I/O. Opaque native dependencies remain borrowed through assembly release.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	native, err := copyNative(options.Native)
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
+	}
+	return prepared.Select(), nil
+}
+
+// PrepareV1 freezes final data/native selection and authoritative declarations
+// without constructing an SDK client or invoking a profile factory.
+func PrepareV1(options OptionsV1, layers ...resource.Layer) (Prepared, error) {
+	native, err := copyNative(options.Native)
+	if err != nil {
+		return Prepared{}, err
 	}
 	version := options.Version
 	if version == 0 {
 		version = 1
 	}
+	var metadata Budget
 	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: func(value settings) error {
 		if err := validate(value); err != nil {
 			return err
 		}
-		return validateNative(value, native)
+		if err := validateNative(value, native); err != nil {
+			return err
+		}
+		metadata = value.budget(native)
+		if native.Dialer != nil {
+			native.Dialer.Timeout = value.Timeout
+		}
+		return nil
 	}}, resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
 	if err != nil {
-		return resource.Selection[Source]{}, err
+		return Prepared{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
+	return Prepared{configuration: prepared, native: native, metadata: metadata}, nil
+}
+
+func (prepared Prepared) Select() resource.Selection[Source] {
+	return prepared.selectLifetime(context.Background())
+}
+
+// SelectWithLifetime gives the source a separate owner-controlled lifetime. It
+// cancels admitted work and starts native shutdown before resource leases drain,
+// including the SDK's contextless HTTP/2 reconnects. Construction and release
+// waiting contexts are not retained. Retired generations keep their own lifetime.
+func (prepared Prepared) SelectWithLifetime(lifetime context.Context) (resource.Selection[Source], error) {
+	if lifetime == nil {
+		return resource.Selection[Source]{}, failure(ErrInput, "source-lifetime")
+	}
+	return prepared.selectLifetime(lifetime), nil
+}
+
+func (prepared Prepared) selectLifetime(lifetime context.Context) resource.Selection[Source] {
+	return resource.Select(prepared.configuration, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
 		if err := ctx.Err(); err != nil {
 			return resource.Resource[Source]{}, failure(ErrState, "construct", err)
 		}
-		copied, err := copyNative(native)
+		copied, err := copyNative(prepared.native)
 		if err != nil {
 			return resource.Resource[Source]{}, err
 		}
-		own := &owner{settings: value, native: copied, callbacks: newActivity(), bindings: make(map[bindingKey]*binding), held: make(map[*binding]struct{})}
+		own := &owner{settings: value, native: copied, budget: prepared.metadata, lifetime: lifetime, callbacks: newActivity(), bindings: make(map[bindingKey]*binding), held: make(map[*binding]struct{})}
 		own.callbacks.limit = 4 * (value.MaxTCPConnections + value.MaxHTTP3Transports)
+		own.releaseMu.Lock()
+		own.stopLifetime = context.AfterFunc(lifetime, func() { _ = own.release(context.Background()) })
+		own.releaseMu.Unlock()
 		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: own}, Release: own.release}, nil
-	}), nil
+	})
 }
 
 // LimitsV1 returns the policy for unoverridden Go options. When layers override
@@ -84,18 +125,12 @@ func LimitsV1(options OptionsV1) (resource.Limits, error) {
 	if options.Version != 0 && options.Version != 1 {
 		return resource.Limits{}, failure(ErrInput, "version")
 	}
-	value := defaults(options)
-	if err := validate(value); err != nil {
-		return resource.Limits{}, err
-	}
-	native, err := copyNative(options.Native)
+	options.Name = "limits"
+	prepared, err := PrepareV1(options)
 	if err != nil {
 		return resource.Limits{}, err
 	}
-	if err := validateNative(value, native); err != nil {
-		return resource.Limits{}, err
-	}
-	return value.limits(), nil
+	return prepared.Metadata().Limits, nil
 }
 
 // Bind joins authoritative resource admission and the independent required Inbox.
@@ -112,7 +147,7 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 		return nil, failure(ErrInput, "bind")
 	}
 	value, limits := source.owner.settings, access.Limits()
-	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < value.reservation() || limits.Queued > 0 && limits.QueuedBytes < value.reservation() {
+	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < source.owner.budget.WorkBytes || limits.Queued > 0 && limits.QueuedBytes < source.owner.budget.WorkBytes {
 		return nil, failure(ErrInput, "limits")
 	}
 	return &Client{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil
@@ -136,7 +171,7 @@ func (client *Client) valid(ctx context.Context) error {
 }
 func (client *Client) begin(ctx context.Context, id fault.Correlation, shape invocation.Shape, route routeChoice) (*operation, error) {
 	value := client.owner.settings
-	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: "request", Correlation: id, Shape: shape, Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.AdmissionTimeout}}, client.inbox, client.observer)
+	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: "request", Correlation: id, Shape: shape, Bytes: client.owner.budget.WorkBytes, EvidenceBytes: client.owner.budget.EvidenceBytes, Admission: invocation.Budget{Limit: value.AdmissionTimeout}}, client.inbox, client.observer)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +184,15 @@ func (client *Client) begin(ctx context.Context, id fault.Correlation, shape inv
 		op.finish()
 		return op, err
 	}
-	op.ctx = context.WithValue(work, callKey{}, op.callbacks)
-	op.cancel = cancel
+	live, stop := context.WithCancelCause(work)
+	stopOwner := context.AfterFunc(client.owner.lifetime, func() {
+		stop(errors.Join(client.owner.lifetime.Err(), context.Cause(client.owner.lifetime)))
+	})
+	if client.owner.lifetime.Err() != nil {
+		stop(errors.Join(client.owner.lifetime.Err(), context.Cause(client.owner.lifetime)))
+	}
+	op.ctx = context.WithValue(live, callKey{}, op.callbacks)
+	op.cancel = func() { stopOwner(); stop(nil); cancel() }
 	return op, nil
 }
 

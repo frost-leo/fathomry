@@ -224,6 +224,13 @@ func (op *operation) nativeOpen(original *http.Request) (*Stream, error) {
 			return tracked, err
 		}
 	}
+	// Establish the effective request before fhttp selects jar cookies or
+	// synthesizes URL-userinfo authorization (which may fork the request).
+	if err := op.before(request); err != nil {
+		err = failure(ErrTransport, "request", err, op.ctx.Err(), context.Cause(op.ctx))
+		op.fail(err)
+		return nil, err
+	}
 	native := &http.Client{Transport: exchange{op}, CheckRedirect: op.redirect}
 	if op.client.owner.native.Jar != nil {
 		native.Jar = operationJar{op}
@@ -252,9 +259,6 @@ type exchange struct{ op *operation }
 func (current exchange) RoundTrip(request *http.Request) (*http.Response, error) {
 	op := current.op
 	if err := op.ctx.Err(); err != nil {
-		return nil, err
-	}
-	if err := op.before(request); err != nil {
 		return nil, err
 	}
 	if err := validateRequest(op.ctx, request, op.client.owner.settings); err != nil {

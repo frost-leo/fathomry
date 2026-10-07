@@ -22,6 +22,7 @@ package tlsclient
 import (
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 
 	http "github.com/bogdanfinn/fhttp"
@@ -121,24 +122,56 @@ func (op *operation) redirect(request *http.Request, previous []*http.Request) e
 	if len(previous) >= op.client.owner.settings.MaxExchanges {
 		return failure(ErrLimit, "redirect")
 	}
+	origin := request.URL.Scheme + "://" + strings.ToLower(authority(request.URL))
+	inherited := map[string][]string{
+		"Cookie":        credentialValues(request.Header, "Cookie"),
+		"Authorization": credentialValues(request.Header, "Authorization"),
+	}
 	callback := op.client.owner.native.CheckRedirect
-	if callback == nil {
-		return nil
+	if callback != nil {
+		done, err := op.client.owner.enterCallback(op.ctx)
+		if err != nil {
+			return err
+		}
+		defer done()
+		preview := previewRequest(request)
+		history := make([]*http.Request, len(previous))
+		for index, prior := range previous {
+			history[index] = previewRequest(prior)
+		}
+		if err := callback(preview, history); err != nil {
+			return err
+		}
+		if err := op.applyPreview(request, preview); err != nil {
+			return err
+		}
 	}
-	done, err := op.client.owner.enterCallback(op.ctx)
-	if err != nil {
+	if err := op.before(request); err != nil {
 		return err
 	}
-	defer done()
-	preview := previewRequest(request)
-	history := make([]*http.Request, len(previous))
-	for index, prior := range previous {
-		history[index] = previewRequest(prior)
+	if origin != request.URL.Scheme+"://"+strings.ToLower(authority(request.URL)) {
+		for name, values := range inherited {
+			if slices.Equal(values, credentialValues(request.Header, name)) {
+				for key := range request.Header {
+					if strings.EqualFold(key, name) {
+						delete(request.Header, key)
+					}
+				}
+			}
+		}
 	}
-	if err := callback(preview, history); err != nil {
-		return err
+	return nil
+}
+
+func credentialValues(header http.Header, name string) []string {
+	var values []string
+	for key, items := range header {
+		if strings.EqualFold(key, name) {
+			values = append(values, items...)
+		}
 	}
-	return op.applyPreview(request, preview)
+	slices.Sort(values)
+	return values
 }
 
 type operationJar struct{ op *operation }

@@ -47,7 +47,7 @@ type modulePin struct{ original, directory, version, sum string }
 
 func sdkPins() []modulePin {
 	return []modulePin{
-		{"github.com/bogdanfinn/tls-client", "third_party/tls-client", "v0.0.0-20260930074612-e7c164f1d613", "h1:Bx3rltt7JCo73ZZm+IZdGMhJqp853c/6Ybtb9j58pn4="},
+		{"github.com/bogdanfinn/tls-client", "third_party/tls-client", "v0.0.0-20261007150852-1c04f9c3b198", "h1:g/j5H3E2ktrVj4TT7sZ2ANJfH24HocDIYgpxQqn77e8="},
 		{"github.com/enetx/http2", "third_party/surf-http2", "v0.0.0-20260930074612-e7c164f1d613", "h1:fFGtOTpPXhfyiZeBadmxGLHZVdxGPmPLsgQFTbzdfp8="},
 		{"github.com/enetx/http3", "third_party/surf-http3", "v0.0.0-20260930074612-e7c164f1d613", "h1:aAdnugFgXbWxuWRQRcdV1gKuSoZP4fEzs0M7WP/cTMI="},
 		{"github.com/enetx/surf", "third_party/surf", "v0.0.0-20260930074612-e7c164f1d613", "h1:OIyhEtx4Z26/K7iLsB5WGxYTvOTNsSvYdw000hC0F0M="},

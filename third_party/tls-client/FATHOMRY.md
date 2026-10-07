@@ -42,7 +42,7 @@ upstream material. The embedded upstream notice in connect.go is also preserved.
 - Module: github.com/bogdanfinn/tls-client v1.16.0.
 - Immutable module-proxy origin: 291b8f9e1b86cc35f210bdb6bf44770bf2660ab5.
 - Original module sum: h1:km3YLI6CMRLZnfrC+hGStePPryIicd3hoxFQvHB1itY=.
-- Compatibility revision: v2, exported as FathomryCompatibilityRevision.
+- Compatibility revision: v3, exported as FathomryCompatibilityRevision.
 - [UPSTREAM.json](UPSTREAM.json) records original runtime-file hashes and provenance.
 - Runtime root files, profiles, bandwidth, module metadata and license are retained.
   Upstream examples, CFFI applications and external-site tests are not copied.
@@ -93,6 +93,12 @@ branch contains net.ErrClosed. Only entirely closed-cause chains/joins are benig
 independent failures retain their original error and ownership until successful retry.
 
 ## Native Close obligations and limits
+
+Revision v3 adds an optional context-bearing work-retention callback to the
+existing control bridge. Controlled asynchronous TLS reconnect/profile work
+retains its originating Provider operation before invoking contextless native
+profile callbacks. It does not replace the SDK's transport pool, change its
+upstream version or grant a new source-license permission.
 
 Callers close every response body, including after EOF. Close seals new managed
 HTTP admission, cancels managed work and closes its transports; a caller retaining

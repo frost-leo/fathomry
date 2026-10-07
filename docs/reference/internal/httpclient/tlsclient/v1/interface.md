@@ -36,9 +36,13 @@ alias shares the original identity and allowance rather than acquiring another c
 
 1. Supply `OptionsV1` and `NativeOptionsV1.Profile`; optional ordered
    `resource.Layer` values contain plain YAML/JSON settings, never runtime handles.
-2. `Select` validates and snapshots configuration without network I/O or calling
-   native factories. Use `LimitsV1` for unoverridden Go options, apply
-   `resource.WithLimits`, then `resource.Assemble`.
+2. `PrepareV1` freezes the final data/native selection offline, without SDK client
+   construction or factory calls. Its Metadata declares exact effective work,
+   evidence and source-residence allowances. Apply its Limits to Prepared.Select
+   and assemble; LimitsV1 remains the unoverridden-Go-options convenience.
+   Prepared.SelectWithLifetime accepts a separate owner lifetime: cancellation
+   starts native shutdown before roots drain, including contextless H2 reconnects.
+   Construction and cleanup waiting contexts are not retained.
 3. Create a separately bounded `invocation.Inbox[Result]`, then `Bind`.
    `Client.EvidenceBytes` reports the per-call evidence reservation. An insufficient
    Inbox byte/count allowance rejects calls before native work.
@@ -47,8 +51,9 @@ alias shares the original identity and allowance rather than acquiring another c
 5. Inspect and release every independent Inbox delivery, even when the direct
    caller has handled its error. Finally close borrowing scopes and the owning assembly.
 
-Public framework/Workflow APIs and the later application anti-corruption layer are
-not supplied. This package does not import other HTTP Providers.
+Independent applications use the [public Adapter](../../../../adapters/httpclient/tlsclient/v1/interface.md)
+and its Fixed/Follow composition, not this Internal package. Neither layer supplies
+business terminal policy or Workflow I/O. This package imports no other HTTP Provider.
 
 ## Native capabilities and runtime routing
 
@@ -71,6 +76,15 @@ RandomizedNoALPN and ordinary explicit/native profiles remain available.
 Pin names use canonical DNS/IP matching; conflicting canonical entries are rejected.
 Pre/post hook panics retain native hook containment without formatting arbitrary
 panic values. A post-hook admission refusal is retained as a notice, not dropped.
+
+Initial pre-hooks establish the final target before jar lookup and automatic
+URL-userinfo Authorization. Response cookies follow that effective request URL.
+On redirects, unchanged inherited Cookie/Authorization values are removed if the
+final callback/pre-hook target changes origin. Explicitly changed credential values
+remain; same-value reassertion cannot be distinguished from inheritance and is
+removed. Initial explicitly supplied application headers retain native behavior.
+Host-only mutation is not a URL-origin change. These rules preserve hooks and jars,
+not business credential refresh or automatic acquisition.
 
 The call's explicit context replaces `Request.Context`. Request URL/header/trailer
 containers are copied before queueing; Body and GetBody are acquired only after
@@ -98,6 +112,14 @@ them in favor of its fixed native ident. SOCKS5/HTTP URL credentials remain supp
 H3 racing accepts direct or SOCKS5/5h routing only; it refuses
 TCP-only dial/proxy factories, IP-family restrictions, certificate pins, key-log
 writers and disabled keep-alives because those native options do not govern H3.
+
+NativeOptionsV1.Dialer and LocalAddr cover the native built-in TCP proxy path,
+including resolver and local-bind selection. Their data containers are copied;
+resolver/control callbacks are guarded cooperative borrows. Native effective
+Timeout overrides Dialer.Timeout, ControlContext has native precedence, and an
+explicit LocalAddr overrides the dialer's local address. H3 racing rejects these
+TCP-only inputs. DialContext conflicts with Dialer/LocalAddr and proxy factories;
+Dialer plus proxy factory is rejected rather than ignored.
 These are mechanism restrictions, not a profile whitelist. HTTPS CONNECT uses the
 SDK's system-trusted proxy TLS path; origin RootCAs are not proxy trust roots.
 Native SOCKS5 QUIC resolves destination names locally. Therefore H3 via
@@ -133,6 +155,7 @@ validated as supplied; explicit layered zero does not reapply a default.
 | Request / response bytes | 8 MiB each | 1 byte–1 GiB, shared across the logical call's reads/replays/redirect bodies |
 | Retained metadata bytes | 64 KiB | 1 KiB–1 MiB per bounded container |
 | Native H2 header ceiling | 10 MiB | At least retained metadata bound, at most 64 MiB |
+| Declared lazy TLS-profile bytes | 1 MiB | 1 KiB–1 MiB; checked initial lengths, cooperative dynamic output |
 | Exchanges / replay readers | 10 / 32 | 1–128 / 1–1024 |
 | Admission / lifetime timeout | 30 seconds each | 1 ms–24 hours |
 | TCP idle timeout ceiling | 90 seconds | 1 ms–24 hours |
@@ -164,6 +187,16 @@ none is exact Go/native RSS or kernel memory. Idle cached bindings may be retire
 to admit a new route, but live bindings are never evicted to evade limits.
 Unconfirmed native release retains capacity. This is technical cleanup, not
 business Provider rotation/eviction.
+
+Prepared Metadata includes final native buffers, origin and HTTPS-proxy H2
+Framer/HPACK/window state, QUIC receive maxima, possible owned 32-entry session
+caches and selected uTLS compressed-certificate decoded envelopes. Public policy
+adds only its bridge/source records, not a second default formula. Lazy factories
+do not run offline: initial spec counts/extension Len values are checked on use;
+dynamic SNI/session/padding callbacks must honor MaxProfileBytes. This declared
+envelope is not a universal wire cap or a pre-allocation sandbox for borrowed code.
+Native Go/randomized/preset placeholder modes use a separate 24-bit hello envelope
+in Metadata, not an inapplicable custom-factory declaration.
 
 A non-nil receipt means accepted work and survives early wait cancellation.
 Headers are not final completion. A stream is complete only after final EOF and
@@ -199,10 +232,16 @@ does not prove non-effect, Complete does not mean business success, and the Inbo
 is process-local evidence rather than a durable ledger.
 
 The integration import major, OptionsV1 format, native/request runtime contracts,
-SDK v1.16.0 and local compatibility revision v2 are separate axes.
+SDK v1.16.0 and local compatibility revision v3 are separate axes.
 `Build` reads actual consuming-binary module/replacement facts; `Profile` reports
 non-secret effective choices, never inferred deployment or service support.
 See [local SDK provenance and license compatibility](../../../../../../third_party/tls-client/FATHOMRY.md).
+
+Bandwidth() observes enabled native origin-TLS-over-TCP counters and retains them
+across binding retirement. It is read-only, not per-request or jointly atomic.
+Cleartext, H3, proxy setup and outer proxy TLS/framing totals are outside its scope;
+application reads never substitute for native measurements. Disabled/overflowed
+observations return unavailable, not a fabricated known zero.
 
 ## Details and executable evidence
 
@@ -210,6 +249,8 @@ The accepted [SDK architecture](../../../../../architecture/sdk-integration.md)
 and [integration standards](../../../../../architecture/internal-sdk-integration.md)
 S01–S12 govern applicable resource/call/evidence obligations.
 [Issue #49](https://github.com/frost-leo/fathomry/issues/49) defines this SDK's scope.
+[Issue #118](https://github.com/frost-leo/fathomry/issues/118) adds native completion
+and public preparation/ownership/delivery requirements.
 
 Source [package documentation](../../../../../../internal/httpclient/tlsclient/v1/doc.go)
 and [tests](../../../../../../internal/httpclient/tlsclient/v1/) cover actual loopback

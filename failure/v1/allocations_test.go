@@ -109,11 +109,17 @@ func TestAllocations(t *testing.T) {
 			t.Fatal("nethttp capability allocation changed")
 		}
 		for index, allocation := range allocations {
+			if allocation.Facility == failure.FacilityTLSClient && (allocation.Module != "fathomry" || allocation.Component != "http_tlsclient" || allocation.Facility != 0x201 || allocation.Facility.Domain() != failure.DomainNetwork) {
+				t.Fatal("tlsclient capability allocation changed")
+			}
 			for _, earlier := range allocations[:index] {
 				if allocation.Facility == earlier.Facility || allocation.Module == earlier.Module && allocation.Component == earlier.Component {
 					t.Fatal("first-party facility ownership is not unique")
 				}
 			}
+		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityTLSClient, Module: "fathomry", Component: "http_tlsclient"}) {
+			t.Fatal("tlsclient allocation missing")
 		}
 		if failure.ErrCode != 0xA0010001 || failure.ErrSerialization != 0xA0010007 {
 			t.Fatal("published local numbers changed")
