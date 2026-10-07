@@ -40,6 +40,7 @@ import (
 	"time"
 
 	"github.com/frost-leo/fathomry/internal/conformance"
+	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/resource"
 )
 
@@ -169,16 +170,25 @@ func TestNativeCallbackCapacityAndShutdownRemainBounded(t *testing.T) {
 	options.Timeout = 50 * time.Millisecond
 	options.Native.TLS = &tls.Config{RootCAs: roots, VerifyConnection: func(tls.ConnectionState) error { entered.Add(1); <-release; return nil }}
 	f := bindFixture(t, options, 1)
+	var retained *invocation.Receipt[Result]
 	for index := range 6 {
 		receipt, err := f.client.Do(deadline(t), deadline(t), correlation("callback"), newRequest(t, "GET", server.URL, nil))
 		if err == nil {
 			t.Fatal("blocked native verification completed")
 		}
-		if receipt != nil {
-			settle(t, f, receipt)
+		if index == 0 {
+			if receipt == nil {
+				t.Fatal("initial native callback was not admitted", err)
+			}
+			retained = receipt
+			if result, _ := receipt.Result(); result.Final || result.Released {
+				t.Fatal("blocked TLS callback released its root")
+			}
+		} else if receipt != nil || !errors.Is(err, invocation.ErrEvidence) {
+			t.Fatal("blocked callback returned admission/evidence capacity", err)
 		}
-		if index == 5 && entered.Load() > 4 {
-			t.Fatal("native callbacks exceeded the declared source bound")
+		if index == 5 && entered.Load() != 1 {
+			t.Fatal("blocked callback did not retain the single root allowance")
 		}
 	}
 	cleanup, cancel := context.WithTimeout(context.Background(), time.Millisecond)
@@ -187,9 +197,13 @@ func TestNativeCallbackCapacityAndShutdownRemainBounded(t *testing.T) {
 		t.Fatal("blocked callback lost its owner", err)
 	}
 	unblock()
-	f.cleanupCause = context.DeadlineExceeded
-	// Historical cleanup interruption remains inspectable after actual release.
-	if err := f.assembly.Close(deadline(t)); !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatal("cleanup history was erased", err)
+	result := settle(t, f, retained)
+	if !errors.Is(result.Outcome.Primary, context.DeadlineExceeded) {
+		t.Fatal("operation deadline evidence was lost", result.Err())
+	}
+	// The first assembly close refused live work without starting native source
+	// release. It must not invent a cleanup timeout after the root actually ends.
+	if err := f.assembly.Close(deadline(t)); err != nil {
+		t.Fatal("confirmed callback cleanup did not release the source", err)
 	}
 }

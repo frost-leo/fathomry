@@ -52,9 +52,11 @@ implemented business credential strategy.
 Framework composition, not each business project, owns the private assembly path:
 
 1. Supply one named `OptionsV1` and any explicitly authorized native dependencies.
-2. Call `Select`, then `resource.WithLimits`, `resource.Assemble` and `Bind`.
-   `LimitsV1` provides a validated policy for unoverridden Go options. If layers
-   override settings, composition must supply matching limits; `Bind` checks them.
+2. Call `PrepareV1`, then use its exact `Select()` and `Metadata().Limits`
+   with `resource.WithLimits`, `resource.Assemble` and `Bind`.
+   Preparation freezes resolved data/native containers without invoking callbacks.
+   `Select` and `LimitsV1` remain convenience routes; only Prepared metadata
+   describes final overlays together with work/evidence/source residence.
 3. Supply a bounded `invocation.Inbox[Result]` independently of caller error
    handling. An optional Observer is lossy and never replaces this receiver.
 4. Choose a controlled operation and retain its accepted receipt.
@@ -109,6 +111,8 @@ closed list of allowed sites.
 | Admission / operation timeout | 30 s each; an earlier caller deadline wins. A direct connection's operation timeout bounds its lifetime. |
 | Dial / TLS handshake timeout | 10 s each. Native/custom callbacks remain cooperative. |
 | Response-header / idle timeout | 30 s / 90 s. Idle cleanup is not active-request cancellation. |
+| Expect-Continue wait | 1 s independently of response headers; resolved zero sends the body immediately, not an unlimited wait. |
+| CONNECT metadata | ProxyConnectHeader is copied and bounded by MaxHeaderBytes. Dynamic selection replaces it before pool lookup; effective proxy authentication and header differences isolate reuse. |
 | Native callbacks | Fallible extension entry is capped at four times connection capacity. Native time/cache/diagnostic hooks must be prompt and nonblocking and retain lifetime accounting; their signatures cannot report admission errors. |
 
 PEM roots are parsed strictly; mixed garbage or unknown blocks do not silently
@@ -183,6 +187,28 @@ of an unqualified native-handle escape.
 
 ## Ownership, cancellation and cleanup
 
+CONNECT metadata applies only to HTTPS targets through HTTP(S) proxies. The
+dynamic selector runs per applicable exchange before pool lookup; returned maps
+are bounded/copied and native proxy-URL Basic credentials retain precedence.
+Authority/framing/upgrade headers are refused. Direct Connect freezes the same
+selection for its children. OnProxyConnectResponse receives bounded immutable
+metadata only, including failure responses before status rejection. Both source
+and operation fences retain callbacks; user callbacks receive the owning method
+context rather than the native detached dial context. No failure falls back to
+another route.
+
+Prepared Budget includes final root/evidence/source/queue envelopes, effective
+H2 stream/read-frame/header-table buffers and copied native containers. These are
+declared bytes, not RSS or arbitrary foreign dependency storage. Construction
+uses that same prepared selection; Bind checks its authoritative work reservation.
+
+Pooled TLS startup reserves operation work before the native detached handshake
+can be scheduled, releasing it only at actual TLSHandshakeDone. SOCKS5/SOCKS5h
+establishment uses the baseline x/net v0.58.0 ContextDialer inside owned dialing,
+with the same remote-DNS/authentication algorithm as the Go native bundle.
+The tracked physical socket is returned to the standard Transport, preserving
+its pool, TLS/H2 and GotConn ownership. Build records this helper provenance.
+
 A nil receipt means rejection before admission. After admission, the Inbox owns
 independent evidence even if the direct caller receives an error or stops waiting.
 
@@ -254,6 +280,7 @@ consuming toolchain/import selection.
 | TLS and runtime hooks | [TLS tests](../../../../../../internal/httpclient/nethttp/v1/tls_test.go), [native options](../../../../../../internal/httpclient/nethttp/v1/native_options_test.go) |
 | Proxy, connections and shutdown | [transport tests](../../../../../../internal/httpclient/nethttp/v1/transport_test.go), [direct connections](../../../../../../internal/httpclient/nethttp/v1/connection_test.go), [lifecycle tests](../../../../../../internal/httpclient/nethttp/v1/lifecycle_test.go) |
 | Runtime routes and independent proxy/accounting oracles | [proxy tests](../../../../../../internal/httpclient/nethttp/v1/proxy_test.go) |
+| Resolved native budgets and CONNECT/continue controls | [preparation tests](../../../../../../internal/httpclient/nethttp/v1/preparation_test.go), [metadata protocol tests](../../../../../../internal/httpclient/nethttp/v1/connect_metadata_test.go) |
 | Independent composition and rejection | [integration tests](../../../../../../internal/httpclient/nethttp/v1/integration_test.go) |
 | Options, copies, errors and consumer facts | [options](../../../../../../internal/httpclient/nethttp/v1/options_test.go), [results](../../../../../../internal/httpclient/nethttp/v1/result_test.go), [errors](../../../../../../internal/httpclient/nethttp/v1/errors_test.go), [compatibility](../../../../../../internal/httpclient/nethttp/v1/compatibility_test.go) |
 
@@ -261,8 +288,9 @@ Raw private experiments and their results remain outside this repository.
 These tests do not establish production-site success, anti-bot capability,
 distributed quotas, exact wire-attempt ceilings, hard RSS/native-memory limits,
 arbitrary native-hook qualification or complete durable framework behavior.
-SOCKS and HTTPS-proxy modes retain native selection but are not separately
-service-qualified by the local CONNECT test.
+SOCKS5/SOCKS5h and HTTPS-proxy modes have separate local protocol/lifetime
+controls in [SOCKS/TLS tests](../../../../../../internal/httpclient/nethttp/v1/socks_lifetime_test.go);
+these are not production-service qualification.
 
 H3, rendered browser execution, 101 upgrades/tunnels, raw native handles and
 server-only TLS ECH keys are not supported by this contract. Profile reports

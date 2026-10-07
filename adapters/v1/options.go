@@ -44,6 +44,24 @@ type EvidenceOptions struct {
 	MaxBytes int64 `json:"max_bytes"`
 }
 
+// Options returns detached, normalized configured ceilings, not available
+// capacity or a reservation. It remains observable after shutdown.
+func (runtime *Runtime) Options() (Options, error) {
+	if runtime == nil || runtime.state == nil {
+		return Options{}, failureOf(ErrHandle, "options", "", Details{})
+	}
+	return runtime.state.options, nil
+}
+
+// Options returns detached configured custody ceilings, not free capacity.
+// Reading them neither admits work nor acknowledges records, even after Seal.
+func (inbox *Inbox[T]) Options() (EvidenceOptions, error) {
+	if inbox == nil || inbox.state == nil {
+		return EvidenceOptions{}, failureOf(ErrHandle, "options", "", Details{})
+	}
+	return inbox.state.options, nil
+}
+
 // Declaration binds a component's facts and evidence receiver once. Copy must
 // isolate mutable data, never mutate its argument, and be bounded, concurrent-safe
 // and non-panicking. It runs outside runtime locks. No reflected copy is inferred.

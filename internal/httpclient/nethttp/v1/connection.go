@@ -108,11 +108,24 @@ func (client *Client) Connect(ctx context.Context, id fault.Correlation, scheme,
 			var route *url.URL
 			route, err = client.owner.proxy(preview)
 			if err == nil {
+				var headers http.Header
+				headers, err = client.owner.connectHeaders(preview, route)
 				bound := proxyChoice{selection: ProxyDirect}
 				if route != nil {
 					bound = proxyChoice{selection: ProxyAddress, address: route}
 				}
-				native, err = client.owner.direct.NewClientConn(context.WithValue(op.ctx, boundProxyKey{}, bound), scheme, address)
+				if err == nil {
+					direct := client.owner.direct.Clone()
+					direct.TLSClientConfig.NextProtos = append([]string(nil), direct.TLSClientConfig.NextProtos...)
+					direct.ProxyConnectHeader = headers
+					if socksProxy(route) {
+						direct.Proxy = nil
+						direct.DialContext = func(ctx context.Context, network, target string) (net.Conn, error) {
+							return client.owner.dialSOCKS(ctx, network, target, route)
+						}
+					}
+					native, err = direct.NewClientConn(context.WithValue(op.ctx, boundProxyKey{}, bound), scheme, address)
+				}
 			}
 		}
 		if err != nil {

@@ -35,6 +35,7 @@ import (
 
 type owner struct {
 	settings    settings
+	budget      Budget
 	native      NativeOptionsV1
 	transport   *http.Transport
 	direct      *http.Transport
@@ -50,19 +51,20 @@ type owner struct {
 	releaseDone chan struct{}
 }
 
-func newOwner(value settings, native NativeOptionsV1) (*owner, error) {
+func newOwner(value settings, native NativeOptionsV1, preparedTLS *tls.Config, budget Budget) (*owner, error) {
 	native, err := copyNative(native)
 	if err != nil {
 		return nil, err
 	}
 	config := native.TLS
 	if config == nil {
-		config, err = configuredTLS(value)
+		config, err = copyTLS(preparedTLS)
 		if err != nil {
 			return nil, err
 		}
 	}
 	own := &owner{settings: value, native: native, callbacks: newActivity(), sockets: make(map[*socket]struct{}), bindings: make(map[string]*transportBinding)}
+	own.budget = budget
 	own.callbacks.limit = 4 * value.MaxConnections
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(value.HTTP1)
@@ -76,8 +78,9 @@ func newOwner(value settings, native NativeOptionsV1) (*owner, error) {
 		MaxResponseHeaderBytes: value.MaxHeaderBytes,
 		DialTLSContext:         nil, TLSHandshakeTimeout: value.TLSHandshakeTimeout,
 		ResponseHeaderTimeout: value.ResponseHeaderTimeout, IdleConnTimeout: value.IdleConnTimeout,
-		ExpectContinueTimeout: value.ResponseHeaderTimeout,
-		DisableKeepAlives:     value.DisableKeepAlives, DisableCompression: value.DisableCompression,
+		ExpectContinueTimeout:  value.ExpectContinueTimeout,
+		OnProxyConnectResponse: own.connectResponse,
+		DisableKeepAlives:      value.DisableKeepAlives, DisableCompression: value.DisableCompression,
 	}
 	own.direct = own.transport.Clone()
 	own.direct.TLSClientConfig.NextProtos = slices.Clone(own.direct.TLSClientConfig.NextProtos)
@@ -157,11 +160,14 @@ func (own *owner) reserveSocket() bool {
 }
 
 type transportBinding struct {
-	transport *http.Transport
-	users     int
+	transport   *http.Transport
+	users       int
+	proxyScheme string
 }
 
 type bindingKey struct{}
+type firstTLSKey struct{}
+type targetTLSKey struct{}
 
 func (own *owner) bindTransport(request *http.Request) (*transportBinding, error) {
 	// Resolve before native H2's authority cache, which may return a connection
@@ -170,10 +176,11 @@ func (own *owner) bindTransport(request *http.Request) (*transportBinding, error
 	if err != nil {
 		return nil, err
 	}
-	key := ""
-	if proxy != nil {
-		key = proxy.String()
+	headers, err := own.connectHeaders(request, proxy)
+	if err != nil {
+		return nil, err
 	}
+	key := routeKey(proxy, headers)
 	for {
 		own.mu.Lock()
 		if own.stopping {
@@ -190,11 +197,20 @@ func (own *owner) bindTransport(request *http.Request) (*transportBinding, error
 			// H2 setup mutates the ALPN slice retained by tls.Config.Clone.
 			transport.TLSClientConfig.NextProtos = slices.Clone(transport.TLSClientConfig.NextProtos)
 			transport.Proxy = nil
+			transport.ProxyConnectHeader = headers
+			proxyScheme := ""
 			if proxy != nil {
 				address := *proxy
-				transport.Proxy = func(*http.Request) (*url.URL, error) { copy := address; return &copy, nil }
+				proxyScheme = proxy.Scheme
+				if socksProxy(proxy) {
+					transport.DialContext = func(ctx context.Context, network, target string) (net.Conn, error) {
+						return own.dialSOCKS(ctx, network, target, &address)
+					}
+				} else {
+					transport.Proxy = func(*http.Request) (*url.URL, error) { copy := address; return &copy, nil }
+				}
 			}
-			binding := &transportBinding{transport: transport, users: 1}
+			binding := &transportBinding{transport: transport, users: 1, proxyScheme: proxyScheme}
 			own.bindings[key] = binding
 			own.mu.Unlock()
 			return binding, nil
@@ -311,6 +327,12 @@ func (own *owner) dial(ctx context.Context, network, address string) (net.Conn, 
 	}
 	op.sockets = append(op.sockets, tracked)
 	op.mu.Unlock()
+	if planned, _ := ctx.Value(firstTLSKey{}).(bool); planned {
+		if !op.callbacks.enter() {
+			_ = tracked.Close()
+			return nil, failure(ErrState, "tls-entry")
+		}
+	}
 	return tracked, nil
 }
 

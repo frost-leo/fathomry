@@ -39,6 +39,8 @@ import (
 	mysql "github.com/frost-leo/fathomry/adapters/database/mysql/v1"
 	postgres "github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	database "github.com/frost-leo/fathomry/adapters/database/v1"
+	nethttp "github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1"
+	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	doris "github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
@@ -63,6 +65,17 @@ type adapterOwner interface {
 
 func TestPublicAdapterContracts(t *testing.T) {
 	const canary = "adapter-contract-private-canary"
+	t.Run("nethttp", func(t *testing.T) {
+		zero := time.Duration(0)
+		disabled := false
+		value := nethttp.Settings{Name: "contract", ProxyURL: "http://" + canary + "@127.0.0.1:1", HTTP2: &disabled, ExpectContinueTimeout: &zero}
+		checkPublicAdapter(t, value, nethttp.Validate, nethttp.Recommend,
+			func(value httpclient.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[nethttp.Result]) nethttp.Dependencies {
+				return nethttp.Dependencies{Runtime: runtime, Evidence: inbox}
+			},
+			nethttp.Open, canary)
+	})
 	t.Run("postgres", func(t *testing.T) {
 		value := postgres.Settings{Name: "contract", Address: "127.0.0.1", Port: 1, Database: "fixture", User: "fixture", Password: canary, Plaintext: true, ParserHome: os.Getenv("HOME")}
 		checkPublicAdapter(t, value, postgres.Validate, postgres.Recommend,

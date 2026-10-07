@@ -46,6 +46,7 @@ automatically own or construct the packages below it.
 | `broker/v1` | capability | [Broker budgets and attribution; no native client](../docs/reference/adapters/broker/v1/interface.md) |
 | `cache/v1` | capability | [Cache/messaging composition budgets and attribution](../docs/reference/adapters/cache/v1/interface.md) |
 | `objectstore/v1` | capability | [Object effects, budgets, generation scaling and attribution](../docs/reference/adapters/objectstore/v1/interface.md) |
+| `httpclient/v1` | capability | [HTTP declared accounting and attribution; no request or runtime interface](../docs/reference/adapters/httpclient/v1/interface.md) |
 | `configsource/v1` | preparation | [Strict configuration preparation and complete raw Source/Observer contracts](../docs/reference/adapters/configsource/v1/interface.md) |
 | `configsource/viper/v1` | configuration-provider | [Explicit local acquisition, native decoding and owned observation](../docs/reference/adapters/configsource/viper/v1/interface.md) |
 | `configsource/nacos/v1` | configuration-provider | [Nacos acquisition/mutation/search and retained observation](../docs/reference/adapters/configsource/nacos/v1/interface.md) |
@@ -57,6 +58,7 @@ automatically own or construct the packages below it.
 | `objectstore/minio/v1` | data-provider | [Objects, multipart, versions/listing and restricted delegation](../docs/reference/adapters/objectstore/minio/v1/interface.md) |
 | `broker/kafka/v1` | data-provider | [Production, direct/classic-group consumption and checkpoints](../docs/reference/adapters/broker/kafka/v1/interface.md) |
 | `cache/redis/v1` | data-provider | [Commands, sessions, Streams/subscriptions and supported experimental modes](../docs/reference/adapters/cache/redis/v1/interface.md) |
+| `httpclient/nethttp/v1` | data-provider | [Standard HTTP finite responses, retained streams and controlled direct connections](../docs/reference/adapters/httpclient/nethttp/v1/interface.md) |
 | `internal/errorbridge` | private | [Bounded error forwarding/inspection; no public registry or execution engine](../docs/reference/adapters/internal/errorbridge/interface.md) |
 
 Public package version and native SDK version are separate: for example, public

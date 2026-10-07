@@ -21,6 +21,7 @@ package nethttp
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net/http"
@@ -147,7 +148,12 @@ func (op *operation) open(original *http.Request, transport http.RoundTripper) (
 }
 
 func (op *operation) nativeOpen(original *http.Request, transport http.RoundTripper) (*Stream, *invocation.Receipt[Result], error) {
-	work := httptrace.WithClientTrace(op.ctx, &httptrace.ClientTrace{GotConn: func(info httptrace.GotConnInfo) { claimConnection(info.Conn) }})
+	work := httptrace.WithClientTrace(op.ctx, &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) { claimConnection(info.Conn) },
+		// A planned reference is acquired before native addTLS can start. Go's
+		// detached dial may start its handshake after request cancellation.
+		TLSHandshakeDone: func(tls.ConnectionState, error) { op.callbacks.leave() },
+	})
 	request := copyRequest(original, work)
 	if original.Body != nil && original.Body != http.NoBody {
 		request.Body = op.wrapRequestBody(original.Body)
@@ -403,7 +409,15 @@ func (value exchange) RoundTrip(request *http.Request) (*http.Response, error) {
 		op.mu.Lock()
 		op.bindings = append(op.bindings, binding)
 		op.mu.Unlock()
-		request = request.WithContext(context.WithValue(request.Context(), bindingKey{}, binding))
+		targetTLS := request.URL.Scheme == "https"
+		firstTLS := targetTLS
+		if binding.proxyScheme != "" {
+			firstTLS = binding.proxyScheme == "https"
+		}
+		bound := context.WithValue(request.Context(), bindingKey{}, binding)
+		bound = context.WithValue(bound, firstTLSKey{}, firstTLS)
+		bound = context.WithValue(bound, targetTLSKey{}, targetTLS)
+		request = request.WithContext(bound)
 		native = binding.transport
 	}
 	response, err := native.RoundTrip(request)

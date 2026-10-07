@@ -103,6 +103,9 @@ func TestDomains(t *testing.T) {
 			failure.FacilityDoris.Domain() != failure.DomainDatabase {
 			t.Fatal("mutable domain registry")
 		}
+		if failure.FacilityNetHTTP.Domain() != failure.DomainNetwork {
+			t.Fatal("mutable domain registry")
+		}
 	})
 	t.Run("reserved_domains_are_not_declarable", func(t *testing.T) {
 		for _, facility := range []failure.Facility{0x380, 0x3FF, 0x780, 0x7FF} {

@@ -1,0 +1,90 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "http_nethttp",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.http_nethttp.invalid_input",
+      "source": "ed20225a1b312596d2b95ee105fe609a5971d3a53a1008ed3fafa066e8a5facf",
+      "forms": {
+        "other": "HTTP 输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.unsupported_profile",
+      "source": "7ac6a950ca932b6bd56eda966cf15811d6b956c918c4243edc312a9b7e296c21",
+      "forms": {
+        "other": "请求的 HTTP 能力不受支持。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.transport_failed",
+      "source": "8da204f00f00cbfe46b3bdfbc5b4bf9161545f66b7d29d1466205c8aa842c0bd",
+      "forms": {
+        "other": "HTTP 传输失败，远端效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.read_failed",
+      "source": "409d087a0d1e6399cd4b64cd3b813efe14ec501f612013f20ff5b99e4b3cf77b",
+      "forms": {
+        "other": "读取 HTTP 输入或响应失败。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.integrity_failed",
+      "source": "9832a4a8680a022a1ba483295142721bcc2602d25c4fc355ad39e8d1e4db6f14",
+      "forms": {
+        "other": "HTTP 响应不完整或格式无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.limit_exceeded",
+      "source": "4c2e19c0f80d6141a0ae251566b7b0f9d7883af778877ec887b7312b10f9d415",
+      "forms": {
+        "other": "超出 HTTP 能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.invalid_state",
+      "source": "22a5f0b7ffc456374ee0c0a17a91a5f1a0fb0e855635d31233fe703128a90e4b",
+      "forms": {
+        "other": "HTTP 句柄在当前状态下无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.cleanup_failed",
+      "source": "d57742e3a99491a230e004edf62fe2577fa6b2df156dc4fddce6cb109d3500a4",
+      "forms": {
+        "other": "HTTP 清理报告失败，完成状态需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.http_nethttp.runtime_serialization",
+      "source": "166bb6689a2abca7d5cf1466a5f80cede0e0fa5c093d43e4e9b14a65e2a0e80a",
+      "forms": {
+        "other": "不支持序列化 HTTP 运行时值。"
+      }
+    }
+  ]
+}

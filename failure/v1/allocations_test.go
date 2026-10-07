@@ -104,6 +104,10 @@ func TestAllocations(t *testing.T) {
 		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityDoris, Module: "fathomry", Component: "database_doris"}) || failure.FacilityDoris != 0x084 || failure.FacilityDoris.Domain() != failure.DomainDatabase {
 			t.Fatal("Doris capability allocation changed")
 		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityNetHTTP, Module: "fathomry", Component: "http_nethttp"}) ||
+			failure.FacilityNetHTTP != 0x200 || failure.FacilityNetHTTP.Domain() != failure.DomainNetwork {
+			t.Fatal("nethttp capability allocation changed")
+		}
 		for index, allocation := range allocations {
 			for _, earlier := range allocations[:index] {
 				if allocation.Facility == earlier.Facility || allocation.Module == earlier.Module && allocation.Component == earlier.Component {
