@@ -412,7 +412,7 @@ func (rt *roundTripper) dialTLSSetup(ctx context.Context, network, addr string) 
 // Only the setup caller holds cachedTransportsLck. Reconnects must not write
 // that cache or reuse a kind left behind by an incomplete cache removal (#270).
 func (rt *roundTripper) dialTLSWithSetup(ctx context.Context, network, addr string, setup bool) (net.Conn, error) {
-	work, done, err := rt.compat.begin(ctx)
+	work, done, err := rt.compat.beginCall(ctx)
 	if err != nil {
 		return nil, err
 	}

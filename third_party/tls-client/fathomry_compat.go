@@ -32,7 +32,7 @@ import (
 )
 
 // FathomryCompatibilityRevision identifies local corrections, not the SDK version.
-const FathomryCompatibilityRevision = "v2"
+const FathomryCompatibilityRevision = "v3"
 
 var (
 	ErrClientClosed      = errors.New("tls-client: client is closed")
@@ -93,6 +93,34 @@ func (state *compatibilityState) begin(ctx context.Context) (context.Context, fu
 		cancel()
 	}
 	return work, func() { stop(); cancel(); state.end() }, nil
+}
+
+// beginCall owns call-bound asynchronous setup, not source-resident H3 relay
+// lifetimes that legitimately survive individual request completion.
+func (state *compatibilityState) beginCall(ctx context.Context) (context.Context, func(), error) {
+	work, done, err := state.begin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	state.mu.Lock()
+	retain := state.control.RetainWork
+	state.mu.Unlock()
+	release := func() {}
+	if retain != nil {
+		retained, err := retain(ctx)
+		if err != nil || retained == nil {
+			if retained != nil {
+				retained()
+			}
+			done()
+			if err == nil {
+				err = errors.New("tls-client: missing work release")
+			}
+			return nil, nil, err
+		}
+		release = retained
+	}
+	return work, func() { release(); done() }, nil
 }
 
 func (state *compatibilityState) end() {
