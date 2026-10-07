@@ -23,7 +23,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 **Audience:** contributors and consumers navigating the Adapter tree.
 **Status:** implemented role-based organization for every current production Go
-package below this directory: 13 public packages and one private helper.
+package below this directory: public contracts, concrete providers and one private helper.
 Grouping directories are not Go packages; testdata consumer modules are executable
 fixtures, not production providers. New packages must be classified and documented.
 
@@ -42,6 +42,7 @@ automatically own or construct the packages below it.
 | --- | --- | --- |
 | `v1` | mechanism | [Operation Runtime, admission, actual-work references and independent evidence](../docs/reference/adapters/v1/interface.md) |
 | `database/v1` | capability | [SQL budgets, attribution and profile vocabulary; no pool/client](../docs/reference/adapters/database/v1/interface.md) |
+| `sqlengine/v1` | capability | [SQL-engine source/work/evidence budgets and observation vocabulary; no native authority](../docs/reference/adapters/sqlengine/v1/interface.md) |
 | `broker/v1` | capability | [Broker budgets and attribution; no native client](../docs/reference/adapters/broker/v1/interface.md) |
 | `cache/v1` | capability | [Cache/messaging composition budgets and attribution](../docs/reference/adapters/cache/v1/interface.md) |
 | `objectstore/v1` | capability | [Object effects, budgets, generation scaling and attribution](../docs/reference/adapters/objectstore/v1/interface.md) |
@@ -50,6 +51,7 @@ automatically own or construct the packages below it.
 | `configsource/nacos/v1` | configuration-provider | [Nacos acquisition/mutation/search and retained observation](../docs/reference/adapters/configsource/nacos/v1/interface.md) |
 | `database/postgres/v1` | data-provider | [PostgreSQL ownership, SQL, preparation, transactions and savepoints](../docs/reference/adapters/database/postgres/v1/interface.md) |
 | `database/mysql/v1` | data-provider | [MySQL ownership, SQL, preparation and provider-specific transactions](../docs/reference/adapters/database/mysql/v1/interface.md) |
+| `sqlengine/duckdb/v1` | data-provider | [Embedded SQL, parameter batches, Appender, transactions and bounded incremental results](../docs/reference/adapters/sqlengine/duckdb/v1/interface.md) |
 | `objectstore/minio/v1` | data-provider | [Objects, multipart, versions/listing and restricted delegation](../docs/reference/adapters/objectstore/minio/v1/interface.md) |
 | `broker/kafka/v1` | data-provider | [Production, direct/classic-group consumption and checkpoints](../docs/reference/adapters/broker/kafka/v1/interface.md) |
 | `cache/redis/v1` | data-provider | [Commands, sessions, Streams/subscriptions and supported experimental modes](../docs/reference/adapters/cache/redis/v1/interface.md) |
@@ -96,7 +98,7 @@ Runtime composition declarations may contain callbacks; they are not loadable DT
 
 ### Capability profile
 
-The four capability packages share `policy.go`, `metadata.go` and
+The capability packages share `policy.go`, `metadata.go` and
 `diagnostics.go`. They expose data/vocabulary, not native pools, source owners,
 provider factories or another runtime. Existing serialization-refusal guards do
 not justify allocating a new provider error facility or fabricating
@@ -135,10 +137,13 @@ error/presentation files. Their actual APIs remain different:
 
 ### Data-provider profile
 
-The five data providers share options/policy/source/client/result responsibilities
+The data providers share options/policy/source/client/result responsibilities
 and the same error/presentation separation. Capability files remain meaningful:
 SQL statements/transactions/savepoints, MinIO multipart/list/delegation, Kafka
 production/consumers/groups, Redis sessions/subscriptions.
+DuckDB retains embedded-engine ownership, exact values, Appender/transaction
+effects and an owned reader over native materialization; bounded Go delivery
+does not become a hard RSS guarantee.
 
 Redis additionally has real `preparation.go`, `credentials.go`,
 `logging.go` and `profile.go` responsibilities. Do not manufacture empty

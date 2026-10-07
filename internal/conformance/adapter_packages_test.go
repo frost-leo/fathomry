@@ -42,6 +42,7 @@ type adapterPackageProfile struct {
 var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"v1":                    {"mechanism", true, []string{"options.go", "runtime.go", "call.go", "evidence.go"}},
 	"database/v1":           {"capability", false, []string{"policy.go", "metadata.go"}},
+	"sqlengine/v1":          {"capability", false, []string{"policy.go", "metadata.go"}},
 	"broker/v1":             {"capability", false, []string{"policy.go", "metadata.go"}},
 	"cache/v1":              {"capability", false, []string{"policy.go", "metadata.go"}},
 	"objectstore/v1":        {"capability", false, []string{"policy.go", "metadata.go"}},
@@ -50,6 +51,7 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"configsource/nacos/v1": {"configuration-provider", true, []string{"options.go", "client.go", "source.go", "metadata.go", "read.go", "watch.go", "acquisition.go"}},
 	"database/postgres/v1":  {"data-provider", true, nil},
 	"database/mysql/v1":     {"data-provider", true, nil},
+	"sqlengine/duckdb/v1":   {"data-provider", true, nil},
 	"objectstore/minio/v1":  {"data-provider", true, nil},
 	"broker/kafka/v1":       {"data-provider", true, nil},
 	"cache/redis/v1":        {"data-provider", true, nil},

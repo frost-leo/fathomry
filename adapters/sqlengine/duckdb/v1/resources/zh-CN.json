@@ -1,0 +1,76 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "database_duckdb",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.database_duckdb.invalid_input",
+      "source": "aa749ac2939673df5bed43058c5da7d5c922cf7edc20892b30c2e7b808f609bc",
+      "forms": {
+        "other": "数据库输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.database_duckdb.unsupported_profile",
+      "source": "a7f22341ee28dceaa64d4436bcc4cd9cb44d4dfb76e458c8cf7006f173111690",
+      "forms": {
+        "other": "不支持所请求的数据库能力。"
+      }
+    },
+    {
+      "id": "fathomry.database_duckdb.native_failed",
+      "source": "e20326ef4088a04756f89e80369d6b47bae0d73fa7d404801a51369f5ba91b6b",
+      "forms": {
+        "other": "DuckDB 原生操作失败；请检查其效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.database_duckdb.limit_exceeded",
+      "source": "79d1edd0adc615ef66010ea9c08f4c4388324aba4d28e2b1dff7b005063c5018",
+      "forms": {
+        "other": "超出数据库能力的限制。"
+      }
+    },
+    {
+      "id": "fathomry.database_duckdb.invalid_state",
+      "source": "fc9cd36c503e1f776163451675cb75dfdf34902485ce4a2ebd1e13156e1811ca",
+      "forms": {
+        "other": "数据库句柄在当前状态下无法执行该操作。"
+      }
+    },
+    {
+      "id": "fathomry.database_duckdb.cleanup_failed",
+      "source": "fa98565e9a14ad418de3dc2b011219c597c2dd917d2ecbcb8c487cb101bbb9d8",
+      "forms": {
+        "other": "数据库清理报告失败；清理完成状态需单独检查。"
+      }
+    },
+    {
+      "id": "fathomry.database_duckdb.runtime_serialization",
+      "source": "fd19a48c655c2cc3f6eb81d84d9ea1fddce7ddedbcfde892bcb498e895615ab1",
+      "forms": {
+        "other": "不支持数据库运行时值序列化。"
+      }
+    }
+  ]
+}

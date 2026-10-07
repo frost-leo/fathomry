@@ -203,7 +203,7 @@ func TestIssue40NativeComposition(t *testing.T) {
 	fixture.exec(t, "ANALYZE gh40_copy")
 	fixture.exec(t, "VACUUM")
 	fixture.exec(t, "DROP TABLE gh40_copy")
-	conformance.Facade(t, fixture.database, "Profile", "Run", "Transaction", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, fixture.database, "Profile", "Run", "Transaction", "Read", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	conformance.Runtime(t, fixture.database, new(Database), "gh40_rows")
 }
 

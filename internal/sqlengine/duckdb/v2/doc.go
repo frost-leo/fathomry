@@ -30,6 +30,14 @@
 // sequence on one connection. Every accepted call completes its receipt only
 // after native statements, appenders, results and connection have been closed.
 // Resource borrowing/delegation uses resource, never raw SDK handles.
+// PrepareV1 supplies one pure authoritative resolved configuration and budget;
+// its Selection and Limits cannot diverge after overlays. Read owns a finite
+// SELECT-shaped native result, with separately bounded Next chunks, total rows,
+// total bytes and lifetime. Root terminal evidence is reserved before setup;
+// each Next requires its own evidence before advancing. Cancel the explicitly
+// supplied owning lifetime or Close to reclaim abandonment, including saturation.
+// Setup cancellation after return does not end a reader. Next/Close must not
+// overlap. EOF alone proves whole-result completion; Close does not invent EOF.
 //
 // Inputs are borrowed until the synchronous call returns and must not be mutated
 // concurrently. Result.Snapshot returns independent scalar data and progress.

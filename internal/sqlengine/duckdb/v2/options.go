@@ -61,27 +61,49 @@ type OptionsV1 struct {
 	// each may be 1 KiB–64 MiB. SQL and result metadata are included.
 	InputBytes  int64
 	ResultBytes int64
+	// ReaderChunkRows defaults to 256 (1–8192). ReaderChunkBytes defaults
+	// to 1 MiB (1 KiB–64 MiB), including one copy of the column metadata.
+	ReaderChunkRows  int
+	ReaderChunkBytes int64
+	// ReaderTotalRows defaults to 1,000,000 (1–1,000,000,000).
+	// ReaderTotalBytes defaults to 1 GiB (1 KiB–1 TiB), counting metadata
+	// once and all delivered rows, not native materialization or transient decode.
+	ReaderTotalRows  int64
+	ReaderTotalBytes int64
+	// ReaderLifetime defaults to 5min (1ms–1h), including setup and consumption.
+	ReaderLifetime time.Duration
 }
 
 type settings struct {
-	Path           string        `json:"path"`
-	Connections    int           `json:"connections"`
-	QueuedCalls    int           `json:"queued_calls"`
-	Threads        int           `json:"threads"`
-	MemoryBytes    int64         `json:"memory_bytes"`
-	Timeout        time.Duration `json:"timeout_ns"`
-	CleanupTimeout time.Duration `json:"cleanup_timeout_ns"`
-	MaxRows        int           `json:"max_rows"`
-	MaxBatchRows   int           `json:"max_batch_rows"`
-	InputBytes     int64         `json:"input_bytes"`
-	ResultBytes    int64         `json:"result_bytes"`
+	Path             string        `json:"path"`
+	Connections      int           `json:"connections"`
+	QueuedCalls      int           `json:"queued_calls"`
+	Threads          int           `json:"threads"`
+	MemoryBytes      int64         `json:"memory_bytes"`
+	Timeout          time.Duration `json:"timeout_ns"`
+	CleanupTimeout   time.Duration `json:"cleanup_timeout_ns"`
+	MaxRows          int           `json:"max_rows"`
+	MaxBatchRows     int           `json:"max_batch_rows"`
+	InputBytes       int64         `json:"input_bytes"`
+	ResultBytes      int64         `json:"result_bytes"`
+	ReaderChunkRows  int           `json:"reader_chunk_rows"`
+	ReaderChunkBytes int64         `json:"reader_chunk_bytes"`
+	ReaderTotalRows  int64         `json:"reader_total_rows"`
+	ReaderTotalBytes int64         `json:"reader_total_bytes"`
+	ReaderLifetime   time.Duration `json:"reader_lifetime_ns"`
+}
+
+func configured(options OptionsV1) settings {
+	return settings{Path: options.Path, Connections: options.Connections, QueuedCalls: options.QueuedCalls,
+		Threads: options.Threads, MemoryBytes: options.MemoryBytes, Timeout: options.Timeout,
+		CleanupTimeout: options.CleanupTimeout, MaxRows: options.MaxRows, MaxBatchRows: options.MaxBatchRows,
+		InputBytes: options.InputBytes, ResultBytes: options.ResultBytes,
+		ReaderChunkRows: options.ReaderChunkRows, ReaderChunkBytes: options.ReaderChunkBytes,
+		ReaderTotalRows: options.ReaderTotalRows, ReaderTotalBytes: options.ReaderTotalBytes, ReaderLifetime: options.ReaderLifetime}
 }
 
 func defaults(options OptionsV1) settings {
-	config := settings{Path: options.Path, Connections: options.Connections, QueuedCalls: options.QueuedCalls,
-		Threads: options.Threads, MemoryBytes: options.MemoryBytes, Timeout: options.Timeout,
-		CleanupTimeout: options.CleanupTimeout, MaxRows: options.MaxRows, MaxBatchRows: options.MaxBatchRows,
-		InputBytes: options.InputBytes, ResultBytes: options.ResultBytes}
+	config := configured(options)
 	if config.Connections == 0 {
 		config.Connections = 1
 	}
@@ -109,6 +131,21 @@ func defaults(options OptionsV1) settings {
 	if config.ResultBytes == 0 {
 		config.ResultBytes = 4 << 20
 	}
+	if config.ReaderChunkRows == 0 {
+		config.ReaderChunkRows = 256
+	}
+	if config.ReaderChunkBytes == 0 {
+		config.ReaderChunkBytes = 1 << 20
+	}
+	if config.ReaderTotalRows == 0 {
+		config.ReaderTotalRows = 1_000_000
+	}
+	if config.ReaderTotalBytes == 0 {
+		config.ReaderTotalBytes = 1 << 30
+	}
+	if config.ReaderLifetime == 0 {
+		config.ReaderLifetime = 5 * time.Minute
+	}
 	return config
 }
 
@@ -117,8 +154,8 @@ func validText(value string, limit int, empty bool) bool {
 }
 
 func validate(config settings) error {
-	if config.Path != "" && (!filepath.IsAbs(config.Path) || filepath.Clean(config.Path) != config.Path ||
-		!validText(config.Path, 4096, false) || strings.ContainsAny(config.Path, "?#%\r\n")) {
+	if config.Path != "" && (!validText(config.Path, 4096, false) || !filepath.IsAbs(config.Path) ||
+		filepath.Clean(config.Path) != config.Path || strings.ContainsAny(config.Path, "?#%\r\n")) {
 		return failure(ErrInput, "path")
 	}
 	if config.Connections < 1 || config.Connections > 8 || config.QueuedCalls < 0 || config.QueuedCalls > 64 ||
@@ -126,6 +163,11 @@ func validate(config settings) error {
 		config.MaxRows < 1 || config.MaxRows > 65536 || config.MaxBatchRows < 1 || config.MaxBatchRows > 65536 ||
 		config.InputBytes < 1024 || config.InputBytes > 64<<20 || config.ResultBytes < 1024 || config.ResultBytes > 64<<20 {
 		return failure(ErrInput, "options")
+	}
+	if config.ReaderChunkRows < 1 || config.ReaderChunkRows > 8192 || config.ReaderChunkBytes < 1024 || config.ReaderChunkBytes > 64<<20 ||
+		config.ReaderTotalRows < 1 || config.ReaderTotalRows > 1_000_000_000 || config.ReaderTotalBytes < 1024 || config.ReaderTotalBytes > 1<<40 ||
+		config.ReaderLifetime < time.Millisecond || config.ReaderLifetime > time.Hour {
+		return failure(ErrInput, "reader-options")
 	}
 	for _, duration := range []time.Duration{config.Timeout, config.CleanupTimeout} {
 		if duration < time.Millisecond || duration > 5*time.Minute {
@@ -152,9 +194,16 @@ func (config settings) reservation() int64 {
 func (config settings) evidenceReservation() int64 {
 	return config.InputBytes + config.ResultBytes + 128<<10
 }
+func (config settings) readerReservation() int64 {
+	return 2*config.InputBytes + 3*config.ReaderChunkBytes + config.readerEvidenceReservation() + 256<<10
+}
+func (config settings) readerEvidenceReservation() int64 {
+	return config.ReaderChunkBytes + 128<<10
+}
 func (config settings) limits() resource.Limits {
+	work := max(config.reservation(), config.readerReservation())
 	return resource.Limits{Active: config.Connections, Queued: config.QueuedCalls,
-		Bytes: int64(config.Connections) * config.reservation(), QueuedBytes: int64(config.QueuedCalls) * config.reservation(), MaxLeases: 1}
+		Bytes: int64(config.Connections) * work, QueuedBytes: int64(config.QueuedCalls) * work, MaxLeases: 2}
 }
 
 // LimitsV1 returns the admission policy for defaulted, unoverridden options.
@@ -184,6 +233,10 @@ func (database *Database) Profile() compatibility.Profile {
 			{Name: "timeout-ns", Value: strconv.FormatInt(int64(config.Timeout), 10)}, {Name: "cleanup-timeout-ns", Value: strconv.FormatInt(int64(config.CleanupTimeout), 10)},
 			{Name: "max-rows", Value: strconv.Itoa(config.MaxRows)}, {Name: "max-batch-rows", Value: strconv.Itoa(config.MaxBatchRows)},
 			{Name: "input-bytes", Value: strconv.FormatInt(config.InputBytes, 10)}, {Name: "result-bytes", Value: strconv.FormatInt(config.ResultBytes, 10)},
+			{Name: "reader-chunk-rows", Value: strconv.Itoa(config.ReaderChunkRows)}, {Name: "reader-chunk-bytes", Value: strconv.FormatInt(config.ReaderChunkBytes, 10)},
+			{Name: "reader-total-rows", Value: strconv.FormatInt(config.ReaderTotalRows, 10)}, {Name: "reader-total-bytes", Value: strconv.FormatInt(config.ReaderTotalBytes, 10)},
+			{Name: "reader-lifetime-ns", Value: strconv.FormatInt(int64(config.ReaderLifetime), 10)},
+			{Name: "reader-mode", Value: "materialized-native-incremental-go-v1"},
 			{Name: "external-access", Value: "disabled"}, {Name: "spill", Value: "disabled"}, {Name: "extensions", Value: "disabled"},
 			{Name: "arrow-api", Value: "unsupported"}, {Name: "iceberg-extension", Value: "unselected"},
 		}}

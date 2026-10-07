@@ -24,6 +24,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,6 +101,13 @@ func TestScalarRejectionAndTimestampPrecision(t *testing.T) {
 	for _, decimal := range []sdk.Decimal{
 		{Width: 4, Scale: 2, Value: big.NewInt(10000)}, {Width: 4, Scale: 1, Value: big.NewInt(1)},
 	} {
+		if decimal.Value.Int64() == 10000 {
+			receipt, err := fixture.database.Run(deadline(t), deadline(t), fixture.id(), Request{Mode: Append, Table: "gh40_decimal", Rows: [][]any{{decimal}}})
+			if receipt != nil || !errors.Is(err, ErrInput) || fixture.inbox.Usage().Outstanding != 0 {
+				t.Fatal("malformed decimal precision reached native work")
+			}
+			continue
+		}
 		result := fixture.run(t, Request{Mode: Append, Table: "gh40_decimal", Rows: [][]any{{decimal}}})
 		if !errors.Is(result.Err(), ErrUnsupported) {
 			t.Fatal("decimal overflow/scale coercion accepted")
@@ -108,6 +116,30 @@ func TestScalarRejectionAndTimestampPrecision(t *testing.T) {
 	requireOK(t, fixture.run(t, Request{Mode: Append, Table: "gh40_decimal", Rows: [][]any{{sdk.Decimal{Width: 4, Scale: 2, Value: big.NewInt(-9999)}}}}))
 	if got := fixture.rows(t, "SELECT value FROM gh40_decimal")[0][0].(sdk.Decimal); got.Value.Int64() != -9999 {
 		t.Fatal("negative decimal changed")
+	}
+}
+
+func TestDecimalDeclaredPrecisionBeforeTextBinding(t *testing.T) {
+	fixture := openFixture(t, OptionsV1{})
+	for width := uint8(1); width <= 38; width++ {
+		bound := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(width)), nil)
+		for _, invalid := range []*big.Int{bound, new(big.Int).Neg(bound)} {
+			value := sdk.Decimal{Width: width, Scale: width, Value: invalid}
+			if _, err := scalarSize(value); !errors.Is(err, ErrInput) {
+				t.Fatal("declared decimal precision ignored")
+			}
+			receipt, err := fixture.database.Run(deadline(t), deadline(t), fixture.id(), Request{Mode: Query, SQL: "SELECT ?::VARCHAR", Args: []any{value}})
+			if receipt != nil || !errors.Is(err, ErrInput) || fixture.inbox.Usage().Outstanding != 0 {
+				t.Fatal("malformed decimal reached native text binding")
+			}
+		}
+		for _, valid := range []*big.Int{new(big.Int).Sub(bound, big.NewInt(1)), new(big.Int).Add(new(big.Int).Neg(bound), big.NewInt(1))} {
+			value := sdk.Decimal{Width: width, Scale: width, Value: valid}
+			progress := requireOK(t, fixture.run(t, Request{Mode: Query, SQL: "SELECT ?::VARCHAR", Args: []any{value}}))
+			if progress.Steps[0].Rows[0][0] != value.String() {
+				t.Fatal("valid decimal boundary changed during exact text binding")
+			}
+		}
 	}
 }
 
@@ -120,6 +152,28 @@ func FuzzScalarInputBounds(f *testing.F) {
 		err := validateRequests(config, []Request{request})
 		if len(value) > 1024 && err == nil {
 			t.Fatal("oversized input accepted")
+		}
+	})
+}
+
+func FuzzDecimalPrecision(f *testing.F) {
+	f.Add(uint8(1), uint8(0), "10")
+	f.Add(uint8(1), uint8(1), "-9")
+	f.Add(uint8(38), uint8(9), "99999999999999999999999999999999999999")
+	f.Add(uint8(38), uint8(9), "100000000000000000000000000000000000000")
+	f.Fuzz(func(t *testing.T, width, scale uint8, text string) {
+		if len(text) > 128 {
+			return
+		}
+		integer, ok := new(big.Int).SetString(text, 10)
+		if !ok {
+			return
+		}
+		digits := len(strings.TrimPrefix(integer.String(), "-"))
+		valid := width >= 1 && width <= 38 && scale <= width && digits <= int(width)
+		_, err := scalarSize(sdk.Decimal{Width: width, Scale: scale, Value: integer})
+		if (err == nil) != valid {
+			t.Fatal("decimal precision and exact digit count disagree")
 		}
 	})
 }

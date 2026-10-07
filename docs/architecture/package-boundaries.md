@@ -182,6 +182,15 @@ producer shutdown and callback completion remain separate owned obligations;
 metadata and required evidence do not inherit business publication meaning.
 The optional `otelbridge` owns only explicit header/context translation.
 
+SQL-engine Adapters own their common public contracts at
+`adapters/sqlengine/v1`, separately from the database contracts used by
+PostgreSQL/MySQL. This boundary contains source/operation observations and
+source/work/evidence budgets, not aliases of the database layer or a universal
+SQL execution interface. Embedded-engine, coordinator-query and Doris load/cursor
+semantics remain provider-specific. Existing public operation/resource mechanisms
+still own admission, evidence and generation lifetimes; the category package
+introduces no competing runtime or new error domain.
+
 A package/file review must answer:
 
 - Can a reader infer its actual purpose and find one behavior without hopping

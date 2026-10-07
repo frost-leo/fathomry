@@ -43,12 +43,17 @@ type owner struct {
 // time out. Each admitted call owns a fresh connection to this database; there is
 // no database/sql retry loop, ambient SQL pool, or provider background worker.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: validate},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: 1, Layers: layers})
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, config settings) (resource.Resource[Source], error) {
+	return prepared.Select(), nil
+}
+
+// Select constructs a selection from these exact, already validated settings.
+// Native I/O occurs only when the selection is assembled.
+func (prepared Preparation) Select() resource.Selection[Source] {
+	return resource.Select(prepared.prepared, func(ctx context.Context, config settings) (resource.Resource[Source], error) {
 		work, cancel, err := (invocation.Budget{Limit: config.Timeout}).Context(ctx, invocation.Establish)
 		if err != nil {
 			return resource.Resource[Source]{}, err
@@ -62,7 +67,7 @@ func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Sou
 		initErr := owned.initialize(work)
 		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: owned}, Release: owned.close},
 			joined(ErrNative, "open", initErr, work.Err(), context.Cause(work))
-	}), nil
+	})
 }
 
 func (owned *owner) initialize(ctx context.Context) (err error) {
@@ -123,8 +128,9 @@ func Bind(assembly *resource.Assembly, selection resource.Selection[Source], inb
 		return nil, failure(ErrInput, "bind")
 	}
 	config, limits := source.owner.config, access.Limits()
-	if limits.Active > config.Connections || limits.Bytes < config.reservation() ||
-		limits.Queued > config.QueuedCalls || limits.Queued > 0 && limits.QueuedBytes < config.reservation() {
+	work := max(config.reservation(), config.readerReservation())
+	if limits.Active > config.Connections || limits.Bytes < work || limits.MaxLeases < 2 ||
+		limits.Queued > config.QueuedCalls || limits.Queued > 0 && limits.QueuedBytes < work {
 		return nil, failure(ErrInput, "limits")
 	}
 	return &Database{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil

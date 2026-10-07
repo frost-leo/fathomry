@@ -63,6 +63,7 @@ type Step struct {
 type Progress struct {
 	private
 	Steps             []Step
+	Reader            *ReadProgress
 	Transaction       bool
 	Began             bool
 	CommitAttempted   bool
@@ -70,6 +71,22 @@ type Progress struct {
 	RollbackAttempted bool
 	RolledBack        bool
 	ConnectionClosed  bool
+}
+
+// ReadProgress is one reader observation, not a history. Chunk is the accepted
+// Next sequence (zero for setup). Offset is the zero-based first row of that
+// delivery; Rows/Bytes describe only that delivery, including its schema bytes.
+// TotalBytes counts the schema once and all delivered rows. Closed confirms
+// native result, statement and connection destruction. Whole-result EOF and
+// limit state remain in Steps[0].Complete/Limited; closing does not imply EOF.
+type ReadProgress struct {
+	Chunk      uint64
+	Offset     int64
+	Rows       int
+	Bytes      int64
+	TotalRows  int64
+	TotalBytes int64
+	Closed     bool
 }
 
 // Result owns immutable outcome data shared by receipt and independent inbox.
@@ -86,6 +103,10 @@ func (result Result) Snapshot() Progress {
 		return Progress{}
 	}
 	copied := *result.progress
+	if copied.Reader != nil {
+		reader := *copied.Reader
+		copied.Reader = &reader
+	}
 	copied.Steps = slices.Clone(copied.Steps)
 	for index := range copied.Steps {
 		step := &copied.Steps[index]

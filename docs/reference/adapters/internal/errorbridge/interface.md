@@ -27,7 +27,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 ## Responsibilities
 
-The five SQL/object-storage/broker/Redis providers share bounded native-kind
+SQL/SQL-engine/object-storage/broker/Redis providers share bounded native-kind
 inspection and safe forwarding. Providers retain their own classification tables,
 definitions, defaults and native-error precedence. This package has no SDK client,
 I/O, goroutine, global registry, lifecycle authority or business retry/effect policy.
