@@ -49,6 +49,9 @@ type Column struct {
 // DataCopy returns a JSON array of rows: numeric tokens stay exact, decimals and
 // temporal values stay strings, binary stays base64, and nested/null shape is
 // preserved. It does not apply Go local-timezone or float64 conversions.
+// QueryPages transfers provisional pages (Complete false), then publishes a
+// summary-only terminal Result whose DataCopy is [] and Rows is the transferred
+// total. A received page never proves successful exhaustion by itself.
 type Result struct {
 	private
 	data *resultData
@@ -66,6 +69,8 @@ type resultData struct {
 	wireBytes          int64
 	updateCount        *int64
 	rows               int
+	offset             int
+	sequence           uint64
 	columns            []Column
 	json               []byte
 }
@@ -131,13 +136,33 @@ func (r Result) WireBytes() int64 {
 	return r.data.wireBytes
 }
 
-// Rows counts retained query rows. Execute and Insert discard result rows while
+// Rows counts retained finite rows, transferred rows in a reader's terminal
+// summary, or this page's rows in a provisional reader result.
+// Execute and Insert discard result rows while
 // still validating their bounds; this count is never their affected-row count.
 func (r Result) Rows() int {
 	if r.data == nil {
 		return 0
 	}
 	return r.data.rows
+}
+
+// Offset is the number of rows transferred before this provisional page.
+// Finite results and terminal reader summaries return zero.
+func (r Result) Offset() int {
+	if r.data == nil {
+		return 0
+	}
+	return r.data.offset
+}
+
+// Sequence is the one-based protocol page number of a provisional reader result.
+// Finite results and terminal reader summaries return zero.
+func (r Result) Sequence() uint64 {
+	if r.data == nil {
+		return 0
+	}
+	return r.data.sequence
 }
 
 // UpdateCount distinguishes absent from aggregate zero. It is never a per-row receipt.
@@ -157,8 +182,10 @@ func (r Result) DataCopy() []byte {
 	return slices.Clone(r.data.json)
 }
 
-// ColumnsCopy returns independent metadata and signature storage. Metadata can
-// be partial after a rejected page; an empty slice does not establish no result.
+// ColumnsCopy returns independent metadata and signature storage. Bounded first
+// metadata is retained even when contradictory/unsupported; Complete must be
+// checked before treating it as validated. Later rejected changes do not overwrite
+// previously accepted metadata. An empty slice does not establish no result.
 func (r Result) ColumnsCopy() []Column {
 	if r.data == nil {
 		return nil

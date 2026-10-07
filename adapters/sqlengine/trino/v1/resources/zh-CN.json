@@ -1,0 +1,97 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "database_trino",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.database_trino.invalid_input",
+      "source": "839729e02c1c0087b5343dda3b3f47095822b2fe8f7399998a1de1620697b3a3",
+      "forms": {
+        "other": "Trino 输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.unsupported_profile",
+      "source": "fe37819ec493cda53ed78d646609dca09af95d1dff518e61c3395d210debcd39",
+      "forms": {
+        "other": "不支持所请求的 Trino 能力。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.authority_refused",
+      "source": "5c1d11b2404faf1b2abf54ac631cb41ef839c0eb9de242f65faadbeced81df62",
+      "forms": {
+        "other": "Trino 端点或后续请求超出允许的访问范围。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.limit_exceeded",
+      "source": "81f046a9b473680f6cd6fdf207a014ca06d69ad18e4b6a1e9433d1b4beef486e",
+      "forms": {
+        "other": "超出 Trino 能力的限制。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.connection_failed",
+      "source": "fa62b6e23b207fbbca9b2685210c206a45ab3b099d95558e24f41b889cf0befc",
+      "forms": {
+        "other": "Trino 连接或就绪检查失败。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.protocol_failed",
+      "source": "c5f4393019bc566150f727bda98ab6bac556fdd9d1bfe43501ff55aab5a4e525",
+      "forms": {
+        "other": "Trino 协议响应违反受支持的协议约束。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.operation_failed",
+      "source": "605e0c6c8e1a1450fd746f9acc0d44f53f19c95f7f981c7e60d0d8217073443f",
+      "forms": {
+        "other": "Trino 操作失败；请检查其效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.invalid_state",
+      "source": "5558a6b190210991b484490c831327076443bfaec9e6fe3d109bd0f0dfa6c785",
+      "forms": {
+        "other": "Trino 句柄在当前状态下无法执行该操作。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.cleanup_failed",
+      "source": "03786c4f4b777f4c6e91dc9e39e4fccc39b00f5378ed0b693154719e68d8bfd0",
+      "forms": {
+        "other": "Trino 清理报告失败；清理完成状态需单独检查。"
+      }
+    },
+    {
+      "id": "fathomry.database_trino.runtime_serialization",
+      "source": "32c31c9084553db5c639db38c9fa4a952617dc617bf9ff9ccf1a5270fa1f1d23",
+      "forms": {
+        "other": "不支持 Trino 运行时值序列化。"
+      }
+    }
+  ]
+}

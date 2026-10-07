@@ -42,6 +42,7 @@ import (
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	duckdb "github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
+	trino "github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
 	sqlengine "github.com/frost-leo/fathomry/adapters/sqlengine/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/internal/conformance"
@@ -112,6 +113,14 @@ func TestPublicAdapterContracts(t *testing.T) {
 		if _, err := os.Stat(value.Path); !os.IsNotExist(err) {
 			t.Fatal("offline preparation or pre-admission rejection touched the native file", err)
 		}
+	})
+	t.Run("trino", func(t *testing.T) {
+		value := trino.Settings{Name: "contract", Endpoint: "http://127.0.0.1:1", Plaintext: true, User: canary}
+		checkPublicAdapter(t, value, trino.Validate, trino.Recommend,
+			func(value sqlengine.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[trino.Result]) trino.Dependencies {
+				return trino.Dependencies{Runtime: runtime, Evidence: inbox}
+			}, trino.Open, canary)
 	})
 }
 

@@ -36,11 +36,14 @@ operation. Client-side multi-row VALUES and server-side set operations are both
 available; there is no bulk-upload protocol, automatic chunking or transaction
 emulation.
 
-1. Supply explicit `OptionsV1` and optional authorized resource layers to `Select`.
+1. Supply explicit `OptionsV1` and optional authorized resource layers to `PrepareV1`.
    Version zero means configuration format 1, independently of SDK major 0,
    Trino server version, table format and deployment revision.
-2. Attach `resource.WithLimits(selection, LimitsV1(options))`. Overlays changing
-   budgets require matching **effective** limits, not the original defaults.
+2. Use the frozen preparation's `Select`, `Options`, `Budget` and `Limits` so
+   construction and offline recommendations consume the same effective values.
+   Defaults apply once before strict layers; explicit zero bounds reject.
+   `PrepareResolvedV1` validates typed resolved values without defaulting again.
+   The older Select/LimitsV1 routes remain, but LimitsV1 describes defaults only.
 3. Assemble with caller-owned initialization and cleanup contexts. Readiness
    executes `SELECT version()` through terminal protocol completion. Native
    `database/sql.Ping` performs no network request and is deliberately not used.
@@ -61,6 +64,13 @@ See [Go contracts](../../../../../../internal/sqlengine/trino/v0/doc.go) and
 The [shared integration standard](../../../../../architecture/sdk-integration.md)
 owns resource, invocation, fault and compatibility responsibilities.
 `internal/conformance` is used only by tests.
+
+Preparation checks the aggregate raw bytes of its seven text settings before
+canonicalization. Defaults already larger than the 1 MiB document ceiling are
+rejected without copying their payloads, preserving resource-owned identity,
+format and UTF-8 error precedence. Bounded defaults still use the original exact
+JSON-escaped size checks and layer rules; semantic defaults may be repaired by a
+valid later layer. This is not a new serializer, reservation formula or RSS cap.
 
 ## SQL and argument boundaries
 
@@ -88,7 +98,9 @@ non-nil recursively bounded slices. Nil byte slices mean SQL NULL; empty bytes
 mean empty VARBINARY. Native float arguments, maps, arbitrary pointers,
 driver.Valuer, named options, access tokens and progress callbacks are rejected.
 Use SQL constructors and CAST with string/positional parameters where necessary.
-All inputs remain borrowed and must not be mutated until the call returns.
+Finite inputs remain borrowed and must not be mutated until the call returns.
+`QueryPages` freezes admitted inputs before asynchronous use, including bounded
+numeric/string storage and fixed-offset time locations with identical SDK encoding.
 
 Parameters use native EXECUTE IMMEDIATE serialization, not header-based prepared
 statements or guaranteed server plan caching. Input and expanded SQL have byte
@@ -108,12 +120,59 @@ REAL/DOUBLE overflow, DECIMAL precision/scale, base64 and scalar MAP key/value
 encodings are checked. Date/time, interval, UUID, IP and JSON strings remain
 unparsed text rather than a second SQL type system. Structural case-aliased
 duplicate JSON fields reject, without folding case-sensitive user MAP keys.
+Textual types and structured signatures must agree semantically, including
+precision, scale, zones, nested types and row field names. Aliases, whitespace,
+default precision and unbounded varchar preserve legal canonical equivalents.
+Bounded first-page rejected metadata remains deliberately inspectable in failed
+results; it is not validated data. Later schema changes never replace accepted
+metadata or make an incomplete prefix complete.
 
-The official driver drains pages via native ExecContext for both operations.
+Repeated column declarations are revalidated before capturing or transferring
+that page's rows. Signature comparison preserves exact integer values, including
+64-bit differences that float64 would round together; JSON member order and
+whitespace remain insignificant. A malformed later LONG cannot be handed to a
+Reader as a valid provisional page merely because the SDK eventually rejects it.
+
+The official driver drains pages via native ExecContext for finite operations.
 The owned transport captures bounded direct data **before** native decoding.
 This preserves data returned in the initial POST, and avoids native Rows'
 datetime conversion. No live Rows reaches a consumer: an early limit/cancellation
 ends native work, while a slow consumer after return holds only its own copies.
+
+## Owned bounded complete-query consumption
+
+`QueryPages` returns an owned Reader and a pre-reserved terminal receipt. One
+bounded-lifetime worker drives the same native statement/transport. Next transfers
+one immutable exact protocol page, including initial rows and empty progress
+pages. An unbuffered transfer allows at most one untransferred page; there is no
+unbounded prefetch queue, page history, SQL rewriting/replay or durable nextUri.
+Pages expose Sequence and Offset and always remain provisional (`Complete=false`).
+
+Next's context limits its wait, not the query lifetime. Successful EOF follows
+actual native release and complete terminal evidence; failures return retained
+primary/cleanup causes rather than EOF. Close cancels the query and waits; after
+a wait timeout, the same Reader retains cleanup authority. Absent consumers
+expire under ReadTimeout. Cleanup uses the original explicit cleanup context and
+terminal reservations, never a new admission/evidence slot. The root owns source
+borrowing until real native release. Its terminal result carries aggregate rows,
+schema, effect/protocol/cancellation facts and no accumulated row payload.
+
+Separate MaxReadRows/MaxReadPages/MaxReadWireBytes/ReadTimeout bounds default to
+1,048,576 rows / 4,096 pages / 256 MiB / one minute. Maxima are 16,777,216 rows,
+65,536 pages, 4 GiB and 30 minutes. MaxPageBytes remains the per-page bound;
+the old finite MaxResultBytes ceiling remains 32 MiB. Authoritative budgets
+include input freezing, page/SDK/JSON copies, metadata, terminal evidence and
+source readiness, not just idle source configuration. These are declared
+allowances, not process/server RSS guarantees or a durable staging store.
+
+The selected mechanism is pull transfer. Controlled same-data/failure experiments
+also exercised bounded local staging, but it offered no required correctness or
+memory advantage and added storage quota/reader/cleanup ownership. Provisional
+technical pages must be staged by callers before ordinary completed-range business
+publication. [Reader controls](../../../../../../internal/sqlengine/trino/v0/reader_test.go)
+exercise larger-than-32-MiB output, backpressure, errors/limits, abandonment and
+retained cleanup. Independent and Framework callers use the separate
+[public Adapter](../../../../adapters/sqlengine/trino/v1/interface.md).
 
 | Fact | What it establishes |
 | --- | --- |

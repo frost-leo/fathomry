@@ -88,6 +88,7 @@ overlays. For overlaid settings, consume resolved preparation metadata.
 | Kafka | `BudgetV1`, including persistent clients and the defaulted record bound |
 | Redis | Frozen `Prepared.Metadata`, after explicit-zero overlays resolve |
 | DuckDB | Frozen `PrepareV1` / `PrepareResolvedV1` metadata, including finite/reader and source reservations |
+| Trino | Frozen `PrepareV1` / `PrepareResolvedV1` metadata, including readiness, finite/reader and source reservations |
 
 This table covers data providers, not every Adapter role. Configuration
 providers retain documented fixed public route envelopes and selected native
@@ -153,6 +154,7 @@ give all methods one signature.
 | Kafka | Open observes metadata, not producer/group readiness. Async production, transactions, direct reads and classic groups retain distinct outcomes; checkpoints are not business acknowledgements. |
 | Redis | Construction may start topology/cache background work; Open is not readiness. Cache/messaging views share ownership but retain separate error domains, including mixed batches and lifecycle roots. |
 | DuckDB | Open initializes a real embedded engine and may create the authorized database/WAL. Incremental Go consumption retains native materialization; Appender flush, transaction commit and complete result decoding remain distinct facts. |
+| Trino | Open executes coordinator readiness, not a connector-permission proof. Query/Execute/Insert retain distinct result/effect facts; streamed pages remain provisional until terminal complete-query evidence. Canceling a page waiter does not cancel its owning query. |
 | Viper | New only binds public dependencies; per-call Load acquires explicit files/readers. Native weak decoding/live environment differ from strict preparation. Borrowed readers remain caller-owned. |
 | Nacos | Open acquires local ownership, not readiness. A complete capture/subscription retains one generation; already-acquired observation batches are not refetched on Next. |
 

@@ -99,7 +99,7 @@ func TestNestedTypesShapeAndStableColumns(t *testing.T) {
 		map[string]any{"kind": "NAMED_TYPE", "value": map[string]any{"fieldName": map[string]any{"name": "y"},
 			"typeSignature": map[string]any{"rawType": "map", "arguments": []any{keyType, typed("bigint")}}}},
 	}}
-	columns := []any{map[string]any{"name": "nested", "type": "row(x bigint,y map(varchar,bigint))", "typeSignature": sig}}
+	columns := []any{map[string]any{"name": "nested", "type": "row(x bigint,y map(varchar(100),bigint))", "typeSignature": sig}}
 	for _, good := range []bool{true, false} {
 		t.Run(fmt.Sprint(good), func(t *testing.T) {
 			e := newExchange(s, true, true, nil)
@@ -124,6 +124,55 @@ func TestNestedTypesShapeAndStableColumns(t *testing.T) {
 		t.Fatal("changed schema accepted")
 	}
 }
+
+func TestRepeatedSignatureRetainsExactIntegerComparison(t *testing.T) {
+	// These deliberately oversized varchar parameters exercise an accepted code
+	// path, not a legal service type or a new qualified Trino length range.
+	firstSignature := `{"rawType":"varchar","arguments":[{"kind":"LONG","value":9007199254740992}]}`
+	for _, check := range []struct {
+		name, signature string
+		valid           bool
+	}{
+		{"stable", firstSignature, true},
+		{"reordered", ` {"arguments":[{"value":9007199254740992,"kind":"LONG"}],"rawType":"varchar"} `, true},
+		{"changed-exact-integer", `{"rawType":"varchar","arguments":[{"kind":"LONG","value":9007199254740993}]}`, false},
+	} {
+		t.Run(check.name, func(t *testing.T) {
+			config := defaults(OptionsV1{Endpoint: "http://localhost", Plaintext: true})
+			exchange := newExchange(config, true, true, nil)
+			page := func(signature string, next bool) []byte {
+				value := map[string]any{"id": "exact_signature", "data": [][]any{{nil}}, "columns": []any{
+					map[string]any{"name": "value", "type": "varchar(9007199254740992)", "typeSignature": json.RawMessage(signature)},
+				}}
+				if next {
+					value["nextUri"] = config.Endpoint + "/v1/statement/executing/exact_signature/slug/1"
+				}
+				body, err := json.Marshal(value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return body
+			}
+			if err := exchange.page(page(firstSignature, true)); err != nil {
+				t.Fatal("initial accepted-code-path control failed", err)
+			}
+			err := exchange.page(page(check.signature, false))
+			wantRows := 1
+			if check.valid {
+				wantRows = 2
+				if err != nil {
+					t.Fatal("stable equivalent metadata was refused", err)
+				}
+			} else if !errors.Is(err, ErrProtocol) {
+				t.Error("later exact integer change was rounded away", err)
+			}
+			if exchange.data.rows != wantRows || string(exchange.data.columns[0].Signature) != firstSignature {
+				t.Error("repeated metadata captured invalid rows or replaced original metadata")
+			}
+		})
+	}
+}
+
 func FuzzDirectPage(f *testing.F) {
 	for _, seed := range []string{"{\"id\":\"q\"}", "{\"id\":\"q\",\"data\":[[]]}", "{\"id\":\"q\",\"error\":{}}", "{\"id\":\"q\",\"data\":{\"encoding\":\"json\",\"segments\":[]}}"} {
 		f.Add([]byte(seed))
@@ -137,6 +186,36 @@ func FuzzDirectPage(f *testing.F) {
 		_ = e.page(body)
 		if len(e.data.json) > s.MaxResultBytes || e.data.rows > s.MaxRows {
 			t.Fatal("unbounded result")
+		}
+	})
+}
+
+func FuzzRepeatedSignatureLONG(f *testing.F) {
+	for _, value := range []string{"5", "5.0", "5e0", "-0", "null", "9007199254740993", "1e999999", `"5"`, `{"value":5}`} {
+		f.Add(value)
+	}
+	f.Fuzz(func(t *testing.T, value string) {
+		if len(value) > 4096 || !json.Valid([]byte(value)) {
+			return
+		}
+		config := defaults(OptionsV1{Endpoint: "http://localhost", Plaintext: true})
+		exchange := newExchange(config, true, true, nil)
+		page := func(value, continuation string) []byte {
+			return []byte(`{"id":"repeated_fuzz","columns":[{"name":"value","type":"decimal(5,2)","typeSignature":{"rawType":"decimal","arguments":[{"kind":"LONG","value":` + value + `},{"kind":"LONG","value":2}]}}],"data":[[null]]` + continuation + `}`)
+		}
+		if err := exchange.page(page("5", `,"nextUri":"http://localhost/v1/statement/executing/repeated_fuzz/slug/1"`)); err != nil {
+			t.Fatal(err)
+		}
+		err := exchange.page(page(value, ""))
+		if err != nil {
+			if exchange.data.rows != 1 {
+				t.Fatal("rejected metadata appended unvalidated rows")
+			}
+			return
+		}
+		var number int64
+		if json.Unmarshal([]byte(value), &number) != nil || number != 5 || exchange.data.rows != 2 {
+			t.Fatal("repeated LONG metadata bypassed exact integer validation")
 		}
 	})
 }

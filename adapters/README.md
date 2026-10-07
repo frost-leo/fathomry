@@ -52,6 +52,7 @@ automatically own or construct the packages below it.
 | `database/postgres/v1` | data-provider | [PostgreSQL ownership, SQL, preparation, transactions and savepoints](../docs/reference/adapters/database/postgres/v1/interface.md) |
 | `database/mysql/v1` | data-provider | [MySQL ownership, SQL, preparation and provider-specific transactions](../docs/reference/adapters/database/mysql/v1/interface.md) |
 | `sqlengine/duckdb/v1` | data-provider | [Embedded SQL, parameter batches, Appender, transactions and bounded incremental results](../docs/reference/adapters/sqlengine/duckdb/v1/interface.md) |
+| `sqlengine/trino/v1` | data-provider | [Coordinator Query/Execute/Insert, provisional page consumption and independent effect evidence](../docs/reference/adapters/sqlengine/trino/v1/interface.md) |
 | `objectstore/minio/v1` | data-provider | [Objects, multipart, versions/listing and restricted delegation](../docs/reference/adapters/objectstore/minio/v1/interface.md) |
 | `broker/kafka/v1` | data-provider | [Production, direct/classic-group consumption and checkpoints](../docs/reference/adapters/broker/kafka/v1/interface.md) |
 | `cache/redis/v1` | data-provider | [Commands, sessions, Streams/subscriptions and supported experimental modes](../docs/reference/adapters/cache/redis/v1/interface.md) |
@@ -144,6 +145,9 @@ production/consumers/groups, Redis sessions/subscriptions.
 DuckDB retains embedded-engine ownership, exact values, Appender/transaction
 effects and an owned reader over native materialization; bounded Go delivery
 does not become a hard RSS guarantee.
+Trino retains coordinator readiness, exact direct JSON, single-statement Insert,
+provisional page transfer and independent terminal/cleanup evidence; a page is
+not a completed business range or a durable resume token.
 
 Redis additionally has real `preparation.go`, `credentials.go`,
 `logging.go` and `profile.go` responsibilities. Do not manufacture empty

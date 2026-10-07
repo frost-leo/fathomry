@@ -38,64 +38,81 @@ import (
 // RootCAPEM replaces system roots when supplied. No ambient proxy or SDK DSN is used.
 // Writes and Maintenance are coarse capability gates, NOT a SQL authorization
 // sandbox. Composition must supply authorized SQL and server-side privileges.
+// Numeric bounds and durations default only when zero in these typed options;
+// explicit zero overrides reject. MaxReadRows/Pages/WireBytes and ReadTimeout
+// govern the entire QueryPages lifetime, including waiting for a consumer, while
+// MaxRows/Pages/WireBytes and Timeout retain their finite-operation meanings.
+// Both paths share MaxPageBytes and bound initial metadata by MaxResultBytes.
 type OptionsV1 struct {
 	private
-	Name           string
-	Version        uint32
-	Endpoint       string
-	User           string
-	Password       string
-	BearerToken    string
-	RootCAPEM      string
-	Plaintext      bool
-	Catalog        string
-	Schema         string
-	Writes         bool
-	Maintenance    bool
-	MaxActive      int
-	MaxSQLBytes    int
-	MaxParameters  int
-	MaxRows        int
-	MaxColumns     int
-	MaxPageBytes   int
-	MaxResultBytes int
-	MaxPages       int
-	MaxWireBytes   int64
-	Timeout        time.Duration
-	CleanupTimeout time.Duration
+	Name             string
+	Version          uint32
+	Endpoint         string
+	User             string
+	Password         string
+	BearerToken      string
+	RootCAPEM        string
+	Plaintext        bool
+	Catalog          string
+	Schema           string
+	Writes           bool
+	Maintenance      bool
+	MaxActive        int
+	MaxSQLBytes      int
+	MaxParameters    int
+	MaxRows          int
+	MaxColumns       int
+	MaxPageBytes     int
+	MaxResultBytes   int
+	MaxPages         int
+	MaxWireBytes     int64
+	MaxReadRows      int
+	MaxReadPages     int
+	MaxReadWireBytes int64
+	ReadTimeout      time.Duration
+	Timeout          time.Duration
+	CleanupTimeout   time.Duration
 }
 
 type settings struct {
-	Endpoint       string        `json:"endpoint"`
-	User           string        `json:"user"`
-	Password       string        `json:"password"`
-	BearerToken    string        `json:"bearer_token"`
-	RootCAPEM      string        `json:"root_ca_pem"`
-	Plaintext      bool          `json:"plaintext"`
-	Catalog        string        `json:"catalog"`
-	Schema         string        `json:"schema"`
-	Writes         bool          `json:"writes"`
-	Maintenance    bool          `json:"maintenance"`
-	MaxActive      int           `json:"max_active"`
-	MaxSQLBytes    int           `json:"max_sql_bytes"`
-	MaxParameters  int           `json:"max_parameters"`
-	MaxRows        int           `json:"max_rows"`
-	MaxColumns     int           `json:"max_columns"`
-	MaxPageBytes   int           `json:"max_page_bytes"`
-	MaxResultBytes int           `json:"max_result_bytes"`
-	MaxPages       int           `json:"max_pages"`
-	MaxWireBytes   int64         `json:"max_wire_bytes"`
-	Timeout        time.Duration `json:"timeout_ns"`
-	CleanupTimeout time.Duration `json:"cleanup_timeout_ns"`
+	Endpoint         string        `json:"endpoint"`
+	User             string        `json:"user"`
+	Password         string        `json:"password"`
+	BearerToken      string        `json:"bearer_token"`
+	RootCAPEM        string        `json:"root_ca_pem"`
+	Plaintext        bool          `json:"plaintext"`
+	Catalog          string        `json:"catalog"`
+	Schema           string        `json:"schema"`
+	Writes           bool          `json:"writes"`
+	Maintenance      bool          `json:"maintenance"`
+	MaxActive        int           `json:"max_active"`
+	MaxSQLBytes      int           `json:"max_sql_bytes"`
+	MaxParameters    int           `json:"max_parameters"`
+	MaxRows          int           `json:"max_rows"`
+	MaxColumns       int           `json:"max_columns"`
+	MaxPageBytes     int           `json:"max_page_bytes"`
+	MaxResultBytes   int           `json:"max_result_bytes"`
+	MaxPages         int           `json:"max_pages"`
+	MaxWireBytes     int64         `json:"max_wire_bytes"`
+	MaxReadRows      int           `json:"max_read_rows"`
+	MaxReadPages     int           `json:"max_read_pages"`
+	MaxReadWireBytes int64         `json:"max_read_wire_bytes"`
+	ReadTimeout      time.Duration `json:"read_timeout_ns"`
+	Timeout          time.Duration `json:"timeout_ns"`
+	CleanupTimeout   time.Duration `json:"cleanup_timeout_ns"`
 }
 
-func defaults(o OptionsV1) settings {
-	s := settings{Endpoint: o.Endpoint, User: o.User, Password: o.Password, BearerToken: o.BearerToken,
+func inputSettings(o OptionsV1) settings {
+	return settings{Endpoint: o.Endpoint, User: o.User, Password: o.Password, BearerToken: o.BearerToken,
 		RootCAPEM: o.RootCAPEM, Plaintext: o.Plaintext, Catalog: o.Catalog, Schema: o.Schema,
 		Writes: o.Writes, Maintenance: o.Maintenance, MaxActive: o.MaxActive, MaxSQLBytes: o.MaxSQLBytes,
 		MaxParameters: o.MaxParameters, MaxRows: o.MaxRows, MaxColumns: o.MaxColumns,
 		MaxPageBytes: o.MaxPageBytes, MaxResultBytes: o.MaxResultBytes, MaxPages: o.MaxPages,
-		MaxWireBytes: o.MaxWireBytes, Timeout: o.Timeout, CleanupTimeout: o.CleanupTimeout}
+		MaxWireBytes: o.MaxWireBytes, Timeout: o.Timeout, CleanupTimeout: o.CleanupTimeout,
+		MaxReadRows: o.MaxReadRows, MaxReadPages: o.MaxReadPages, MaxReadWireBytes: o.MaxReadWireBytes, ReadTimeout: o.ReadTimeout}
+}
+func defaults(o OptionsV1) settings {
+	s := inputSettings(o)
 	if s.MaxActive == 0 {
 		s.MaxActive = 2
 	}
@@ -128,6 +145,18 @@ func defaults(o OptionsV1) settings {
 	}
 	if s.CleanupTimeout == 0 {
 		s.CleanupTimeout = 5 * time.Second
+	}
+	if s.MaxReadRows == 0 {
+		s.MaxReadRows = 1 << 20
+	}
+	if s.MaxReadPages == 0 {
+		s.MaxReadPages = 4096
+	}
+	if s.MaxReadWireBytes == 0 {
+		s.MaxReadWireBytes = 256 << 20
+	}
+	if s.ReadTimeout == 0 {
+		s.ReadTimeout = time.Minute
 	}
 	return s
 }
@@ -236,6 +265,9 @@ func validate(s settings) error {
 		s.MaxRows < 1 || s.MaxRows > 1<<20 || s.MaxColumns < 1 || s.MaxColumns > 1024 ||
 		s.MaxPageBytes < 128 || s.MaxPageBytes > 8<<20 || s.MaxResultBytes < 128 || s.MaxResultBytes > 32<<20 ||
 		s.MaxPages < 1 || s.MaxPages > 4096 || s.MaxWireBytes < int64(s.MaxPageBytes) || s.MaxWireBytes > 256<<20 ||
+		s.MaxReadRows < 1 || s.MaxReadRows > 1<<24 || s.MaxReadPages < 1 || s.MaxReadPages > 65536 ||
+		s.MaxReadWireBytes < int64(s.MaxPageBytes) || s.MaxReadWireBytes > 4<<30 ||
+		s.ReadTimeout < time.Millisecond || s.ReadTimeout > 30*time.Minute ||
 		s.Timeout < time.Millisecond || s.Timeout > 30*time.Minute ||
 		s.CleanupTimeout < time.Millisecond || s.CleanupTimeout > time.Minute {
 		return failure(ErrInput, "limits")
@@ -243,10 +275,22 @@ func validate(s settings) error {
 	return nil
 }
 func (s settings) reservation() int64 {
-	return int64(64*s.MaxPageBytes + 3*s.MaxResultBytes + 16*s.MaxSQLBytes + 65536)
+	return 64*int64(s.MaxPageBytes) + 3*int64(s.MaxResultBytes) + 16*int64(s.MaxSQLBytes) + 65536
 }
 func (s settings) evidenceBytes() int64 {
-	return int64(s.MaxResultBytes + 8*s.MaxPageBytes + 65536)
+	return int64(s.MaxResultBytes) + 8*int64(s.MaxPageBytes) + 65536
+}
+
+func (s settings) metadataBytes() int64 {
+	return min(int64(s.MaxResultBytes), int64(s.MaxPageBytes)+64*int64(s.MaxColumns)+2)
+}
+
+func (s settings) readerReservation() int64 {
+	return 64*int64(s.MaxPageBytes) + 3*s.metadataBytes() + 16*int64(s.MaxSQLBytes) + 65536
+}
+
+func (s settings) readerEvidenceBytes() int64 {
+	return s.metadataBytes() + 8*int64(s.MaxPageBytes) + 65536
 }
 
 // LimitsV1 supplies zero-queue admission for the defaulted options. These are
@@ -254,5 +298,5 @@ func (s settings) evidenceBytes() int64 {
 // effective limits; aliases inherit one authoritative resource's allowance.
 func LimitsV1(options OptionsV1) resource.Limits {
 	s := defaults(options)
-	return resource.Limits{Active: s.MaxActive, Bytes: int64(s.MaxActive) * s.reservation(), MaxLeases: 1}
+	return resource.Limits{Active: s.MaxActive, Bytes: int64(s.MaxActive) * max(s.reservation(), s.readerReservation()), MaxLeases: 1}
 }
