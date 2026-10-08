@@ -150,6 +150,7 @@ The authoritative first-party manifest is
 | 0x181 | fathomry / messaging_redis | [Redis messaging and mixed-command attribution](../../adapters/cache/redis/v1/interface.md) |
 | 0x200 | fathomry / http_nethttp | [Standard HTTP requests, streams and direct-connection ownership](../../adapters/httpclient/nethttp/v1/interface.md) |
 | 0x201 | fathomry / http_tlsclient | [Native-profile HTTP, racing, streams and measured bandwidth](../../adapters/httpclient/tlsclient/v1/interface.md) |
+| 0x202 | fathomry / http_surf | [Surf protocol, incremental upload and response ownership](../../adapters/httpclient/surf/v1/interface.md) |
 
 Unlisted first-party facilities cannot be used by definitions. Future modules add
 reviewed entries in their capability range. The previous unreleased settings slot

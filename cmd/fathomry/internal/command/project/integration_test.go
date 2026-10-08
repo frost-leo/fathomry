@@ -228,7 +228,7 @@ func TestVersionedProjects(t *testing.T) {
 				}
 				t.Logf("%s/%s: generated, tidied, vetted, race-tested and built from the isolated module cache; local programs executed, remote programs reject absent bootstrap", mode, encoding)
 				if mode == "local" && encoding == "yaml" {
-					for _, provider := range []string{"nethttp", "tlsclient"} {
+					for _, provider := range []string{"nethttp", "tlsclient", "surf"} {
 						for _, variant := range []string{"direct", "framework"} {
 							fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/httpclient", provider, "v1/testdata", variant, "main.go"))
 							if err != nil {
@@ -265,8 +265,9 @@ func TestVersionedProjects(t *testing.T) {
 
 func verifyHTTPReplacement(t testing.TB, directory string, environment []string) {
 	t.Helper()
+	verified := 0
 	for _, pin := range sdkPins() {
-		if pin.original != "github.com/bogdanfinn/tls-client" {
+		if pin.original != "github.com/bogdanfinn/tls-client" && pin.original != "github.com/enetx/surf" && pin.original != "github.com/enetx/http2" && pin.original != "github.com/enetx/http3" {
 			continue
 		}
 		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", pin.original)
@@ -276,7 +277,9 @@ func verifyHTTPReplacement(t testing.TB, directory string, environment []string)
 		if json.Unmarshal(raw, &selected) != nil || selected.Replace == nil || selected.Replace.Path != frameworkModule+"/"+pin.directory || selected.Replace.Version != pin.version || selected.Replace.Sum != pin.sum {
 			t.Fatal("actual downloaded HTTP replacement differs from qualified immutable bytes")
 		}
-		return
+		verified++
 	}
-	t.Fatal("HTTP replacement policy missing")
+	if verified != 4 {
+		t.Fatal("HTTP replacement policy missing")
+	}
 }

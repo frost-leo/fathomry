@@ -26,17 +26,23 @@ import (
 )
 
 type inputBody struct {
-	raw      io.ReadCloser
-	op       *operation
-	mu       sync.Mutex
-	once     sync.Once
-	closeErr error
-	count    int64
-	closed   bool
+	raw         io.ReadCloser
+	op          *operation
+	mu          sync.Mutex
+	once        sync.Once
+	closeErr    error
+	readErr     error
+	producerErr error
+	producer    func() error
+	count       int64
+	closed      bool
 }
 
 func (op *operation) input(raw io.ReadCloser) *inputBody {
-	body := &inputBody{raw: raw, op: op}
+	return op.trackInput(raw, nil)
+}
+func (op *operation) trackInput(raw io.ReadCloser, producer func() error) *inputBody {
+	body := &inputBody{raw: raw, op: op, producer: producer}
 	op.mu.Lock()
 	op.inputs = append(op.inputs, body)
 	closing := op.closing
@@ -71,15 +77,27 @@ func (body *inputBody) Read(buffer []byte) (int, error) {
 		count, err = raw.Read(buffer)
 		return err
 	})
+	if count < 0 || count > len(buffer) {
+		count = 0
+		err = failure(ErrIntegrity, "input-count")
+	}
 	body.mu.Lock()
+	if err != nil && err != io.EOF && body.readErr == nil {
+		body.readErr = err
+	}
 	body.count += int64(count)
 	tooLarge := body.count > body.op.client.owner.settings.MaxRequestBytes
+	if tooLarge {
+		limit := failure(ErrLimit, "request-body")
+		err = errors.Join(limit, err)
+		body.readErr = errors.Join(body.readErr, limit)
+	}
 	body.mu.Unlock()
 	body.op.mu.Lock()
 	body.op.data.sent += int64(count)
 	body.op.mu.Unlock()
 	if tooLarge {
-		return count, failure(ErrLimit, "request-body")
+		return min(count, int(max(left, 0))), err
 	}
 	return count, err
 }
@@ -90,6 +108,9 @@ func (body *inputBody) Close() error {
 		raw := body.raw
 		body.mu.Unlock()
 		body.closeErr = invoke("request-body-close", raw.Close)
+		if body.producer != nil {
+			body.producerErr = invoke("multipart-producer-evidence", body.producer)
+		}
 		body.mu.Lock()
 		body.raw = nil
 		body.mu.Unlock()

@@ -39,6 +39,7 @@ type RequestOptionsV1 struct {
 	Version        uint32
 	ProxyURL       *string
 	ConnectHeaders http.Header
+	Multipart      *Multipart
 }
 type routeChoice struct {
 	proxy   string
@@ -166,6 +167,9 @@ func headerFits(headers http.Header, maximum int64, ordered bool) bool {
 	return true
 }
 func validateRequest(ctx context.Context, request *http.Request, value settings) error {
+	if request != nil && request.URL != nil && value.Mode == H2C && request.URL.Scheme != "http" {
+		return failure(ErrInput, "h2c-origin")
+	}
 	if request == nil || request.URL == nil || request.RequestURI != "" || request.URL.User != nil ||
 		request.URL.Opaque != "" || request.URL.Hostname() == "" || request.URL.Fragment != "" ||
 		request.URL.Scheme != "http" && request.URL.Scheme != "https" || !token(request.Method) ||

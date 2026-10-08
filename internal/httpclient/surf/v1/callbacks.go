@@ -41,12 +41,6 @@ func guardCallbacks(native *NativeOptionsV1) {
 			return spec, err
 		}
 	}
-	if resolver := native.Resolver; resolver != nil && resolver.Dial != nil {
-		native.Resolver = &net.Resolver{
-			PreferGo: resolver.PreferGo, StrictErrors: resolver.StrictErrors,
-			Dial: guardedDial(resolver.Dial),
-		}
-	}
 }
 
 func guardedDial(dial func(context.Context, string, string) (net.Conn, error)) func(context.Context, string, string) (net.Conn, error) {

@@ -37,9 +37,15 @@ func (op *operation) prepare(request *sdk.Request) error {
 		request.GetRequest().Header = headers
 	}
 	for key, values := range op.client.owner.native.Headers {
+		if op.multipart != nil && multipartHeader(key) {
+			continue
+		}
 		headers[key] = append([]string(nil), values...)
 	}
 	for key, values := range op.original.Header {
+		if op.multipart != nil && multipartHeader(key) {
+			continue
+		}
 		headers[key] = append([]string(nil), values...)
 	}
 	for _, hook := range op.client.owner.native.RequestMiddleware {

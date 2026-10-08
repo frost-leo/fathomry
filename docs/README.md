@@ -273,6 +273,12 @@ evidence. Go 1.27, Surf and the local Surf/H2/H3 corrections have separate versi
 axes. H3 does not imply JA fidelity. Native fork licensing and production-site
 qualification remain explicit prerequisites, not consequences of fixture passes.
 
+Its [public Surf Adapter](reference/adapters/httpclient/surf/v1/interface.md)
+adds exact offline preparation, managed h2c and genuinely incremental multipart
+uploads with explicit replay and producer cleanup. Independent direct and Framework
+Fixed/Follow consumers retain Surf's method-context authority, native request
+types, source-wide protocol ownership and independent evidence.
+
 The [HTTPcloak v1 integration](reference/internal/httpclient/httpcloak/v1/interface.md)
 adds explicit H1/H2/direct-H3 requests and streams, external native/JSON presets,
 dynamic TCP proxies, bounded native ownership and independent framing/callback
@@ -345,6 +351,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/httpclient/v1`](reference/adapters/httpclient/v1/interface.md) | HTTP accounting, preparation and attribution vocabulary; no runtime/client |
 | [`adapters/httpclient/nethttp/v1`](reference/adapters/httpclient/nethttp/v1/interface.md) | Standard HTTP finite/stream/direct-connection use with exact preparation and ownership |
 | [`adapters/httpclient/tlsclient/v1`](reference/adapters/httpclient/tlsclient/v1/interface.md) | Explicit native profiles, H3 racing, finite/stream HTTP and protocol-qualified counters |
+| [`adapters/httpclient/surf/v1`](reference/adapters/httpclient/surf/v1/interface.md) | Surf H1/H2/H3/h2c, incremental multipart, finite/stream responses and exact preparation |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

@@ -31,6 +31,9 @@ import (
 
 func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 	result := input
+	if nativeContainerBytes(input) > maxNativeContainerBytes {
+		return result, failure(ErrLimit, "native-containers")
+	}
 	if nilLike(input.Jar) || len(input.RequestMiddleware) > 32 || len(input.ResponseMiddleware) > 32 ||
 		!headerFits(input.Headers, 1<<20, true) {
 		return result, failure(ErrInput, "native-options")
@@ -90,7 +93,16 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 	return result, err
 }
 func validateNative(value settings, native NativeOptionsV1) error {
-	ja := native.Profile != nil || native.HelloSpecFactory != nil
+	ja := usesJA(native)
+	if value.Mode == H2C && (native.TLSConfig != nil || native.JAConfig != nil || ja || native.Profile != nil && native.Profile.ShuffleExtensions) {
+		return failure(ErrInput, "h2c-origin-tls")
+	}
+	if native.Profile != nil && native.Profile.HelloSpec != nil {
+		remaining := value.MaxProfileBytes
+		if !boundedValue(reflect.ValueOf(*native.Profile.HelloSpec), &remaining, make(map[uintptr]bool), 0) {
+			return failure(ErrLimit, "profile-bytes")
+		}
+	}
 	if !headerFits(native.Headers, value.MaxHeaderBytes, true) {
 		return failure(ErrLimit, "native-headers")
 	}
@@ -108,6 +120,17 @@ func validateNative(value settings, native NativeOptionsV1) error {
 		}
 	}
 	return nil
+}
+
+func usesJA(native NativeOptionsV1) bool {
+	if native.HelloSpecFactory != nil {
+		return true
+	}
+	if native.Profile == nil {
+		return false
+	}
+	id := native.Profile.HelloID
+	return native.Profile.HelloSpec != nil || id.Client != "" || id.Version != "" || id.Seed != nil || id.Weights != nil
 }
 
 func validateSpec(spec utls.ClientHelloSpec) error {
@@ -295,6 +318,12 @@ func copyJA(input *utls.Config) (*utls.Config, error) {
 	result.CipherSuites = slices.Clone(input.CipherSuites)
 	result.CurvePreferences = slices.Clone(input.CurvePreferences)
 	result.EncryptedClientHelloConfigList = slices.Clone(input.EncryptedClientHelloConfigList)
+	if input.ApplicationSettings != nil {
+		result.ApplicationSettings = make(map[string][]byte, len(input.ApplicationSettings))
+		for name, value := range input.ApplicationSettings {
+			result.ApplicationSettings[name] = slices.Clone(value)
+		}
+	}
 	result.Certificates = make([]utls.Certificate, len(input.Certificates))
 	clone := func(input utls.Certificate) (utls.Certificate, error) {
 		result := input

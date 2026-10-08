@@ -40,6 +40,7 @@ const (
 	HTTP1Only   ProtocolMode = "http1"
 	HTTP2Only   ProtocolMode = "http2"
 	PreferHTTP3 ProtocolMode = "prefer-http3"
+	H2C         ProtocolMode = "h2c"
 )
 
 // NativeOptionsV1 keeps SDK-specific extension points outside layered settings.
@@ -94,6 +95,9 @@ type OptionsV1 struct {
 	MaxRoutes            int
 	MaxTCPConnections    int
 	MaxUDPSockets        int
+	MaxHTTP3Clients      int
+	MaxProfileBytes      int64
+	MaxHTTP2StreamBytes  int64
 	MaxRequestBytes      int64
 	MaxResponseBytes     int64
 	MaxHeaderBytes       int64
@@ -118,6 +122,9 @@ type settings struct {
 	MaxRoutes            int           `json:"max_routes"`
 	MaxTCPConnections    int           `json:"max_tcp_connections"`
 	MaxUDPSockets        int           `json:"max_udp_sockets"`
+	MaxHTTP3Clients      int           `json:"max_http3_clients"`
+	MaxProfileBytes      int64         `json:"max_profile_bytes"`
+	MaxHTTP2StreamBytes  int64         `json:"max_http2_stream_bytes"`
 	MaxRequestBytes      int64         `json:"max_request_bytes"`
 	MaxResponseBytes     int64         `json:"max_response_bytes"`
 	MaxHeaderBytes       int64         `json:"max_header_bytes"`
@@ -136,6 +143,7 @@ func defaults(options OptionsV1) settings {
 	value := settings{Mode: options.Mode, ProxyURL: options.ProxyURL, RoutingLocked: options.RoutingLocked, DisableCompression: options.DisableCompression,
 		MaxActive: options.MaxActive, QueuedCalls: options.QueuedCalls, MaxRoutes: options.MaxRoutes,
 		MaxTCPConnections: options.MaxTCPConnections, MaxUDPSockets: options.MaxUDPSockets,
+		MaxHTTP3Clients: options.MaxHTTP3Clients, MaxProfileBytes: options.MaxProfileBytes, MaxHTTP2StreamBytes: options.MaxHTTP2StreamBytes,
 		MaxRequestBytes: options.MaxRequestBytes, MaxResponseBytes: options.MaxResponseBytes, MaxHeaderBytes: options.MaxHeaderBytes, MaxNativeHeaderBytes: options.MaxNativeHeaderBytes,
 		MaxRoundTrips: options.MaxRoundTrips, MaxReplays: options.MaxReplays, NativeRetries: options.NativeRetries,
 		RetryCodes: append([]int(nil), options.RetryCodes...), RetryDelay: options.RetryDelay,
@@ -154,6 +162,15 @@ func defaults(options OptionsV1) settings {
 	}
 	if value.MaxUDPSockets == 0 {
 		value.MaxUDPSockets = 16
+	}
+	if value.MaxHTTP3Clients == 0 {
+		value.MaxHTTP3Clients = 32
+	}
+	if value.MaxProfileBytes == 0 {
+		value.MaxProfileBytes = 1 << 20
+	}
+	if value.MaxHTTP2StreamBytes == 0 {
+		value.MaxHTTP2StreamBytes = 8 << 20
 	}
 	if value.MaxRequestBytes == 0 {
 		value.MaxRequestBytes = 8 << 20
@@ -185,10 +202,12 @@ func defaults(options OptionsV1) settings {
 	return value
 }
 func validate(value settings) error {
-	if value.Mode != Negotiated && value.Mode != HTTP1Only && value.Mode != HTTP2Only && value.Mode != PreferHTTP3 ||
+	if value.Mode != Negotiated && value.Mode != HTTP1Only && value.Mode != HTTP2Only && value.Mode != PreferHTTP3 && value.Mode != H2C ||
 		value.MaxActive < 1 || value.MaxActive > 1024 || value.QueuedCalls < 0 || value.QueuedCalls > 4096 ||
 		value.MaxRoutes < 1 || value.MaxRoutes > 1024 || value.MaxTCPConnections < 1 || value.MaxTCPConnections > 4096 ||
 		value.MaxUDPSockets < 1 || value.MaxUDPSockets > 1024 || value.MaxRequestBytes < 1 || value.MaxRequestBytes > 1<<30 ||
+		value.MaxHTTP3Clients < 1 || value.MaxHTTP3Clients > 1024 || value.MaxProfileBytes < 1024 || value.MaxProfileBytes > 1<<20 ||
+		value.MaxHTTP2StreamBytes < 4<<20 || value.MaxHTTP2StreamBytes > 1<<30 ||
 		value.MaxResponseBytes < 1 || value.MaxResponseBytes > 1<<30 || value.MaxHeaderBytes < 1024 || value.MaxHeaderBytes > 1<<20 ||
 		value.MaxNativeHeaderBytes < value.MaxHeaderBytes || value.MaxNativeHeaderBytes > 64<<20 ||
 		value.MaxRoundTrips < 1 || value.MaxRoundTrips > 128 || value.MaxReplays < 1 || value.MaxReplays > 1024 ||
@@ -214,7 +233,7 @@ func (value settings) reservation() int64 {
 		value.MaxHeaderBytes*int64(4*value.MaxRoundTrips+12) + int64(value.MaxReplays)*256 + 64<<10
 }
 func (value settings) evidenceBytes() int64 {
-	return value.MaxResponseBytes + 4*value.MaxHeaderBytes + int64(value.MaxRoundTrips)*256 + 4096
+	return value.MaxResponseBytes + 4*value.MaxHeaderBytes + int64(value.MaxRoundTrips)*256 + int64(value.MaxReplays+1)*MaxMultipartParts*128 + 4096
 }
 func (value settings) limits() resource.Limits {
 	return resource.Limits{Active: value.MaxActive, Queued: value.QueuedCalls, Bytes: int64(value.MaxActive) * value.reservation(),
