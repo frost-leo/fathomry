@@ -26,7 +26,7 @@ No production, arbitrary-profile or full upstream-suite qualification is implied
 
 - Module `github.com/enetx/surf v1.0.206`.
 - Immutable origin `7da0502899af06f8318f95e632797cb2ac0c6c20`.
-- Local compatibility revision `v2`.
+- Local compatibility revision `v3`.
 - Original file hashes and module/ZIP identity: [UPSTREAM.json](UPSTREAM.json).
 - The original [MIT LICENSE](LICENSE) is retained unchanged. Project-authored
   additions have their own complete project notices and do not relicense upstream.
@@ -104,6 +104,14 @@ their transfer/concurrent-close contracts. No raw filesystem input is added.
 These are locally maintained corrections for
 [issue119](https://github.com/frost-leo/fathomry/issues/119), not an SDK upgrade,
 upstream release claim or new distribution permission.
+
+Revision v3 additionally installs the owner-approved dynamic QPACK receive path
+in the selected H3 correction. The declared table-byte and blocked-stream ceilings
+are separate from native advertised SETTINGS (including explicit zero), checked
+after lazy profile evaluation but before packet/dial effects. A bounded feedback
+queue and per-client decoder residence are accounted by Internal preparation.
+Request encoding remains the selected conformant static encoder. No shared QPACK
+replacement or concrete-provider dependency is introduced.
 
 ## Verification and maintenance
 

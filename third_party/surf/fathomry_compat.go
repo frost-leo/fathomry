@@ -26,7 +26,7 @@ import (
 )
 
 // FathomryCompatibilityRevision identifies the local changes, not SDK provenance.
-const FathomryCompatibilityRevision = "v2"
+const FathomryCompatibilityRevision = "v3"
 
 // ErrFathomryBodyLimit rejects a prefix that cannot represent a complete body.
 var ErrFathomryBodyLimit = errors.New("surf: response body limit exceeded")

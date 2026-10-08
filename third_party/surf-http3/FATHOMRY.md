@@ -23,7 +23,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 - Module: `github.com/enetx/http3 v1.0.9`.
 - Origin: `ba6a50293c3c477f83648f3faa9e58adaa807206`.
-- Compatibility revision: `v2`.
+- Compatibility revision: `v3`.
 - Original source hashes: [UPSTREAM.json](UPSTREAM.json).
 
 Native request-writing goroutines retain registered work through body writes,
@@ -40,6 +40,21 @@ shutdown cancels all clients before joining them. A rejected-request retry close
 and joins only its previous request writer before acquiring the replay client;
 successful early responses remain incremental and one-shot unsafe replay stops.
 These are issue119 ownership corrections, not business retry or provider rotation.
+
+Revision v3 implements dynamic response QPACK, including all reference forms,
+encoder instructions, blocked sections, informational responses and trailers.
+The private decoder reuses the selected static table/Huffman implementation and
+adapts bounded table routines with their [MIT provenance](internal/qpack/PROVENANCE.md).
+The request encoder remains static; no shared QPACK/QUIC replacement is changed.
+
+Decoder feedback is a bounded connection-owned FIFO. ACK/cancellation ordering and
+known received counts are serialized; insert notifications coalesce. Partial write
+failure terminates the connection instead of appending to a damaged critical stream.
+Client retirement joins accept/parser/control/feedback workers before quota release.
+Read cancellation never uses QUIC's completed send-half context. A local decoded
+header limit cancels only its section; malformed references/instructions and critical
+stream failures use their actual connection error codes. Normal connection shutdown
+does not manufacture protocol failure when the QUIC context notification is delayed.
 
 The selected upstream module archive and inspected upstream license endpoint provide no standalone
 LICENSE file. The upstream README identifies its quic-go HTTP/3 basis, but that

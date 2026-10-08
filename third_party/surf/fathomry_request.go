@@ -74,6 +74,9 @@ func (builder *Builder) FathomryApplyVariant(variant profiles.Variant, os profil
 				if key > (1<<62)-1 || value > (1<<62)-1 {
 					return ErrFathomryProfileLimit
 				}
+				if limits := builder.cli.fathomry.control.QPACKLimits; builder.forceHTTP3 && limits != nil && (key == 1 && value > limits.MaxTableCapacity || key == 7 && value > limits.MaxBlockedStreams) {
+					return ErrFathomryProfileLimit
+				}
 			}
 			if maximum := builder.cli.fathomry.control.MaxProfileBytes; maximum > 0 && size > maximum {
 				return ErrFathomryProfileLimit

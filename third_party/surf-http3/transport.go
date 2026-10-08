@@ -64,9 +64,15 @@ func (r *roundTripperWithCount) Close() error {
 	r.closeOnce.Do(func() {
 		r.cancel()
 		<-r.dialing
+		if stopping, ok := r.clientConn.(interface{ FathomryStop() }); ok {
+			stopping.FathomryStop()
+		}
 		if r.conn != nil {
 			r.closeErr = r.conn.CloseWithError(0, "")
 			<-r.conn.Context().Done()
+		}
+		if joined, ok := r.clientConn.(interface{ FathomryWait() error }); ok {
+			r.closeErr = errors.Join(r.closeErr, joined.FathomryWait())
 		}
 		if r.release != nil {
 			r.release()
@@ -81,6 +87,7 @@ type Transport struct {
 	// FathomryAcquireClient reserves one cached, pending or retiring native
 	// client before acquisition. Its release follows confirmed connection close.
 	FathomryAcquireClient func() (func(), error)
+	FathomryQPACKLimits   *FathomryQPACKLimits
 	// TLSClientConfig specifies the TLS configuration to use with
 	// tls.Client. If nil, the default configuration is used.
 	TLSClientConfig *tls.Config
@@ -145,6 +152,9 @@ var (
 )
 
 func (t *Transport) init() error {
+	if _, _, _, err := qpackSelection(t.AdditionalSettings, t.FathomryQPACKLimits); err != nil {
+		return err
+	}
 	if t.newClientConn == nil {
 		t.newClientConn = func(conn *quic.Conn) clientConn {
 			return newClientConn(
@@ -154,6 +164,7 @@ func (t *Transport) init() error {
 				t.MaxResponseHeaderBytes,
 				t.DisableCompression,
 				t.Logger,
+				t.FathomryQPACKLimits,
 			)
 		}
 	}
@@ -468,6 +479,10 @@ func (t *Transport) dial(ctx context.Context, hostname string) (*quic.Conn, clie
 		return nil, nil, errors.New("http3: dial returned nil connection")
 	}
 	clientConn := t.newClientConn(conn)
+	if controlled, ok := clientConn.(*ClientConn); ok {
+		controlled.startUnidirectional()
+		return conn, clientConn, nil
+	}
 	go func() {
 		for {
 			str, err := conn.AcceptUniStream(context.Background())
@@ -528,16 +543,9 @@ func (t *Transport) NewClientConn(conn *quic.Conn) *ClientConn {
 		t.MaxResponseHeaderBytes,
 		t.DisableCompression,
 		t.Logger,
+		t.FathomryQPACKLimits,
 	)
-	go func() {
-		for {
-			str, err := conn.AcceptUniStream(context.Background())
-			if err != nil {
-				return
-			}
-			go c.handleUnidirectionalStream(str)
-		}
-	}()
+	c.startUnidirectional()
 	return c
 }
 
@@ -554,6 +562,7 @@ func (t *Transport) NewRawClientConn(conn *quic.Conn) *RawClientConn {
 			t.MaxResponseHeaderBytes,
 			t.DisableCompression,
 			t.Logger,
+			t.FathomryQPACKLimits,
 		),
 	}
 }

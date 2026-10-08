@@ -25,7 +25,7 @@ import (
 )
 
 // FathomryCompatibilityRevision identifies the local lifecycle correction.
-const FathomryCompatibilityRevision = "v2"
+const FathomryCompatibilityRevision = "v3"
 
 type fathomryWorkKey struct{}
 

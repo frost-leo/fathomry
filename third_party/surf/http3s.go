@@ -179,6 +179,7 @@ func (ut *uquicTransport) initTransport() error {
 
 	ut.http3tr = &http3.Transport{
 		FathomryAcquireClient: ut.client.fathomry.control.AcquireHTTP3Client,
+		FathomryQPACKLimits:   ut.client.fathomry.control.QPACKLimits,
 		TLSClientConfig:       ut.tlsConfig,
 		DisableCompression:    true,
 		QUICConfig: &quic.Config{

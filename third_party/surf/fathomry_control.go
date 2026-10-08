@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/enetx/http"
+	http3 "github.com/enetx/http3"
 	utls "github.com/refraction-networking/utls"
 )
 
@@ -47,6 +48,7 @@ type FathomryControlV1 struct {
 	// AcquireHTTP3Client bounds cached, pending and retiring client entries,
 	// independently from the number of UDP sockets shared by connections.
 	AcquireHTTP3Client    func() (func(), error)
+	QPACKLimits           *http3.FathomryQPACKLimits
 	Enter                 func(context.Context) (func(), error)
 	DialContext           func(context.Context, string, string) (net.Conn, error)
 	ListenPacket          func(context.Context, string, string) (net.PacketConn, error)
@@ -100,6 +102,13 @@ func (client *Client) ConfigureFathomry(control FathomryControlV1) error {
 		return errors.New("surf: invalid native limits")
 	}
 	state.control = control
+	if control.QPACKLimits != nil {
+		copy := *control.QPACKLimits
+		if copy.MaxTableCapacity > 64<<20 || copy.MaxBlockedStreams > 1024 || copy.MaxFeedbackRecords < 1 || copy.MaxFeedbackRecords > 65536 {
+			return errors.New("surf: invalid QPACK limits")
+		}
+		state.control.QPACKLimits = &copy
+	}
 	state.control.ProxyTLSConfig = state.tlsConfig(control.ProxyTLSConfig)
 	if control.JAConfig != nil {
 		config := control.JAConfig.Clone()
