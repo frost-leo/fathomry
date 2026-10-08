@@ -57,6 +57,7 @@ type resultData struct {
 	read, sent         int64
 	roundTrips         int
 	proxyMode          string
+	inputErrors        []error
 }
 
 func (value Result) Metadata() Metadata {
@@ -103,4 +104,13 @@ func (value Result) ProxyMode() string {
 		return ""
 	}
 	return value.data.proxyMode
+}
+
+// InputErrorsCopy retains input/producer notices separately from a complete
+// early response. These observations are not a business retry decision.
+func (value Result) InputErrorsCopy() []error {
+	if value.data == nil {
+		return nil
+	}
+	return append([]error(nil), value.data.inputErrors...)
 }

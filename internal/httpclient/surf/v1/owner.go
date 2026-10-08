@@ -31,6 +31,7 @@ import (
 
 	"github.com/enetx/g"
 	http "github.com/enetx/http"
+	http3 "github.com/enetx/http3"
 	sdk "github.com/enetx/surf"
 	"github.com/frost-leo/fathomry/internal/resource"
 	utls "github.com/refraction-networking/utls"
@@ -47,16 +48,17 @@ type routeBinding struct {
 	retry  bool
 }
 type owner struct {
-	settings  settings
-	native    NativeOptionsV1
-	work      *activity
-	mu        sync.Mutex
-	routes    map[routeKey]*routeBinding
-	tcp, udp  int
-	stopping  bool
-	closeOnce sync.Once
-	done      chan struct{}
-	cleanup   error
+	settings     settings
+	budget       Budget
+	native       NativeOptionsV1
+	work         *activity
+	mu           sync.Mutex
+	routes       map[routeKey]*routeBinding
+	tcp, udp, h3 int
+	stopping     bool
+	closeOnce    sync.Once
+	done         chan struct{}
+	cleanup      error
 }
 
 func routeIdentity(route routeChoice) routeKey {
@@ -118,6 +120,17 @@ func (own *owner) enter(ctx context.Context) (func(), error) {
 		}
 		own.work.leave()
 	}, nil
+}
+
+func (own *owner) reserveHTTP3Client() (func(), error) {
+	own.mu.Lock()
+	if own.stopping || own.h3 >= own.settings.MaxHTTP3Clients {
+		own.mu.Unlock()
+		return nil, failure(ErrLimit, "native-http3-clients", resource.ErrCapacity)
+	}
+	own.h3++
+	own.mu.Unlock()
+	return sync.OnceFunc(func() { own.mu.Lock(); own.h3--; own.mu.Unlock() }), nil
 }
 func (own *owner) binding(ctx context.Context, route routeChoice) (*routeBinding, error) {
 	key := routeIdentity(route)
@@ -201,11 +214,15 @@ func (own *owner) nativeClient(ctx context.Context, route routeChoice) (client *
 			}
 			return bound, func() { stop(); deadlineCancel(); cancel(nil) }
 		},
-		AcquireTCP: func() (func(), error) { return own.reserve(false) },
-		AcquireUDP: func() (func(), error) { return own.reserve(true) },
-		Enter:      own.enter, DialContext: native.DialContext, ListenPacket: native.ListenPacket,
+		AcquireTCP:         func() (func(), error) { return own.reserve(false) },
+		AcquireUDP:         func() (func(), error) { return own.reserve(true) },
+		AcquireHTTP3Client: own.reserveHTTP3Client,
+		QPACKLimits:        &http3.FathomryQPACKLimits{MaxTableCapacity: uint64(own.settings.MaxHTTP3QPACKTableBytes), MaxBlockedStreams: uint64(own.settings.MaxHTTP3QPACKBlockedStreams), MaxFeedbackRecords: own.settings.qpackFeedbackRecords()},
+		Enter:              own.enter, DialContext: native.DialContext, ListenPacket: native.ListenPacket,
 		ProxyTLSConfig: native.ProxyTLSConfig, JAConfig: native.JAConfig, HelloSpecFactory: native.HelloSpecFactory,
 		MaxRequestBytes: own.settings.MaxRequestBytes, MaxResponseBytes: own.settings.MaxResponseBytes, MaxHeaderBytes: own.settings.MaxNativeHeaderBytes, MaxProxyHeaderBytes: own.settings.MaxHeaderBytes,
+		MaxProfileBytes: own.settings.MaxProfileBytes, MaxHTTP2StreamBytes: own.settings.MaxHTTP2StreamBytes,
+		MaxRequestHeaderBytes: own.settings.MaxHeaderBytes,
 		RequestClient: func(ctx context.Context, value http.Client) (http.Client, error) {
 			op, _ := ctx.Value(operationKey{}).(*operation)
 			if op == nil {
@@ -229,7 +246,10 @@ func (own *owner) nativeClient(ctx context.Context, route routeChoice) (client *
 		}
 	}
 	if native.Resolver != nil {
-		client.GetDialer().Resolver = native.Resolver
+		if err := client.FathomrySetResolver(native.Resolver); err != nil {
+			returned = true
+			return client, err
+		}
 	}
 	transport := client.GetTransport().(*http.Transport)
 	transport.MaxConnsPerHost = own.settings.MaxTCPConnections
@@ -251,6 +271,8 @@ func (own *owner) nativeClient(ctx context.Context, route routeChoice) (client *
 		builder.ForceHTTP2()
 	case PreferHTTP3:
 		builder.ForceHTTP3()
+	case H2C:
+		builder.H2C()
 	}
 	if native.Profile != nil {
 		builder.FathomryApplyVariant(*native.Profile, native.OS)
@@ -331,17 +353,24 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 		own.mu.Unlock()
 		go func() {
 			var causes []error
+			var causesMu sync.Mutex
+			var pending sync.WaitGroup
 			for _, binding := range bindings {
-				<-binding.ready
-				if binding.client != nil {
-					if err := binding.client.Close(); err != nil {
-						causes = append(causes, err)
+				pending.Go(func() {
+					<-binding.ready
+					if binding.client != nil {
+						if err := binding.client.Close(); err != nil {
+							causesMu.Lock()
+							causes = append(causes, err)
+							causesMu.Unlock()
+						}
 					}
-				}
+				})
 			}
+			pending.Wait()
 			<-own.work.stop()
 			own.mu.Lock()
-			if own.tcp != 0 || own.udp != 0 {
+			if own.tcp != 0 || own.udp != 0 || own.h3 != 0 {
 				causes = append(causes, failure(ErrState, "native-release-unconfirmed"))
 			}
 			own.cleanup = errors.Join(causes...)
@@ -353,7 +382,7 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 	case <-own.done:
 		own.mu.Lock()
 		defer own.mu.Unlock()
-		confirmed := own.tcp == 0 && own.udp == 0
+		confirmed := own.tcp == 0 && own.udp == 0 && own.h3 == 0
 		result := resource.ReleaseResult{Quiescent: confirmed, Released: confirmed, Err: own.cleanup}
 		if !confirmed {
 			result.Continue = own.release

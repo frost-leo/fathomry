@@ -17,8 +17,6 @@ import (
 	"github.com/enetx/http3/qlog"
 	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/qlogwriter"
-
-	"github.com/quic-go/qpack"
 )
 
 const (
@@ -54,7 +52,8 @@ type ClientConn struct {
 	conn    *quic.Conn
 	rawConn *rawConn
 
-	decoder *qpack.Decoder
+	qpack   *qpackConnection
+	workers sync.WaitGroup
 
 	// Additional HTTP/3 settings.
 	// It is invalid to specify any settings defined by RFC 9114 (HTTP/3) and RFC 9297 (HTTP Datagrams).
@@ -90,6 +89,7 @@ func newClientConn(
 	maxResponseHeaderBytes int,
 	disableCompression bool,
 	logger *slog.Logger,
+	configured ...*FathomryQPACKLimits,
 ) *ClientConn {
 	var qlogger qlogwriter.Recorder
 	if qlogTrace := conn.QlogTrace(); qlogTrace != nil && qlogTrace.SupportsSchemas(qlog.EventSchema) {
@@ -103,8 +103,18 @@ func newClientConn(
 		lastStreamID:       invalidStreamID,
 		logger:             logger,
 		qlogger:            qlogger,
-		decoder:            qpack.NewDecoder(),
 	}
+	var supplied *FathomryQPACKLimits
+	if len(configured) > 0 {
+		supplied = configured[0]
+	}
+	limits, table, blocked, configurationErr := qpackSelection(additionalSettings, supplied)
+	if configurationErr != nil {
+		table, blocked = 0, 0
+		limits.MaxFeedbackRecords = 1
+		_ = conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeSettingsError), "")
+	}
+	c.qpack = newQPACKConnection(conn, table, blocked, limits.MaxFeedbackRecords)
 	if maxResponseHeaderBytes <= 0 {
 		c.maxResponseHeaderBytes = defaultMaxResponseHeaderBytes
 	} else {
@@ -119,8 +129,12 @@ func newClientConn(
 		qlogger,
 		c.logger,
 	)
+	c.rawConn.qpackEncoderHandler = c.qpack.encoderStream
+	c.rawConn.qpackDecoderHandler = c.qpack.decoderStream
+	c.workers.Go(c.qpack.writeFeedback)
+	c.workers.Go(func() { <-conn.Context().Done(); c.qpack.stop(context.Cause(conn.Context())) })
 	// send the SETTINGs frame, using 0-RTT data, if possible
-	go func() {
+	c.workers.Go(func() {
 		_, err := c.rawConn.openControlStream(&settingsFrame{
 			Datagram: enableDatagrams,
 			Other:    additionalSettings,
@@ -133,7 +147,7 @@ func newClientConn(
 			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeInternalError), "")
 			return
 		}
-	}()
+	})
 	return c
 }
 
@@ -189,18 +203,21 @@ func (c *ClientConn) openRequestStream(
 	hstr := c.rawConn.TrackStream(str)
 	rsp := &http.Response{}
 	trace := httptrace.ContextClientTrace(ctx)
+	section := c.qpack.section(ctx, uint64(str.StreamID()), uint64(maxHeaderBytes))
+	stream := newStream(hstr, c.rawConn, trace, func(r io.Reader, hf *headersFrame) error {
+		hdr, err := decodeTrailers(r, hf, maxHeaderBytes, section, c.qlogger, str.StreamID())
+		if err != nil {
+			return err
+		}
+		rsp.Trailer = hdr
+		return nil
+	}, c.qlogger)
+	stream.cancelQPACK = section.close
 	return newRequestStream(
-		newStream(hstr, c.rawConn, trace, func(r io.Reader, hf *headersFrame) error {
-			hdr, err := decodeTrailers(r, hf, maxHeaderBytes, c.decoder, c.qlogger, str.StreamID())
-			if err != nil {
-				return err
-			}
-			rsp.Trailer = hdr
-			return nil
-		}, c.qlogger),
+		stream,
 		requestWriter,
 		reqDone,
-		c.decoder,
+		section,
 		disableCompression,
 		maxHeaderBytes,
 		rsp,
@@ -209,6 +226,31 @@ func (c *ClientConn) openRequestStream(
 
 func (c *ClientConn) handleUnidirectionalStream(str *quic.ReceiveStream) {
 	c.rawConn.handleUnidirectionalStream(str, false)
+}
+
+func (c *ClientConn) startUnidirectional() {
+	c.workers.Go(func() {
+		for {
+			stream, err := c.conn.AcceptUniStream(c.conn.Context())
+			if err != nil {
+				return
+			}
+			c.workers.Go(func() { c.handleUnidirectionalStream(stream) })
+		}
+	})
+}
+
+// FathomryStop seals codec work before local QUIC shutdown begins.
+func (c *ClientConn) FathomryStop() { c.qpack.stop(nil) }
+
+// FathomryWait joins connection-owned control and QPACK work after QUIC shutdown.
+func (c *ClientConn) FathomryWait() error {
+	<-c.conn.Context().Done()
+	c.qpack.stop(context.Cause(c.conn.Context()))
+	c.workers.Wait()
+	c.qpack.mu.Lock()
+	defer c.qpack.mu.Unlock()
+	return c.qpack.err
 }
 
 func (c *ClientConn) handleControlStream(str *quic.ReceiveStream, fp *frameParser) {

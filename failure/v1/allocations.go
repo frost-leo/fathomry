@@ -104,6 +104,8 @@ const (
 	FacilityNetHTTP Facility = 0x200
 	// FacilityTLSClient owns the public tls-client HTTP capability.
 	FacilityTLSClient Facility = 0x201
+	// FacilitySurf owns controlled Surf HTTP and multipart capabilities.
+	FacilitySurf Facility = 0x202
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -154,6 +156,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityDuckDB, Module: "fathomry", Component: "database_duckdb"},
 		{Facility: FacilityNetHTTP, Module: "fathomry", Component: "http_nethttp"},
 		{Facility: FacilityTLSClient, Module: "fathomry", Component: "http_tlsclient"},
+		{Facility: FacilitySurf, Module: "fathomry", Component: "http_surf"},
 	}
 }
 

@@ -22,12 +22,13 @@ import (
 // It wraps the standard http.Request and provides enhanced features like middleware support,
 // retry capabilities, remote address tracking, and structured error handling.
 type Request struct {
-	err        error         // General error associated with the request (validation, setup, etc.)
-	remoteAddr net.Addr      // Remote server address captured during connection
-	bodyBytes  []byte        // Cached body bytes for retry support
-	request    *http.Request // The underlying standard HTTP request
-	cli        *Client       // The associated surf client for this request
-	multipart  *Multipart    // Multipart form data for file uploads and form submissions
+	err              error         // General error associated with the request (validation, setup, etc.)
+	remoteAddr       net.Addr      // Remote server address captured during connection
+	bodyBytes        []byte        // Cached body bytes for retry support
+	request          *http.Request // The underlying standard HTTP request
+	cli              *Client       // The associated surf client for this request
+	multipart        *Multipart    // Multipart form data for file uploads and form submissions
+	managedMultipart *fathomryMultipart
 }
 
 // GetRequest returns the underlying standard http.Request.
@@ -61,6 +62,10 @@ func (req *Request) prepareMultipart() {
 
 	if req.request.Body != nil {
 		req.err = fmt.Errorf("cannot use both Body() and Multipart() - they are mutually exclusive")
+		return
+	}
+	if req.managedMultipart != nil {
+		req.prepareFathomryMultipart()
 		return
 	}
 
@@ -131,6 +136,11 @@ func (req *Request) Do() (result g.Result[*Response]) {
 	if err := req.cli.applyReqMW(req); err != nil {
 		return g.Err[*Response](fathomryFailure(err, closeFathomryBody(req.request)))
 	}
+	if req.managedMultipart != nil {
+		if err := req.validateFathomryMultipart(); err != nil {
+			return g.Err[*Response](fathomryFailure(err, closeFathomryBody(req.request)))
+		}
+	}
 	if req.request.Body != nil {
 		req.request.Body = &fathomryFraming{ReadCloser: req.request.Body, expected: -1,
 			maximum: req.cli.fathomry.control.MaxRequestBytes}
@@ -172,6 +182,14 @@ retry:
 	// Restore body from saved bytes for retry attempts
 	if attempts > 0 && req.bodyBytes != nil {
 		req.request.Body = io.NopCloser(bytes.NewReader(req.bodyBytes))
+	} else if attempts > 0 && req.managedMultipart != nil {
+		if req.request.GetBody == nil {
+			return g.Err[*Response](errors.New("surf: multipart body cannot be replayed"))
+		}
+		req.request.Body, err = req.request.GetBody()
+		if err != nil {
+			return g.Err[*Response](err)
+		}
 	}
 
 	resp, err = cli.Do(req.request)

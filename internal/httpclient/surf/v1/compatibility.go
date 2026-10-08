@@ -80,6 +80,7 @@ func (client *Client) Profile() compatibility.Profile {
 		value bool
 	}{
 		{"native-profile", native.Profile != nil}, {"hello-factory", native.HelloSpecFactory != nil},
+		{"origin-ja", usesJA(native)},
 		{"native-jar", native.Jar != nil}, {"native-middleware", len(native.RequestMiddleware)+len(native.ResponseMiddleware) > 0},
 		{"custom-tcp-dial", native.DialContext != nil}, {"custom-packet-listen", native.ListenPacket != nil},
 		{"routing-locked", value.RoutingLocked}, {"disable-compression", value.DisableCompression},
@@ -95,6 +96,8 @@ func (client *Client) Profile() compatibility.Profile {
 	}{
 		{"max-active", int64(value.MaxActive)}, {"queued-calls", int64(value.QueuedCalls)}, {"max-routes", int64(value.MaxRoutes)},
 		{"max-tcp-connections", int64(value.MaxTCPConnections)}, {"max-udp-sockets", int64(value.MaxUDPSockets)},
+		{"max-http3-clients", int64(value.MaxHTTP3Clients)}, {"declared-profile-bytes", value.MaxProfileBytes}, {"declared-http2-stream-bytes", value.MaxHTTP2StreamBytes},
+		{"declared-qpack-table-bytes", value.MaxHTTP3QPACKTableBytes}, {"declared-qpack-blocked-streams", int64(value.MaxHTTP3QPACKBlockedStreams)},
 		{"max-request-bytes", value.MaxRequestBytes}, {"max-response-bytes", value.MaxResponseBytes},
 		{"max-header-bytes", value.MaxHeaderBytes}, {"max-native-header-bytes", value.MaxNativeHeaderBytes},
 		{"max-round-trips", int64(value.MaxRoundTrips)}, {"max-replays", int64(value.MaxReplays)},

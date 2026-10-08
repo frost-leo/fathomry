@@ -39,6 +39,7 @@ type RequestOptionsV1 struct {
 	Version        uint32
 	ProxyURL       *string
 	ConnectHeaders http.Header
+	Multipart      *Multipart
 }
 type routeChoice struct {
 	proxy   string
@@ -166,6 +167,9 @@ func headerFits(headers http.Header, maximum int64, ordered bool) bool {
 	return true
 }
 func validateRequest(ctx context.Context, request *http.Request, value settings) error {
+	if request != nil && request.URL != nil && value.Mode == H2C && request.URL.Scheme != "http" {
+		return failure(ErrInput, "h2c-origin")
+	}
 	if request == nil || request.URL == nil || request.RequestURI != "" || request.URL.User != nil ||
 		request.URL.Opaque != "" || request.URL.Hostname() == "" || request.URL.Fragment != "" ||
 		request.URL.Scheme != "http" && request.URL.Scheme != "https" || !token(request.Method) ||
@@ -178,7 +182,9 @@ func validateRequest(ctx context.Context, request *http.Request, value settings)
 	if httptrace.ContextClientTrace(ctx) != nil || httptrace.ContextClientTrace(request.Context()) != nil {
 		return failure(ErrUnsupported, "unmanaged-trace")
 	}
-	if request.Cancel != nil || request.Response != nil || len(request.TransferEncoding) > 1 {
+	if request.Cancel != nil || request.Response != nil || request.TLS != nil ||
+		request.Form != nil || request.PostForm != nil || request.MultipartForm != nil ||
+		request.RemoteAddr != "" || request.Pattern != "" || len(request.TransferEncoding) > 1 {
 		return failure(ErrUnsupported, "request-handles")
 	}
 	return nil
@@ -195,9 +201,13 @@ func nilLike(value any) bool {
 	return false
 }
 func copyRequest(request *http.Request, ctx context.Context) *http.Request {
-	copy := request.Clone(ctx)
-	copy.GetBody = request.GetBody
-	copy.Body = request.Body
-	copy.Response = nil
-	return copy
+	location := *request.URL
+	snapshot := &http.Request{
+		Method: request.Method, URL: &location,
+		Proto: request.Proto, ProtoMajor: request.ProtoMajor, ProtoMinor: request.ProtoMinor,
+		Header: request.Header.Clone(), Body: request.Body, GetBody: request.GetBody,
+		ContentLength: request.ContentLength, TransferEncoding: append([]string(nil), request.TransferEncoding...),
+		Close: request.Close, Host: request.Host, Trailer: request.Trailer.Clone(),
+	}
+	return snapshot.WithContext(ctx)
 }

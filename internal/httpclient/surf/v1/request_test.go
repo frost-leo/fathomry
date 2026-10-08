@@ -23,8 +23,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"mime/multipart"
 	stdhttp "net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -35,6 +37,126 @@ import (
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/resource"
 )
+
+func TestRequestServerMetadataIsRefusedBeforeAcquisition(t *testing.T) {
+	for _, field := range []string{"form", "post-form", "multipart"} {
+		t.Run(field, func(t *testing.T) {
+			fix := newFixture(t, OptionsV1{Name: "server-metadata", Mode: HTTP1Only}, 1)
+			body := &reviewBehaviorInput{reader: strings.NewReader("body")}
+			input := request(t, "POST", "http://127.0.0.1:1", "")
+			input.Body, input.GetBody, input.ContentLength = body, nil, 4
+			values := url.Values{"unused": {strings.Repeat("x", 128<<10)}}
+			switch field {
+			case "form":
+				input.Form = values
+			case "post-form":
+				input.PostForm = values
+			case "multipart":
+				input.MultipartForm = &multipart.Form{Value: values}
+			}
+			stream, receipt, err := fix.client.Open(testContext(t), fault.Correlation{Call: "refuse"}, input)
+			if stream != nil || receipt != nil || !errors.Is(err, ErrUnsupported) {
+				if stream != nil {
+					_ = stream.Close(testContext(t))
+				}
+				t.Fatal("server-only metadata was admitted", err)
+			}
+			if body.reads.Load() != 0 || body.closes.Load() != 0 || fix.inbox.Usage().Outstanding != 0 {
+				t.Fatal("metadata refusal acquired input or evidence")
+			}
+		})
+	}
+}
+
+func TestRequestSnapshotPreservesClientFieldsWithoutServerPathState(t *testing.T) {
+	input := request(t, "POST", "http://example.invalid/path?query=value", "body")
+	input.Host = "authority.invalid"
+	input.Close = true
+	input.TransferEncoding = []string{"chunked"}
+	input.Trailer = http.Header{"X-Trailer": {"value"}}
+	input.Header[http.HeaderOrderKey] = []string{"x-native"}
+	input.Header["x-native"] = []string{"first", "second"}
+	input.SetPathValue("server-only", strings.Repeat("x", 128<<10))
+	ctx := testContext(t)
+	snapshot := copyRequest(input, ctx)
+	if snapshot.PathValue("server-only") != "" {
+		t.Fatal("outbound snapshot retained hidden server state")
+	}
+	if snapshot.Context() != ctx || snapshot.Method != input.Method || snapshot.Host != input.Host || !snapshot.Close ||
+		snapshot.Body != input.Body || snapshot.GetBody == nil || snapshot.ContentLength != input.ContentLength ||
+		snapshot.Header["x-native"][1] != "second" || snapshot.Header[http.HeaderOrderKey][0] != "x-native" ||
+		snapshot.Trailer.Get("X-Trailer") != "value" || snapshot.TransferEncoding[0] != "chunked" {
+		t.Fatal("outbound snapshot lost admitted client fields")
+	}
+	input.URL.Path = "/changed"
+	input.Header["x-native"][0] = "changed"
+	input.Trailer["X-Trailer"][0] = "changed"
+	input.TransferEncoding[0] = "changed"
+	if snapshot.URL.Path != "/path" || snapshot.Header["x-native"][0] != "first" ||
+		snapshot.Trailer.Get("X-Trailer") != "value" || snapshot.TransferEncoding[0] != "chunked" {
+		t.Fatal("outbound snapshot aliases client metadata")
+	}
+}
+
+func TestCookieCopiedContainerBoundaries(t *testing.T) {
+	cookie := &http.Cookie{Name: "name", Value: "value", Unparsed: []string{"a", "", "bb"}}
+	const exact = 128 + 4 + 5 + 3*16 + 3
+	for _, maximum := range []int64{exact - 1, exact} {
+		copied, err := cloneCookies([]*http.Cookie{cookie}, maximum)
+		if maximum < exact {
+			if !errors.Is(err, ErrLimit) {
+				t.Fatal("cookie slice descriptors escaped the bound", err)
+			}
+			continue
+		}
+		if err != nil || len(copied) != 1 || len(copied[0].Unparsed) != 3 || copied[0].Unparsed[2] != "bb" {
+			t.Fatal("exact cookie metadata boundary was not preserved", err)
+		}
+		copied[0].Unparsed[0] = "changed"
+		if cookie.Unparsed[0] != "a" {
+			t.Fatal("cookie metadata copy aliases the caller")
+		}
+	}
+	cookie.Unparsed = make([]string, 4096)
+	if _, err := cloneCookies([]*http.Cookie{cookie}, 1024); !errors.Is(err, ErrLimit) {
+		t.Fatal("empty unparsed fields bypassed copied-container bound", err)
+	}
+}
+
+func TestProxyInputRefusalBeforeAcquisition(t *testing.T) {
+	for _, address := range []string{"ftp://proxy.invalid", "http://proxy.invalid/path", "http://proxy.invalid?query=value", "http://proxy.invalid:invalid", "socks4://user:password@proxy.invalid", "http://"} {
+		t.Run(address, func(t *testing.T) {
+			if _, err := PrepareV1(OptionsV1{Name: "proxy-refusal", ProxyURL: address}); err == nil {
+				t.Fatal("invalid configured proxy was prepared")
+			}
+			fix := newFixture(t, OptionsV1{Name: "proxy-refusal", Mode: HTTP1Only}, 1)
+			body := &reviewBehaviorInput{reader: strings.NewReader("body")}
+			input := request(t, "POST", "http://127.0.0.1:1", "")
+			input.Body, input.GetBody, input.ContentLength = body, nil, 4
+			stream, receipt, err := fix.client.Open(testContext(t), fault.Correlation{Call: "proxy-refusal"}, input, RequestOptionsV1{ProxyURL: &address})
+			if stream != nil || receipt != nil || err == nil || body.reads.Load() != 0 || body.closes.Load() != 0 || fix.inbox.Usage().Outstanding != 0 {
+				t.Fatal("invalid per-call proxy acquired input or admitted work", err)
+			}
+		})
+	}
+}
+
+func TestRetainedHeaderContainerBoundaries(t *testing.T) {
+	for _, ordered := range []bool{false, true} {
+		headers := http.Header{"X-Test": {strings.Repeat("a", 10)}}
+		if !headerFits(headers, 64, ordered) || headerFits(headers, 63, ordered) {
+			t.Fatal("header descriptor/content boundary changed")
+		}
+		headers["X-Test"] = make([]string, 4096)
+		if headerFits(headers, 64, ordered) {
+			t.Fatal("empty header values bypassed container bounds")
+		}
+	}
+	ordered := http.Header{http.HeaderOrderKey: {"x-test"}}
+	if !headerFits(ordered, 1024, true) || headerFits(ordered, 1024, false) {
+		t.Fatal("native header-order sentinel became a transmitted metadata field")
+	}
+}
 
 func TestNativeRetriesCookiesAndRuntimeInputRemainDistinct(t *testing.T) {
 	var calls atomic.Int32

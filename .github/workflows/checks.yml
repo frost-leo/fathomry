@@ -103,7 +103,13 @@ jobs:
             exit 1
           fi
           go vet ./...
-          go test -race -count=1 -timeout=10m ./...
+          cold_package=github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project
+          go list ./... > "$RUNNER_TEMP/fathomry-test-packages"
+          grep -Fxq "$cold_package" "$RUNNER_TEMP/fathomry-test-packages"
+          mapfile -t remaining_packages < <(grep -Fxv "$cold_package" "$RUNNER_TEMP/fathomry-test-packages")
+          test "${#remaining_packages[@]}" -gt 0
+          go test -p=1 -race -count=1 -timeout=10m "$cold_package"
+          go test -p=2 -race -count=1 -timeout=10m "${remaining_packages[@]}"
           go build ./...
       - name: Verify independent mail example
         if: steps.module.outputs.present == 'true'

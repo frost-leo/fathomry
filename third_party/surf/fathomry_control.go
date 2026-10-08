@@ -29,6 +29,7 @@ import (
 	"sync"
 
 	"github.com/enetx/http"
+	http3 "github.com/enetx/http3"
 	utls "github.com/refraction-networking/utls"
 )
 
@@ -44,15 +45,22 @@ type FathomryControlV1 struct {
 	HelloSpecFactory    func(context.Context) (utls.ClientHelloSpec, error)
 	AcquireTCP          func() (func(), error)
 	AcquireUDP          func() (func(), error)
-	Enter               func(context.Context) (func(), error)
-	DialContext         func(context.Context, string, string) (net.Conn, error)
-	ListenPacket        func(context.Context, string, string) (net.PacketConn, error)
-	ProxyTLSConfig      *tls.Config
-	JAConfig            *utls.Config
-	MaxRequestBytes     int64
-	MaxResponseBytes    int64
-	MaxHeaderBytes      int64
-	MaxProxyHeaderBytes int64
+	// AcquireHTTP3Client bounds cached, pending and retiring client entries,
+	// independently from the number of UDP sockets shared by connections.
+	AcquireHTTP3Client    func() (func(), error)
+	QPACKLimits           *http3.FathomryQPACKLimits
+	Enter                 func(context.Context) (func(), error)
+	DialContext           func(context.Context, string, string) (net.Conn, error)
+	ListenPacket          func(context.Context, string, string) (net.PacketConn, error)
+	ProxyTLSConfig        *tls.Config
+	JAConfig              *utls.Config
+	MaxRequestBytes       int64
+	MaxResponseBytes      int64
+	MaxHeaderBytes        int64
+	MaxRequestHeaderBytes int64
+	MaxProxyHeaderBytes   int64
+	MaxProfileBytes       int64
+	MaxHTTP2StreamBytes   int64
 }
 
 var ErrFathomryClosed = errors.New("surf: client closed")
@@ -90,10 +98,17 @@ func (client *Client) ConfigureFathomry(control FathomryControlV1) error {
 	if state.closing || state.configured || state.active != 0 || len(state.conns) != 0 || len(state.packets) != 0 || client.builder != nil {
 		return errors.New("surf: control requires an unused client")
 	}
-	if control.MaxRequestBytes < 0 || control.MaxResponseBytes < 0 || control.MaxHeaderBytes < 0 {
+	if control.MaxRequestBytes < 0 || control.MaxResponseBytes < 0 || control.MaxHeaderBytes < 0 || control.MaxRequestHeaderBytes < 0 || control.MaxProfileBytes < 0 || control.MaxHTTP2StreamBytes < 0 {
 		return errors.New("surf: invalid native limits")
 	}
 	state.control = control
+	if control.QPACKLimits != nil {
+		copy := *control.QPACKLimits
+		if copy.MaxTableCapacity > 64<<20 || copy.MaxBlockedStreams > 1024 || copy.MaxFeedbackRecords < 1 || copy.MaxFeedbackRecords > 65536 {
+			return errors.New("surf: invalid QPACK limits")
+		}
+		state.control.QPACKLimits = &copy
+	}
 	state.control.ProxyTLSConfig = state.tlsConfig(control.ProxyTLSConfig)
 	if control.JAConfig != nil {
 		config := control.JAConfig.Clone()
@@ -261,6 +276,10 @@ func (client *Client) fathomryListen(ctx context.Context, network, address strin
 	return packet, nil
 }
 func (client *Client) fathomryTLS(ctx context.Context, network, address string, dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
+	return client.fathomryTLSConfig(ctx, network, address, dial, client.tlsConfig)
+}
+
+func (client *Client) fathomryTLSConfig(ctx context.Context, network, address string, dial func(context.Context, string, string) (net.Conn, error), selected *tls.Config) (net.Conn, error) {
 	ctx, finishContext := client.fathomry.bindContext(ctx)
 	defer finishContext()
 	end, err := client.fathomry.enter(ctx)
@@ -272,7 +291,7 @@ func (client *Client) fathomryTLS(ctx context.Context, network, address string, 
 	if err != nil {
 		return nil, err
 	}
-	config := client.tlsConfig.Clone()
+	config := selected.Clone()
 	if config.ServerName == "" {
 		config.ServerName, _, err = net.SplitHostPort(address)
 		if err != nil {

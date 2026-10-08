@@ -19,11 +19,11 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Local Surf HTTP/3 transport corrections
 
-**Status:** narrowly scoped dependency replacement for Surf issue #50.
+**Status:** narrowly scoped dependency replacement for Surf issues #50 and #119.
 
 - Module: `github.com/enetx/http3 v1.0.9`.
 - Origin: `ba6a50293c3c477f83648f3faa9e58adaa807206`.
-- Compatibility revision: `v1`.
+- Compatibility revision: `v4`.
 - Original source hashes: [UPSTREAM.json](UPSTREAM.json).
 
 Native request-writing goroutines retain registered work through body writes,
@@ -31,11 +31,47 @@ trace callbacks, trailers and stream closure. A returned response or canceled
 body does not independently certify that this work has ended. Declared body
 lengths also reject premature EOF rather than accepting a truncated prefix.
 
-The module archive and inspected upstream license endpoint provide no standalone
+Revision v2 additionally bounds cached, pending and retiring native clients via
+FathomryAcquireClient, independently of UDP socket count. Response bodies and
+request writers retain their actual client until Close/completion; a failed
+stream can retire its cached client without killing a retained sibling response.
+Removal compares client identity, failed orphaned dials release their slot, and
+shutdown cancels all clients before joining them. A rejected-request retry closes
+and joins only its previous request writer before acquiring the replay client;
+successful early responses remain incremental and one-shot unsafe replay stops.
+These are issue119 ownership corrections, not business retry or provider rotation.
+
+Revision v3 implements dynamic response QPACK, including all reference forms,
+encoder instructions, blocked sections, informational responses and trailers.
+The private decoder reuses the selected static table/Huffman implementation and
+adapts bounded table routines with their [MIT provenance](internal/qpack/PROVENANCE.md).
+The request encoder remains static; no shared QPACK/QUIC replacement is changed.
+
+Decoder feedback is a bounded connection-owned FIFO. ACK/cancellation ordering and
+known received counts are serialized; insert notifications coalesce. Partial write
+failure terminates the connection instead of appending to a damaged critical stream.
+Client retirement joins accept/parser/control/feedback workers before quota release.
+Read cancellation never uses QUIC's completed send-half context. A local decoded
+header limit cancels only its section; malformed references/instructions and critical
+stream failures use their actual connection error codes. Normal connection shutdown
+does not manufacture protocol failure when the QUIC context notification is delayed.
+
+Revision v4 observes peer STOP_SENDING on an idle outgoing decoder critical stream
+without waiting for another encoder instruction or feedback write. Connection
+shutdown still joins the same worker; no polling or additional goroutine is added.
+The selected QUIC receive API exposes a request-stream reset through a subsequent
+read, not a receive context. A section already blocked on QPACK retains its owned
+wait until table progress, request cancellation/timeout or connection shutdown;
+immediate remote-reset notification is not promised. A completed send half or
+normal FIN must not cancel a valid section awaiting encoder instructions.
+
+The selected upstream module archive and inspected upstream license endpoint provide no standalone
 LICENSE file. The upstream README identifies its quic-go HTTP/3 basis, but that
 reference is not a license grant for every fork contribution. Existing notices
 are retained; redistribution remains an owner-review prerequisite. First-party
 files retain the complete project notice without relicensing upstream material.
+Go may include the repository-root license when packaging this corrected nested
+module; that mechanical inheritance does not resolve upstream contribution rights.
 
 Run `TestFathomry*` with the consuming dependency selections. Real loopback H3,
 body/trust/encoding and blocked-native-callback controls live in the Surf Provider

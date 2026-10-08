@@ -65,14 +65,21 @@ func consumerEnvironment(extra ...string) []string {
 }
 func runConsumer(t testing.TB, directory string, environment []string, command string, args ...string) []byte {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	return runConsumerBudget(t, 90*time.Second, directory, environment, command, args...)
+}
+
+func runConsumerBudget(t testing.TB, budget time.Duration, directory string, environment []string, command string, args ...string) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), budget)
 	defer cancel()
+	started := time.Now()
 	process := exec.CommandContext(ctx, command, args...)
 	process.Dir = directory
 	process.Env = environment
 	output, err := process.CombinedOutput()
+	t.Logf("consumer %s %v: elapsed=%s budget=%s", filepath.Base(command), args, time.Since(started), budget)
 	if err != nil || ctx.Err() != nil {
-		t.Fatalf("consumer command %s %v: %v\n%s", filepath.Base(command), args, err, output)
+		t.Fatalf("consumer command %s %v: %v; context=%v cause=%v\n%s", filepath.Base(command), args, err, ctx.Err(), context.Cause(ctx), output)
 	}
 	return output
 }
@@ -196,8 +203,10 @@ func TestVersionedProjects(t *testing.T) {
 	proxyURL := (&url.URL{Scheme: "file", Path: filepath.ToSlash(proxy)}).String()
 	environment := consumerEnvironment("GOMODCACHE="+cache, "GOPROXY="+proxyURL+",https://proxy.golang.org", "GONOSUMDB="+frameworkModule, "GOFLAGS=-modcacherw")
 	cli := filepath.Join(job, "fathomry")
-	runConsumer(t, toolDirectory, environment, goTool(), "build", "-mod=mod", "-o", cli, frameworkModule+"/cmd/fathomry")
-	verifyHTTPReplacement(t, toolDirectory, environment)
+	runConsumerBudget(t, 3*time.Minute, toolDirectory, environment, goTool(), "list", "-mod=mod", "-deps", frameworkModule+"/cmd/fathomry")
+	offline := append(append([]string(nil), environment...), "GOPROXY=off", "GONOPROXY=none", "GOSUMDB=off")
+	runConsumerBudget(t, 3*time.Minute, toolDirectory, offline, goTool(), "build", "-mod=readonly", "-o", cli, frameworkModule+"/cmd/fathomry")
+	verifyHTTPReplacement(t, toolDirectory, offline)
 	for _, mode := range []string{"local", "remote"} {
 		for _, encoding := range []string{"yaml", "toml"} {
 			t.Run(mode+"/"+encoding, func(t *testing.T) {
@@ -228,7 +237,7 @@ func TestVersionedProjects(t *testing.T) {
 				}
 				t.Logf("%s/%s: generated, tidied, vetted, race-tested and built from the isolated module cache; local programs executed, remote programs reject absent bootstrap", mode, encoding)
 				if mode == "local" && encoding == "yaml" {
-					for _, provider := range []string{"nethttp", "tlsclient"} {
+					for _, provider := range []string{"nethttp", "tlsclient", "surf"} {
 						for _, variant := range []string{"direct", "framework"} {
 							fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/httpclient", provider, "v1/testdata", variant, "main.go"))
 							if err != nil {
@@ -245,7 +254,7 @@ func TestVersionedProjects(t *testing.T) {
 							runConsumer(t, destination, environment, goTool(), "mod", "tidy")
 							runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
 							binary := filepath.Join(job, name)
-							runConsumer(t, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
+							runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
 							executeHTTPConsumer(t, destination, environment, binary, provider+" "+variant+" public consumer passed\n")
 						}
 					}
@@ -265,8 +274,9 @@ func TestVersionedProjects(t *testing.T) {
 
 func verifyHTTPReplacement(t testing.TB, directory string, environment []string) {
 	t.Helper()
+	verified := 0
 	for _, pin := range sdkPins() {
-		if pin.original != "github.com/bogdanfinn/tls-client" {
+		if pin.original != "github.com/bogdanfinn/tls-client" && pin.original != "github.com/enetx/surf" && pin.original != "github.com/enetx/http2" && pin.original != "github.com/enetx/http3" {
 			continue
 		}
 		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", pin.original)
@@ -276,7 +286,9 @@ func verifyHTTPReplacement(t testing.TB, directory string, environment []string)
 		if json.Unmarshal(raw, &selected) != nil || selected.Replace == nil || selected.Replace.Path != frameworkModule+"/"+pin.directory || selected.Replace.Version != pin.version || selected.Replace.Sum != pin.sum {
 			t.Fatal("actual downloaded HTTP replacement differs from qualified immutable bytes")
 		}
-		return
+		verified++
 	}
-	t.Fatal("HTTP replacement policy missing")
+	if verified != 4 {
+		t.Fatal("HTTP replacement policy missing")
+	}
 }

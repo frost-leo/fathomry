@@ -164,12 +164,25 @@ CI restores Go module/build caches by runner OS/architecture, Go version and
 artifacts. Separate restore/save steps retain available cache data even when a
 check fails; canceled jobs do not save, and existing exact keys are not overwritten.
 Cache hits are an optimization, not an acceptance prerequisite or a reason to skip
-checks. A cache save never changes a failed check's result. Race tests keep
+checks. A cache save never changes a failed check's result. CI runs the cold
+project/consumer package alone with `-p=1`, then the remaining packages with bounded
+`-p=2` concurrency. The package list comes from `go list ./...`; every package and
+test remains included. This isolates nested cold compilation without serializing
+all unrelated work against the job-wide guard. Race tests keep
 `-count=1` so previous test results cannot replace execution. Independent-consumer fixtures
 first prepare their own module graph using the configured Go proxy/checksum policy,
 then enforce offline tidy-diff, readonly execution and import-boundary checks.
 Cold module caches must work; a developer's previously downloaded dependency-test
 versions are not fixture inputs.
+
+The versioned CLI fixture starts with an empty module cache. Its dependency-closure
+acquisition, subsequent readonly offline CLI compilation, and first-build HTTP
+consumer race compilation each have a three-minute test guard; other consumer
+commands retain their 90-second guard. These separate
+budgets cover network acquisition and relocated cold compilation, not a product
+startup SLA. Phase timings and context causes remain in test diagnostics. No
+checksum, replacement-graph, generated-project or public-consumer assertion is
+skipped when acquisition is slow.
 
 ## Engineering expectations
 

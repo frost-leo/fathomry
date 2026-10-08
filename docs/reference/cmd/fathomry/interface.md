@@ -261,8 +261,8 @@ The repository still contains local SDK replacements, so a direct
 `go install .../cmd/fathomry@VERSION` is not promised. Build the CLI from a checked
 out revision, or from a main module that supplies the documented replacement
 policy. No installer or release publication is added by project generation.
-In particular, the offline tls-client catalog is part of its concrete Adapter
-package and therefore compiles against the corrected SDK even without constructing
+In particular, the offline tls-client and Surf catalogs are part of their concrete Adapter
+packages and therefore compile against the corrected SDKs even without constructing
 a client. A module-based CLI build must supply the maintained
 [versioned SDK selections](../../../../cmd/fathomry/internal/command/project/dependency.go)
 before building; the versioned-root qualification does this without copying nested

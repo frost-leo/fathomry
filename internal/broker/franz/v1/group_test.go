@@ -95,6 +95,31 @@ func waitGroup(t *testing.T, fixture fixture, group *Group, count int) GroupSnap
 		}
 	}
 }
+
+func waitGroupInitialOffsets(t *testing.T, group *Group) {
+	t.Helper()
+	ctx := deadline(t)
+	poll := time.NewTicker(time.Millisecond)
+	defer poll.Stop()
+	for {
+		group.mu.Lock()
+		ready := group.ready && !group.closing && len(group.partitions) > 0
+		pending, problem := len(group.expectedOffsets), group.primary
+		group.mu.Unlock()
+		if problem != nil {
+			logFixtureCauses(t, problem)
+			t.Fatal("group failed before initial offsets completed")
+		}
+		if ready && pending == 0 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("initial OffsetFetch did not complete", ctx.Err())
+		case <-poll.C:
+		}
+	}
+}
 func nextBatch(t *testing.T, fixture fixture, group *Group) GroupBatch {
 	t.Helper()
 	for range 8 {
@@ -518,7 +543,12 @@ func TestGroupLeaveMemberFailureRetained(t *testing.T) {
 	fixture := bindFixture(t, groupOptions(cluster.ListenAddrs()), 8)
 	group := openGroup(t, fixture)
 	waitGroup(t, fixture, group, 2)
+	// Ready reports assignment, not completion of the native initial OffsetFetch.
+	// Its cancellation can retire the coordinator connection before Leave is read.
+	waitGroupInitialOffsets(t, group)
+	var leaves atomic.Int32
 	cluster.ControlKey(int16(kmsg.LeaveGroup), func(request kmsg.Request) (kmsg.Response, error, bool) {
+		leaves.Add(1)
 		leave := request.(*kmsg.LeaveGroupRequest)
 		if leave.Version != 2 {
 			t.Error("dynamic group leave profile must be v2")
@@ -535,9 +565,10 @@ func TestGroupLeaveMemberFailureRetained(t *testing.T) {
 		return response, nil, true
 	})
 	result := settle(t, group.Close(), nil)
-	if errors.Is(result.Outcome.Cleanup, kerr.UnknownServerError) {
+	if errors.Is(result.Outcome.Cleanup, kerr.UnknownServerError) && leaves.Load() == 1 {
 		return
 	}
+	logFixtureCauses(t, result.Outcome.Cleanup)
 	request := kmsg.NewPtrDescribeGroupsRequest()
 	request.Groups = []string{fixture.client.owner.settings.ConsumerGroup}
 	response, err := request.RequestWith(deadline(t), nativeClient(t, cluster.ListenAddrs()))

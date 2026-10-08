@@ -60,6 +60,7 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"cache/redis/v1":          {"data-provider", true, nil},
 	"httpclient/nethttp/v1":   {"data-provider", true, nil},
 	"httpclient/tlsclient/v1": {"data-provider", true, nil},
+	"httpclient/surf/v1":      {"data-provider", true, nil},
 	"internal/errorbridge":    {"private", false, []string{"bridge.go", "containment.go", "details.go"}},
 }
 
