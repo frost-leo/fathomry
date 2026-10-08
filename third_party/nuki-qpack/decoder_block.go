@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 // decodeDynamic returns a DecodeFunc for a header block, using the dynamic
@@ -78,9 +79,13 @@ func (d *Decoder) decodeBlockContext(ctx context.Context, streamID int64, p []by
 	}
 	var base uint64
 	if !signBit {
+		if deltaBase > math.MaxUint64-ric {
+			d.mutex.Unlock()
+			return nil, errors.New("qpack: Base overflow")
+		}
 		base = ric + deltaBase
 	} else {
-		if deltaBase+1 > ric {
+		if deltaBase >= ric {
 			d.mutex.Unlock()
 			return nil, fmt.Errorf("qpack: invalid Base (Required Insert Count %d, Delta Base %d)", ric, deltaBase)
 		}
@@ -88,8 +93,32 @@ func (d *Decoder) decodeBlockContext(ctx context.Context, streamID int64, p []by
 	}
 
 	// Block this stream until the dynamic table has received enough inserts.
+	blocked := d.dt.insertCount < ric && !d.closed && ctx.Err() == nil
+	if blocked {
+		if streamID < 0 || d.blockedStreams[streamID] == 0 {
+			if d.blocked >= d.maxBlocked {
+				d.mutex.Unlock()
+				return nil, errors.New("qpack: advertised blocked-stream limit exceeded")
+			}
+			d.blocked++
+		}
+		if streamID >= 0 {
+			d.blockedStreams[streamID]++
+		}
+	}
 	for d.dt.insertCount < ric && !d.closed && ctx.Err() == nil {
 		d.cond.Wait()
+	}
+	if blocked {
+		if streamID < 0 {
+			d.blocked--
+		} else {
+			d.blockedStreams[streamID]--
+			if d.blockedStreams[streamID] == 0 {
+				delete(d.blockedStreams, streamID)
+				d.blocked--
+			}
+		}
 	}
 	if ctx.Err() != nil {
 		d.mutex.Unlock()
@@ -104,16 +133,14 @@ func (d *Decoder) decodeBlockContext(ctx context.Context, streamID int64, p []by
 		return nil, err
 	}
 
-	fields, err := d.decodeFieldLines(p, base, limit)
+	fields, err := d.decodeFieldLines(p, base, ric, limit)
 	d.mutex.Unlock()
 	if err != nil {
 		return nil, err
 	}
 
 	if streamID >= 0 && ric > 0 {
-		buf := appendVarInt(nil, 7, uint64(streamID))
-		buf[0] |= 0x80
-		if err := d.writeDecoderStreamContext(ctx, buf); err != nil {
+		if err := d.acknowledgeSection(ctx, uint64(streamID), ric); err != nil {
 			return nil, err
 		}
 	}
@@ -123,7 +150,7 @@ func (d *Decoder) decodeBlockContext(ctx context.Context, streamID int64, p []by
 // decodeFieldLines decodes all field line representations in p against the
 // static and dynamic tables, using the given Base. It must be called with
 // d.mutex held.
-func (d *Decoder) decodeFieldLines(p []byte, base uint64, limit uint64) ([]HeaderField, error) {
+func (d *Decoder) decodeFieldLines(p []byte, base, required uint64, limit uint64) ([]HeaderField, error) {
 	var fields []HeaderField
 	var size uint64
 	for len(p) > 0 {
@@ -133,15 +160,15 @@ func (d *Decoder) decodeFieldLines(p []byte, base uint64, limit uint64) ([]Heade
 		var err error
 		switch {
 		case b&0x80 != 0: // 1Txxxxxx: Indexed Field Line (Section 4.5.2)
-			hf, rest, err = d.decodeIndexedLine(p, base)
+			hf, rest, err = d.decodeIndexedLine(p, base, required)
 		case b&0x40 != 0: // 01NTxxxx: Literal Field Line with Name Reference (Section 4.5.4)
-			hf, rest, err = d.decodeLiteralWithNameRef(p, base)
+			hf, rest, err = d.decodeLiteralWithNameRef(p, base, required)
 		case b&0x20 != 0: // 001NHxxx: Literal Field Line with Literal Name (Section 4.5.6)
 			hf, rest, err = d.parseLiteralHeaderFieldWithoutNameReference(p)
 		case b&0x10 != 0: // 0001xxxx: Indexed Field Line with Post-Base Index (Section 4.5.3)
-			hf, rest, err = d.decodePostBaseIndexedLine(p, base)
+			hf, rest, err = d.decodePostBaseIndexedLine(p, base, required)
 		default: // 0000Nxxx: Literal Field Line with Post-Base Name Reference (Section 4.5.5)
-			hf, rest, err = d.decodePostBaseLiteralWithNameRef(p, base)
+			hf, rest, err = d.decodePostBaseLiteralWithNameRef(p, base, required)
 		}
 		if err != nil {
 			return nil, err
@@ -167,7 +194,7 @@ func (d *Decoder) dynamicAt(absoluteIndex uint64) (HeaderField, bool) {
 	return HeaderField{Name: e.name, Value: e.value}, true
 }
 
-func (d *Decoder) decodeIndexedLine(buf []byte, base uint64) (HeaderField, []byte, error) {
+func (d *Decoder) decodeIndexedLine(buf []byte, base, required uint64) (HeaderField, []byte, error) {
 	static := buf[0]&0x40 != 0
 	index, rest, err := readVarInt(6, buf)
 	if err != nil {
@@ -180,7 +207,7 @@ func (d *Decoder) decodeIndexedLine(buf []byte, base uint64) (HeaderField, []byt
 		}
 		return hf, rest, nil
 	}
-	if index+1 > base {
+	if index >= base || base-index-1 >= required {
 		return HeaderField{}, buf, fmt.Errorf("qpack: indexed field line references invalid relative index %d (Base %d)", index, base)
 	}
 	hf, ok := d.dynamicAt(base - index - 1)
@@ -190,10 +217,13 @@ func (d *Decoder) decodeIndexedLine(buf []byte, base uint64) (HeaderField, []byt
 	return hf, rest, nil
 }
 
-func (d *Decoder) decodePostBaseIndexedLine(buf []byte, base uint64) (HeaderField, []byte, error) {
+func (d *Decoder) decodePostBaseIndexedLine(buf []byte, base, required uint64) (HeaderField, []byte, error) {
 	index, rest, err := readVarInt(4, buf)
 	if err != nil {
 		return HeaderField{}, buf, err
+	}
+	if base >= required || index >= required-base {
+		return HeaderField{}, buf, invalidIndexError(index)
 	}
 	hf, ok := d.dynamicAt(base + index)
 	if !ok {
@@ -202,7 +232,7 @@ func (d *Decoder) decodePostBaseIndexedLine(buf []byte, base uint64) (HeaderFiel
 	return hf, rest, nil
 }
 
-func (d *Decoder) decodeLiteralWithNameRef(buf []byte, base uint64) (HeaderField, []byte, error) {
+func (d *Decoder) decodeLiteralWithNameRef(buf []byte, base, required uint64) (HeaderField, []byte, error) {
 	static := buf[0]&0x10 != 0
 	index, rest, err := readVarInt(4, buf)
 	if err != nil {
@@ -216,7 +246,7 @@ func (d *Decoder) decodeLiteralWithNameRef(buf []byte, base uint64) (HeaderField
 			return HeaderField{}, buf, invalidIndexError(index)
 		}
 	} else {
-		if index+1 > base {
+		if index >= base || base-index-1 >= required {
 			return HeaderField{}, buf, fmt.Errorf("qpack: literal field line references invalid relative index %d (Base %d)", index, base)
 		}
 		var ok bool
@@ -238,10 +268,13 @@ func (d *Decoder) decodeLiteralWithNameRef(buf []byte, base uint64) (HeaderField
 	return hf, rest, nil
 }
 
-func (d *Decoder) decodePostBaseLiteralWithNameRef(buf []byte, base uint64) (HeaderField, []byte, error) {
+func (d *Decoder) decodePostBaseLiteralWithNameRef(buf []byte, base, required uint64) (HeaderField, []byte, error) {
 	index, rest, err := readVarInt(3, buf)
 	if err != nil {
 		return HeaderField{}, buf, err
+	}
+	if base >= required || index >= required-base {
+		return HeaderField{}, buf, invalidIndexError(index)
 	}
 	hf, ok := d.dynamicAt(base + index)
 	if !ok {

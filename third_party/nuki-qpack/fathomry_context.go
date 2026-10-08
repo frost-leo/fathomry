@@ -25,9 +25,13 @@ import (
 	"io"
 )
 
-const FathomryCompatibilityRevision = "v1"
+const FathomryCompatibilityRevision = "v2"
 
 var ErrHeaderLimit = errors.New("qpack: decoded header limit exceeded")
+
+// ErrDecoderStream preserves failures writing required feedback separately from
+// malformed peer field sections or encoder instructions.
+var ErrDecoderStream = errors.New("qpack: decoder feedback failed")
 
 // DecodeForStreamContext bounds one section's decoded bytes and permits its
 // cancellation without closing the shared table or affecting another stream.
@@ -65,6 +69,10 @@ func (d *Decoder) writeDecoderStreamContext(ctx context.Context, data []byte) er
 	case d.writeGate <- struct{}{}:
 	}
 	defer func() { <-d.writeGate }()
+	return d.writeDecoderStreamLocked(ctx, data)
+}
+
+func (d *Decoder) writeDecoderStreamLocked(ctx context.Context, data []byte) error {
 	if ctx.Err() != nil {
 		return context.Cause(ctx)
 	}
@@ -86,5 +94,37 @@ func (d *Decoder) writeDecoderStreamContext(ctx context.Context, data []byte) er
 	if err == nil && count != len(data) {
 		err = io.ErrShortWrite
 	}
-	return err
+	if err != nil {
+		return errors.Join(ErrDecoderStream, err)
+	}
+	return nil
+}
+
+func (d *Decoder) acknowledgeSection(ctx context.Context, streamID, required uint64) error {
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case d.writeGate <- struct{}{}:
+	}
+	defer func() { <-d.writeGate }()
+	buffer := appendVarInt(nil, 7, streamID)
+	buffer[0] |= 0x80
+	if err := d.writeDecoderStreamLocked(ctx, buffer); err != nil {
+		return err
+	}
+	d.mutex.Lock()
+	d.ackedInsertCount = max(d.ackedInsertCount, required)
+	d.mutex.Unlock()
+	return nil
+}
+
+// CancelStreamContext writes cancellation after the section's decode context
+// has been canceled. The shared write gate orders it against any accepted ACK.
+func (d *Decoder) CancelStreamContext(ctx context.Context, streamID uint64) error {
+	if d.dt == nil {
+		return nil
+	}
+	buffer := appendVarInt(nil, 6, streamID)
+	buffer[0] |= 0x40
+	return d.writeDecoderStreamContext(ctx, buffer)
 }

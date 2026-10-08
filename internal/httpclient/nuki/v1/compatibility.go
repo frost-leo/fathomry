@@ -51,6 +51,8 @@ func (client *Client) Profile() compatibility.Profile {
 			{Name: "config-format", Value: "1"}, {Name: "native-format", Value: "1"}, {Name: "request-format", Value: "1"},
 			{Name: "local-revision", Value: sdk.FathomryCompatibilityRevision},
 			{Name: "max-connections", Value: strconv.Itoa(value.MaxConnections)},
+			{Name: "max-proxy-tunnels", Value: strconv.Itoa(value.MaxProxyTunnels)},
+			{Name: "max-profile-bytes", Value: strconv.FormatInt(value.MaxProfileBytes, 10)},
 			{Name: "max-routes", Value: strconv.Itoa(value.MaxRoutes)},
 			{Name: "max-exchanges", Value: strconv.Itoa(value.MaxExchanges)},
 			{Name: "max-replays", Value: strconv.Itoa(value.MaxReplays)},

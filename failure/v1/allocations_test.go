@@ -116,6 +116,10 @@ func TestAllocations(t *testing.T) {
 			failure.FacilityHTTPcloak != 0x203 || failure.FacilityHTTPcloak.Domain() != failure.DomainNetwork {
 			t.Fatal("HTTPcloak capability allocation changed")
 		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityNuki, Module: "fathomry", Component: "http_nuki"}) ||
+			failure.FacilityNuki != 0x204 || failure.FacilityNuki.Domain() != failure.DomainNetwork {
+			t.Fatal("Nuki capability allocation changed")
+		}
 		for index, allocation := range allocations {
 			if allocation.Facility == failure.FacilityTLSClient && (allocation.Module != "fathomry" || allocation.Component != "http_tlsclient" || allocation.Facility != 0x201 || allocation.Facility.Domain() != failure.DomainNetwork) {
 				t.Fatal("tlsclient capability allocation changed")

@@ -17,20 +17,22 @@ import (
 )
 
 type Dialer struct {
-	maxHeader   int64
-	base        ContextDialer
-	headers     http.Header
-	createMu    sync.Mutex
-	closed      bool
-	cleanup     error
-	sessions    []*http2.ClientConn
-	h3Transport *quic.Transport
-	h3Socket    net.PacketConn
-	proxyURL    *url.URL
-	template    *uritemplate.Template
-	authHeader  string
-	timeout     time.Duration
-	tlsConf     *tls.Config
+	maxHeader     int64
+	base          ContextDialer
+	headers       http.Header
+	createMu      sync.Mutex
+	closed        bool
+	cleanup       error
+	sessions      []*http2.ClientConn
+	h3Transport   *quic.Transport
+	h3Socket      net.PacketConn
+	proxyURL      *url.URL
+	template      *uritemplate.Template
+	authHeader    string
+	timeout       time.Duration
+	tlsConf       *tls.Config
+	resolver      *net.Resolver
+	acquireTunnel func() (func(), error)
 
 	h2DialLock   sync.Mutex
 	h2Conn       net.Conn
@@ -39,6 +41,11 @@ type Dialer struct {
 	h3DialLock   sync.Mutex
 	h3Conn       *quic.Conn
 	h3ClientConn *http3.ClientConn
+}
+
+// ConfigureFathomry selects source-owned lookup and tunnel admission before use.
+func (d *Dialer) ConfigureFathomry(resolver *net.Resolver, acquire func() (func(), error)) {
+	d.resolver, d.acquireTunnel = resolver, acquire
 }
 
 var (

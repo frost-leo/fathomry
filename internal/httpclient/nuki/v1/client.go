@@ -45,35 +45,57 @@ type Client struct {
 // Select prepares and freezes explicit settings without network I/O or executing
 // native profile factories. Native object borrowing is declared by NativeOptionsV1.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	native, err := copyNative(options.Native)
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
+	}
+	return prepared.Select(), nil
+}
+
+// PrepareV1 freezes exact layered data and native inputs without invoking factories.
+func PrepareV1(options OptionsV1, layers ...resource.Layer) (Prepared, error) {
+	if err := validateDataEnvelope(options); err != nil {
+		return Prepared{}, err
+	}
+	native, err := copyNative(options.Native)
+	if err != nil {
+		return Prepared{}, err
 	}
 	version := options.Version
 	if version == 0 {
 		version = 1
 	}
+	var effective settings
 	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options),
 		Validate: func(value settings) error {
 			if err := validate(value); err != nil {
 				return err
 			}
-			return validateNative(value, native)
+			if err := validateNative(value, native); err != nil {
+				return err
+			}
+			effective = value
+			return nil
 		}},
 		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
 	if err != nil {
-		return resource.Selection[Source]{}, err
+		return Prepared{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
+	return Prepared{configuration: prepared, native: native, metadata: effective.budget(native)}, nil
+}
+
+func (prepared Prepared) Select() resource.Selection[Source] {
+	return resource.Select(prepared.configuration, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
 		if err := ctx.Err(); err != nil {
 			return resource.Resource[Source]{}, failure(ErrState, "construct", err, context.Cause(ctx))
 		}
-		instance, err := newOwner(value, native)
+		instance, err := newOwner(value, prepared.native)
 		if err != nil {
 			return resource.Resource[Source]{}, err
 		}
+		instance.budget = prepared.metadata
 		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: instance}, Release: instance.release}, nil
-	}), nil
+	})
 }
 
 // LimitsV1 returns bounds for Go options without layers. Layered composition must
@@ -82,11 +104,12 @@ func LimitsV1(options OptionsV1) (resource.Limits, error) {
 	if options.Version != 0 && options.Version != 1 {
 		return resource.Limits{}, failure(ErrInput, "version")
 	}
-	value := defaults(options)
-	if err := validate(value); err != nil {
+	options.Name = "limits"
+	prepared, err := PrepareV1(options)
+	if err != nil {
 		return resource.Limits{}, err
 	}
-	return value.limits(), nil
+	return prepared.Metadata().Limits, nil
 }
 
 // Bind grants controlled operations over exactly the selected authoritative
@@ -104,8 +127,8 @@ func Bind(assembly *resource.Assembly, selection resource.Selection[Source], inb
 		return nil, failure(ErrInput, "bind")
 	}
 	value, limits := source.owner.settings, access.Limits()
-	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < value.reservation() ||
-		limits.Queued > 0 && limits.QueuedBytes < value.reservation() {
+	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < source.owner.budget.WorkBytes ||
+		limits.Queued > 0 && limits.QueuedBytes < source.owner.budget.WorkBytes {
 		return nil, failure(ErrInput, "limits")
 	}
 	return &Client{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil

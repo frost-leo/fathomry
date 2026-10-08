@@ -353,6 +353,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/httpclient/tlsclient/v1`](reference/adapters/httpclient/tlsclient/v1/interface.md) | Explicit native profiles, H3 racing, finite/stream HTTP and protocol-qualified counters |
 | [`adapters/httpclient/surf/v1`](reference/adapters/httpclient/surf/v1/interface.md) | Surf H1/H2/H3/h2c, incremental multipart, finite/stream responses and exact preparation |
 | [`adapters/httpclient/httpcloak/v1`](reference/adapters/httpclient/httpcloak/v1/interface.md) | HTTPcloak native HTTP, exact preparation and controlled route/response ownership |
+| [`adapters/httpclient/nuki/v1`](reference/adapters/httpclient/nuki/v1/interface.md) | Nuki native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

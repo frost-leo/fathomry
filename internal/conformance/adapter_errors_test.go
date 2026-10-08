@@ -29,7 +29,7 @@ import (
 	"testing"
 )
 
-var publicDataAdapters = []string{"database/postgres", "database/mysql", "objectstore/minio", "broker/kafka", "cache/redis", "sqlengine/duckdb", "sqlengine/trino", "sqlengine/doris", "httpclient/nethttp", "httpclient/tlsclient", "httpclient/surf", "httpclient/httpcloak"}
+var publicDataAdapters = []string{"database/postgres", "database/mysql", "objectstore/minio", "broker/kafka", "cache/redis", "sqlengine/duckdb", "sqlengine/trino", "sqlengine/doris", "httpclient/nethttp", "httpclient/tlsclient", "httpclient/surf", "httpclient/httpcloak", "httpclient/nuki"}
 
 // These files are offline metadata boundaries. Native translation and runtime
 // diagnostics stay separately reviewable without changing public package APIs.

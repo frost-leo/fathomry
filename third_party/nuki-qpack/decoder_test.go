@@ -27,9 +27,9 @@ func TestDecoderInvalidInputs(t *testing.T) {
 			expected: "expected Required Insert Count to be zero",
 		},
 		{
-			name:     "non-zero delta base", // we don't support dynamic table updates
-			input:    append(appendVarInt(nil, 8, 0), appendVarInt(nil, 7, 1)...),
-			expected: "expected Base to be zero",
+			name:     "negative delta base with zero required insert count",
+			input:    []byte{0, 0x80},
+			expected: "qpack: negative Base with zero Required Insert Count",
 		},
 		{
 			name:     "unknown type byte",

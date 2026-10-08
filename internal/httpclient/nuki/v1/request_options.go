@@ -114,11 +114,10 @@ func (client *Client) prepare(ctx context.Context, request *http.Request, option
 		}
 		choice.headers[canonical] = append([]string(nil), values...)
 	}
-	if err := validateRequest(request, value); err != nil {
+	copied, err := SnapshotRequestV1(ctx, request, value.requestPolicy())
+	if err != nil {
 		return nil, choice, err
 	}
-	copied := request.Clone(ctx)
-	copied.Response, copied.TLS, copied.Cancel = nil, nil, nil
 	if err := canonicalizeURL(copied.URL); err != nil {
 		return nil, choice, err
 	}
@@ -138,7 +137,7 @@ func (owner *owner) validateRouteRequest(request *http.Request, choice routeChoi
 	if err != nil {
 		return err
 	}
-	if force && proxy != nil && (proxy.Scheme == "http" || proxy.Scheme == "https") {
+	if force && proxy != nil && (proxy.Scheme == "http" || proxy.Scheme == "https") && !strings.Contains(proxy.Path, "{") && !strings.Contains(proxy.RawQuery, "{") && !strings.Contains(strings.ToLower(proxy.RawQuery), "%7b") {
 		return failure(ErrUnsupported, "http3-route")
 	}
 	if !disabled && owner.native.Profile.H3 != nil && proxy != nil && proxy.Scheme == "socks5h" && net.ParseIP(request.URL.Hostname()) == nil {
@@ -148,16 +147,16 @@ func (owner *owner) validateRouteRequest(request *http.Request, choice routeChoi
 }
 
 func validateRequest(request *http.Request, value settings) error {
-	if request != nil && (request.MultipartForm != nil || len(request.Form) != 0 || len(request.PostForm) != 0 || request.Response != nil || request.TLS != nil) {
+	if request != nil && (request.MultipartForm != nil || request.Form != nil || request.PostForm != nil || request.Response != nil || request.TLS != nil || request.Cancel != nil || request.RequestURI != "" || request.RemoteAddr != "" || request.Pattern != "") {
 		return failure(ErrUnsupported, "server-request-state")
 	}
-	if request == nil || request.URL == nil || request.URL.Hostname() == "" ||
+	if request == nil || request.URL == nil || !boundedURL(request.URL) || request.URL.Hostname() == "" ||
 		request.URL.Scheme != "http" && request.URL.Scheme != "https" ||
-		request.Method == "CONNECT" || request.Method != "" && !fieldToken(request.Method) ||
+		int64(len(request.Method)) > value.MaxHeaderBytes || request.Method == "CONNECT" || request.Method != "" && !fieldToken(request.Method) ||
 		request.ContentLength < -1 || request.ContentLength > value.MaxRequestBytes ||
 		request.Body == nil && request.ContentLength > 0 || len(request.TransferEncoding) > 1 ||
 		len(request.TransferEncoding) == 1 && request.TransferEncoding[0] != "chunked" ||
-		!boundedURL(request.URL) || len(request.Host) > 8192 || !fieldValue(request.Host) {
+		len(request.Host) > 8192 || !fieldValue(request.Host) {
 		return failure(ErrInput, "request")
 	}
 	if port := request.URL.Port(); port != "" {
@@ -165,6 +164,16 @@ func validateRequest(request *http.Request, value settings) error {
 		if err != nil || parsed == 0 {
 			return failure(ErrInput, "port", err)
 		}
+	}
+	if int64(len(request.Method))+int64(len(request.Proto))+int64(len(request.Host)) > value.MaxHeaderBytes || len(request.ExcludedCookies) > 4096 {
+		return failure(ErrLimit, "request-metadata")
+	}
+	remaining := value.MaxHeaderBytes
+	for name := range request.ExcludedCookies {
+		if int64(len(name))+64 > remaining {
+			return failure(ErrLimit, "excluded-cookies")
+		}
+		remaining -= int64(len(name)) + 64
 	}
 	if err := validateHeaders(request.Header, value.MaxHeaderBytes); err != nil {
 		return err
@@ -190,23 +199,26 @@ func validateRequest(request *http.Request, value settings) error {
 }
 
 func validateHeaders(header http.Header, limit int64) error {
-	total := int64(0)
+	remaining := limit
 	for key, values := range header {
+		if int64(len(key))+64 > remaining {
+			return failure(ErrLimit, "headers")
+		}
+		remaining -= int64(len(key)) + 64
+		if int64(len(values)) > remaining/32 {
+			return failure(ErrLimit, "headers")
+		}
 		if key != http.HeaderOrderKey && !fieldToken(key) {
 			return failure(ErrInput, "header-name")
 		}
-		total += int64(len(key)) + 64
 		for _, value := range values {
+			if int64(len(value))+32 > remaining {
+				return failure(ErrLimit, "headers")
+			}
 			if !fieldValue(value) {
 				return failure(ErrInput, "header-value")
 			}
-			total += int64(len(value)) + 32
-			if total > limit {
-				return failure(ErrLimit, "headers")
-			}
-		}
-		if total > limit {
-			return failure(ErrLimit, "headers")
+			remaining -= int64(len(value)) + 32
 		}
 	}
 	return nil
@@ -232,12 +244,25 @@ func fieldValue(value string) bool {
 }
 
 func boundedURL(value *url.URL) bool {
-	length := len(value.Scheme) + len(value.Opaque) + len(value.Host) + len(value.Path) + len(value.RawPath) + len(value.RawQuery) + len(value.Fragment) + len(value.RawFragment)
+	remaining := 8192
+	for _, field := range []string{value.Scheme, value.Opaque, value.Host, value.Path, value.RawPath, value.RawQuery, value.Fragment, value.RawFragment} {
+		if len(field) > remaining {
+			return false
+		}
+		remaining -= len(field)
+	}
 	if value.User != nil {
 		password, _ := value.User.Password()
-		length += len(value.User.Username()) + len(password)
+		if len(value.User.Username()) > remaining {
+			return false
+		}
+		remaining -= len(value.User.Username())
+		if len(password) > remaining {
+			return false
+		}
 	}
-	return length <= 8192 && len(value.String()) <= 8192 && fieldValue(value.String())
+	encoded := value.String()
+	return len(encoded) <= 8192 && fieldValue(encoded)
 }
 func canonicalizeURL(value *url.URL) error {
 	host, err := canonicalHost(value.Hostname())
@@ -260,7 +285,7 @@ func metadataRequest(request *http.Request) *http.Request {
 	if request == nil {
 		return nil
 	}
-	result := request.Clone(request.Context())
+	result := snapshotRequest(request, request.Context())
 	result.Body, result.GetBody, result.Response, result.TLS, result.Cancel = nil, nil, nil, nil, nil
 	return result
 }

@@ -261,7 +261,7 @@ The repository still contains local SDK replacements, so a direct
 `go install .../cmd/fathomry@VERSION` is not promised. Build the CLI from a checked
 out revision, or from a main module that supplies the documented replacement
 policy. No installer or release publication is added by project generation.
-In particular, the offline tls-client, Surf and HTTPcloak catalogs are part of their concrete Adapter
+In particular, the offline tls-client, Surf, HTTPcloak and Nuki catalogs are part of their concrete Adapter
 packages and therefore compile against the corrected SDKs even without constructing
 a client. A module-based CLI build must supply the maintained
 [versioned SDK selections](../../../../cmd/fathomry/internal/command/project/dependency.go)

@@ -19,7 +19,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Nuki QUIC compatibility correction
 
-**Status:** local revision v1 for the internal Nuki Provider, not production or
+**Status:** local revision v2 for the Internal/public Nuki boundary, not production or
 arbitrary QUIC-mode qualification.
 
 Source: github.com/nukilabs/quic-go v1.3.0 at
@@ -53,6 +53,23 @@ The patch changes neither the official github.com/quic-go/quic-go module nor its
 shared QPACK selection. It requires the separately versioned local Nuki QPACK
 correction. Go 1.27 and the selected uTLS stack remain genuine requirements; no
 cryptographic backport or language-version-only downgrade is supplied.
+
+The #121 correction adds context-aware datagram enqueue without changing ordinary
+public request ownership. Dynamic QPACK uses the exact advertised blocked-stream
+allowance and Required Insert Count references, serialized acknowledged-insertion
+credit, critical-stream failure observation independent of feedback backpressure,
+and genuine receive-abort/deadline notification distinct from normal FIN. Reading
+abandonment sends at most one cancellation; no later section ACK can revive it.
+Bounded control workers are joined after terminal QUIC close. The native QPACK
+correction and HTTP receive-window correction must accompany this module in the
+actual consumer replacement graph.
+
+The context-aware enqueue extension preserves
+SendDatagram's unreliable delivery meaning. A canceled queue waiter cannot close
+the connection or enqueue a frame later; HTTP3 request-stream forwarding preserves
+stream cancellation so CONNECT-UDP deadlines do not terminate healthy siblings.
+Refusal of the bounded datagram receiver worker closes the affected connection
+with H3_EXCESSIVE_LOAD; it cannot leave negotiated datagrams without a receiver.
 
 Original failure controls and owner/agent reviews remain private. Maintained
 native unit tests, the Provider's independent-peer cancellation/isolation test,

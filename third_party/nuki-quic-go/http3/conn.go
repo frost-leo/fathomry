@@ -43,6 +43,10 @@ type rawConn struct {
 	// qpackEncoderStrHandler, if set, is called with the peer's QPACK encoder
 	// stream so its instructions can be fed into the QPACK dynamic table.
 	qpackEncoderStrHandler func(*quic.ReceiveStream)
+	qpackDecoderStrHandler func(*quic.ReceiveStream)
+	watchCriticalReceive   func(*quic.ReceiveStream)
+	watchCriticalSend      func(*quic.SendStream)
+	schedule               func(func()) bool
 
 	onStreamsEmpty func()
 
@@ -91,6 +95,9 @@ func (c *rawConn) openControlStream(settings *settingsFrame) (*quic.SendStream, 
 	if err != nil {
 		return nil, err
 	}
+	if c.watchCriticalSend != nil {
+		c.watchCriticalSend(str)
+	}
 	b := make([]byte, 0, 64)
 	b = quicvarint.Append(b, streamTypeControlStream)
 	b = settings.Append(b)
@@ -119,6 +126,7 @@ func (c *rawConn) openControlStream(settings *settingsFrame) (*quic.SendStream, 
 
 func (c *rawConn) TrackStream(str *quic.Stream) *stateTrackingStream {
 	hstr := newStateTrackingStream(str, c, func(b []byte) error { return c.sendDatagram(str.StreamID(), b) })
+	hstr.sendDatagramContext = func(ctx context.Context, b []byte) error { return c.sendDatagramContext(ctx, str.StreamID(), b) }
 
 	c.streamMx.Lock()
 	c.streams[str.StreamID()] = hstr
@@ -188,6 +196,9 @@ func (c *rawConn) handleUnidirectionalStream(str *quic.ReceiveStream, isServer b
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate QPACK encoder stream")
 			return
 		}
+		if c.watchCriticalReceive != nil {
+			c.watchCriticalReceive(str)
+		}
 		// Feed the encoder stream into the QPACK dynamic table, if configured.
 		// Otherwise the instructions are read and discarded.
 		if c.qpackEncoderStrHandler != nil {
@@ -197,8 +208,14 @@ func (c *rawConn) handleUnidirectionalStream(str *quic.ReceiveStream, isServer b
 	case streamTypeQPACKDecoderStream:
 		if isFirst := c.rcvdQPACKDecoderStr.CompareAndSwap(false, true); !isFirst {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate QPACK decoder stream")
+			return
 		}
-		// Our QPACK implementation doesn't use the dynamic table yet.
+		if c.watchCriticalReceive != nil {
+			c.watchCriticalReceive(str)
+		}
+		if c.qpackDecoderStrHandler != nil {
+			c.qpackDecoderStrHandler(str)
+		}
 		return
 	case streamTypePushStream:
 		if isServer {
@@ -217,6 +234,9 @@ func (c *rawConn) handleUnidirectionalStream(str *quic.ReceiveStream, isServer b
 	if isFirstControlStr := c.rcvdControlStr.CompareAndSwap(false, true); !isFirstControlStr {
 		c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate control stream")
 		return
+	}
+	if c.watchCriticalReceive != nil {
+		c.watchCriticalReceive(str)
 	}
 	c.handleControlStream(str)
 }
@@ -256,18 +276,32 @@ func (c *rawConn) handleControlStream(str *quic.ReceiveStream) {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeSettingsError), "missing QUIC Datagram support")
 			return
 		}
-		c.qloggerWG.Go(func() {
+		work := func() {
 			err := c.receiveDatagrams()
 			if c.logger != nil {
 				c.logger.Debug("receiving datagrams failed", "error", err)
 			}
-		})
+		}
+		if c.schedule != nil {
+			c.qloggerWG.Add(1)
+			if !c.schedule(func() { defer c.qloggerWG.Done(); work() }) {
+				c.qloggerWG.Done()
+				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeExcessiveLoad), "datagram receiver capacity exhausted")
+				return
+			}
+		} else {
+			c.qloggerWG.Go(work)
+		}
 	}
 
 	c.controlStrHandler(str, fp)
 }
 
 func (c *rawConn) sendDatagram(streamID quic.StreamID, b []byte) error {
+	return c.sendDatagramContext(context.Background(), streamID, b)
+}
+
+func (c *rawConn) sendDatagramContext(ctx context.Context, streamID quic.StreamID, b []byte) error {
 	// TODO: this creates a lot of garbage and an additional copy
 	data := make([]byte, 0, len(b)+8)
 	quarterStreamID := uint64(streamID / 4)
@@ -282,7 +316,7 @@ func (c *rawConn) sendDatagram(streamID quic.StreamID, b []byte) error {
 			},
 		})
 	}
-	return c.conn.SendDatagram(data)
+	return c.conn.SendDatagramContext(ctx, data)
 }
 
 func (c *rawConn) receiveDatagrams() error {

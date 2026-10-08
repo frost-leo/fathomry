@@ -3,7 +3,7 @@
   "version": "v1.8.8",
   "commit": "a39f4b559907b309f376eb1022172f03d35102e2",
   "module_sum": "h1:AnSzSJ4jJ51THOdciLifC7yrO6oaCYWmU6vHtBL9Mkw=",
-  "local_revision": "v1",
+  "local_revision": "v2",
   "original_sha256": {
     "LICENSE": "f724a85585443c5996856bd2b4a38c64cbd8dd6dbdaab7935a43ba7f0eb37875",
     "bandwidth/conn.go": "7659dbabe8874d632e104674b7a9fa0202b5c065585f3f1c1b840b5ecc2c8b07",

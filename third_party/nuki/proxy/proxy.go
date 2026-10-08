@@ -61,7 +61,9 @@ func NewWithDialer(proxyURL *url.URL, timeout time.Duration, tlsConf *tls.Config
 			data := []byte(proxyURL.User.Username() + ":" + password)
 			authHeader = "Basic " + base64.StdEncoding.EncodeToString(data)
 		}
-		template, err := uritemplate.New(unescapeBraces(proxyURL.String()))
+		templateURL := *proxyURL
+		templateURL.User = nil
+		template, err := uritemplate.New(unescapeBraces(templateURL.String()))
 		if err != nil {
 			return nil, err
 		}

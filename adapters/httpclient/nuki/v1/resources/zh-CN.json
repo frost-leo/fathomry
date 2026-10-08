@@ -1,0 +1,97 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "http_nuki",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.http_nuki.invalid_input",
+      "source": "c00aa67c3ae301478458a411e9d6fd9b5d6056d66f17a9a725320df5dc5019b5",
+      "forms": {
+        "other": "HTTP 输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.unsupported_profile",
+      "source": "5977408c229546df50047d96677294114297742e6a1832d0afa123fa663c1616",
+      "forms": {
+        "other": "请求的 HTTP 能力不受支持。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.transport_failed",
+      "source": "3fc9d594186487cb3b09924c699d80eb55384f4b034112b725e0f9f13a4c13c4",
+      "forms": {
+        "other": "HTTP 传输失败，远端效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.read_failed",
+      "source": "a8cf028753cc79fdf189a814e27362e893c4ff6789a24f5b8b357efe19b8fb86",
+      "forms": {
+        "other": "读取 HTTP 输入或响应失败。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.integrity_failed",
+      "source": "46cd2900f16b91be7eeb30761401e7e9a808e8c555f280c0aa3ff75655f0ee62",
+      "forms": {
+        "other": "HTTP 响应不完整或格式无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.limit_exceeded",
+      "source": "f99a52b4792184fbaa2c8edd0f5df9beed50e14b9138546016d67806cfed1309",
+      "forms": {
+        "other": "超出 HTTP 能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.invalid_state",
+      "source": "cfae0a97ef4d2dd9979f019835c3617ed399387e29335a1678d2bc4ab1a7c436",
+      "forms": {
+        "other": "HTTP 句柄在当前状态下无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.cleanup_failed",
+      "source": "4a961ab4c52c1b415a2ec3de13bdb7846568d93f139045dfd177f314ca9a5b72",
+      "forms": {
+        "other": "HTTP 清理报告失败，完成状态需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.runtime_serialization",
+      "source": "070117f07c311ab19816c8639a056ce8d609080a3598155b902f1f9014d325f2",
+      "forms": {
+        "other": "不支持序列化 HTTP 运行时值。"
+      }
+    },
+    {
+      "id": "fathomry.http_nuki.callback_failed",
+      "source": "a1d3418c600ba1325f2a80e3bb908e3ac6966de631644fd00ef6c7d009c89424",
+      "forms": {
+        "other": "HTTP 回调失败。"
+      }
+    }
+  ]
+}

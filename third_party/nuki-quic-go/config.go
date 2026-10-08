@@ -14,6 +14,14 @@ func (c *Config) Clone() *Config {
 	return &copy
 }
 
+// FathomryReceiveBounds reports selected native defaults without changing the
+// configuration or invoking callbacks. It is declared accounting, not RSS.
+func FathomryReceiveBounds(config *Config) (stream, connection uint64) {
+	selected := populateConfig(config)
+	return max(selected.InitialStreamReceiveWindow, selected.MaxStreamReceiveWindow),
+		max(selected.InitialConnectionReceiveWindow, selected.MaxConnectionReceiveWindow)
+}
+
 func (c *Config) handshakeTimeout() time.Duration {
 	return 2 * c.HandshakeIdleTimeout
 }

@@ -64,7 +64,7 @@ func nativeCommand(t *testing.T, environment []string) {
 	if strings.TrimSpace(string(cgo)) == "1" {
 		args = append(args, "-race")
 	}
-	args = append(args, "github.com/nukilabs/tlsclient", "github.com/nukilabs/tlsclient/proxy", "github.com/nukilabs/socks",
+	args = append(args, "github.com/nukilabs/http/http2", "github.com/nukilabs/tlsclient", "github.com/nukilabs/tlsclient/proxy", "github.com/nukilabs/socks",
 		"github.com/nukilabs/qpack", "github.com/nukilabs/quic-go", "github.com/nukilabs/quic-go/http3", "github.com/nukilabs/quic-go/qlogwriter")
 	command := exec.CommandContext(ctx, goBinary, args...)
 	command.Dir = productRoot(t)

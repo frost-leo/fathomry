@@ -28,7 +28,7 @@ import (
 )
 
 // FathomryCompatibilityRevision identifies this local correction, not an upstream release.
-const FathomryCompatibilityRevision = "v1"
+const FathomryCompatibilityRevision = "v2"
 
 var ErrClientClosed = errors.New("tlsclient: client closed")
 var ErrInvalidHook = errors.New("tlsclient: invalid hook result")
