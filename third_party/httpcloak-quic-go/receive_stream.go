@@ -16,7 +16,9 @@ import (
 
 // A ReceiveStream is a unidirectional Receive Stream.
 type ReceiveStream struct {
-	mutex sync.Mutex
+	abortSignal chan struct{}
+	abortCause  error
+	mutex       sync.Mutex
 
 	streamID protocol.StreamID
 
@@ -90,6 +92,7 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 
 	s.mutex.Lock()
 	queuedStreamWindowUpdate, queuedConnWindowUpdate, n, err := s.readImpl(p)
+	s.signalFathomryAbort()
 	completed := s.isNewlyCompleted()
 	s.mutex.Unlock()
 
@@ -371,6 +374,7 @@ func (s *ReceiveStream) dequeueNextFrame() {
 func (s *ReceiveStream) CancelRead(errorCode StreamErrorCode) {
 	s.mutex.Lock()
 	queuedNewControlFrame := s.cancelReadImpl(errorCode)
+	s.signalFathomryAbort()
 	completed := s.isNewlyCompleted()
 	s.mutex.Unlock()
 
@@ -434,6 +438,7 @@ func (s *ReceiveStream) handleStreamFrameImpl(frame *wire.StreamFrame, now monot
 func (s *ReceiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame, now monotime.Time) error {
 	s.mutex.Lock()
 	err := s.handleResetStreamFrameImpl(frame, now)
+	s.signalFathomryAbort()
 	completed := s.isNewlyCompleted()
 	s.mutex.Unlock()
 
@@ -515,6 +520,7 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 func (s *ReceiveStream) closeForShutdown(err error) {
 	s.mutex.Lock()
 	s.closeForShutdownErr = err
+	s.signalFathomryAbort()
 	s.mutex.Unlock()
 	s.signalRead()
 }

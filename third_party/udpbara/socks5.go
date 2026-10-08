@@ -1,6 +1,7 @@
 package udpbara
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -76,6 +77,12 @@ func socks5UsernameAuth(conn net.Conn, user, pass string) error {
 
 // socks5UDPAssociate sends the UDP ASSOCIATE command and returns the relay address.
 func socks5UDPAssociate(conn net.Conn) (*net.UDPAddr, error) {
+	return socks5UDPAssociateContext(context.Background(), conn, func(ctx context.Context, host string) ([]net.IP, error) {
+		return net.DefaultResolver.LookupIP(ctx, "ip", host)
+	})
+}
+
+func socks5UDPAssociateContext(ctx context.Context, conn net.Conn, resolve func(context.Context, string) ([]net.IP, error)) (*net.UDPAddr, error) {
 	// VER=5, CMD=3 (UDP ASSOCIATE), RSV=0, ATYP=1 (IPv4), DST.ADDR=0.0.0.0, DST.PORT=0
 	req := []byte{
 		0x05, 0x03, 0x00, 0x01,
@@ -123,9 +130,12 @@ func socks5UDPAssociate(conn net.Conn) (*net.UDPAddr, error) {
 		if _, err := io.ReadFull(conn, domain); err != nil {
 			return nil, err
 		}
-		ips, err := net.LookupIP(string(domain))
+		ips, err := resolve(ctx, string(domain))
 		if err != nil {
 			return nil, fmt.Errorf("resolve relay domain %s: %w", domain, err)
+		}
+		if len(ips) == 0 {
+			return nil, errors.New("empty relay resolution")
 		}
 		bindIP = ips[0]
 	default:

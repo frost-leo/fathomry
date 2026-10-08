@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/sardanioss/quic-go/internal/utils"
@@ -45,9 +46,23 @@ func newDatagramQueue(hasData func(), logger utils.Logger) *datagramQueue {
 // Up to 32 DATAGRAM frames will be queued.
 // Once that limit is reached, Add blocks until the queue size has reduced.
 func (h *datagramQueue) Add(f *wire.DatagramFrame) error {
+	return h.AddContext(context.Background(), f)
+}
+
+func (h *datagramQueue) AddContext(ctx context.Context, f *wire.DatagramFrame) error {
 	h.sendMx.Lock()
 
 	for {
+		if err := ctx.Err(); err != nil {
+			h.sendMx.Unlock()
+			return errors.Join(err, context.Cause(ctx))
+		}
+		select {
+		case <-h.closed:
+			h.sendMx.Unlock()
+			return h.closeErr
+		default:
+		}
 		if h.sendQueue.Len() < maxDatagramSendQueueLen {
 			h.sendQueue.PushBack(f)
 			h.sendMx.Unlock()
@@ -60,6 +75,8 @@ func (h *datagramQueue) Add(f *wire.DatagramFrame) error {
 		}
 		h.sendMx.Unlock()
 		select {
+		case <-ctx.Done():
+			return errors.Join(ctx.Err(), context.Cause(ctx))
 		case <-h.closed:
 			return h.closeErr
 		case <-h.sent:

@@ -60,6 +60,9 @@ type rawConn struct {
 	// qpackEncoderInstructionHandler processes QPACK encoder instructions from the peer
 	// This is optional - if nil, encoder instructions are ignored (no dynamic table)
 	qpackEncoderInstructionHandler func([]byte) error
+	qpackEncoderFinish             func() error
+	qpackDecoderHandler            func(*quic.ReceiveStream)
+	schedule                       func(func()) bool
 
 	// controlStrSend is the client-side send-half of the control stream.
 	// Stored after openControlStream so we can lazily write PRIORITY_UPDATE
@@ -67,8 +70,10 @@ type rawConn struct {
 	// emits PRIORITY_UPDATE just before HEADERS for a request, with the
 	// priority field value derived from the request's Sec-Fetch-Dest /
 	// resource type (matches the per-request "priority:" header).
-	controlStrSend   io.Writer
-	controlStrSendMx sync.Mutex
+	controlStrSend    io.Writer
+	controlSendStream *quic.SendStream
+	controlStrSendMx  sync.Mutex
+	controlWriteGate  chan struct{}
 }
 
 func newRawConn(
@@ -81,6 +86,7 @@ func newRawConn(
 	logger *slog.Logger,
 ) *rawConn {
 	return &rawConn{
+		controlWriteGate:  make(chan struct{}, 1),
 		conn:              quicConn,
 		logger:            logger,
 		enableDatagrams:   enableDatagrams,
@@ -143,6 +149,7 @@ func (c *rawConn) openControlStream(settings *settingsFrame) (*quic.SendStream, 
 	// through the returned handle instead and never sends PRIORITY_UPDATE.
 	c.controlStrSendMx.Lock()
 	c.controlStrSend = str
+	c.controlSendStream = str
 	c.controlStrSendMx.Unlock()
 	return str, nil
 }
@@ -169,22 +176,48 @@ func (c *rawConn) openControlStream(settings *settingsFrame) (*quic.SendStream, 
 // Returns nil silently if the control stream isn't open yet (early shutdown
 // race). Losing one PRIORITY_UPDATE beats breaking the connection.
 func (c *rawConn) MaybeSendPriorityUpdate(streamID quic.StreamID, priorityValue string) error {
+	return c.MaybeSendPriorityUpdateContext(context.Background(), streamID, priorityValue)
+}
+
+// MaybeSendPriorityUpdateContext cancels waiting writers without touching other
+// streams. Once writing starts, cancellation ends the connection because a
+// partial control frame cannot be removed or safely interleaved with a sibling.
+func (c *rawConn) MaybeSendPriorityUpdateContext(ctx context.Context, streamID quic.StreamID, priorityValue string) error {
+	if err := ctx.Err(); err != nil {
+		return errors.Join(err, context.Cause(ctx))
+	}
 	if isDefaultPriority(priorityValue) {
 		return nil
 	}
 	b := appendPriorityUpdateFrameDynamic(nil, uint64(streamID), priorityValue)
 
-	// The mutex is held across the Write, not just the pointer read. One frame
-	// per request means as many writers as there are in-flight requests, and
-	// quic.SendStream.Write is not safe for concurrent use: interleaved partial
-	// frames on the control stream are a connection error.
+	select {
+	case c.controlWriteGate <- struct{}{}:
+		defer func() { <-c.controlWriteGate }()
+	case <-ctx.Done():
+		return errors.Join(ctx.Err(), context.Cause(ctx))
+	case <-c.Context().Done():
+		return context.Cause(c.Context())
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(err, context.Cause(ctx))
+	}
 	c.controlStrSendMx.Lock()
-	defer c.controlStrSendMx.Unlock()
-	if c.controlStrSend == nil {
+	writer := c.controlStrSend
+	c.controlStrSendMx.Unlock()
+	if writer == nil {
 		return nil
 	}
-	_, err := c.controlStrSend.Write(b)
-	return err
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
+		_ = c.CloseWithError(quic.ApplicationErrorCode(ErrCodeRequestCanceled), "priority write canceled")
+	})
+	_, err := writer.Write(b)
+	if !stop() {
+		<-done
+	}
+	return errors.Join(err, ctx.Err(), context.Cause(ctx))
 }
 
 // isDefaultPriority reports whether an RFC 9218 priority field value is exactly
@@ -228,7 +261,9 @@ func appendPriorityUpdateFrameDynamic(b []byte, streamID uint64, priorityValue s
 }
 
 func (c *rawConn) TrackStream(str *quic.Stream) *stateTrackingStream {
-	hstr := newStateTrackingStream(str, c, func(b []byte) error { return c.sendDatagram(str.StreamID(), b) })
+	hstr := newStateTrackingStream(str, c.Context(), c,
+		func(b []byte) error { return c.sendDatagram(str.StreamID(), b) },
+		func(ctx context.Context, b []byte) error { return c.sendDatagramContext(ctx, str.StreamID(), b) })
 
 	c.streamMx.Lock()
 	c.streams[str.StreamID()] = hstr
@@ -283,14 +318,17 @@ func (c *rawConn) handleUnidirectionalStream(str *quic.ReceiveStream, isServer b
 		}
 		// Process encoder instructions if handler is set
 		if c.qpackEncoderInstructionHandler != nil {
-			go c.handleQPACKEncoderStream(str)
+			c.handleQPACKEncoderStream(str)
 		}
 		return
 	case streamTypeQPACKDecoderStream:
 		if isFirst := c.rcvdQPACKDecoderStr.CompareAndSwap(false, true); !isFirst {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeStreamCreationError), "duplicate QPACK decoder stream")
+			return
 		}
-		// Our QPACK implementation doesn't use the dynamic table yet.
+		if c.qpackDecoderHandler != nil {
+			c.qpackDecoderHandler(str)
+		}
 		return
 	case streamTypePushStream:
 		if isServer {
@@ -347,13 +385,21 @@ func (c *rawConn) handleControlStream(str *quic.ReceiveStream) {
 			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeSettingsError), "missing QUIC Datagram support")
 			return
 		}
-		go func() {
+		work := func() {
 			if err := c.receiveDatagrams(); err != nil {
 				if c.logger != nil {
 					c.logger.Debug("receiving datagrams failed", "error", err)
 				}
 			}
-		}()
+		}
+		if c.schedule != nil {
+			if !c.schedule(work) {
+				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeExcessiveLoad), "datagram reader capacity exceeded")
+				return
+			}
+		} else {
+			go work()
+		}
 	}
 
 	if c.controlStrHandler != nil {
@@ -362,6 +408,19 @@ func (c *rawConn) handleControlStream(str *quic.ReceiveStream) {
 }
 
 func (c *rawConn) sendDatagram(streamID quic.StreamID, b []byte) error {
+	return c.sendDatagramContext(context.Background(), streamID, b)
+}
+
+func (c *rawConn) sendDatagramContext(ctx context.Context, streamID quic.StreamID, b []byte) error {
+	if ctx == nil {
+		return errors.New("http3: nil datagram context")
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(err, context.Cause(ctx))
+	}
+	if len(b) > 65527 {
+		return &quic.DatagramTooLargeError{MaxDatagramPayloadSize: 65527}
+	}
 	// TODO: this creates a lot of garbage and an additional copy
 	data := make([]byte, 0, len(b)+8)
 	quarterStreamID := uint64(streamID / 4)
@@ -376,7 +435,7 @@ func (c *rawConn) sendDatagram(streamID quic.StreamID, b []byte) error {
 			},
 		})
 	}
-	return c.conn.SendDatagram(data)
+	return c.conn.SendDatagramContext(ctx, data)
 }
 
 func (c *rawConn) receiveDatagrams() error {
@@ -431,23 +490,24 @@ func (c *rawConn) handleQPACKEncoderStream(str *quic.ReceiveStream) {
 	buf := make([]byte, 4096)
 	for {
 		n, err := str.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				return
-			}
-			if c.logger != nil {
-				c.logger.Debug("reading QPACK encoder stream failed", "error", err)
-			}
-			return
-		}
 		if n > 0 {
 			if err := c.qpackEncoderInstructionHandler(buf[:n]); err != nil {
 				if c.logger != nil {
 					c.logger.Debug("processing QPACK encoder instructions failed", "error", err)
 				}
-				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeQPACKDecompressionFailed), "")
+				c.CloseWithError(quic.ApplicationErrorCode(ErrCodeQPACKEncoderStreamError), "")
 				return
 			}
+		}
+		if err != nil {
+			if c.Context().Err() == nil {
+				code := ErrCodeClosedCriticalStream
+				if c.qpackEncoderFinish != nil && c.qpackEncoderFinish() != nil {
+					code = ErrCodeQPACKEncoderStreamError
+				}
+				c.CloseWithError(quic.ApplicationErrorCode(code), "")
+			}
+			return
 		}
 	}
 }

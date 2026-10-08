@@ -89,5 +89,6 @@ func ToStdConnectionState(s utls.ConnectionState) stdtls.ConnectionState {
 		VerifiedChains:              s.VerifiedChains,
 		SignedCertificateTimestamps: s.SignedCertificateTimestamps,
 		OCSPResponse:                s.OCSPResponse,
+		ECHAccepted:                 s.ECHAccepted,
 	}
 }

@@ -25,7 +25,7 @@ import (
 	"net"
 )
 
-const FathomryCompatibilityRevision = "udpbara-v1"
+const FathomryCompatibilityRevision = "udpbara-v2"
 
 func (t *Tunnel) fathomryConnecting(ctx context.Context, conn net.Conn) (func(), error) {
 	t.mu.Lock()
@@ -62,5 +62,22 @@ func (t *Tunnel) FathomryClose() error {
 	err := t.Close()
 	t.connects.Wait()
 	t.workers.Wait()
+	t.mu.Lock()
+	err = errors.Join(err, t.closeErr)
+	t.mu.Unlock()
+	return err
+}
+
+func (t *Tunnel) closeUDP(conn *net.UDPConn) error {
+	if conn == nil {
+		return nil
+	}
+	if t.config.Fathomry != nil {
+		return t.config.Fathomry.CloseUDP(conn)
+	}
+	err := conn.Close()
+	if errors.Is(err, net.ErrClosed) {
+		return nil
+	}
 	return err
 }

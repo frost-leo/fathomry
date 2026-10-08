@@ -159,8 +159,9 @@ func parseHeaders(decodeFn qpack.DecodeFunc, isRequest bool, sizeLimit int, head
 	return hdr, nil
 }
 
-func parseTrailers(decodeFn qpack.DecodeFunc, headerFields *[]qpack.HeaderField) (http.Header, error) {
+func parseTrailers(decodeFn qpack.DecodeFunc, sizeLimit int, headerFields *[]qpack.HeaderField) (http.Header, error) {
 	h := make(http.Header)
+	var size int64
 	for {
 		hf, err := decodeFn()
 		if err != nil {
@@ -168,6 +169,10 @@ func parseTrailers(decodeFn qpack.DecodeFunc, headerFields *[]qpack.HeaderField)
 				break
 			}
 			return nil, &qpackError{err}
+		}
+		size += int64(len(hf.Name)) + int64(len(hf.Value)) + 32
+		if size > int64(sizeLimit) {
+			return nil, errors.New("http3: trailers exceed header limit")
 		}
 		if headerFields != nil {
 			*headerFields = append(*headerFields, hf)
@@ -353,7 +358,7 @@ func writeTrailers(wr io.Writer, trailers http.Header, streamID quic.StreamID, q
 	return true, err
 }
 
-func decodeTrailers(r io.Reader, hf *headersFrame, maxHeaderBytes int, decoder *qpack.Decoder, qlogger qlogwriter.Recorder, streamID quic.StreamID) (http.Header, error) {
+func decodeTrailers(r io.Reader, hf *headersFrame, maxHeaderBytes int, decoder headerDecoder, qlogger qlogwriter.Recorder, streamID quic.StreamID) (http.Header, error) {
 	if hf.Length > uint64(maxHeaderBytes) {
 		maybeQlogInvalidHeadersFrame(qlogger, streamID, hf.Length)
 		return nil, fmt.Errorf("http3: HEADERS frame too large: %d bytes (max: %d)", hf.Length, maxHeaderBytes)
@@ -368,7 +373,10 @@ func decodeTrailers(r io.Reader, hf *headersFrame, maxHeaderBytes int, decoder *
 	if qlogger != nil {
 		fields = make([]qpack.HeaderField, 0, 16)
 	}
-	trailers, err := parseTrailers(decodeFn, &fields)
+	trailers, err := parseTrailers(decodeFn, maxHeaderBytes, &fields)
+	if controlled, ok := decoder.(*streamQPACKDecoder); ok {
+		err = controlled.finish(err)
+	}
 	if err != nil {
 		maybeQlogInvalidHeadersFrame(qlogger, streamID, hf.Length)
 		return nil, err

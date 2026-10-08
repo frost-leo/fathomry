@@ -116,6 +116,7 @@ type ProxyConfig struct {
 
 // TransportConfig contains advanced transport configuration
 type TransportConfig struct {
+	FathomryControls *FathomryControls
 	// FathomryDialTCP is an immutable managed-origin connector. The caller owns
 	// routing, physical connection admission and cleanup of returned connections.
 	FathomryDialTCP        func(context.Context, string, string) (net.Conn, error)
@@ -1322,6 +1323,10 @@ func (c *TransportConfig) GetConnectHost(requestHost string) string {
 // GetECHConfig returns the ECH config to use for a host.
 // Returns custom config if set, otherwise fetches from ECHConfigDomain or target host.
 func (c *TransportConfig) GetECHConfig(ctx context.Context, targetHost string) []byte {
+	if c != nil && c.FathomryControls != nil {
+		config, _ := c.FathomryControls.ECH(ctx, targetHost)
+		return config
+	}
 	if c == nil {
 		// No config - fetch from target host
 		echConfig, _ := dns.FetchECHConfigs(ctx, targetHost)

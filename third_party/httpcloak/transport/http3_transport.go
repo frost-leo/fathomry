@@ -257,6 +257,7 @@ type proxyQUICConn struct {
 	udpConn   *udpbara.Connection
 	quicTr    *quic.Transport
 	closeOnce sync.Once
+	closeErr  error
 }
 
 // HTTP3Transport is an HTTP/3 transport with proper QUIC connection reuse
@@ -332,6 +333,8 @@ type HTTP3Transport struct {
 	udpbaraMu     sync.Mutex      // guards lazy connect of udpbaraTunnel
 	proxyConns    []*proxyQUICConn
 	proxyConnsMu  sync.Mutex
+	proxyWorkers  sync.WaitGroup
+	proxyCleanup  error
 	quicTransport *quic.Transport // Only used for direct connections
 
 	// MASQUE proxy support
@@ -618,7 +621,13 @@ func NewHTTP3TransportWithTransportConfig(preset *fingerprint.Preset, dnsCache *
 	} else {
 		localUDPAddr = &net.UDPAddr{IP: net.IPv4zero, Port: 0}
 	}
-	udpConn, err := ListenUDPWithLocalAddr("udp", localUDPAddr, t.localAddr)
+	listen := func(network string, address *net.UDPAddr) (*net.UDPConn, error) {
+		if config != nil && config.FathomryControls != nil {
+			return config.FathomryControls.ListenUDP(network, address)
+		}
+		return ListenUDPWithLocalAddr(network, address, t.localAddr)
+	}
+	udpConn, err := listen("udp", localUDPAddr)
 	if err != nil {
 		if t.localAddr != "" {
 			// localAddr is set — retrying with the same IP on "udp6" won't help
@@ -626,7 +635,7 @@ func NewHTTP3TransportWithTransportConfig(preset *fingerprint.Preset, dnsCache *
 		}
 		// Fallback to IPv6 if IPv4 fails (no localAddr — try IPv6zero)
 		localUDPAddr = &net.UDPAddr{IP: net.IPv6zero, Port: 0}
-		udpConn, err = ListenUDPWithLocalAddr("udp6", localUDPAddr, t.localAddr)
+		udpConn, err = listen("udp6", localUDPAddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create UDP socket (IPv4 and IPv6 both failed): %w", err)
 		}
@@ -904,7 +913,13 @@ func NewHTTP3TransportWithMASQUE(preset *fingerprint.Preset, dnsCache *dns.Cache
 	t.quicConfig = t.buildQUICConfig(clientHelloID, quicIdleTimeout, 1350)
 
 	// Create MASQUE connection
-	masqueConn, err := proxy.NewMASQUEConn(proxyConfig.URL)
+	var masqueConn *proxy.MASQUEConn
+	var err error
+	if config != nil && config.FathomryControls != nil {
+		masqueConn, err = proxy.NewFathomryMASQUEConn(proxyConfig.URL, config.FathomryControls)
+	} else {
+		masqueConn, err = proxy.NewMASQUEConn(proxyConfig.URL)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MASQUE connection: %w", err)
 	}
@@ -946,7 +961,13 @@ func (t *HTTP3Transport) dialQUICWithMASQUE(ctx context.Context, addr string, tl
 	// (rather than the shared t.quicConfig base) so a concurrent first-use of the
 	// tunnel can't race-mutate one spec via ApplyPreset.
 	masqueCfg := t.quicConfig.Clone()
-	masqueCfg.CachedClientHelloSpec = t.getSpecForHost(connectHost)
+	proxyHost := connectHost
+	if t.config != nil && t.config.FathomryControls != nil {
+		if address, err := url.Parse(t.config.FathomryControls.ProxyURL); err == nil {
+			proxyHost = address.Hostname()
+		}
+	}
+	masqueCfg.CachedClientHelloSpec = t.getSpecForHost(proxyHost)
 	err = t.masqueConn.EstablishWithQUICConfig(ctx, connectHost, portInt, t.tlsConfig, masqueCfg)
 	if err != nil {
 		return nil, fmt.Errorf("MASQUE tunnel establishment failed: %w", err)
@@ -1019,7 +1040,13 @@ func (t *HTTP3Transport) dialQUICWithMASQUE(ctx context.Context, addr string, tl
 
 	// Dial QUIC over the MASQUE tunnel using quic.DialEarly for 0-RTT support
 	// This properly supports ECH, unlike quic.Transport.Dial
-	return quic.DialEarly(ctx, t.masqueConn, targetAddr, tlsCfgCopy, cfgCopy)
+	dial := func(ctx context.Context) (*quic.Conn, error) {
+		return quic.DialEarly(ctx, t.masqueConn, targetAddr, tlsCfgCopy, cfgCopy)
+	}
+	if t.config != nil {
+		return t.config.FathomryControls.DialQUIC(ctx, dial)
+	}
+	return dial(ctx)
 }
 
 // ensureUDPTunnel returns the SOCKS5 UDP relay tunnel, connecting it on first
@@ -1038,43 +1065,32 @@ func (t *HTTP3Transport) ensureUDPTunnel(ctx context.Context) (*udpbara.Tunnel, 
 		return nil, fmt.Errorf("no SOCKS5 proxy configured for UDP relay")
 	}
 
-	tunnel, err := udpbara.NewTunnel(t.proxyConfig.URL)
+	var options []udpbara.Config
+	if t.config != nil && t.config.FathomryControls != nil {
+		controls := t.config.FathomryControls
+		configuration := udpbara.DefaultConfig()
+		configuration.AutoReconnect = false
+		configuration.Fathomry = &udpbara.FathomryHooks{DialTCP: controls.DialTCP, Resolve: controls.Resolve, ListenUDP: controls.ListenUDP, DialUDP: controls.DialUDP, CloseUDP: controls.CloseUDP}
+		options = append(options, configuration)
+	}
+	tunnel, err := udpbara.NewTunnel(t.proxyConfig.URL, options...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SOCKS5 tunnel: %w", err)
 	}
 	if err := connectTunnelBounded(ctx, tunnel, 15*time.Second); err != nil {
-		tunnel.Close()
-		return nil, fmt.Errorf("SOCKS5 proxy does not support UDP relay (required for HTTP/3): %w", err)
+		return nil, errors.Join(fmt.Errorf("SOCKS5 proxy does not support UDP relay (required for HTTP/3): %w", err), tunnel.FathomryClose())
 	}
 	t.udpbaraTunnel = tunnel
 	return tunnel, nil
 }
 
-// connectTunnelBounded runs tunnel.ConnectContext under a hard upper bound. The
-// udpbara handshake honors the context only for the TCP dial, not the SOCKS5
-// greeting reads, so a proxy that accepts TCP then goes silent would otherwise
-// block forever. We cap the wait at min(ctx deadline, max) and, on timeout,
-// abandon the connect and tear the tunnel down so the caller fails fast instead
-// of hanging.
+// The selected udpbara correction cancels the actual registered greeting socket.
+// Keep setup synchronous so no abandoned waiter outlives its native work.
 func connectTunnelBounded(parent context.Context, tunnel *udpbara.Tunnel, max time.Duration) error {
 	ctx, cancel := context.WithTimeout(parent, max)
 	defer cancel()
 
-	done := make(chan error, 1)
-	go func() { done <- tunnel.ConnectContext(ctx) }()
-
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		// Abandon the stalled connect. Close() unblocks the connect once udpbara
-		// has installed its control socket; a proxy stuck before that point leaves
-		// one udpbara goroutine parked on a socket read until the process exits —
-		// a known udpbara limitation (its handshake reads set no deadline). Far
-		// better than hanging the dial.
-		tunnel.Close()
-		return fmt.Errorf("SOCKS5 UDP relay connect timed out: %w", ctx.Err())
-	}
+	return tunnel.ConnectContext(ctx)
 }
 
 // dialQUICWithProxy dials a QUIC connection through SOCKS5 proxy via udpbara.
@@ -1139,19 +1155,32 @@ func (t *HTTP3Transport) dialQUICWithProxy(ctx context.Context, addr string, tls
 	}
 
 	// Dial through the local relay → udpbara wraps in SOCKS5 → proxy forwards
-	conn, err := qt.DialEarly(ctx, udpConn.RelayAddr(), tlsCfgCopy, cfgCopy)
+	dial := func(ctx context.Context) (*quic.Conn, error) {
+		return qt.DialEarly(ctx, udpConn.RelayAddr(), tlsCfgCopy, cfgCopy)
+	}
+	var conn *quic.Conn
+	if t.config != nil {
+		conn, err = t.config.FathomryControls.DialQUIC(ctx, dial)
+	} else {
+		conn, err = dial(ctx)
+	}
 	if err != nil {
-		closeProxyConn(pc)
+		closeErr := closeProxyConn(pc)
 		t.removeProxyConn(pc)
-		return nil, err
+		return nil, errors.Join(err, closeErr)
 	}
 
 	// Auto-cleanup when the QUIC connection closes (timeout, error, idle, explicit).
 	// Without this, failed requests leave quic.Transport goroutines + udpbara relay
 	// goroutines running until session.Close(), burning CPU on Linux (ECN/GSO syscalls).
+	t.proxyWorkers.Add(1)
 	go func() {
+		defer t.proxyWorkers.Done()
 		<-conn.Context().Done()
-		closeProxyConn(pc)
+		err := closeProxyConn(pc)
+		t.proxyConnsMu.Lock()
+		t.proxyCleanup = errors.Join(t.proxyCleanup, err)
+		t.proxyConnsMu.Unlock()
 		t.removeProxyConn(pc)
 	}()
 
@@ -1281,14 +1310,23 @@ func interleaveAddrs(first, second []*net.UDPAddr) []*net.UDPAddr {
 // closing the losers. This replaces "try all IPv6 for 2s, then all IPv4", which
 // added up to 2s of dead time before IPv4 on IPv6-broken networks.
 func (t *HTTP3Transport) happyEyeballsDialQUIC(ctx context.Context, addrs []*net.UDPAddr, tlsCfg *tls.Config, makeConfig func() *quic.Config) (*quic.Conn, error) {
-	const attemptDelay = 250 * time.Millisecond
-	return staggeredRace(ctx, len(addrs), attemptDelay,
+	attemptDelay, maxActive := 250*time.Millisecond, len(addrs)
+	if t.config != nil && t.config.FathomryControls != nil {
+		attemptDelay, maxActive = t.config.FathomryControls.AddressRaceDelay, t.config.FathomryControls.MaxAddressRaces
+	}
+	return staggeredRaceBounded(ctx, len(addrs), maxActive, attemptDelay,
 		func(rctx context.Context, idx int) (*quic.Conn, error) {
 			// Each attempt gets its own config clone AND its own regenerated
 			// ClientHello spec, so concurrent dials never mutate shared state.
 			// The spec matters most: utls rewrites it in place during
 			// ApplyPreset, so a shared one is corrupted by the racing dial.
-			return t.quicTransport.DialEarly(rctx, addrs[idx], tlsCfg, makeConfig())
+			dial := func(ctx context.Context) (*quic.Conn, error) {
+				return t.quicTransport.DialEarly(ctx, addrs[idx], tlsCfg, makeConfig())
+			}
+			if t.config != nil {
+				return t.config.FathomryControls.DialQUIC(rctx, dial)
+			}
+			return dial(rctx)
 		},
 		func(c *quic.Conn) { c.CloseWithError(0, "lost happy-eyeballs race") },
 	)
@@ -1707,23 +1745,25 @@ func (t *HTTP3Transport) removeProxyConn(pc *proxyQUICConn) {
 }
 
 // closeProxyConn closes a single proxyQUICConn exactly once.
-func closeProxyConn(pc *proxyQUICConn) {
+func closeProxyConn(pc *proxyQUICConn) error {
 	pc.closeOnce.Do(func() {
-		closeWithTimeout(pc.quicTr, 3*time.Second)
-		pc.udpConn.Close()
+		pc.closeErr = errors.Join(pc.quicTr.Close(), pc.udpConn.Close())
 	})
+	return pc.closeErr
 }
 
 // closeAllProxyConns closes all tracked proxy QUIC connections.
 // Closes quic.Transport first (sends CONNECTION_CLOSE), then udpbara (closes sockets).
-func (t *HTTP3Transport) closeAllProxyConns() {
+func (t *HTTP3Transport) closeAllProxyConns() error {
 	t.proxyConnsMu.Lock()
 	conns := t.proxyConns
 	t.proxyConns = nil
 	t.proxyConnsMu.Unlock()
+	var err error
 	for _, c := range conns {
-		closeProxyConn(c)
+		err = errors.Join(err, closeProxyConn(c))
 	}
+	return err
 }
 
 // Close shuts down the transport and all connections
@@ -1744,7 +1784,12 @@ func (t *HTTP3Transport) fathomryClose() error {
 	}
 
 	if t.quicTransport != nil {
-		causes = append(causes, t.quicTransport.Close(), t.quicTransport.Conn.Close())
+		causes = append(causes, t.quicTransport.Close())
+		if t.config != nil && t.config.FathomryControls != nil {
+			causes = append(causes, t.config.FathomryControls.CloseUDP(t.quicTransport.Conn.(*net.UDPConn)))
+		} else {
+			causes = append(causes, t.quicTransport.Conn.Close())
+		}
 	}
 
 	// Close udpbara tunnel (if it was ever connected) and all proxy QUIC
@@ -1754,9 +1799,13 @@ func (t *HTTP3Transport) fathomryClose() error {
 	tunnel := t.udpbaraTunnel
 	t.udpbaraMu.Unlock()
 	if tunnel != nil {
-		t.closeAllProxyConns()
+		causes = append(causes, t.closeAllProxyConns())
 		causes = append(causes, tunnel.FathomryClose())
 	}
+	t.proxyWorkers.Wait()
+	t.proxyConnsMu.Lock()
+	causes = append(causes, t.proxyCleanup)
+	t.proxyConnsMu.Unlock()
 
 	// Close MASQUE connection if using MASQUE proxy
 	if t.masqueConn != nil {
@@ -1850,14 +1899,10 @@ func (t *HTTP3Transport) Refresh() error {
 	return nil
 }
 
-// closeWithTimeout closes a closer with a timeout to prevent blocking indefinitely.
-// QUIC connections may block on Close() waiting for graceful drain.
-func closeWithTimeout(c io.Closer, timeout time.Duration) {
+// This legacy refresh helper is not used by the managed close path.
+func closeWithTimeout(closer io.Closer, timeout time.Duration) {
 	done := make(chan struct{})
-	go func() {
-		c.Close()
-		close(done)
-	}()
+	go func() { _ = closer.Close(); close(done) }()
 	select {
 	case <-done:
 	case <-time.After(timeout):
@@ -2039,6 +2084,10 @@ func (t *HTTP3Transport) SetECHConfigCache(configs map[string][]byte) {
 // example the CDN rotated ECH keys), so a long-lived session self-heals instead
 // of spamming the same failure until restart.
 func (t *HTTP3Transport) invalidateECHConfig(host string) {
+	if t.config != nil && t.config.FathomryControls != nil {
+		t.config.FathomryControls.InvalidateECH(host)
+		return
+	}
 	t.echConfigCacheMu.Lock()
 	delete(t.echConfigCache, host)
 	t.echConfigCacheMu.Unlock()
@@ -2337,6 +2386,9 @@ func (t *HTTP3Transport) getECHConfig(ctx context.Context, targetHost string) []
 	// option was doing only part of what it says.
 	if t.disableECH || t.echFailures.disabled(t.config, targetHost) {
 		return nil
+	}
+	if t.config != nil && t.config.FathomryControls != nil {
+		return t.config.GetECHConfig(ctx, targetHost)
 	}
 
 	t.echConfigCacheMu.RLock()

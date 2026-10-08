@@ -19,6 +19,7 @@
 package udpbara
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -40,6 +41,7 @@ type Logger interface {
 // via DefaultConfig(). Zero-value fields will not override defaults when passed
 // to NewTunnel or Dial — use DefaultConfig() and modify specific fields instead.
 type Config struct {
+	Fathomry *FathomryHooks
 	// ReadBufferSize is the UDP socket read buffer size in bytes.
 	// Default: 7MB (recommended for QUIC).
 	ReadBufferSize int
@@ -67,6 +69,16 @@ type Config struct {
 	// Logger is an optional logger for tunnel events.
 	// If nil, no logging is performed. Default: nil.
 	Logger Logger
+}
+
+// FathomryHooks supplies immutable source-owned socket and resolver authority.
+// Callbacks are synchronous and must not retain unaccounted work.
+type FathomryHooks struct {
+	DialTCP   func(context.Context, string) (net.Conn, error)
+	Resolve   func(context.Context, string) ([]net.IP, error)
+	ListenUDP func(string, *net.UDPAddr) (*net.UDPConn, error)
+	DialUDP   func(string, *net.UDPAddr, *net.UDPAddr) (*net.UDPConn, error)
+	CloseUDP  func(*net.UDPConn) error
 }
 
 // DefaultConfig returns a Config with sensible defaults.

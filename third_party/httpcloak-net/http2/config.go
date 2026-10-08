@@ -121,6 +121,15 @@ func configFromTransport(h2 *Transport) http2Config {
 		fillNetHTTPConfig(&conf, h2.t1.HTTP2)
 	}
 	setConfigDefaults(&conf, false)
+	if h2.ConnectionFlow > 0 && h2.ConnectionFlow <= math.MaxInt32-initialWindowSize {
+		conf.MaxUploadBufferPerConnection = int32(h2.ConnectionFlow)
+	}
+	if window, present := h2.Settings[SettingInitialWindowSize]; present && window == 0 {
+		conf.MaxUploadBufferPerStream = 0
+	}
+	if table, present := h2.Settings[SettingHeaderTableSize]; present && table == 0 {
+		conf.MaxDecoderHeaderTableSize = 0
+	}
 	return conf
 }
 
