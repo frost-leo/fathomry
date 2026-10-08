@@ -444,6 +444,23 @@ func reviewRouteFallbackPeer(t *testing.T, code quic.ApplicationErrorCode, adver
 					t.Error("H3 fallback HEADERS bytes", err)
 					return
 				}
+				var body strings.Builder
+				for !strings.Contains(body.String(), "payload") {
+					kind, err := quicvarint.Read(reader)
+					if err != nil || kind != 0 {
+						t.Error("H3 fallback DATA missing", err)
+						return
+					}
+					length, err := quicvarint.Read(reader)
+					if err != nil || length > uint64(4096-body.Len()) {
+						t.Error("H3 fallback DATA exceeds fixture bound", err)
+						return
+					}
+					if _, err := io.CopyN(&body, reader, int64(length)); err != nil {
+						t.Error("H3 fallback DATA bytes", err)
+						return
+					}
+				}
 				requests.Add(1)
 				_ = connection.CloseWithError(code, "synthetic protocol control")
 			})
