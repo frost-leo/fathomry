@@ -91,7 +91,13 @@ func TestProfileDisclosesControlsNotNativeSecrets(t *testing.T) {
 	for _, option := range profile.Options {
 		fields[option.Name] = option.Value
 	}
-	if fields["surf-compatibility"] != "v1" || fields["http2-compatibility"] != "v1" || fields["http3-compatibility"] != "v1" || fields["h3-ja-fingerprinting"] != "false" {
+	if fields["surf-compatibility"] != "v3" || fields["http2-compatibility"] != "v2" || fields["http3-compatibility"] != "v4" || fields["h3-ja-fingerprinting"] != "false" {
 		t.Fatal("profile lost native compatibility axes")
+	}
+	if fields["max-http3-clients"] != "32" || fields["declared-profile-bytes"] != "1048576" || fields["declared-http2-stream-bytes"] != "8388608" {
+		t.Fatal("profile lost resolved native ownership ceilings")
+	}
+	if fields["declared-qpack-table-bytes"] != "65536" || fields["declared-qpack-blocked-streams"] != "128" {
+		t.Fatal("profile lost QPACK ceilings")
 	}
 }

@@ -18,9 +18,12 @@
  */
 
 // Package surf integrates Surf as an independently configured internal HTTP Provider.
-// Select and resource.Assemble own one named instance; Bind joins its original
+// PrepareV1 freezes final choices and authoritative budgets offline. Its Select
+// and resource.Assemble own one named instance; Bind joins its original
 // admission with an independent invocation Inbox. Do retains a bounded response;
 // Open returns a controlled stream whose Close must be observed separately.
+// Managed h2c and incremental multipart share the original method-context,
+// replay, producer and socket ownership rather than introducing a native escape.
 // Native profiles and callbacks are external, not a business profile catalog.
 // Runtime routes never mutate a shared native client. Native handles do not escape.
 // These APIs are in-process resource contracts, not Temporal Workflow code or

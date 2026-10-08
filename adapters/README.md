@@ -60,6 +60,7 @@ automatically own or construct the packages below it.
 | `cache/redis/v1` | data-provider | [Commands, sessions, Streams/subscriptions and supported experimental modes](../docs/reference/adapters/cache/redis/v1/interface.md) |
 | `httpclient/nethttp/v1` | data-provider | [Standard HTTP finite responses, retained streams and controlled direct connections](../docs/reference/adapters/httpclient/nethttp/v1/interface.md) |
 | `httpclient/tlsclient/v1` | data-provider | [Explicit native profiles, protocol racing, finite/stream responses and measured TLS/TCP bandwidth](../docs/reference/adapters/httpclient/tlsclient/v1/interface.md) |
+| `httpclient/surf/v1` | data-provider | [Surf profiles, owned h2c and incremental multipart with explicit replay](../docs/reference/adapters/httpclient/surf/v1/interface.md) |
 | `internal/errorbridge` | private | [Bounded error forwarding/inspection; no public registry or execution engine](../docs/reference/adapters/internal/errorbridge/interface.md) |
 
 Public package version and native SDK version are separate: for example, public

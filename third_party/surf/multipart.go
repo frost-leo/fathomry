@@ -136,70 +136,7 @@ func (m *Multipart) prepareWriter(boundary func() g.String) (io.ReadCloser, stri
 	}
 
 	go func() {
-		err := func() error {
-			for key, val := range m.fields.Iter() {
-				part, err := writer.CreateFormField(key.Std())
-				if err != nil {
-					return err
-				}
-
-				if _, err := io.Copy(part, val.Reader()); err != nil {
-					return err
-				}
-			}
-
-			for file := range m.files.Iter() {
-				var reader io.Reader
-
-				if file.file != nil {
-					res := file.file.Open()
-					if res.IsErr() {
-						return fmt.Errorf("cannot open file %q: %w", file.file.Name(), res.Err())
-					}
-
-					opened := res.Ok()
-					defer opened.Close()
-
-					reader = opened.Std()
-				} else if file.reader != nil {
-					reader = file.reader
-				} else {
-					return fmt.Errorf("multipart file %q has no content source", file.fileName.Std())
-				}
-
-				ct := file.contentType.Std()
-				if ct == "" {
-					ext := filepath.Ext(file.fileName.Std())
-					ct = mime.TypeByExtension(ext)
-					if ct == "" {
-						ct = "application/octet-stream"
-					}
-				}
-
-				disposition := fmt.Sprintf(
-					`form-data; name="%s"; filename="%s"`,
-					escapeQuotes(file.fieldName),
-					escapeQuotes(file.fileName),
-				)
-
-				h := textproto.MIMEHeader{
-					"Content-Disposition": {disposition},
-					"Content-Type":        {ct},
-				}
-
-				part, err := writer.CreatePart(h)
-				if err != nil {
-					return err
-				}
-
-				if _, err := io.Copy(part, reader); err != nil {
-					return err
-				}
-			}
-
-			return writer.Close()
-		}()
-
+		err := m.writeMultipart(writer)
 		pw.CloseWithError(err)
 	}()
 
@@ -207,3 +144,67 @@ func (m *Multipart) prepareWriter(boundary func() g.String) (io.ReadCloser, stri
 }
 
 func escapeQuotes(s g.String) string { return s.ReplaceMulti(`\`, `\\`, `"`, `\"`).Std() }
+
+func (m *Multipart) writeMultipart(writer *multipart.Writer) error {
+	for key, val := range m.fields.Iter() {
+		part, err := writer.CreateFormField(key.Std())
+		if err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(part, val.Reader()); err != nil {
+			return err
+		}
+	}
+
+	for file := range m.files.Iter() {
+		var reader io.Reader
+
+		if file.file != nil {
+			res := file.file.Open()
+			if res.IsErr() {
+				return fmt.Errorf("cannot open file %q: %w", file.file.Name(), res.Err())
+			}
+
+			opened := res.Ok()
+			defer opened.Close()
+
+			reader = opened.Std()
+		} else if file.reader != nil {
+			reader = file.reader
+		} else {
+			return fmt.Errorf("multipart file %q has no content source", file.fileName.Std())
+		}
+
+		ct := file.contentType.Std()
+		if ct == "" {
+			ext := filepath.Ext(file.fileName.Std())
+			ct = mime.TypeByExtension(ext)
+			if ct == "" {
+				ct = "application/octet-stream"
+			}
+		}
+
+		disposition := fmt.Sprintf(
+			`form-data; name="%s"; filename="%s"`,
+			escapeQuotes(file.fieldName),
+			escapeQuotes(file.fileName),
+		)
+
+		h := textproto.MIMEHeader{
+			"Content-Disposition": {disposition},
+			"Content-Type":        {ct},
+		}
+
+		part, err := writer.CreatePart(h)
+		if err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(part, reader); err != nil {
+			return err
+		}
+	}
+
+	return writer.Close()
+}

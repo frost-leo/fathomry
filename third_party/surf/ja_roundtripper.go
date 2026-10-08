@@ -263,6 +263,9 @@ func (rt *roundtripper) tlsHandshake(ctx context.Context, network, addr string, 
 	}
 
 	spec := specr.Ok()
+	if err := fathomryValidateHello(spec, rt.ja.builder.cli.fathomry.control.MaxProfileBytes); err != nil {
+		return nil, err
+	}
 
 	// Apply HTTP/1 ALPN if forced
 	if forceHTTP1 || rt.ja.builder.forceHTTP1 {

@@ -13,6 +13,7 @@ import (
 	"github.com/quic-go/quic-go/http3/qlog"
 	"github.com/quic-go/quic-go/qlogwriter"
 
+	qpackdecoder "github.com/enetx/http3/internal/qpack"
 	"github.com/quic-go/qpack"
 )
 
@@ -47,6 +48,14 @@ type Stream struct {
 
 	parseTrailer  func(io.Reader, *headersFrame) error
 	parsedTrailer bool
+	cancelQPACK   func()
+}
+
+func (s *Stream) CancelRead(code quic.StreamErrorCode) {
+	if s.cancelQPACK != nil {
+		s.cancelQPACK()
+	}
+	s.datagramStream.CancelRead(code)
 }
 
 func newStream(
@@ -165,7 +174,7 @@ type RequestStream struct {
 
 	responseBody io.ReadCloser // set by ReadResponse
 
-	decoder            *qpack.Decoder
+	decoder            fieldSectionDecoder
 	requestWriter      *requestWriter
 	maxHeaderBytes     int
 	reqDone            chan<- struct{}
@@ -181,7 +190,7 @@ func newRequestStream(
 	str *Stream,
 	requestWriter *requestWriter,
 	reqDone chan<- struct{},
-	decoder *qpack.Decoder,
+	decoder fieldSectionDecoder,
 	disableCompression bool,
 	maxHeaderBytes int,
 	rsp *http.Response,
@@ -360,6 +369,12 @@ func (s *RequestStream) ReadResponse() (*http.Response, error) {
 		var qpackErr *qpackError
 		if errors.As(err, &qpackErr) {
 			errCode = ErrCodeQPACKDecompressionFailed
+		}
+		if errors.Is(err, qpackdecoder.ErrLimit) {
+			errCode = ErrCodeExcessiveLoad
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			errCode = ErrCodeRequestCanceled
 		}
 		s.str.CancelRead(quic.StreamErrorCode(errCode))
 		s.str.CancelWrite(quic.StreamErrorCode(errCode))

@@ -33,24 +33,29 @@ import (
 )
 
 type operation struct {
-	client   *Client
-	call     *invocation.Call[Result]
-	ctx      context.Context
-	cancel   context.CancelFunc
-	work     *activity
-	mu       sync.Mutex
-	closing  bool
-	original *http.Request
-	route    routeChoice
-	data     resultData
-	primary  error
-	cleanup  error
-	inputs   []*inputBody
-	response *sdk.Response
-	replays  int
-	once     sync.Once
-	done     chan struct{}
-	finalErr error
+	client          *Client
+	call            *invocation.Call[Result]
+	ctx             context.Context
+	cancel          context.CancelFunc
+	work            *activity
+	mu              sync.Mutex
+	closing         bool
+	original        *http.Request
+	route           routeChoice
+	data            resultData
+	primary         error
+	cleanup         error
+	inputs          []*inputBody
+	multipart       *Multipart
+	nativeMultipart *sdk.Multipart
+	replayMultipart bool
+	parts           []*multipartInput
+	seenParts       map[io.ReadCloser]bool
+	response        *sdk.Response
+	replays         int
+	once            sync.Once
+	done            chan struct{}
+	finalErr        error
 }
 
 // Open admits a request and returns its controlled response stream. Request
@@ -106,10 +111,18 @@ func (client *Client) open(ctx context.Context, id fault.Correlation, request *h
 	if err != nil {
 		return nil, nil, err
 	}
+	var multipart *Multipart
+	var replayMultipart bool
+	if len(options) == 1 {
+		multipart, replayMultipart, err = copyMultipart(options[0].Multipart, request, client.owner.settings)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 	snapshot := copyRequest(request, ctx)
 	value := client.owner.settings
 	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: "request", Shape: shape, Correlation: id,
-		Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.AdmissionTimeout},
+		Bytes: client.owner.budget.WorkBytes, EvidenceBytes: client.owner.budget.EvidenceBytes, Admission: invocation.Budget{Limit: value.AdmissionTimeout},
 		AttemptsKnown: false}, client.inbox, client.observer)
 	if err != nil {
 		return nil, nil, err
@@ -122,6 +135,16 @@ func (client *Client) open(ctx context.Context, id fault.Correlation, request *h
 	op := &operation{client: client, call: call, work: newActivity(), cancel: cancel, original: snapshot, route: route, done: make(chan struct{}),
 		data: resultData{proxyMode: route.mode()}}
 	op.ctx = context.WithValue(work, operationKey{}, op)
+	op.multipart, op.replayMultipart = multipart, replayMultipart
+	if multipart != nil {
+		snapshot.Body, snapshot.GetBody = nil, nil
+		op.nativeMultipart, err = op.makeMultipart(false)
+		if err != nil {
+			op.fail(err)
+			op.finish()
+			return nil, call.Receipt(), err
+		}
+	}
 	if snapshot.Body != nil && snapshot.Body != http.NoBody {
 		snapshot.Body = op.input(snapshot.Body)
 	}
@@ -183,15 +206,39 @@ func (client *Client) open(ctx context.Context, id fault.Correlation, request *h
 func (op *operation) nativeOpen() (*sdk.Response, error) {
 	binding, err := op.client.owner.binding(op.ctx, op.route)
 	if err != nil {
+		if errors.Is(err, sdk.ErrFathomryProfileLimit) {
+			err = failure(ErrLimit, "profile", err)
+		}
 		op.nativeCleanup(err)
 		op.fail(err)
 		return nil, err
 	}
 	request := copyRequest(op.original, op.ctx)
-	result := binding.client.FathomryRequest(request).Do()
+	if op.multipart != nil {
+		for name := range request.Header {
+			if multipartHeader(name) {
+				delete(request.Header, name)
+			}
+		}
+	}
+	nativeRequest := binding.client.FathomryRequest(request)
+	if op.multipart != nil {
+		var replay func() (*sdk.Multipart, error)
+		if op.replayMultipart {
+			replay = func() (*sdk.Multipart, error) { return op.makeMultipart(true) }
+		}
+		nativeRequest.FathomryMultipart(op.nativeMultipart, replay, func(body io.ReadCloser) io.ReadCloser {
+			producer := body.(interface{ FathomryProducerError() error })
+			return op.trackInput(body, producer.FathomryProducerError)
+		})
+	}
+	result := nativeRequest.Do()
 	if result.IsErr() {
 		op.nativeCleanup(result.Err())
 		err = failure(ErrTransport, "request", result.Err(), op.ctx.Err(), context.Cause(op.ctx))
+		if errors.Is(result.Err(), sdk.ErrFathomryProfileLimit) {
+			err = failure(ErrLimit, "profile", err)
+		}
 		if errors.Is(result.Err(), sdk.ErrFathomryCallback) {
 			err = failure(ErrCallback, "native", err)
 		}
@@ -295,6 +342,7 @@ func (op *operation) finish() {
 			op.closeBodies()
 			op.mu.Lock()
 			data := op.data
+			data.inputErrors = append([]error(nil), data.inputErrors...)
 			var cleanup []error
 			if op.cleanup != nil {
 				cleanup = append(cleanup, op.cleanup)
@@ -303,6 +351,25 @@ func (op *operation) finish() {
 				if input.closeErr != nil {
 					cleanup = append(cleanup, input.closeErr)
 				}
+				if input.readErr != nil {
+					data.inputErrors = append(data.inputErrors, input.readErr)
+				}
+				if input.producerErr != nil {
+					data.inputErrors = append(data.inputErrors, input.producerErr)
+				}
+			}
+			for _, part := range op.parts {
+				part.mu.Lock()
+				if part.initErr != nil {
+					data.inputErrors = append(data.inputErrors, part.initErr)
+				}
+				if part.readErr != nil {
+					data.inputErrors = append(data.inputErrors, part.readErr)
+				}
+				if part.closeErr != nil {
+					cleanup = append(cleanup, part.closeErr)
+				}
+				part.mu.Unlock()
 			}
 			response := op.response
 			primary := op.primary
@@ -336,14 +403,20 @@ func (op *operation) finish() {
 func (op *operation) closeBodies() {
 	op.mu.Lock()
 	inputs := append([]*inputBody(nil), op.inputs...)
+	parts := append([]*multipartInput(nil), op.parts...)
 	response := op.response
 	op.mu.Unlock()
+	var closing sync.WaitGroup
+	for _, part := range parts {
+		closing.Go(func() { _ = part.Close() })
+	}
 	for _, input := range inputs {
-		_ = input.Close()
+		closing.Go(func() { _ = input.Close() })
 	}
 	if response != nil && response.Body != nil {
-		_ = response.Body.Close()
+		closing.Go(func() { _ = response.Body.Close() })
 	}
+	closing.Wait()
 }
 func (op *operation) wait(ctx context.Context) error {
 	select {

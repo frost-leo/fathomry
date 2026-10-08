@@ -37,9 +37,15 @@ func (op *operation) prepare(request *sdk.Request) error {
 		request.GetRequest().Header = headers
 	}
 	for key, values := range op.client.owner.native.Headers {
+		if op.multipart != nil && multipartHeader(key) {
+			continue
+		}
 		headers[key] = append([]string(nil), values...)
 	}
 	for key, values := range op.original.Header {
+		if op.multipart != nil && multipartHeader(key) {
+			continue
+		}
 		headers[key] = append([]string(nil), values...)
 	}
 	for _, hook := range op.client.owner.native.RequestMiddleware {
@@ -89,7 +95,12 @@ func (op *operation) redirect(request *http.Request, via []*http.Request) error 
 	if len(via) >= op.client.owner.settings.MaxRoundTrips {
 		return failure(ErrLimit, "redirects")
 	}
-	if err := validateRequest(op.ctx, copyRequest(request, op.ctx), op.client.owner.settings); err != nil {
+	if request == nil {
+		return failure(ErrInput, "redirect")
+	}
+	checked := *request
+	checked.Response = nil
+	if err := validateRequest(op.ctx, &checked, op.client.owner.settings); err != nil {
 		return err
 	}
 	hook := op.client.owner.native.CheckRedirect
@@ -120,7 +131,7 @@ type operationJar struct {
 }
 
 func cloneCookies(cookies []*http.Cookie, maximum int64) ([]*http.Cookie, error) {
-	if len(cookies) > 4096 {
+	if len(cookies) > 4096 || int64(len(cookies)) > maximum/128 {
 		return nil, failure(ErrLimit, "cookies")
 	}
 	result := make([]*http.Cookie, len(cookies))
@@ -132,12 +143,21 @@ func cloneCookies(cookies []*http.Cookie, maximum int64) ([]*http.Cookie, error)
 		if err := cookie.Valid(); err != nil {
 			return nil, failure(ErrInput, "cookie", err)
 		}
-		bytes += int64(len(cookie.Name) + len(cookie.Value) + len(cookie.Path) + len(cookie.Domain) + len(cookie.Raw) + len(cookie.RawExpires) + 128)
-		for _, field := range cookie.Unparsed {
+		bytes += 128
+		for _, field := range []string{cookie.Name, cookie.Value, cookie.Path, cookie.Domain, cookie.Raw, cookie.RawExpires} {
+			if int64(len(field)) > maximum-bytes {
+				return nil, failure(ErrLimit, "cookies")
+			}
 			bytes += int64(len(field))
 		}
-		if bytes > maximum {
+		if bytes > maximum || int64(len(cookie.Unparsed)) > (maximum-bytes)/16 {
 			return nil, failure(ErrLimit, "cookies")
+		}
+		for _, field := range cookie.Unparsed {
+			if int64(len(field)) > maximum-bytes-16 {
+				return nil, failure(ErrLimit, "cookies")
+			}
+			bytes += int64(len(field)) + 16
 		}
 		copy := *cookie
 		copy.Unparsed = append([]string(nil), cookie.Unparsed...)

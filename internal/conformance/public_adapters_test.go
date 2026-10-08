@@ -42,6 +42,7 @@ import (
 	postgres "github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	database "github.com/frost-leo/fathomry/adapters/database/v1"
 	nethttp "github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1"
+	surf "github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	tlsclient "github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
@@ -77,6 +78,14 @@ func TestPublicAdapterContracts(t *testing.T) {
 			func(runtime *adapters.Runtime, inbox *adapters.Inbox[tlsclient.Result]) tlsclient.Dependencies {
 				return tlsclient.Dependencies{Runtime: runtime, Evidence: inbox, Native: native}
 			}, tlsclient.Open, canary)
+	})
+	t.Run("surf", func(t *testing.T) {
+		value := surf.Settings{Name: "contract", ProxyURL: "http://" + canary + "@127.0.0.1:1"}
+		checkPublicAdapter(t, value, surf.Validate, surf.Recommend,
+			func(value httpclient.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[surf.Result]) surf.Dependencies {
+				return surf.Dependencies{Runtime: runtime, Evidence: inbox}
+			}, surf.Open, canary)
 	})
 	t.Run("nethttp", func(t *testing.T) {
 		zero := time.Duration(0)

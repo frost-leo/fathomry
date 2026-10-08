@@ -120,6 +120,7 @@ type uquicTransport struct {
 	quictr            *quic.Transport
 	pconn             net.PacketConn
 	fallbackTransport http.RoundTripper
+	fallbackHTTP1     *http.Transport
 	tlsConfig         *tls.Config
 	dialer            *net.Dialer
 	settings          g.MapOrd[uint64, uint64]
@@ -148,6 +149,18 @@ func newUQUICTransport(settings g.MapOrd[uint64, uint64], c *Client, builder *Bu
 	if err := ut.initTransport(); err != nil {
 		return nil, err
 	}
+	if base, ok := ut.fallbackTransport.(*http.Transport); ok {
+		fallback := base.Clone()
+		fallback.Protocols = new(http.Protocols)
+		fallback.Protocols.SetHTTP1(true)
+		config := c.tlsConfig.Clone()
+		config.NextProtos = []string{"http/1.1"}
+		fallback.TLSClientConfig = config
+		fallback.DialTLSContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+			return c.fathomryTLSConfig(ctx, network, address, fallback.DialContext, config)
+		}
+		ut.fallbackHTTP1 = fallback
+	}
 
 	return ut, nil
 }
@@ -165,8 +178,10 @@ func (ut *uquicTransport) initTransport() error {
 	}
 
 	ut.http3tr = &http3.Transport{
-		TLSClientConfig:    ut.tlsConfig,
-		DisableCompression: true,
+		FathomryAcquireClient: ut.client.fathomry.control.AcquireHTTP3Client,
+		FathomryQPACKLimits:   ut.client.fathomry.control.QPACKLimits,
+		TLSClientConfig:       ut.tlsConfig,
+		DisableCompression:    true,
 		QUICConfig: &quic.Config{
 			Versions:             []quic.Version{quic.Version1},
 			EnableDatagrams:      true,
@@ -434,7 +449,14 @@ func (ut *uquicTransport) handleError(req *http.Request, err error) (*http.Respo
 		req.Body = body
 	}
 
-	response, fallbackErr := ut.fallbackTransport.RoundTrip(req)
+	transport := ut.fallbackTransport
+	if isHTTP1Required(err) {
+		if ut.fallbackHTTP1 == nil {
+			return nil, err
+		}
+		transport = ut.fallbackHTTP1
+	}
+	response, fallbackErr := transport.RoundTrip(req)
 	if fallbackErr != nil {
 		return response, errors.Join(err, fallbackErr)
 	}
@@ -443,6 +465,9 @@ func (ut *uquicTransport) handleError(req *http.Request, err error) (*http.Respo
 
 // CloseIdleConnections closes idle connections while keeping the transport usable.
 func (ut *uquicTransport) CloseIdleConnections() {
+	if ut.fallbackHTTP1 != nil {
+		ut.fallbackHTTP1.CloseIdleConnections()
+	}
 	if ut.http3tr != nil {
 		ut.http3tr.CloseIdleConnections()
 	}
@@ -462,6 +487,9 @@ func (ut *uquicTransport) Close() error {
 
 func (ut *uquicTransport) closeOwned() error {
 	var cleanup []error
+	if ut.fallbackHTTP1 != nil {
+		ut.fallbackHTTP1.CloseIdleConnections()
+	}
 	if ut.http3tr != nil {
 		cleanup = append(cleanup, ut.http3tr.Close())
 	}
@@ -494,6 +522,15 @@ func cloneRequestWithScheme(req *http.Request, scheme string) *http.Request {
 	return &clone
 }
 
+func isHTTP1Required(err error) bool {
+	var application *quic.ApplicationError
+	if errors.As(err, &application) && application.Remote && application.ErrorCode == quic.ApplicationErrorCode(http3.ErrCodeVersionFallback) {
+		return true
+	}
+	var protocol *http3.Error
+	return errors.As(err, &protocol) && protocol.Remote && protocol.ErrorCode == http3.ErrCodeVersionFallback
+}
+
 func isHTTP3UnsupportedError(err error) bool {
 	if err == nil {
 		return false
@@ -501,6 +538,9 @@ func isHTTP3UnsupportedError(err error) bool {
 
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
+	}
+	if isHTTP1Required(err) {
+		return true
 	}
 
 	var appErr *quic.ApplicationError
