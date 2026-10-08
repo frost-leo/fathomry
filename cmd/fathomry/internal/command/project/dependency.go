@@ -55,10 +55,10 @@ func sdkPins() []modulePin {
 		{"github.com/nukilabs/quic-go", "third_party/nuki-quic-go", "v0.0.0-20260930074612-e7c164f1d613", "h1:hvTCpen/HHo8v+xfCqDCs5hz12l1WwsY88G8DnWJdRE="},
 		{"github.com/nukilabs/socks", "third_party/nuki-socks", "v0.0.0-20260930074612-e7c164f1d613", "h1:gCQEnfYNVwLit12biJMWMT9eBNrxRGCgGMdVrXULp+4="},
 		{"github.com/nukilabs/tlsclient", "third_party/nuki", "v0.0.0-20260930074612-e7c164f1d613", "h1:jBuc2XNyjG6nUiCmTOswBxusE8mXDedn9ydkrGOndh8="},
-		{"github.com/sardanioss/httpcloak", "third_party/httpcloak", "v0.0.0-20260930074612-e7c164f1d613", "h1:hLY4LNZ10ImRPqmyxdXbEjnd2GQXi1dNBqsJpcM6D6c="},
-		{"github.com/sardanioss/net", "third_party/httpcloak-net", "v0.0.0-20260930074612-e7c164f1d613", "h1:s6yIw3Kwg5po+YuXevV/eQbOmrjj5HXwstF+eqfGf6o="},
-		{"github.com/sardanioss/quic-go", "third_party/httpcloak-quic-go", "v0.0.0-20260930074612-e7c164f1d613", "h1:cZrWOXVpeXdj3zWVyySZFSfocnA9oAQfHchW24smvsU="},
-		{"github.com/sardanioss/udpbara", "third_party/udpbara", "v0.0.0-20260930074612-e7c164f1d613", "h1:4kf1j4tSYRiQmv1CWCUY/kM6KzUnhn6DwdVevIcHV20="},
+		{"github.com/sardanioss/httpcloak", "third_party/httpcloak", "v0.0.0-20261008143415-2e24df88d7d2", "h1:b7SKwMwzE97clRt8sRRp8oTsl2Gq4Z22/f84U5p9Gx0="},
+		{"github.com/sardanioss/net", "third_party/httpcloak-net", "v0.0.0-20261008143415-2e24df88d7d2", "h1:VJjU8ewLDgxvgIEQU/CHuY8AUBocU9mMkLf7HlJIaAo="},
+		{"github.com/sardanioss/quic-go", "third_party/httpcloak-quic-go", "v0.0.0-20261008143415-2e24df88d7d2", "h1:g8h8TDm/RIxylM4pvp505OjyQG/q+TH3Wq7xyt9DSs8="},
+		{"github.com/sardanioss/udpbara", "third_party/udpbara", "v0.0.0-20261008143415-2e24df88d7d2", "h1:mcqDpvpZrbAWqH1oFIqZdjpapDJAIVSTl72tj2HuDJc="},
 		{"go.temporal.io/sdk", "third_party/temporal-sdk", "v0.0.0-20260930074612-e7c164f1d613", "h1:MdY61SwGWMujwmuVY0TYZMl69nTl8kdFQh+fFDWeTdI="},
 	}
 }

@@ -19,7 +19,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # HTTPcloak local compatibility boundary
 
-**Status:** local #51 compatibility implementation; not an upstream release or a
+**Status:** local #51 and #120 compatibility implementation; not an upstream release or a
 blanket qualification of every SDK API.
 
 The original MIT [LICENSE](LICENSE) is unchanged. [UPSTREAM.json](UPSTREAM.json)
@@ -39,10 +39,24 @@ The copied runtime packages are fingerprint, transport, DNS, proxy, protocol and
 their internal helpers. Bindings, examples, higher-level Client/Session and upstream
 test suites are not copied. The Provider consumes `FathomryTransport`, not the
 buffered SDK `Transport.Do`, mutable Session setters or the auto-racing dispatcher.
+The current local compatibility marker is `v2`; it is not an SDK version upgrade.
 
 - Clone custom raw ClientHello/PSK bytes and all ClientHelloID pointer state.
   Registry insertion snapshots its input; strict insertion is atomic.
 - Construct from a private preset rather than temporary global registration.
+- Bound custom registry snapshots before cloning, reading the selected immutable
+  registry entry once rather than checking one entry and copying a later replacement.
+- Derive preparation metadata with the same H2/H3 builders and normal/PSK hello
+  selections used by construction. Account for compressed-certificate expansion
+  and streaming decoder scratch, independently of small TLS wire-message limits.
+  Connection receive credit is obtained from the selected corrected H2 builder,
+  not copied from a default formula or confused with stream credit.
+  MASQUE structured-field parsing reserves a separate container envelope from
+  the actual configured receive-header bound, in addition to capsule/datagram
+  queue and worker residence.
+  H3 retained client/control/decoder graphs are also charged per exclusive
+  binding (including possible MASQUE outer plus inner clients), separately from
+  active QUIC/race slots; closed contexts do not imply immediate reclamation.
 - Supply an immutable managed TCP connector, native receive-header bounds and raw
   response bodies. Separate optional native response ordering/casing observations
   from bookkeeping keys. Bounded H1 parsing does not collect response spelling.
@@ -62,10 +76,32 @@ buffered SDK `Transport.Do`, mutable Session setters or the auto-racing dispatch
 - Do not inject default Go/QUIC User-Agent headers into exact/TLS-only requests.
 - Join address-race losers, DNS/ECH work and TCP cleanup tasks.
 - Join and preserve direct H3 cleanup, including the actually owned UDP socket.
+- Managed DNS and ECH callbacks use source-owned resolver authority and copied,
+  bounded cache state. H2 disabling suppresses configured discovery; H3 managed
+  discovery/invalidation bypasses both process-global and per-transport caches.
+  H1 does not apply ECH. Best-effort retry/fallback remains native behavior, and
+  `ECHAccepted` reports the observed handshake rather than the selected option.
+- Managed H3 explicitly selects direct, SOCKS UDP or MASQUE; proxy failure cannot
+  select direct networking. Hooks admit and reclaim physical sockets, outer/inner
+  QUIC connections and CONNECT-UDP request ownership separately. Proxy TLS trust
+  and origin TLS trust are independent, and target/proxy DNS cannot use ambient
+  authority. Address racing bounds active legs and joins even late-success losers.
+- MASQUE retains its native packet/CONNECT-UDP implementation, with bounded
+  datagrams, replacement read/write deadlines, setup cancellation and joined close.
+  The successful owning request stream uses tunnel lifetime, not the expired setup
+  context. A joined capsule reader consumes context-zero DATAGRAM capsules and
+  skips unrecognized capsules with bounded scratch; FIN, RESET and malformed
+  capsules cancel tunnel I/O rather than waiting for an unrelated QUIC idle timer.
+  It is not a public raw packet or tunnel API.
+- Managed capsule negotiation parses the Boolean Item and parameters with the
+  already-selected `github.com/dunglas/httpsfv` v1.1.0 protocol utility. Legal
+  unknown parameters remain accepted; malformed/list/non-Boolean/false values
+  and prohibited content headers/statuses are rejected. This adds no dependency
+  on another concrete HTTP Provider or SDK upgrade.
 - Use the matching local HTTP/2 and HTTP/3 request-lifetime completion boundaries.
   ALPN errors lose their owning TLS handle only after that handle is reclaimed.
 
-The Provider controls exclusive checkouts, dynamic TCP routes, actual socket
+The Provider controls exclusive checkouts, dynamic routes, actual socket
 admission, decoded/wire bounds and native callback evidence. No business preset,
 Cookie/token lifecycle, rotation, distributed cache or retry policy is installed.
 Original mutable/refresh/cache/racing paths outside this managed entry remain
@@ -78,10 +114,14 @@ against consuming dependency selections with offline, read-only module resolutio
 Provider loopback tests additionally verify real H1/H2/H3, encoded framing, request
 replay, cancellation, callback exit and shared source limits. Private failure,
 repair and review logs remain in the owner-local #51 directory, not this repository.
+The #120 controls add independent ECH, exact H2 zero-window, SOCKS UDP/MASQUE and
+bounded race peers. Their current results and remaining delivery gates live in
+the owner-local #120 evidence; the presence of a test is not an acceptance claim.
 
 Runtime files also receive Go formatting required by repository checks. All
 semantic changes remain identifiable against the original hashes. Re-evaluate
 these patches before SDK upgrades or framework releases; do not retire them from
 a version number or release note alone.
 
-[Issue #51](https://github.com/frost-leo/fathomry/issues/51).
+[Issue #51](https://github.com/frost-leo/fathomry/issues/51) and
+[issue #120](https://github.com/frost-leo/fathomry/issues/120).

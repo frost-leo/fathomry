@@ -19,7 +19,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # HTTPcloak QUIC compatibility corrections
 
-**Status:** scoped local #51 replacement for `github.com/sardanioss/quic-go`
+**Status:** scoped local #51/#120 replacement for `github.com/sardanioss/quic-go`
 v1.2.29, not the independent official `github.com/quic-go/quic-go` module.
 
 The original MIT [LICENSE](LICENSE) is unchanged. [UPSTREAM.json](UPSTREAM.json)
@@ -48,5 +48,34 @@ generated `internal/mocks` test helpers. Maintained `TestFathomry*` regressions 
 not skipped; the full copied module is tested with the consuming selections.
 Go formatting of copied runtime source is separate from the scoped HTTP/3 edits.
 
+Issue #120 additionally retains the selected dynamic decoder as a private
+[source-recorded correction](internal/fathomryqpack/FATHOMRY.md), without adding
+a Go module or replacing the static request encoder. Advertised QPACK capacities,
+fragmented encoder instructions, Required Insert Count references, ordered
+feedback, blocked-stream cancellation and critical-stream failures now use owned,
+bounded paths. Effective receive aborts are observed without treating FIN or
+send-half completion as cancellation; read deadlines wake blocked decoding.
+Normal native reliable-reset and EOF precedence is retained. Abandoning unread
+trailers sends stream cancellation and suppresses later acknowledgements.
+
+The managed client joins critical readers, feedback, stream-abort observation and
+datagram receivers as part of FathomryCloseSenders after QUIC shutdown. An
+independent critical watcher remains effective during feedback write backpressure.
+Context-aware datagram enqueue preserves ordinary SendDatagram while allowing
+MASQUE deadline/cancellation to stop waiting without killing sibling streams.
+Nil means local enqueue, not delivery; a canceled call returning an error did not
+enqueue that packet. Native/source queue and parser storage remain separately
+accounted, not reduced to a nominal socket count.
+
+Per-request datagram writes also observe actual local/remote send cancellation,
+joining their cancellation callback without confusing receive FIN with abort.
+Refused datagram-worker admission closes with H3_EXCESSIVE_LOAD rather than
+advertising an unusable receive path. Priority-update writes use cancellable
+control-stream admission; an interrupted partial frame terminates the connection
+instead of leaving a corrupt shared stream or a blocked operation. Independent
+QUIC peers cover active and queued write cancellation alongside healthy controls.
+The local compatibility marker is `httpcloak-quic-v2`.
+
 See the [HTTPcloak boundary](../httpcloak/FATHOMRY.md) and
-[issue #51](https://github.com/frost-leo/fathomry/issues/51).
+[issue #51](https://github.com/frost-leo/fathomry/issues/51) and
+[issue #120](https://github.com/frost-leo/fathomry/issues/120).

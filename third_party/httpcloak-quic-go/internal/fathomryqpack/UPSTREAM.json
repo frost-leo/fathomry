@@ -1,0 +1,27 @@
+{
+  "schema": "fathomry.selected-source/v1",
+  "module": "github.com/sardanioss/qpack",
+  "version": "v0.6.3",
+  "origin": "99927365012d19777a0828b99fdfe3d8a8402b3a",
+  "go": "1.24",
+  "sum": "h1:XGXtEYzpqMD7kzq/kyRhjucohUD8JPiJvi6RuxAlueQ=",
+  "go_mod_sum": "h1:RSs0PpIh6d66DzAdANPGs9eHV/AbROwpW/Egpy0kIvQ=",
+  "license": "LICENSE.md",
+  "original_sha256": {
+    "decoder.go": "52e225de01f0012bb147d4b910717353361702fd84a813b68c2caa4118b79075",
+    "static_table.go": "84bceb6a8514f7456927bf0f88b8c444a7688391929f42a18cf65e828cb5fda2",
+    "varint.go": "a7074f062613e68d9c2366eb02292483f691d508e48e29a9fad6bfd5537b15d4",
+    "decoder_test.go": "6f1abfcb5986a83341d07f36e47803b8ac562e4ef65817a5f6dc31a2708548c7",
+    "LICENSE.md": "1b6a897efd39b20b3cdce8cd306160d115dbded39d855ceeffe21dc11e4d53df",
+    "header_field.go": "6098f8b41e26b1410530f3a190ea1eab114b53e5bd5326f568aebf186ce72233"
+  },
+  "selection": {
+    "decoder.go": "Selected decoder with bounded owned corrections; DecodeFunc remains the external SDK type.",
+    "static_table.go": "Decoder static table entries only; unused encoder map/test link helper omitted.",
+    "varint.go": "Selected prefix integer codec with explicit 62-bit overflow guard.",
+    "decoder_test.go": "Unchanged selected upstream decoder controls.",
+    "header_field.go": "First-party type alias to the original SDK HeaderField, not a copied type.",
+    "LICENSE.md": "Exact original MIT notice."
+  },
+  "boundary": "Private package inside the existing corrected QUIC module. No additional go.mod, SDK version upgrade or separately published module."
+}

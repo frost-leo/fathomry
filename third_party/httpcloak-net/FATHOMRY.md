@@ -19,7 +19,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # HTTPcloak HTTP/2 compatibility corrections
 
-**Status:** scoped #51 replacement for `github.com/sardanioss/net` v1.2.10.
+**Status:** scoped #51 and #120 replacement for `github.com/sardanioss/net` v1.2.10.
 
 The original BSD-style [LICENSE](LICENSE) and Go source notices are preserved.
 [UPSTREAM.json](UPSTREAM.json) records commit
@@ -37,10 +37,24 @@ regressions and consuming-version offline checks cover the local changes:
   callbacks. Ordinary canceled Body.Close remains distinct from that join.
 - Preserve exact Cookie field pairs through the request-local managed marker,
   without mutating shared transport settings or affecting ordinary requests.
+- Use explicitly supplied native SETTINGS values for actual decoder capacity and
+  initial stream receive credit, including zero, instead of advertising zero while
+  retaining unrelated default credit. Independent local H2 controls observe both
+  legal zero/nonzero exchanges and flow-control/HPACK violations at zero.
+- Derive connection receive credit from the actual initial WINDOW_UPDATE increment,
+  preserving zero's native default meaning. Refuse signed-31-bit overflow and use
+  the same effective credit for wire output, local inflow and managed preparation
+  metadata. A large stream window cannot mask a smaller connection-level bound.
+
+The current local marker is `v2`. Connection-credit controls use an independent
+peer and DATA followed by PING while application reads are held; tests compare
+small exact/over-limit credit and a larger legal advertised window, not only a
+settings struct or a successful small response.
 
 Only the HTTPcloak managed bridge enables the additional completion contract;
 it stops new checkouts before waiting. This is not a general claim that native
 Close rolls back remote effects. Runtime formatting follows repository checks.
 
 See the [HTTPcloak boundary](../httpcloak/FATHOMRY.md) and
-[issue #51](https://github.com/frost-leo/fathomry/issues/51).
+[issue #51](https://github.com/frost-leo/fathomry/issues/51) and
+[issue #120](https://github.com/frost-leo/fathomry/issues/120).

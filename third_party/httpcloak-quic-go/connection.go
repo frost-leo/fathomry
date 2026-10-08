@@ -3056,6 +3056,18 @@ func (c *Conn) onStreamCompleted(id protocol.StreamID) {
 // In addition, a datagram may be dropped before being sent out if the available packet size suddenly decreases.
 // If the payload is too large to be sent at the current time, a DatagramTooLargeError is returned.
 func (c *Conn) SendDatagram(p []byte) error {
+	return c.SendDatagramContext(context.Background(), p)
+}
+
+// SendDatagramContext bounds waiting for local queue space. An error means the
+// packet was not enqueued; nil is local acceptance, not remote delivery evidence.
+func (c *Conn) SendDatagramContext(ctx context.Context, p []byte) error {
+	if ctx == nil {
+		return errors.New("quic: nil datagram context")
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(err, context.Cause(ctx))
+	}
 	if !c.supportsDatagrams() {
 		return errors.New("datagram support disabled")
 	}
@@ -3072,7 +3084,7 @@ func (c *Conn) SendDatagram(p []byte) error {
 	}
 	f.Data = make([]byte, len(p))
 	copy(f.Data, p)
-	return c.datagramQueue.Add(f)
+	return c.datagramQueue.AddContext(ctx, f)
 }
 
 // ReceiveDatagram gets a message received in a QUIC datagram, as specified in RFC 9221.

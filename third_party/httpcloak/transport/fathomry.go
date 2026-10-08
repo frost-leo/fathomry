@@ -23,6 +23,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -30,10 +31,13 @@ import (
 	http "github.com/sardanioss/http"
 	"github.com/sardanioss/httpcloak/dns"
 	"github.com/sardanioss/httpcloak/fingerprint"
+	"github.com/sardanioss/httpcloak/internal/managed"
 	http2 "github.com/sardanioss/net/http2"
 )
 
-const FathomryCompatibilityRevision = "v1"
+const FathomryCompatibilityRevision = "v2"
+
+type FathomryControls = managed.Controls
 
 // FathomryErrHeaderLimit identifies a managed send/receive header budget failure.
 var FathomryErrHeaderLimit = errors.New("httpcloak: managed header limit")
@@ -68,6 +72,11 @@ func NewFathomryTransport(preset *fingerprint.Preset, config *TransportConfig, p
 	if config.SessionCacheBackend != nil || config.SessionCacheErrorCallback != nil {
 		return nil, errors.New("httpcloak: unmanaged distributed session cache")
 	}
+	if controls := config.FathomryControls; controls != nil {
+		if controls.Resolve == nil || controls.ECH == nil || controls.InvalidateECH == nil || controls.DialTCP == nil || controls.ListenUDP == nil || controls.DialUDP == nil || controls.CloseUDP == nil || controls.AcquireQUIC == nil || controls.AcquireControl == nil || controls.MaxAddressRaces < 1 {
+			return nil, errors.New("httpcloak: incomplete managed resource authority")
+		}
+	}
 	preset = fingerprint.Clone(preset)
 	if len(preset.HeaderOrder) > 0 {
 		preset.Headers = nil
@@ -92,6 +101,9 @@ func NewFathomryTransport(preset *fingerprint.Preset, config *TransportConfig, p
 	copied.TLSOnly = true
 	copied.FathomryMaxHeaderBytes = maxHeaders
 	cache := dns.NewCache()
+	if copied.FathomryControls != nil {
+		cache = dns.NewFathomryCache(copied.FathomryControls.Resolve)
+	}
 	switch protocol {
 	case ProtocolHTTP1:
 		managed.h1 = NewHTTP1TransportWithConfig(preset, cache, nil, &copied)
@@ -109,7 +121,27 @@ func NewFathomryTransport(preset *fingerprint.Preset, config *TransportConfig, p
 			return nil, ErrProtocol
 		}
 		var err error
-		managed.h3, err = NewHTTP3TransportWithTransportConfig(preset, cache, &copied)
+		if controls := copied.FathomryControls; controls != nil && controls.ProxyURL != "" {
+			address, problem := url.Parse(controls.ProxyURL)
+			if problem != nil {
+				return nil, problem
+			}
+			proxy := &ProxyConfig{URL: controls.ProxyURL}
+			switch address.Scheme {
+			case "masque":
+				managed.h3, err = NewHTTP3TransportWithMASQUE(preset, cache, proxy, &copied)
+			case "socks5", "socks5h":
+				if address.Port() == "" {
+					address.Host = net.JoinHostPort(address.Hostname(), "1080")
+					proxy.URL = address.String()
+				}
+				managed.h3, err = NewHTTP3TransportWithConfig(preset, cache, proxy, &copied)
+			default:
+				return nil, errors.New("httpcloak: unsupported managed H3 route")
+			}
+		} else {
+			managed.h3, err = NewHTTP3TransportWithTransportConfig(preset, cache, &copied)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -227,7 +259,7 @@ func (managed *FathomryTransport) Close() error {
 	})
 	managed.retryMu.Lock()
 	defer managed.retryMu.Unlock()
-	if managed.h3 != nil && !managed.ResourcesReleased() {
+	if managed.h3 != nil && managed.h3.quicTransport != nil && !managed.ResourcesReleased() {
 		managed.closeErr = errors.Join(managed.closeErr, managed.h3.quicTransport.Conn.Close())
 	}
 	return managed.closeErr
@@ -243,6 +275,9 @@ func (managed *FathomryTransport) ResourcesReleased() bool {
 	}
 	if managed.h3 == nil {
 		return true
+	}
+	if managed.h3.quicTransport == nil {
+		return managed.closeErr == nil
 	}
 	return errors.Is(managed.h3.quicTransport.Conn.SetReadDeadline(time.Time{}), net.ErrClosed)
 }

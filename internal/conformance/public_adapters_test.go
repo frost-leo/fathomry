@@ -41,6 +41,7 @@ import (
 	mysql "github.com/frost-leo/fathomry/adapters/database/mysql/v1"
 	postgres "github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	database "github.com/frost-leo/fathomry/adapters/database/v1"
+	httpcloak "github.com/frost-leo/fathomry/adapters/httpclient/httpcloak/v1"
 	nethttp "github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1"
 	surf "github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	tlsclient "github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
@@ -69,6 +70,17 @@ type adapterOwner interface {
 
 func TestPublicAdapterContracts(t *testing.T) {
 	const canary = "adapter-contract-private-canary"
+	t.Run("httpcloak", func(t *testing.T) {
+		dependencies := httpcloak.NativeOptions{}
+		value := httpcloak.Settings{Name: "contract", PresetName: "chrome-148", ProxyURL: "http://" + canary + "@127.0.0.1:1"}
+		checkPublicAdapter(t, value, httpcloak.Validate, func(value httpcloak.Settings) (httpclient.Policy, error) {
+			return httpcloak.Recommend(value, dependencies)
+		},
+			func(value httpclient.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[httpcloak.Result]) httpcloak.Dependencies {
+				return httpcloak.Dependencies{Runtime: runtime, Evidence: inbox, Native: dependencies}
+			}, httpcloak.Open, canary)
+	})
 	t.Run("tlsclient", func(t *testing.T) {
 		profile := profiles.Chrome_144
 		native := tlsclient.NativeOptions{Profile: &profile}

@@ -161,7 +161,7 @@ func TestReviewPresetCredentialsRespectRedirectScope(t *testing.T) {
 	defer origin.Close()
 	preset := fingerprint.GetStrict("chrome-148")
 	preset.HeaderOrder = append(preset.HeaderOrder, fingerprint.HeaderPair{Key: "Authorization", Value: "Bearer test"}, fingerprint.HeaderPair{Key: "Cookie", Value: "session=test"})
-	fixture := bindFixture(t, OptionsV1{Name: "source", Protocol: HTTP1, Native: NativeOptionsV1{Preset: preset}}, 1)
+	fixture := bindFixture(t, OptionsV1{Name: "source", Protocol: HTTP1, Native: NativeOptionsV1{Preset: preset, Transport: &transport.TransportConfig{ConnectTo: map[string]string{"localhost": "127.0.0.1"}}}}, 1)
 	receipt, err := fixture.client.Do(testContext(t), testContext(t), fault.Correlation{Call: "profile-redirect"}, request(t, "GET", origin.URL, nil), RequestOptionsV1{FollowRedirects: true})
 	if err != nil {
 		t.Fatal(err)

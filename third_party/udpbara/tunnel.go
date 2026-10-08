@@ -2,6 +2,7 @@ package udpbara
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -38,9 +39,10 @@ type Tunnel struct {
 	// allConns is a flat list for fallback broadcast when key lookup fails.
 	allConns []*tunnelConn
 
-	running atomic.Bool
-	closing atomic.Bool // set by Close(); prevents ConnectContext from opening after Close()
-	closeCh chan struct{}
+	running  atomic.Bool
+	closing  atomic.Bool // set by Close(); prevents ConnectContext from opening after Close()
+	closeCh  chan struct{}
+	closeErr error
 
 	// Logger (nil = no logging)
 	logger Logger
@@ -125,6 +127,9 @@ func NewTunnel(proxyURL string, config ...Config) (*Tunnel, error) {
 	if len(config) > 0 {
 		cfg = config[0]
 	}
+	if hooks := cfg.Fathomry; hooks != nil && (hooks.DialTCP == nil || hooks.Resolve == nil || hooks.ListenUDP == nil || hooks.DialUDP == nil || hooks.CloseUDP == nil || cfg.AutoReconnect) {
+		return nil, fmt.Errorf("invalid managed UDP authority")
+	}
 
 	return &Tunnel{
 		proxyAddr: addr,
@@ -201,7 +206,7 @@ func (t *Tunnel) ConnectContext(ctx context.Context) error {
 	if t.running.Load() || t.closing.Load() {
 		t.mu.Unlock()
 		ctrl.Close()
-		remoteUDP.Close()
+		t.closeUDP(remoteUDP)
 		if t.closing.Load() {
 			return fmt.Errorf("tunnel closed")
 		}
@@ -226,7 +231,11 @@ func (t *Tunnel) ConnectContext(ctx context.Context) error {
 func (t *Tunnel) doConnect(ctx context.Context) (ctrl net.Conn, relayAddr *net.UDPAddr, remoteUDP *net.UDPConn, err error) {
 	timeout := time.Duration(t.config.ConnectTimeout) * time.Second
 	dialer := &net.Dialer{Timeout: timeout}
-	ctrl, err = dialer.DialContext(ctx, "tcp", t.proxyAddr)
+	if t.config.Fathomry != nil {
+		ctrl, err = t.config.Fathomry.DialTCP(ctx, t.proxyAddr)
+	} else {
+		ctrl, err = dialer.DialContext(ctx, "tcp", t.proxyAddr)
+	}
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("tcp connect: %w", err)
 	}
@@ -249,13 +258,21 @@ func (t *Tunnel) doConnect(ctx context.Context) (ctrl net.Conn, relayAddr *net.U
 		return nil, nil, nil, fmt.Errorf("socks5 handshake: %w", err)
 	}
 
-	relayAddr, err = socks5UDPAssociate(ctrl)
+	if t.config.Fathomry != nil {
+		relayAddr, err = socks5UDPAssociateContext(ctx, ctrl, t.config.Fathomry.Resolve)
+	} else {
+		relayAddr, err = socks5UDPAssociate(ctrl)
+	}
 	if err != nil {
 		ctrl.Close()
 		return nil, nil, nil, fmt.Errorf("udp associate: %w", err)
 	}
 
-	remoteUDP, err = net.DialUDP("udp", nil, relayAddr)
+	if t.config.Fathomry != nil {
+		remoteUDP, err = t.config.Fathomry.DialUDP("udp", nil, relayAddr)
+	} else {
+		remoteUDP, err = net.DialUDP("udp", nil, relayAddr)
+	}
 	if err != nil {
 		ctrl.Close()
 		return nil, nil, nil, fmt.Errorf("udp dial: %w", err)
@@ -313,8 +330,18 @@ func (t *Tunnel) DialContext(ctx context.Context, target string) (*Connection, e
 	// and allConns broadcast fallback in readLoop.
 	var resolvedKeys []string
 	if ip := net.ParseIP(host); ip == nil {
-		resolver := &net.Resolver{}
-		if ips, err := resolver.LookupIPAddr(ctx, host); err == nil {
+		var ips []net.IPAddr
+		var resolveErr error
+		if t.config.Fathomry != nil {
+			var addresses []net.IP
+			addresses, resolveErr = t.config.Fathomry.Resolve(ctx, host)
+			for _, address := range addresses {
+				ips = append(ips, net.IPAddr{IP: address})
+			}
+		} else {
+			ips, resolveErr = (&net.Resolver{}).LookupIPAddr(ctx, host)
+		}
+		if resolveErr == nil {
 			resolvedKeys = make([]string, 0, len(ips))
 			for _, resolved := range ips {
 				// Normalize IPv4-mapped IPv6 to plain IPv4 so keys match those
@@ -328,6 +355,9 @@ func (t *Tunnel) DialContext(ctx context.Context, target string) (*Connection, e
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, fathomryContextError(ctx, err)
+	}
 	conn, err := newTunnelConn(t, target, socks5Header)
 	if err != nil {
 		t.logError("dial failed", "target", target, "error", err)
@@ -371,11 +401,12 @@ func (t *Tunnel) Close() error {
 	t.closing.Store(true)
 	t.mu.Lock()
 	for conn := range t.connecting {
-		conn.Close()
+		t.closeErr = errors.Join(t.closeErr, conn.Close())
 	}
+	prior := t.closeErr
 	t.mu.Unlock()
 	if !t.running.CompareAndSwap(true, false) {
-		return nil
+		return prior
 	}
 
 	close(t.closeCh)
@@ -383,14 +414,15 @@ func (t *Tunnel) Close() error {
 	// Use allConns to close each connection exactly once (conns map has
 	// duplicate entries under hostname and IP keys).
 	t.connsMu.Lock()
+	var closeErr error
 	t.logInfo("tunnel closing", "proxy", t.proxyAddr, "active_conns", len(t.allConns))
 	for _, c := range t.allConns {
 		c.closeMu.Lock()
 		if !c.closed {
 			c.closed = true
 			close(c.closeCh)
-			c.appConn.Close()
-			c.relayConn.Close()
+			c.closeErr = errors.Join(t.closeUDP(c.appConn), t.closeUDP(c.relayConn))
+			closeErr = errors.Join(closeErr, c.closeErr)
 		}
 		c.closeMu.Unlock()
 	}
@@ -400,14 +432,16 @@ func (t *Tunnel) Close() error {
 
 	t.mu.Lock()
 	if udp := t.remoteUDP.Load(); udp != nil {
-		udp.Close()
+		closeErr = errors.Join(closeErr, t.closeUDP(udp))
 	}
 	if t.controlTCP != nil {
-		t.controlTCP.Close()
+		closeErr = errors.Join(closeErr, t.controlTCP.Close())
 	}
+	t.closeErr = errors.Join(t.closeErr, closeErr)
+	closeErr = t.closeErr
 	t.mu.Unlock()
 
-	return nil
+	return closeErr
 }
 
 // readLoop continuously reads from the SOCKS5 relay and dispatches to connections.
@@ -523,7 +557,7 @@ func (t *Tunnel) reconnect() {
 	// if Close() is called after all reconnect attempts fail.
 	t.mu.Lock()
 	if udp := t.remoteUDP.Load(); udp != nil {
-		udp.Close()
+		t.closeUDP(udp)
 		t.remoteUDP.Store(nil)
 	}
 	if t.controlTCP != nil {
@@ -558,7 +592,7 @@ func (t *Tunnel) reconnect() {
 			if !t.running.Load() {
 				t.mu.Unlock()
 				ctrl.Close()
-				remoteUDP.Close()
+				t.closeUDP(remoteUDP)
 				return
 			}
 			t.controlTCP = ctrl

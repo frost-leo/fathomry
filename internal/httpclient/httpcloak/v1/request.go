@@ -92,7 +92,8 @@ func (client *Client) open(ctx context.Context, id fault.Correlation, request *h
 	if client == nil || client.owner == nil || client.access == nil || ctx == nil {
 		return nil, nil, failure(ErrInput, "client")
 	}
-	if err := validateRequest(ctx, request, client.owner.settings); err != nil {
+	snapshot, _, err := requestPolicy(client.owner.settings, client.owner.native).Snapshot(ctx, request, options...)
+	if err != nil {
 		return nil, nil, err
 	}
 	option, err := freezeOptions(client, options)
@@ -100,7 +101,7 @@ func (client *Client) open(ctx context.Context, id fault.Correlation, request *h
 		return nil, nil, err
 	}
 	parent, parentStop := requestParent(ctx, request.Context())
-	snapshot := request.Clone(parent)
+	snapshot = snapshot.WithContext(parent)
 	if snapshot.Header == nil {
 		snapshot.Header = make(http.Header)
 	}
@@ -122,7 +123,7 @@ func (client *Client) open(ctx context.Context, id fault.Correlation, request *h
 		}
 	}
 	value := client.owner.settings
-	call, err := invocation.Begin(parent, client.access, invocation.Request{Name: "request", Correlation: id, Shape: shape, Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.AdmissionTimeout}}, client.inbox, client.observer)
+	call, err := invocation.Begin(parent, client.access, invocation.Request{Name: "request", Correlation: id, Shape: shape, Bytes: client.owner.budget.WorkBytes, EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.AdmissionTimeout}}, client.inbox, client.observer)
 	if err != nil {
 		parentStop()
 		return nil, nil, err
@@ -217,7 +218,7 @@ func (op *operation) execute(request *http.Request) (*Stream, error) {
 			return op.input(reader, expectedInput), err
 		}
 	}
-	native := &http.Client{Transport: exchange{op}, Jar: op.client.owner.native.Jar, CheckRedirect: func(request *http.Request, via []*http.Request) error {
+	native := &http.Client{Transport: exchange{op}, CheckRedirect: func(request *http.Request, via []*http.Request) error {
 		if !op.option.FollowRedirects {
 			return http.ErrUseLastResponse
 		}
@@ -236,8 +237,8 @@ func (op *operation) execute(request *http.Request) (*Stream, error) {
 		}
 		return nil
 	}}
-	if len(op.option.ExactHeaders) > 0 {
-		native.Jar = nil
+	if op.client.owner.native.Jar != nil && len(op.option.ExactHeaders) == 0 {
+		native.Jar = operationJar{op}
 	}
 	response, err := native.Do(request)
 	if err != nil {

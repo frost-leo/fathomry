@@ -11,6 +11,7 @@ retract (
 
 require (
 	github.com/andybalholm/brotli v1.2.0
+	github.com/dunglas/httpsfv v1.1.0
 	github.com/klauspost/compress v1.18.2
 	github.com/miekg/dns v1.1.69
 	github.com/sardanioss/http v1.2.0

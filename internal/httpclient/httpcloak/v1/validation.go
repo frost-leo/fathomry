@@ -54,8 +54,12 @@ func headerFits(header http.Header, limit int64) bool {
 		if !token(key) {
 			return false
 		}
+		count += int64(len(key)) + 32
+		if count > limit || int64(len(values)) > (limit-count)/16 {
+			return false
+		}
 		for _, value := range values {
-			count += int64(len(key) + len(value) + 4)
+			count += int64(len(value)) + 16
 			if count > limit || !fieldValue(value) {
 				return false
 			}
@@ -71,6 +75,10 @@ func validateRequest(ctx context.Context, request *http.Request, value settings)
 		return failure(ErrState, "request-context", err, context.Cause(request.Context()))
 	}
 	address := request.URL
+	urlBytes := len(address.Scheme) + len(address.Opaque) + len(address.Host) + len(address.Path) + len(address.RawPath) + len(address.RawQuery) + len(address.Fragment) + len(address.RawFragment)
+	if len(request.Method) > 256 || urlBytes > 8192 {
+		return failure(ErrLimit, "request")
+	}
 	if request.Method == "" || !token(request.Method) || request.Method == "CONNECT" || request.Method == "GET_0RTT" || request.Method == "HEAD_0RTT" ||
 		address.Hostname() == "" || address.Scheme != "http" && address.Scheme != "https" || address.User != nil || address.Opaque != "" || len(address.String()) > 8192 ||
 		!fieldValue(address.Host) || !fieldValue(request.Host) || !headerFits(request.Header, value.MaxHeaderBytes) || !headerFits(request.Trailer, value.MaxHeaderBytes) {
@@ -128,7 +136,7 @@ func parseProxy(value string) (*url.URL, error) {
 		return nil, failure(ErrInput, "proxy", err)
 	}
 	if address.Hostname() == "" || address.Path != "" && address.Path != "/" || address.RawQuery != "" || address.Fragment != "" || address.Opaque != "" ||
-		(address.Scheme != "http" && address.Scheme != "https" && address.Scheme != "socks5" && address.Scheme != "socks5h") {
+		(address.Scheme != "http" && address.Scheme != "https" && address.Scheme != "socks5" && address.Scheme != "socks5h" && address.Scheme != "masque") {
 		return nil, failure(ErrUnsupported, "proxy")
 	}
 	if !fieldValue(address.Host) {
@@ -154,8 +162,10 @@ func freezeOptions(client *Client, options []RequestOptionsV1) (RequestOptionsV1
 	if _, err := parseProxy(option.ProxyURL); err != nil {
 		return option, err
 	}
-	if client.owner.settings.Protocol == HTTP3 && option.ProxyURL != "" {
-		return option, failure(ErrUnsupported, "http3-proxy")
+	if proxy, _ := parseProxy(option.ProxyURL); proxy != nil {
+		if client.owner.settings.Protocol == HTTP3 && (proxy.Scheme == "http" || proxy.Scheme == "https") || client.owner.settings.Protocol != HTTP3 && proxy.Scheme == "masque" {
+			return option, failure(ErrUnsupported, "proxy-protocol")
+		}
 	}
 	if !headerFits(option.ConnectHeaders, client.owner.settings.MaxHeaderBytes) {
 		return option, failure(ErrInput, "proxy-headers")
@@ -166,7 +176,7 @@ func freezeOptions(client *Client, options []RequestOptionsV1) (RequestOptionsV1
 			return option, failure(ErrInput, "proxy-headers-without-proxy")
 		}
 		proxy, _ := parseProxy(option.ProxyURL)
-		if proxy.Scheme == "socks5" || proxy.Scheme == "socks5h" {
+		if proxy.Scheme == "socks5" || proxy.Scheme == "socks5h" || proxy.Scheme == "masque" {
 			return option, failure(ErrUnsupported, "socks-headers")
 		}
 		keys := make([]string, 0, len(option.ConnectHeaders))
@@ -180,8 +190,6 @@ func freezeOptions(client *Client, options []RequestOptionsV1) (RequestOptionsV1
 		}
 		option.ConnectHeaders = normalized
 	}
-	option.HeaderOrder = append([]string(nil), option.HeaderOrder...)
-	option.ExactHeaders = append(option.ExactHeaders[:0:0], option.ExactHeaders...)
 	if len(option.HeaderOrder) > 1024 || len(option.ExactHeaders) > 1024 {
 		return option, failure(ErrLimit, "header-order")
 	}
@@ -204,6 +212,8 @@ func freezeOptions(client *Client, options []RequestOptionsV1) (RequestOptionsV1
 	if bytes > client.owner.settings.MaxHeaderBytes {
 		return option, failure(ErrLimit, "header-order")
 	}
+	option.HeaderOrder = append([]string(nil), option.HeaderOrder...)
+	option.ExactHeaders = append(option.ExactHeaders[:0:0], option.ExactHeaders...)
 	if option.TLSOnly != nil {
 		value := *option.TLSOnly
 		option.TLSOnly = &value

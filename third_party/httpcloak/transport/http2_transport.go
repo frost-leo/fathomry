@@ -653,6 +653,9 @@ func (t *HTTP2Transport) createConn(ctx context.Context, host, port string) (*pe
 // echConfigured reports whether this transport has any ECH source configured
 // (raw bytes or an ECHConfigDomain), i.e. whether a no-ECH retry is meaningful.
 func (t *HTTP2Transport) echConfigured() bool {
+	if t.config != nil && t.config.FathomryControls != nil && t.config.FathomryControls.DisableECH {
+		return false
+	}
 	return t.config != nil && (len(t.config.ECHConfig) > 0 || t.config.ECHConfigDomain != "")
 }
 
@@ -789,9 +792,11 @@ func (t *HTTP2Transport) establishConn(ctx context.Context, host, port string, s
 	// config was rejected or mis-served.
 	var echConfigList []byte
 	if !skipECH && t.config != nil {
-		if len(t.config.ECHConfig) > 0 {
+		if t.config.FathomryControls != nil && t.echConfigured() {
+			echConfigList = t.config.GetECHConfig(ctx, host)
+		} else if t.config.FathomryControls == nil && len(t.config.ECHConfig) > 0 {
 			echConfigList = t.config.ECHConfig
-		} else if t.config.ECHConfigDomain != "" {
+		} else if t.config.FathomryControls == nil && t.config.ECHConfigDomain != "" {
 			// Fetch ECH config from DNS
 			echConfigList, _ = dns.FetchECHConfigs(ctx, t.config.ECHConfigDomain)
 			// ECH fetch failed - continue without ECH (SNI will be visible)

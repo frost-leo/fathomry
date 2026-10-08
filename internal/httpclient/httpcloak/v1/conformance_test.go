@@ -31,6 +31,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -82,6 +83,36 @@ func TestTraceCallbackExitPrecedesTechnicalRelease(t *testing.T) {
 			result := settle(t, fixture, receipt)
 			if !result.Final || !result.Released || result.Outcome.Value.WritesObserved() != 1 {
 				t.Fatal("trace completion evidence lost")
+			}
+		})
+	}
+}
+
+func TestRequestRejectsOwningTraceHooksBeforeAdmission(t *testing.T) {
+	for _, supplied := range []string{"method", "request", "both"} {
+		t.Run(supplied, func(t *testing.T) {
+			var wire, callback atomic.Int32
+			address, options := peer(t, HTTP2, func(writer http.ResponseWriter, _ *http.Request) {
+				wire.Add(1)
+				writer.WriteHeader(http.StatusNoContent)
+			})
+			fixture := bindFixture(t, options, 1)
+			method, native := testContext(t), testContext(t)
+			trace := &httptrace.ClientTrace{GotConn: func(httptrace.GotConnInfo) { callback.Add(1) }}
+			if supplied != "request" {
+				method = httptrace.WithClientTrace(method, trace)
+			}
+			if supplied != "method" {
+				native = httptrace.WithClientTrace(native, trace)
+			}
+			body := &countedBody{}
+			input := request(t, "POST", address, body).WithContext(native)
+			if err := ValidateRequestV1(method, input); !errors.Is(err, ErrUnsupported) {
+				t.Fatal("hard public preflight admitted owning trace authority", err)
+			}
+			receipt, err := fixture.client.Do(method, testContext(t), fault.Correlation{Call: "owning-trace"}, input)
+			if !errors.Is(err, ErrUnsupported) || receipt != nil || body.reads.Load() != 0 || body.closes.Load() != 0 || callback.Load() != 0 || wire.Load() != 0 {
+				t.Fatal("owning trace rejection occurred after admission, input or connection exposure", err)
 			}
 		})
 	}

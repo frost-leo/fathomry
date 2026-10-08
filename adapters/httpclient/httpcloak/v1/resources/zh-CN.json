@@ -1,0 +1,90 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "http_httpcloak",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.http_httpcloak.invalid_input",
+      "source": "a088269e1fa93bccbb63c5e28b10a42a6057a913f8cb1e43be5adf1a6df6d979",
+      "forms": {
+        "other": "HTTP 输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.unsupported_profile",
+      "source": "0df2746a673ef9dc4cfb766cd01b29b59e80aa45795517fb5eba69a9f69ba316",
+      "forms": {
+        "other": "请求的 HTTP 能力不受支持。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.transport_failed",
+      "source": "10f516f484b9532f7037136f1e7d0448acf498cda4b1ffc8057f9b046e2744fe",
+      "forms": {
+        "other": "HTTP 传输失败，远端效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.read_failed",
+      "source": "d6fbbd321447d2ee265093cdee9f7f345d2912561fed32a35a57d6e3e1342e85",
+      "forms": {
+        "other": "读取 HTTP 输入或响应失败。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.integrity_failed",
+      "source": "d784f0a84a04678421b13e2606ecf395920d84b208886fc5d890d71defb6c5fd",
+      "forms": {
+        "other": "HTTP 响应不完整或格式无效。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.limit_exceeded",
+      "source": "1ee67c21da27b7f3395001cdb48ec7e8d9ae40eca3a94a71c03d9ec2b0985643",
+      "forms": {
+        "other": "超出 HTTP 能力限制。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.invalid_state",
+      "source": "60706c8f069866ccd7c0d8055935d682ebe55bb780248c3738b7edcad67262c2",
+      "forms": {
+        "other": "HTTP 句柄在当前状态下无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.cleanup_failed",
+      "source": "912288ebe1aae72e264a87ec0c5a0cd9d9a8dcf55b416257bd7019c4caa12da8",
+      "forms": {
+        "other": "HTTP 清理报告失败，完成状态需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.http_httpcloak.runtime_serialization",
+      "source": "4b553a073399b906cdea04eaa4da1ead647283cfc5cdd7546ca17e67eb13e4c6",
+      "forms": {
+        "other": "不支持序列化 HTTP 运行时值。"
+      }
+    }
+  ]
+}

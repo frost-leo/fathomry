@@ -24,6 +24,8 @@ import (
 	http "github.com/sardanioss/http"
 	"github.com/sardanioss/httpcloak/fingerprint"
 	"github.com/sardanioss/httpcloak/transport"
+	"net"
+	"strconv"
 	"time"
 )
 
@@ -38,7 +40,8 @@ const (
 )
 
 // NativeOptionsV1 retains the native fingerprint and transport configuration.
-// Containers are copied. Verification hooks, Jar and key-log writers are borrowed
+// Data containers and verification wrappers are copied. Verification hooks,
+// immutable RootCAs pools, Jar and key-log writers are borrowed
 // through source release, must support concurrent calls, and must not start
 // unaccounted work. Preset, PresetName and PresetJSON are mutually exclusive.
 // Distributed session-cache backends and native mutable Setters are not exposed.
@@ -57,53 +60,109 @@ type NativeOptionsV1 struct {
 // layer overrides are validated as supplied. Durations are nanoseconds.
 type OptionsV1 struct {
 	private
-	Name               string
-	Version            uint32
-	PresetName         string
-	PresetJSON         string
-	Protocol           ProtocolMode
-	ProxyURL           string
-	RoutingLocked      bool
-	InsecureSkipVerify bool
-	DisableECH         bool
-	Native             NativeOptionsV1
-	MaxActive          int
-	QueuedCalls        int
-	MaxConnections     int
-	MaxBindings        int
-	MaxRequestBytes    int64
-	MaxResponseBytes   int64
-	MaxWireBytes       int64
-	MaxHeaderBytes     int64
-	MaxExchanges       int
-	MaxReplays         int
-	AdmissionTimeout   time.Duration
-	Timeout            time.Duration
+	Name                 string
+	Version              uint32
+	PresetName           string
+	PresetJSON           string
+	Protocol             ProtocolMode
+	ProxyURL             string
+	RoutingLocked        bool
+	InsecureSkipVerify   bool
+	DisableECH           bool
+	ResolverAddress      string
+	ResolverNetwork      string
+	ResolverTimeout      time.Duration
+	MaxDNSActive         int
+	MaxResolvedAddresses int
+	MaxAddressRaces      int
+	AddressRaceDelay     time.Duration
+	MaxECHEntries        int
+	MaxECHConfigBytes    int
+	MaxQUICConnections   int
+	MaxControlStreams    int
+	Native               NativeOptionsV1
+	MaxActive            int
+	QueuedCalls          int
+	MaxConnections       int
+	MaxBindings          int
+	MaxRequestBytes      int64
+	MaxResponseBytes     int64
+	MaxWireBytes         int64
+	MaxHeaderBytes       int64
+	MaxExchanges         int
+	MaxReplays           int
+	AdmissionTimeout     time.Duration
+	Timeout              time.Duration
 }
 type settings struct {
-	PresetName         string        `json:"preset_name"`
-	PresetJSON         string        `json:"preset_json"`
-	Protocol           ProtocolMode  `json:"protocol"`
-	ProxyURL           string        `json:"proxy_url"`
-	RoutingLocked      bool          `json:"routing_locked"`
-	InsecureSkipVerify bool          `json:"insecure_skip_verify"`
-	DisableECH         bool          `json:"disable_ech"`
-	MaxActive          int           `json:"max_active"`
-	QueuedCalls        int           `json:"queued_calls"`
-	MaxConnections     int           `json:"max_connections"`
-	MaxBindings        int           `json:"max_bindings"`
-	MaxRequestBytes    int64         `json:"max_request_bytes"`
-	MaxResponseBytes   int64         `json:"max_response_bytes"`
-	MaxWireBytes       int64         `json:"max_wire_bytes"`
-	MaxHeaderBytes     int64         `json:"max_header_bytes"`
-	MaxExchanges       int           `json:"max_exchanges"`
-	MaxReplays         int           `json:"max_replays"`
-	AdmissionTimeout   time.Duration `json:"admission_timeout_ns"`
-	Timeout            time.Duration `json:"timeout_ns"`
+	PresetName           string        `json:"preset_name"`
+	PresetJSON           string        `json:"preset_json"`
+	Protocol             ProtocolMode  `json:"protocol"`
+	ProxyURL             string        `json:"proxy_url"`
+	RoutingLocked        bool          `json:"routing_locked"`
+	InsecureSkipVerify   bool          `json:"insecure_skip_verify"`
+	DisableECH           bool          `json:"disable_ech"`
+	ResolverAddress      string        `json:"resolver_address"`
+	ResolverNetwork      string        `json:"resolver_network"`
+	ResolverTimeout      time.Duration `json:"resolver_timeout_ns"`
+	MaxDNSActive         int           `json:"max_dns_active"`
+	MaxResolvedAddresses int           `json:"max_resolved_addresses"`
+	MaxAddressRaces      int           `json:"max_address_races"`
+	AddressRaceDelay     time.Duration `json:"address_race_delay_ns"`
+	MaxECHEntries        int           `json:"max_ech_entries"`
+	MaxECHConfigBytes    int           `json:"max_ech_config_bytes"`
+	MaxQUICConnections   int           `json:"max_quic_connections"`
+	MaxControlStreams    int           `json:"max_control_streams"`
+	MaxActive            int           `json:"max_active"`
+	QueuedCalls          int           `json:"queued_calls"`
+	MaxConnections       int           `json:"max_connections"`
+	MaxBindings          int           `json:"max_bindings"`
+	MaxRequestBytes      int64         `json:"max_request_bytes"`
+	MaxResponseBytes     int64         `json:"max_response_bytes"`
+	MaxWireBytes         int64         `json:"max_wire_bytes"`
+	MaxHeaderBytes       int64         `json:"max_header_bytes"`
+	MaxExchanges         int           `json:"max_exchanges"`
+	MaxReplays           int           `json:"max_replays"`
+	AdmissionTimeout     time.Duration `json:"admission_timeout_ns"`
+	Timeout              time.Duration `json:"timeout_ns"`
 }
 
 func defaults(input OptionsV1) settings {
 	value := settings{PresetName: input.PresetName, PresetJSON: input.PresetJSON, Protocol: input.Protocol, ProxyURL: input.ProxyURL, RoutingLocked: input.RoutingLocked, InsecureSkipVerify: input.InsecureSkipVerify, DisableECH: input.DisableECH, MaxActive: input.MaxActive, QueuedCalls: input.QueuedCalls, MaxConnections: input.MaxConnections, MaxBindings: input.MaxBindings, MaxRequestBytes: input.MaxRequestBytes, MaxResponseBytes: input.MaxResponseBytes, MaxWireBytes: input.MaxWireBytes, MaxHeaderBytes: input.MaxHeaderBytes, MaxExchanges: input.MaxExchanges, MaxReplays: input.MaxReplays, AdmissionTimeout: input.AdmissionTimeout, Timeout: input.Timeout}
+	value.ResolverAddress, value.ResolverNetwork, value.ResolverTimeout = input.ResolverAddress, input.ResolverNetwork, input.ResolverTimeout
+	value.MaxDNSActive, value.MaxResolvedAddresses, value.MaxAddressRaces = input.MaxDNSActive, input.MaxResolvedAddresses, input.MaxAddressRaces
+	value.AddressRaceDelay, value.MaxECHEntries, value.MaxECHConfigBytes = input.AddressRaceDelay, input.MaxECHEntries, input.MaxECHConfigBytes
+	value.MaxQUICConnections, value.MaxControlStreams = input.MaxQUICConnections, input.MaxControlStreams
+	if value.ResolverNetwork == "" {
+		value.ResolverNetwork = "udp"
+	}
+	if value.ResolverTimeout == 0 {
+		value.ResolverTimeout = 5 * time.Second
+	}
+	if value.MaxDNSActive == 0 {
+		value.MaxDNSActive = 4
+	}
+	if value.MaxResolvedAddresses == 0 {
+		value.MaxResolvedAddresses = 16
+	}
+	if value.MaxAddressRaces == 0 {
+		value.MaxAddressRaces = 2
+	}
+	if value.AddressRaceDelay == 0 {
+		value.AddressRaceDelay = 250 * time.Millisecond
+	}
+	if value.MaxECHEntries == 0 {
+		value.MaxECHEntries = 64
+	}
+	if value.MaxECHConfigBytes == 0 {
+		value.MaxECHConfigBytes = 64 << 10
+	}
+	if value.MaxQUICConnections == 0 {
+		value.MaxQUICConnections = 32
+	}
+	if value.MaxControlStreams == 0 {
+		value.MaxControlStreams = 16
+	}
 	if value.Protocol == "" {
 		value.Protocol = HTTP2
 	}
@@ -157,12 +216,22 @@ func validate(value settings) error {
 			return failure(ErrInput, "timeout")
 		}
 	}
-	_, err := parseProxy(value.ProxyURL)
+	if value.ResolverNetwork != "udp" && value.ResolverNetwork != "tcp" || value.ResolverTimeout < time.Millisecond || value.ResolverTimeout > time.Minute || value.MaxDNSActive < 1 || value.MaxDNSActive > 1024 || value.MaxResolvedAddresses < 1 || value.MaxResolvedAddresses > 256 || value.MaxAddressRaces < 1 || value.MaxAddressRaces > value.MaxResolvedAddresses || value.AddressRaceDelay < time.Millisecond || value.AddressRaceDelay > time.Second || value.MaxECHEntries < 1 || value.MaxECHEntries > 4096 || value.MaxECHConfigBytes < 1 || value.MaxECHConfigBytes > 1<<16 || value.MaxQUICConnections < 1 || value.MaxQUICConnections > 4096 || value.MaxControlStreams < 1 || value.MaxControlStreams > 1024 {
+		return failure(ErrInput, "resolver-limits")
+	}
+	if value.ResolverAddress != "" {
+		host, port, err := net.SplitHostPort(value.ResolverAddress)
+		service, portErr := strconv.Atoi(port)
+		if err != nil || portErr != nil || net.ParseIP(host) == nil || service < 1 || service > 65535 {
+			return failure(ErrInput, "resolver-address")
+		}
+	}
+	proxy, err := parseProxy(value.ProxyURL)
 	if err != nil {
 		return err
 	}
-	if value.Protocol == HTTP3 && value.ProxyURL != "" {
-		return failure(ErrUnsupported, "http3-proxy")
+	if proxy != nil && (value.Protocol == HTTP3 && (proxy.Scheme == "http" || proxy.Scheme == "https") || value.Protocol != HTTP3 && proxy.Scheme == "masque") {
+		return failure(ErrUnsupported, "proxy-protocol")
 	}
 	return nil
 }

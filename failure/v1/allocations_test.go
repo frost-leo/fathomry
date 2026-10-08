@@ -112,6 +112,10 @@ func TestAllocations(t *testing.T) {
 			failure.FacilitySurf != 0x202 || failure.FacilitySurf.Domain() != failure.DomainNetwork {
 			t.Fatal("Surf capability allocation changed")
 		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityHTTPcloak, Module: "fathomry", Component: "http_httpcloak"}) ||
+			failure.FacilityHTTPcloak != 0x203 || failure.FacilityHTTPcloak.Domain() != failure.DomainNetwork {
+			t.Fatal("HTTPcloak capability allocation changed")
+		}
 		for index, allocation := range allocations {
 			if allocation.Facility == failure.FacilityTLSClient && (allocation.Module != "fathomry" || allocation.Component != "http_tlsclient" || allocation.Facility != 0x201 || allocation.Facility.Domain() != failure.DomainNetwork) {
 				t.Fatal("tlsclient capability allocation changed")

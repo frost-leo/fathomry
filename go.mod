@@ -43,6 +43,7 @@ require (
 	github.com/chromedp/chromedp v0.16.0
 	github.com/duckdb/duckdb-go-bindings v0.10505.0
 	github.com/duckdb/duckdb-go/v2 v2.10505.0
+	github.com/dunglas/httpsfv v1.1.0
 	github.com/enetx/g v1.1.0
 	github.com/enetx/http v1.0.29
 	github.com/enetx/http2 v1.0.26
@@ -63,6 +64,7 @@ require (
 	// multipart/response bounds, callback verification and the WebSocket wire,
 	// fragment, acknowledgement and lifecycle controls before SDK upgrades.
 	github.com/larksuite/oapi-sdk-go/v3 v3.12.0
+	github.com/miekg/dns v1.1.69
 	github.com/minio/minio-go/v7 v7.3.0
 	// TODO(gh-21): Recheck this pin and lifecycle compatibility before Nacos upgrades
 	// or framework releases. An official stable SDK must fix BOTH registry shutdown
@@ -100,6 +102,7 @@ require (
 	github.com/sardanioss/net v1.2.10
 	github.com/sardanioss/quic-go v1.2.29
 	github.com/sardanioss/udpbara v1.1.0
+	github.com/sardanioss/utls v1.10.5
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
@@ -211,7 +214,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
-	github.com/miekg/dns v1.1.69 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/nexus-rpc/nexus-proto-annotations v0.1.0 // indirect
@@ -224,7 +226,6 @@ require (
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sardanioss/qpack v0.6.3 // indirect
-	github.com/sardanioss/utls v1.10.5 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect

@@ -148,6 +148,16 @@ func (s *Stream) SendDatagram(b []byte) error {
 	return s.datagramStream.SendDatagram(b)
 }
 
+// SendDatagramContext limits queue waiting without resetting a sibling stream.
+func (s *Stream) SendDatagramContext(ctx context.Context, b []byte) error {
+	if sender, ok := s.datagramStream.(interface {
+		SendDatagramContext(context.Context, []byte) error
+	}); ok {
+		return sender.SendDatagramContext(ctx, b)
+	}
+	return errors.New("http3: context-aware datagrams unavailable")
+}
+
 func (s *Stream) ReceiveDatagram(ctx context.Context) ([]byte, error) {
 	// TODO: reject if datagrams are not negotiated (yet)
 	return s.datagramStream.ReceiveDatagram(ctx)
@@ -166,7 +176,7 @@ type RequestStream struct {
 
 	responseBody io.ReadCloser // set by ReadResponse
 
-	decoder            *qpack.Decoder
+	decoder            headerDecoder
 	requestWriter      *requestWriter
 	maxHeaderBytes     int
 	reqDone            chan<- struct{}
@@ -182,7 +192,7 @@ func newRequestStream(
 	str *Stream,
 	requestWriter *requestWriter,
 	reqDone chan<- struct{},
-	decoder *qpack.Decoder,
+	decoder headerDecoder,
 	disableCompression bool,
 	maxHeaderBytes int,
 	rsp *http.Response,
@@ -273,6 +283,12 @@ func (s *RequestStream) SendDatagram(b []byte) error {
 	return s.str.SendDatagram(b)
 }
 
+// SendDatagramContext returns an error only before local queue acceptance.
+// A nil result does not acknowledge remote delivery.
+func (s *RequestStream) SendDatagramContext(ctx context.Context, b []byte) error {
+	return s.str.SendDatagramContext(ctx, b)
+}
+
 // ReceiveDatagram receives HTTP Datagrams (RFC 9297).
 //
 // It is only possible if support for HTTP Datagrams was enabled, using the EnableDatagram
@@ -354,6 +370,9 @@ func (s *RequestStream) ReadResponse() (*http.Response, error) {
 	}
 	res := s.response
 	err = updateResponseFromHeaders(res, decodeFn, s.maxHeaderBytes, &hfs)
+	if controlled, ok := s.decoder.(*streamQPACKDecoder); ok {
+		err = controlled.finish(err)
+	}
 	if s.str.qlogger != nil {
 		qlogParsedHeadersFrame(s.str.qlogger, s.str.StreamID(), hf, hfs)
 	}
@@ -362,6 +381,11 @@ func (s *RequestStream) ReadResponse() (*http.Response, error) {
 		var qpackErr *qpackError
 		if errors.As(err, &qpackErr) {
 			errCode = ErrCodeQPACKDecompressionFailed
+		}
+		if controlled, ok := s.decoder.(*streamQPACKDecoder); ok && controlled.readAborted(err) {
+			errCode = ErrCodeRequestCanceled
+		} else if errCode == ErrCodeQPACKDecompressionFailed {
+			s.str.conn.CloseWithError(quic.ApplicationErrorCode(errCode), "")
 		}
 		s.str.CancelRead(quic.StreamErrorCode(errCode))
 		s.str.CancelWrite(quic.StreamErrorCode(errCode))

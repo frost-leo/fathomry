@@ -138,8 +138,12 @@ func retryDial[T any](parent context.Context, attempts int, attemptTimeout time.
 // race is already won is handed to closeLoser so it isn't leaked. dial must
 // honor the context it's given (it is cancelled for the losers).
 func staggeredRace[T any](ctx context.Context, n int, attemptDelay time.Duration, dial func(context.Context, int) (T, error), closeLoser func(T)) (T, error) {
+	return staggeredRaceBounded(ctx, n, n, attemptDelay, dial, closeLoser)
+}
+
+func staggeredRaceBounded[T any](ctx context.Context, n, maxActive int, attemptDelay time.Duration, dial func(context.Context, int) (T, error), closeLoser func(T)) (T, error) {
 	var zero T
-	if n <= 0 {
+	if n <= 0 || maxActive < 1 {
 		return zero, fmt.Errorf("no candidates to dial")
 	}
 	if err := ctx.Err(); err != nil {
@@ -179,7 +183,7 @@ func staggeredRace[T any](ctx context.Context, n int, attemptDelay time.Duration
 			drain()
 			return zero, ctx.Err()
 		case <-timer.C:
-			if launched < n {
+			if launched < n && pending < maxActive {
 				launch()
 				timer.Reset(attemptDelay)
 			}
@@ -196,11 +200,24 @@ func staggeredRace[T any](ctx context.Context, n int, attemptDelay time.Duration
 			lastErr = got.err
 			if launched < n {
 				launch()
+				timer.Reset(attemptDelay)
 			} else if pending == 0 {
 				return zero, lastErr
 			}
 		}
 	}
+}
+
+// FathomryRaceTCP runs native staggered address selection through owned dialing.
+// Each attempt and successful losing connection is joined before this returns.
+func FathomryRaceTCP(ctx context.Context, addresses []net.IP, port string, maxActive int, delay time.Duration, dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
+	return staggeredRaceBounded(ctx, len(addresses), maxActive, delay, func(ctx context.Context, index int) (net.Conn, error) {
+		network := "tcp4"
+		if addresses[index].To4() == nil {
+			network = "tcp6"
+		}
+		return dial(ctx, network, net.JoinHostPort(addresses[index].String(), port))
+	}, func(conn net.Conn) { _ = conn.Close() })
 }
 
 // ipsToStrings converts resolved net.IP values to their string form, preserving
