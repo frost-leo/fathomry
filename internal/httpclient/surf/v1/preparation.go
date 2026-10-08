@@ -70,7 +70,7 @@ func (value settings) budget(native NativeOptionsV1) Budget {
 		work += value.MaxHTTP2StreamBytes
 	}
 	if value.Mode == PreferHTTP3 {
-		work += 6 << 20
+		work += 6<<20 + 8*value.MaxNativeHeaderBytes
 	}
 	standardTLS := int64(4*(256<<10) + 2*(64<<10))
 	originTLS := standardTLS
@@ -98,6 +98,7 @@ func (value settings) budget(native NativeOptionsV1) Budget {
 		// Native H3 client quota covers cached, pending and retired clients, not UDP
 		// sockets. Codec buffers and peer TLS metadata outlive individual responses.
 		source += int64(value.MaxHTTP3Clients) * (15<<20 + 4*value.MaxNativeHeaderBytes + standardTLS + 256<<10)
+		source += int64(value.MaxHTTP3Clients) * (32*value.MaxHTTP3QPACKTableBytes + 128*int64(value.MaxHTTP3QPACKBlockedStreams) + 64*int64(value.qpackFeedbackRecords()) + 128<<10)
 	}
 	limits := value.limits()
 	limits.Bytes = int64(limits.Active) * work
@@ -107,6 +108,10 @@ func (value settings) budget(native NativeOptionsV1) Budget {
 }
 
 const maxNativeContainerBytes int64 = 1 << 30
+
+func (value settings) qpackFeedbackRecords() int {
+	return 7*value.MaxActive + 2*value.MaxHTTP3QPACKBlockedStreams + 16
+}
 
 type nativeCharge struct{ total int64 }
 

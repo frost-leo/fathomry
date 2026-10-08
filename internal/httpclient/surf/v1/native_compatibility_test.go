@@ -150,9 +150,12 @@ func TestNativeCompatibilityUsesConsumingSelectionsOffline(t *testing.T) {
 			if strings.TrimSpace(string(cgo)) == "1" {
 				arguments = append(arguments, "-race")
 			}
-			arguments = append(arguments, "-modfile="+modfile, "-mod=readonly", "-count=1", "-timeout=45s", "-run=^TestFathomry", "-v", ".")
+			arguments = append(arguments, "-modfile="+modfile, "-mod=readonly", "-count=1", "-timeout=45s", "-run=^(TestFathomry|FuzzFathomry)", "-v", ".")
 			if module.path == "github.com/enetx/surf" {
 				arguments = append(arguments, "./pkg/socks4")
+			}
+			if module.path == "github.com/enetx/http3" {
+				arguments = append(arguments, "./internal/qpack")
 			}
 			command := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), arguments...)
 			command.Env = environment

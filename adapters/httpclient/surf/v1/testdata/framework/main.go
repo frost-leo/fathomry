@@ -20,8 +20,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,18 +40,25 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/enetx/surf/profiles/chrome"
 	"github.com/frost-leo/fathomry/adapters/configsource/v1"
 	surf "github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
+	"github.com/quic-go/quic-go"
+	"github.com/quic-go/quic-go/quicvarint"
 )
 
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	if err := fixedFollow(ctx); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err := dynamicFollow(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -706,4 +716,454 @@ func fixedFollow(ctx context.Context) error {
 
 func nativeOptions(tracker *socketTracker) surf.NativeOptions {
 	return surf.NativeOptions{DialContext: tracker.dial}
+}
+
+// dynamicQPACKPeer only uses standard library and the selected QUIC dependency.
+// Clients must advertise capacity >=64 and at least one blocked stream. It sends
+// one dynamic insertion per connection and references it in every response.
+type dynamicQPACKPeer struct {
+	URL                    string
+	Roots                  *x509.CertPool
+	Requests, Acknowledged atomic.Int64
+	connections            atomic.Int64
+	hold                   <-chan struct{}
+	ctx                    context.Context
+	cancel                 context.CancelFunc
+	listener               *quic.Listener
+	packet                 net.PacketConn
+	workers                sync.WaitGroup
+	once                   sync.Once
+	mu                     sync.Mutex
+	err                    error
+	changed                chan struct{}
+}
+
+func newDynamicQPACKPeer(parent context.Context, held ...<-chan struct{}) (*dynamicQPACKPeer, error) {
+	certificate := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	config := &tls.Config{Certificates: certificate.TLS.Certificates, NextProtos: []string{"h3"}}
+	roots := x509.NewCertPool()
+	roots.AddCert(certificate.Certificate())
+	certificate.Close()
+	packet, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		return nil, err
+	}
+	listener, err := quic.Listen(packet, config, &quic.Config{})
+	if err != nil {
+		_ = packet.Close()
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(parent)
+	peer := &dynamicQPACKPeer{URL: "https://" + packet.LocalAddr().String(), Roots: roots, ctx: ctx, cancel: cancel, listener: listener, packet: packet, changed: make(chan struct{}, 1)}
+	if len(held) > 0 {
+		peer.hold = held[0]
+	}
+	peer.workers.Go(func() {
+		for {
+			connection, err := listener.Accept(ctx)
+			if err != nil {
+				return
+			}
+			peer.workers.Go(func() { peer.serve(connection) })
+		}
+	})
+	return peer, nil
+}
+
+func (peer *dynamicQPACKPeer) fail(err error) {
+	peer.mu.Lock()
+	if peer.err == nil {
+		peer.err = err
+	}
+	peer.mu.Unlock()
+	select {
+	case peer.changed <- struct{}{}:
+	default:
+	}
+}
+
+func (peer *dynamicQPACKPeer) Close() error {
+	peer.once.Do(func() { peer.cancel(); _ = peer.listener.Close(); _ = peer.packet.Close(); peer.workers.Wait() })
+	peer.mu.Lock()
+	defer peer.mu.Unlock()
+	return peer.err
+}
+
+func (peer *dynamicQPACKPeer) WaitAcknowledged(ctx context.Context, count int64) error {
+	for peer.Acknowledged.Load() < count {
+		peer.mu.Lock()
+		err := peer.err
+		peer.mu.Unlock()
+		if err != nil {
+			return err
+		}
+		select {
+		case <-peer.changed:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-peer.ctx.Done():
+			return peer.ctx.Err()
+		}
+	}
+	return nil
+}
+
+func (peer *dynamicQPACKPeer) serve(connection *quic.Conn) {
+	value := fmt.Sprintf("dynamic-%d", peer.connections.Add(1))
+	stop := context.AfterFunc(peer.ctx, func() { _ = connection.CloseWithError(0, "") })
+	defer stop()
+	defer connection.CloseWithError(0, "")
+	control, err := connection.OpenUniStreamSync(peer.ctx)
+	if err != nil {
+		return
+	}
+	if _, err := control.Write([]byte{0, 4, 0}); err != nil {
+		return
+	}
+	settings := make(chan map[uint64]uint64, 1)
+	peer.workers.Go(func() {
+		for {
+			stream, err := connection.AcceptUniStream(peer.ctx)
+			if err != nil {
+				return
+			}
+			peer.workers.Go(func() { peer.readUni(stream, settings) })
+		}
+	})
+	select {
+	case values := <-settings:
+		if values[1] < 64 || values[7] < 1 {
+			peer.fail(errors.New("dynamic peer: required QPACK settings absent"))
+			return
+		}
+	case <-peer.ctx.Done():
+		return
+	case <-connection.Context().Done():
+		return
+	}
+	encoder, err := connection.OpenUniStreamSync(peer.ctx)
+	if err != nil {
+		return
+	}
+	if _, err := encoder.Write(append([]byte{2, 0x3f, 0x21, 0x47}, append([]byte("x-qpack"), append([]byte{byte(len(value))}, []byte(value)...)...)...)); err != nil {
+		return
+	}
+	for {
+		stream, err := connection.AcceptStream(peer.ctx)
+		if err != nil {
+			return
+		}
+		peer.workers.Go(func() {
+			reader := quicvarint.NewReader(stream)
+			kind, err := quicvarint.Read(reader)
+			if err != nil || kind != 1 {
+				peer.fail(errors.New("dynamic peer: request HEADERS absent"))
+				return
+			}
+			length, err := quicvarint.Read(reader)
+			if err != nil || length > 64<<10 {
+				peer.fail(errors.New("dynamic peer: request HEADERS exceeds bound"))
+				return
+			}
+			if _, err := io.CopyN(io.Discard, reader, int64(length)); err != nil {
+				return
+			}
+			sequence := peer.Requests.Add(1)
+			if err := dynamicPeerFrame(stream, 1, []byte{2, 0, 0xd9, 0x80}); err != nil {
+				return
+			}
+			if err := dynamicPeerFrame(stream, 0, []byte("dynamic")); err != nil {
+				return
+			}
+			if sequence == 1 && peer.hold != nil {
+				select {
+				case <-peer.hold:
+				case <-connection.Context().Done():
+					return
+				case <-peer.ctx.Done():
+					return
+				}
+			}
+			if err := dynamicPeerFrame(stream, 1, []byte{2, 0, 0x80}); err != nil {
+				return
+			}
+			_ = stream.Close()
+			_, _ = io.Copy(io.Discard, io.LimitReader(reader, 1<<20))
+		})
+	}
+}
+
+func (peer *dynamicQPACKPeer) readUni(stream *quic.ReceiveStream, settings chan<- map[uint64]uint64) {
+	reader := bufio.NewReader(stream)
+	kind, err := quicvarint.Read(reader)
+	if err != nil {
+		return
+	}
+	if kind == 0 {
+		frame, err := quicvarint.Read(reader)
+		if err != nil || frame != 4 {
+			peer.fail(errors.New("dynamic peer: SETTINGS absent"))
+			return
+		}
+		length, err := quicvarint.Read(reader)
+		if err != nil || length > 4096 {
+			peer.fail(errors.New("dynamic peer: SETTINGS exceeds bound"))
+			return
+		}
+		data := make([]byte, length)
+		if _, err := io.ReadFull(reader, data); err != nil {
+			return
+		}
+		input := bytes.NewReader(data)
+		values := make(map[uint64]uint64)
+		for input.Len() > 0 {
+			key, err := quicvarint.Read(input)
+			if err != nil {
+				peer.fail(err)
+				return
+			}
+			value, err := quicvarint.Read(input)
+			if err != nil {
+				peer.fail(err)
+				return
+			}
+			values[key] = value
+		}
+		select {
+		case settings <- values:
+		case <-peer.ctx.Done():
+			return
+		}
+		_, _ = io.Copy(io.Discard, reader)
+		return
+	}
+	if kind != 3 {
+		_, _ = io.Copy(io.Discard, reader)
+		return
+	}
+	for {
+		first, err := reader.ReadByte()
+		if err != nil {
+			return
+		}
+		prefix := uint(6)
+		if first&0x80 != 0 {
+			prefix = 7
+		}
+		if _, err := dynamicPeerInteger(reader, first, prefix); err != nil {
+			peer.fail(err)
+			return
+		}
+		if first&0x80 != 0 {
+			peer.Acknowledged.Add(1)
+			select {
+			case peer.changed <- struct{}{}:
+			default:
+			}
+		}
+	}
+}
+
+func dynamicPeerInteger(reader io.ByteReader, first byte, bits uint) (uint64, error) {
+	maximum := uint64(1<<bits) - 1
+	value := uint64(first) & maximum
+	if value != maximum {
+		return value, nil
+	}
+	for shift := uint(0); shift < 63; shift += 7 {
+		next, err := reader.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+		value += uint64(next&127) << shift
+		if next&128 == 0 {
+			return value, nil
+		}
+	}
+	return 0, errors.New("dynamic peer: feedback integer exceeds bound")
+}
+
+func dynamicPeerFrame(writer io.Writer, kind uint64, data []byte) error {
+	header := quicvarint.Append(nil, kind)
+	header = quicvarint.Append(header, uint64(len(data)))
+	_, err := writer.Write(append(header, data...))
+	return err
+}
+
+func dynamicFollow(ctx context.Context) error {
+	hold := make(chan struct{})
+	release := sync.OnceFunc(func() { close(hold) })
+	defer release()
+	peer, err := newDynamicQPACKPeer(ctx, hold)
+	if err != nil {
+		return err
+	}
+	defer peer.Close()
+	mode := surf.PreferHTTP3
+	profile := chrome.Desktop
+	native := surf.NativeOptions{Profile: &profile, TLSConfig: &tls.Config{RootCAs: peer.Roots}}
+	first := surf.Settings{Name: "qpack-first", Mode: &mode}
+	prepared, err := surf.Prepare(first, native)
+	if err != nil {
+		return err
+	}
+	policy, err := surf.Compose(prepared, prepared, prepared)
+	if err != nil {
+		return err
+	}
+	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	if err != nil {
+		return err
+	}
+	defer cleanup(runtime.Close)
+	inbox, err := adapters.NewInbox[surf.Result](policy.Evidence)
+	if err != nil {
+		return err
+	}
+	dependencies := surf.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	ledger := newLedger(inbox)
+	created := make(chan constructedSource, 4)
+	bind := func(name string, mode resource.Policy) (resource.Ref[surf.Handle], error) {
+		return resource.Bind(runtime.Resources(), resource.Binding[surf.Settings, surf.Handle]{
+			Name: name, Policy: mode, Clone: cloneSettings, Equal: func(a, b surf.Settings) bool { return reflect.DeepEqual(a, b) },
+			Select: func(view settings.View) (surf.Settings, error) {
+				snapshot, err := settings.As[surf.Settings](view)
+				if err != nil {
+					return surf.Settings{}, err
+				}
+				return snapshot.ValueCopy()
+			},
+			Build: func(ctx context.Context, value surf.Settings) (*resource.Instance[surf.Handle], error) {
+				deps := dependencies
+				deps.Native = native
+				owner, err := surf.Open(ctx, value, deps)
+				if owner == nil {
+					return nil, err
+				}
+				created <- constructedSource{binding: name, name: value.Name, owner: owner}
+				return &resource.Instance[surf.Handle]{Value: owner.Handle(), Release: owner.Release}, err
+			},
+		})
+	}
+	fixedRef, err := bind("qpack-fixed", resource.Fixed)
+	if err != nil {
+		return err
+	}
+	followRef, err := bind("qpack-follow", resource.Follow)
+	if err != nil {
+		return err
+	}
+	apply := func(value surf.Settings) error {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		prepared, err := configsource.Prepare(ctx, configsource.Schema[surf.Settings]{Version: 1, Defaults: first, Validate: func(_ context.Context, value surf.Settings) error { return surf.Validate(value) }}, []configsource.Layer{{Kind: configsource.Base, Encoding: configsource.JSON, Content: raw}})
+		if err != nil {
+			return err
+		}
+		snapshot, err := prepared.Snapshot()
+		if err != nil {
+			return err
+		}
+		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		if err != nil {
+			return err
+		}
+		return update.Wait(ctx)
+	}
+	if err := apply(first); err != nil {
+		return err
+	}
+	var old *surf.Owner
+	for range 2 {
+		select {
+		case entry := <-created:
+			if entry.binding == "qpack-follow" {
+				old = entry.owner
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	fixed, err := surf.Using(ctx, fixedRef, policy.Budget, dependencies)
+	if err != nil {
+		return err
+	}
+	follow, err := surf.Using(ctx, followRef, policy.Budget, dependencies)
+	if err != nil {
+		return err
+	}
+	oldStatus, _ := followRef.Inspect()
+	input, _ := nativehttp.NewRequest("GET", peer.URL, nil)
+	stream, receipt, err := follow.Open(ctx, input)
+	if err != nil {
+		return err
+	}
+	defer stream.Close(context.Background())
+	if err := ledger.expect(receipt); err != nil {
+		return err
+	}
+	oldValue := stream.Metadata().HeadersCopy().Get("X-Qpack")
+	if oldValue != "dynamic-1" {
+		return errors.New("old dynamic table header missing")
+	}
+	prefix := make([]byte, 7)
+	if _, err := io.ReadFull(stream, prefix); err != nil || string(prefix) != "dynamic" {
+		return errors.Join(err, errors.New("dynamic old body prefix missing"))
+	}
+	second := cloneSettings(first)
+	second.Name = "qpack-second"
+	if err := apply(second); err != nil {
+		return err
+	}
+	select {
+	case <-created:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	currentStatus, _ := followRef.Inspect()
+	if old == nil || old.ShutdownComplete() || currentStatus.Generation == oldStatus.Generation || currentStatus.Retiring != 1 {
+		return errors.New("dynamic old source was not retained")
+	}
+	for _, selection := range []struct {
+		client *surf.Client
+		name   string
+	}{{follow, "qpack-second"}, {fixed, "qpack-first"}} {
+		input, _ := nativehttp.NewRequest("GET", peer.URL, nil)
+		got, err := selection.client.Do(ctx, ctx, input)
+		result, err := ledger.result(ctx, got, err)
+		if err != nil {
+			return err
+		}
+		value := result.Metadata().HeadersCopy().Get("X-Qpack")
+		if !result.Complete() || result.Source().Name != selection.name || value == "" || value == oldValue || result.TrailersCopy().Get("X-Qpack") != value {
+			return errors.New("dynamic generation or table isolation changed")
+		}
+	}
+	release()
+	if data, err := io.ReadAll(stream); err != nil || len(data) != 0 {
+		return errors.Join(err, errors.New("held dynamic trailer failed"))
+	}
+	if err := peer.WaitAcknowledged(ctx, 6); err != nil {
+		return err
+	}
+	result, err := ledger.result(ctx, receipt, stream.Close(ctx))
+	if err != nil {
+		return err
+	}
+	if !result.Complete() || result.TrailersCopy().Get("X-Qpack") != oldValue || result.Attribution().Source.Generation != oldStatus.Generation {
+		return errors.New("retired dynamic table or generation was lost")
+	}
+	if err := runtime.Close(ctx); err != nil {
+		return err
+	}
+	if err := ledger.drain(ctx); err != nil {
+		return err
+	}
+	status, _ := runtime.Operations().Inspect()
+	if status.Active != 0 || status.WorkBytes != 0 || !old.ShutdownComplete() {
+		return errors.New("dynamic Framework source was not released")
+	}
+	return peer.Close()
 }

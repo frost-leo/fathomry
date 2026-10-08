@@ -31,6 +31,7 @@ import (
 
 	"github.com/enetx/g"
 	http "github.com/enetx/http"
+	http3 "github.com/enetx/http3"
 	sdk "github.com/enetx/surf"
 	"github.com/frost-leo/fathomry/internal/resource"
 	utls "github.com/refraction-networking/utls"
@@ -216,6 +217,7 @@ func (own *owner) nativeClient(ctx context.Context, route routeChoice) (client *
 		AcquireTCP:         func() (func(), error) { return own.reserve(false) },
 		AcquireUDP:         func() (func(), error) { return own.reserve(true) },
 		AcquireHTTP3Client: own.reserveHTTP3Client,
+		QPACKLimits:        &http3.FathomryQPACKLimits{MaxTableCapacity: uint64(own.settings.MaxHTTP3QPACKTableBytes), MaxBlockedStreams: uint64(own.settings.MaxHTTP3QPACKBlockedStreams), MaxFeedbackRecords: own.settings.qpackFeedbackRecords()},
 		Enter:              own.enter, DialContext: native.DialContext, ListenPacket: native.ListenPacket,
 		ProxyTLSConfig: native.ProxyTLSConfig, JAConfig: native.JAConfig, HelloSpecFactory: native.HelloSpecFactory,
 		MaxRequestBytes: own.settings.MaxRequestBytes, MaxResponseBytes: own.settings.MaxResponseBytes, MaxHeaderBytes: own.settings.MaxNativeHeaderBytes, MaxProxyHeaderBytes: own.settings.MaxHeaderBytes,

@@ -83,60 +83,64 @@ type NativeOptionsV1 struct {
 // supplied, without silently restoring Go defaults.
 type OptionsV1 struct {
 	private
-	Name                 string
-	Version              uint32
-	Mode                 ProtocolMode
-	ProxyURL             string
-	RoutingLocked        bool
-	DisableCompression   bool
-	Native               NativeOptionsV1
-	MaxActive            int
-	QueuedCalls          int
-	MaxRoutes            int
-	MaxTCPConnections    int
-	MaxUDPSockets        int
-	MaxHTTP3Clients      int
-	MaxProfileBytes      int64
-	MaxHTTP2StreamBytes  int64
-	MaxRequestBytes      int64
-	MaxResponseBytes     int64
-	MaxHeaderBytes       int64
-	MaxNativeHeaderBytes int64
-	MaxRoundTrips        int
-	MaxReplays           int
-	NativeRetries        int
-	RetryCodes           []int
-	RetryDelay           time.Duration
-	AdmissionTimeout     time.Duration
-	Timeout              time.Duration
-	IdleConnTimeout      time.Duration
+	Name                        string
+	Version                     uint32
+	Mode                        ProtocolMode
+	ProxyURL                    string
+	RoutingLocked               bool
+	DisableCompression          bool
+	Native                      NativeOptionsV1
+	MaxActive                   int
+	QueuedCalls                 int
+	MaxRoutes                   int
+	MaxTCPConnections           int
+	MaxUDPSockets               int
+	MaxHTTP3Clients             int
+	MaxHTTP3QPACKTableBytes     int64
+	MaxHTTP3QPACKBlockedStreams int
+	MaxProfileBytes             int64
+	MaxHTTP2StreamBytes         int64
+	MaxRequestBytes             int64
+	MaxResponseBytes            int64
+	MaxHeaderBytes              int64
+	MaxNativeHeaderBytes        int64
+	MaxRoundTrips               int
+	MaxReplays                  int
+	NativeRetries               int
+	RetryCodes                  []int
+	RetryDelay                  time.Duration
+	AdmissionTimeout            time.Duration
+	Timeout                     time.Duration
+	IdleConnTimeout             time.Duration
 }
 
 type settings struct {
-	Mode                 ProtocolMode  `json:"mode"`
-	ProxyURL             string        `json:"proxy_url"`
-	RoutingLocked        bool          `json:"routing_locked"`
-	DisableCompression   bool          `json:"disable_compression"`
-	MaxActive            int           `json:"max_active"`
-	QueuedCalls          int           `json:"queued_calls"`
-	MaxRoutes            int           `json:"max_routes"`
-	MaxTCPConnections    int           `json:"max_tcp_connections"`
-	MaxUDPSockets        int           `json:"max_udp_sockets"`
-	MaxHTTP3Clients      int           `json:"max_http3_clients"`
-	MaxProfileBytes      int64         `json:"max_profile_bytes"`
-	MaxHTTP2StreamBytes  int64         `json:"max_http2_stream_bytes"`
-	MaxRequestBytes      int64         `json:"max_request_bytes"`
-	MaxResponseBytes     int64         `json:"max_response_bytes"`
-	MaxHeaderBytes       int64         `json:"max_header_bytes"`
-	MaxNativeHeaderBytes int64         `json:"max_native_header_bytes"`
-	MaxRoundTrips        int           `json:"max_round_trips"`
-	MaxReplays           int           `json:"max_replays"`
-	NativeRetries        int           `json:"native_retries"`
-	RetryCodes           []int         `json:"retry_codes"`
-	RetryDelay           time.Duration `json:"retry_delay_ns"`
-	AdmissionTimeout     time.Duration `json:"admission_timeout_ns"`
-	Timeout              time.Duration `json:"timeout_ns"`
-	IdleConnTimeout      time.Duration `json:"idle_conn_timeout_ns"`
+	Mode                        ProtocolMode  `json:"mode"`
+	ProxyURL                    string        `json:"proxy_url"`
+	RoutingLocked               bool          `json:"routing_locked"`
+	DisableCompression          bool          `json:"disable_compression"`
+	MaxActive                   int           `json:"max_active"`
+	QueuedCalls                 int           `json:"queued_calls"`
+	MaxRoutes                   int           `json:"max_routes"`
+	MaxTCPConnections           int           `json:"max_tcp_connections"`
+	MaxUDPSockets               int           `json:"max_udp_sockets"`
+	MaxHTTP3Clients             int           `json:"max_http3_clients"`
+	MaxHTTP3QPACKTableBytes     int64         `json:"max_http3_qpack_table_bytes"`
+	MaxHTTP3QPACKBlockedStreams int           `json:"max_http3_qpack_blocked_streams"`
+	MaxProfileBytes             int64         `json:"max_profile_bytes"`
+	MaxHTTP2StreamBytes         int64         `json:"max_http2_stream_bytes"`
+	MaxRequestBytes             int64         `json:"max_request_bytes"`
+	MaxResponseBytes            int64         `json:"max_response_bytes"`
+	MaxHeaderBytes              int64         `json:"max_header_bytes"`
+	MaxNativeHeaderBytes        int64         `json:"max_native_header_bytes"`
+	MaxRoundTrips               int           `json:"max_round_trips"`
+	MaxReplays                  int           `json:"max_replays"`
+	NativeRetries               int           `json:"native_retries"`
+	RetryCodes                  []int         `json:"retry_codes"`
+	RetryDelay                  time.Duration `json:"retry_delay_ns"`
+	AdmissionTimeout            time.Duration `json:"admission_timeout_ns"`
+	Timeout                     time.Duration `json:"timeout_ns"`
+	IdleConnTimeout             time.Duration `json:"idle_conn_timeout_ns"`
 }
 
 func defaults(options OptionsV1) settings {
@@ -144,6 +148,7 @@ func defaults(options OptionsV1) settings {
 		MaxActive: options.MaxActive, QueuedCalls: options.QueuedCalls, MaxRoutes: options.MaxRoutes,
 		MaxTCPConnections: options.MaxTCPConnections, MaxUDPSockets: options.MaxUDPSockets,
 		MaxHTTP3Clients: options.MaxHTTP3Clients, MaxProfileBytes: options.MaxProfileBytes, MaxHTTP2StreamBytes: options.MaxHTTP2StreamBytes,
+		MaxHTTP3QPACKTableBytes: options.MaxHTTP3QPACKTableBytes, MaxHTTP3QPACKBlockedStreams: options.MaxHTTP3QPACKBlockedStreams,
 		MaxRequestBytes: options.MaxRequestBytes, MaxResponseBytes: options.MaxResponseBytes, MaxHeaderBytes: options.MaxHeaderBytes, MaxNativeHeaderBytes: options.MaxNativeHeaderBytes,
 		MaxRoundTrips: options.MaxRoundTrips, MaxReplays: options.MaxReplays, NativeRetries: options.NativeRetries,
 		RetryCodes: append([]int(nil), options.RetryCodes...), RetryDelay: options.RetryDelay,
@@ -165,6 +170,12 @@ func defaults(options OptionsV1) settings {
 	}
 	if value.MaxHTTP3Clients == 0 {
 		value.MaxHTTP3Clients = 32
+	}
+	if value.MaxHTTP3QPACKTableBytes == 0 {
+		value.MaxHTTP3QPACKTableBytes = 64 << 10
+	}
+	if value.MaxHTTP3QPACKBlockedStreams == 0 {
+		value.MaxHTTP3QPACKBlockedStreams = 128
 	}
 	if value.MaxProfileBytes == 0 {
 		value.MaxProfileBytes = 1 << 20
@@ -207,6 +218,7 @@ func validate(value settings) error {
 		value.MaxRoutes < 1 || value.MaxRoutes > 1024 || value.MaxTCPConnections < 1 || value.MaxTCPConnections > 4096 ||
 		value.MaxUDPSockets < 1 || value.MaxUDPSockets > 1024 || value.MaxRequestBytes < 1 || value.MaxRequestBytes > 1<<30 ||
 		value.MaxHTTP3Clients < 1 || value.MaxHTTP3Clients > 1024 || value.MaxProfileBytes < 1024 || value.MaxProfileBytes > 1<<20 ||
+		value.MaxHTTP3QPACKTableBytes < 0 || value.MaxHTTP3QPACKTableBytes > 64<<20 || value.MaxHTTP3QPACKBlockedStreams < 0 || value.MaxHTTP3QPACKBlockedStreams > 1024 ||
 		value.MaxHTTP2StreamBytes < 4<<20 || value.MaxHTTP2StreamBytes > 1<<30 ||
 		value.MaxResponseBytes < 1 || value.MaxResponseBytes > 1<<30 || value.MaxHeaderBytes < 1024 || value.MaxHeaderBytes > 1<<20 ||
 		value.MaxNativeHeaderBytes < value.MaxHeaderBytes || value.MaxNativeHeaderBytes > 64<<20 ||

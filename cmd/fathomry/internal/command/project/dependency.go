@@ -49,8 +49,8 @@ func sdkPins() []modulePin {
 	return []modulePin{
 		{"github.com/bogdanfinn/tls-client", "third_party/tls-client", "v0.0.0-20261007150852-1c04f9c3b198", "h1:g/j5H3E2ktrVj4TT7sZ2ANJfH24HocDIYgpxQqn77e8="},
 		{"github.com/enetx/http2", "third_party/surf-http2", "v0.0.0-20261007235212-fb099a79451b", "h1:urNe80Cqo+4XSzwiwuwcgBZcNXD08TVYvwZPOKDZQAk="},
-		{"github.com/enetx/http3", "third_party/surf-http3", "v0.0.0-20261007235212-fb099a79451b", "h1:XoFH+BuvwQMZOfSoBFqCM5/3MIknh4J4g3AjXp+L/+8="},
-		{"github.com/enetx/surf", "third_party/surf", "v0.0.0-20261007235212-fb099a79451b", "h1:XRWkWcAwAKKWI/nGqQMZowKPZLu7r8pnMgq4Ny3pXXY="},
+		{"github.com/enetx/http3", "third_party/surf-http3", "v0.0.0-20261008013857-a2ab5bb59121", "h1:j2ChOPVVzrk2g29r8IrybtR1s1zMyiCQJ8JCpkQvPg8="},
+		{"github.com/enetx/surf", "third_party/surf", "v0.0.0-20261008013857-a2ab5bb59121", "h1:VzdaOF0y3GZLUfeCO33ns92Xv2K3b//ifAlm2r3fafg="},
 		{"github.com/nukilabs/qpack", "third_party/nuki-qpack", "v0.0.0-20260930074612-e7c164f1d613", "h1:70IZ753KVivUDel6GRCQpYkQz5ZIbPC1zLGbPYSFPAk="},
 		{"github.com/nukilabs/quic-go", "third_party/nuki-quic-go", "v0.0.0-20260930074612-e7c164f1d613", "h1:hvTCpen/HHo8v+xfCqDCs5hz12l1WwsY88G8DnWJdRE="},
 		{"github.com/nukilabs/socks", "third_party/nuki-socks", "v0.0.0-20260930074612-e7c164f1d613", "h1:gCQEnfYNVwLit12biJMWMT9eBNrxRGCgGMdVrXULp+4="},

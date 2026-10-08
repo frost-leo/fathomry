@@ -51,32 +51,34 @@ const (
 // NativeRetries configures only the selected SDK's retry mechanism. Explicit
 // serialization can disclose proxy credentials; ordinary diagnostics are redacted.
 type Settings struct {
-	Name                 string         `json:"name" mapstructure:"name"`
-	Version              uint32         `json:"version" mapstructure:"version"`
-	Mode                 *ProtocolMode  `json:"mode" mapstructure:"mode"`
-	ProxyURL             string         `json:"proxy_url" mapstructure:"proxy_url"`
-	RoutingLocked        *bool          `json:"routing_locked" mapstructure:"routing_locked"`
-	DisableCompression   *bool          `json:"disable_compression" mapstructure:"disable_compression"`
-	MaxActive            *int           `json:"max_active" mapstructure:"max_active"`
-	QueuedCalls          *int           `json:"queued_calls" mapstructure:"queued_calls"`
-	MaxRoutes            *int           `json:"max_routes" mapstructure:"max_routes"`
-	MaxTCPConnections    *int           `json:"max_tcp_connections" mapstructure:"max_tcp_connections"`
-	MaxUDPSockets        *int           `json:"max_udp_sockets" mapstructure:"max_udp_sockets"`
-	MaxHTTP3Clients      *int           `json:"max_http3_clients" mapstructure:"max_http3_clients"`
-	MaxProfileBytes      *int64         `json:"max_profile_bytes" mapstructure:"max_profile_bytes"`
-	MaxHTTP2StreamBytes  *int64         `json:"max_http2_stream_bytes" mapstructure:"max_http2_stream_bytes"`
-	MaxRequestBytes      *int64         `json:"max_request_bytes" mapstructure:"max_request_bytes"`
-	MaxResponseBytes     *int64         `json:"max_response_bytes" mapstructure:"max_response_bytes"`
-	MaxHeaderBytes       *int64         `json:"max_header_bytes" mapstructure:"max_header_bytes"`
-	MaxNativeHeaderBytes *int64         `json:"max_native_header_bytes" mapstructure:"max_native_header_bytes"`
-	MaxRoundTrips        *int           `json:"max_round_trips" mapstructure:"max_round_trips"`
-	MaxReplays           *int           `json:"max_replays" mapstructure:"max_replays"`
-	NativeRetries        *int           `json:"native_retries" mapstructure:"native_retries"`
-	RetryCodes           []int          `json:"retry_codes" mapstructure:"retry_codes"`
-	RetryDelay           *time.Duration `json:"retry_delay_ns" mapstructure:"retry_delay_ns"`
-	AdmissionTimeout     *time.Duration `json:"admission_timeout_ns" mapstructure:"admission_timeout_ns"`
-	Timeout              *time.Duration `json:"timeout_ns" mapstructure:"timeout_ns"`
-	IdleConnTimeout      *time.Duration `json:"idle_conn_timeout_ns" mapstructure:"idle_conn_timeout_ns"`
+	Name                        string         `json:"name" mapstructure:"name"`
+	Version                     uint32         `json:"version" mapstructure:"version"`
+	Mode                        *ProtocolMode  `json:"mode" mapstructure:"mode"`
+	ProxyURL                    string         `json:"proxy_url" mapstructure:"proxy_url"`
+	RoutingLocked               *bool          `json:"routing_locked" mapstructure:"routing_locked"`
+	DisableCompression          *bool          `json:"disable_compression" mapstructure:"disable_compression"`
+	MaxActive                   *int           `json:"max_active" mapstructure:"max_active"`
+	QueuedCalls                 *int           `json:"queued_calls" mapstructure:"queued_calls"`
+	MaxRoutes                   *int           `json:"max_routes" mapstructure:"max_routes"`
+	MaxTCPConnections           *int           `json:"max_tcp_connections" mapstructure:"max_tcp_connections"`
+	MaxUDPSockets               *int           `json:"max_udp_sockets" mapstructure:"max_udp_sockets"`
+	MaxHTTP3Clients             *int           `json:"max_http3_clients" mapstructure:"max_http3_clients"`
+	MaxHTTP3QPACKTableBytes     *int64         `json:"max_http3_qpack_table_bytes" mapstructure:"max_http3_qpack_table_bytes"`
+	MaxHTTP3QPACKBlockedStreams *int           `json:"max_http3_qpack_blocked_streams" mapstructure:"max_http3_qpack_blocked_streams"`
+	MaxProfileBytes             *int64         `json:"max_profile_bytes" mapstructure:"max_profile_bytes"`
+	MaxHTTP2StreamBytes         *int64         `json:"max_http2_stream_bytes" mapstructure:"max_http2_stream_bytes"`
+	MaxRequestBytes             *int64         `json:"max_request_bytes" mapstructure:"max_request_bytes"`
+	MaxResponseBytes            *int64         `json:"max_response_bytes" mapstructure:"max_response_bytes"`
+	MaxHeaderBytes              *int64         `json:"max_header_bytes" mapstructure:"max_header_bytes"`
+	MaxNativeHeaderBytes        *int64         `json:"max_native_header_bytes" mapstructure:"max_native_header_bytes"`
+	MaxRoundTrips               *int           `json:"max_round_trips" mapstructure:"max_round_trips"`
+	MaxReplays                  *int           `json:"max_replays" mapstructure:"max_replays"`
+	NativeRetries               *int           `json:"native_retries" mapstructure:"native_retries"`
+	RetryCodes                  []int          `json:"retry_codes" mapstructure:"retry_codes"`
+	RetryDelay                  *time.Duration `json:"retry_delay_ns" mapstructure:"retry_delay_ns"`
+	AdmissionTimeout            *time.Duration `json:"admission_timeout_ns" mapstructure:"admission_timeout_ns"`
+	Timeout                     *time.Duration `json:"timeout_ns" mapstructure:"timeout_ns"`
+	IdleConnTimeout             *time.Duration `json:"idle_conn_timeout_ns" mapstructure:"idle_conn_timeout_ns"`
 }
 
 // NativeOptions selects the SDK's client capabilities. Profile omission uses

@@ -34,7 +34,8 @@ client, Builder, transport, Multipart, raw connection or filesystem path escapes
 
 Selected SDK: Surf v1.0.206, origin
 `7da0502899af06f8318f95e632797cb2ac0c6c20`; HTTP2 v1.0.26 and HTTP3 v1.0.9.
-All three local corrections have revision v2, separate from upstream versions.
+The local Surf/H3 corrections have revision v3 and H2 has revision v2, separate
+from upstream versions.
 See [Surf provenance](../../../../../../third_party/surf/FATHOMRY.md),
 [H2](../../../../../../third_party/surf-http2/FATHOMRY.md) and
 [H3](../../../../../../third_party/surf-http3/FATHOMRY.md). Original source notices
@@ -87,6 +88,8 @@ contain proxy credentials; normal fmt/slog is redacted.
 | MaxActive, QueuedCalls | 8,0; zero queue disables queueing |
 | MaxRoutes, MaxTCPConnections, MaxUDPSockets | 16,32,16; source-wide ownership |
 | MaxHTTP3Clients | 32; cached, pending and retiring client entries, not UDP sockets |
+| MaxHTTP3QPACKTableBytes | 64KiB declared per-client table ceiling; explicit0..64MiB |
+| MaxHTTP3QPACKBlockedStreams | 128 declared blocked-stream ceiling; explicit0..1024 |
 | MaxProfileBytes | 1MiB; 1KiB..1MiB declared lazy/profile envelope |
 | MaxHTTP2StreamBytes | 8MiB; 4MiB..1GiB lazy receive-stream ceiling |
 | MaxRequestBytes, MaxResponseBytes | 8MiB each; positive up to1GiB |
@@ -165,16 +168,31 @@ fallback transport with independent ALPN configuration and the same TCP quota.
 It does not mutate the shared H2-capable fallback. One-shot and other non-fallback
 errors still stop before resending; replayable multipart acquires fresh bodies.
 
-### Selected native QPACK limitation
+### Dynamic QPACK ownership
 
-The selected `github.com/quic-go/qpack v0.6.0` decoder is static-table-only, and
-the selected H3 transport does not consume dynamic encoder-stream instructions.
-Native profile SETTINGS are preserved, including profiles advertising nonzero
-QPACK capacity; that advertisement does not add dynamic decoding. A peer using
-the advertised dynamic table can fail. Static/literal H3 response controls pass;
-this is an inherited native limitation, not H3/ConfigureH3 API removal or a claim
-of arbitrary browser-profile fidelity. Adding dynamic QPACK is distinct from the
-implemented h2c, multipart and owned replay paths.
+The local H3 revision3 supplements the selected upstream static-only decoder with
+connection-local dynamic response decoding. Relative/post-base indices, literals,
+insert/duplicate/capacity updates, eviction and Required Insert Count wrapping are
+supported for informational/final headers and trailers. Static request encoding
+remains conformant and unchanged; no other provider or shared QPACK module changes.
+
+The two QPACK Settings fields declare technical ceilings, not wire overrides.
+Absent values select64KiB/128; explicit zero remains zero. Native advertised
+SETTINGS1/7 keep their actual values and RFC zero defaults, and lazy nonzero values
+outside a zero/insufficient declaration reject before packet/dial effects. Profile
+callbacks are not evaluated offline. The existing MaxNativeHeaderBytes bounds each
+encoded/decoded section; a local section-size refusal does not poison a retained
+sibling. Malformed codec instructions/references remain connection protocol errors.
+
+The dynamic table, bounded instruction scratch, blocked descriptors and feedback
+FIFO belong to each cached/pending/retiring H3 client. Queued ACKs and cancellations
+remain source-owned after a root ends. Feedback capacity is derived from MaxActive
+and the blocked-stream ceiling; exhaustion explicitly terminates the unusable
+connection, without growing a queue or dropping required instructions. Source
+shutdown joins actual parser/writer workers before releasing the client slot.
+Native receive-context cancellation stops only that section, not a shared table
+or decoder stream. EOF, protocol feedback delivery and public evidence Ack are
+different facts; closing the source can cancel unsent feedback by closing QUIC.
 
 ## Requests and incremental multipart
 

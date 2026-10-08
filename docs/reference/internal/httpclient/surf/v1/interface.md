@@ -244,11 +244,12 @@ count and delay. Profiles are checked with the actual `compatibility.Assess`
 contract. Native callback completion, per-call cleanup and
 whole-instance release have separate tests and evidence boundaries.
 External-service and public-site qualification are not implied.
-The selected QPACK decoder is static-table-only although native profile settings
-can advertise nonzero dynamic-table capacity. The H3 transport ignores the encoder
-stream, so dynamic-table responses are not qualified and can fail; preserving
-native settings does not implement that missing native codec. See the public
-[selected-source limitation](../../../../adapters/httpclient/surf/v1/interface.md#selected-native-qpack-limitation).
+The H3 revision3 supplements the upstream static-only QPACK decoder with bounded
+connection-local dynamic response headers/trailers. Prepared metadata separately
+charges declared table/blocked/feedback state per H3 client and eager section/scratch
+work per root. MaxHTTP3QPACKTableBytes defaults64KiB and MaxHTTP3QPACKBlockedStreams
+defaults128; strict layers preserve explicit zero. Native SETTINGS are never clamped
+or replaced by these ceilings. See the public [dynamic QPACK contract](../../../../adapters/httpclient/surf/v1/interface.md#dynamic-qpack-ownership).
 
 Surf's original MIT license is retained. The enetx/http2 and enetx/http3 archives
 lack standalone LICENSE files; their fork-contribution/distribution permissions
