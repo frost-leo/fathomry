@@ -1,6 +1,7 @@
 package udpbara
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -19,9 +20,10 @@ type tunnelConn struct {
 	relayConn *net.UDPConn // relay-facing side (we read/write internally)
 	appAddr   *net.UDPAddr // address of appConn
 
-	closeCh chan struct{}
-	closed  bool
-	closeMu sync.Mutex
+	closeCh  chan struct{}
+	closeErr error
+	closed   bool
+	closeMu  sync.Mutex
 
 	// Per-connection stats
 	pktsSent  atomic.Uint64
@@ -33,14 +35,17 @@ type tunnelConn struct {
 // newTunnelConn creates a tunnelConn with a local UDP socket pair.
 func newTunnelConn(tunnel *Tunnel, target string, socks5Header []byte) (*tunnelConn, error) {
 	// Create two UDP sockets on localhost
-	relayConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	listen := net.ListenUDP
+	if tunnel.config.Fathomry != nil {
+		listen = tunnel.config.Fathomry.ListenUDP
+	}
+	relayConn, err := listen("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	if err != nil {
 		return nil, err
 	}
-	appConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	appConn, err := listen("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
 	if err != nil {
-		relayConn.Close()
-		return nil, err
+		return nil, errors.Join(err, tunnel.closeUDP(relayConn))
 	}
 
 	// Use tunnel config for buffer sizes
@@ -136,14 +141,15 @@ func (c *tunnelConn) RelayAddr() *net.UDPAddr {
 func (c *tunnelConn) Close() error {
 	c.closeMu.Lock()
 	if c.closed {
+		err := c.closeErr
 		c.closeMu.Unlock()
-		return nil
+		return err
 	}
 	c.closed = true
 	close(c.closeCh)
 
-	c.appConn.Close()
-	c.relayConn.Close()
+	c.closeErr = errors.Join(c.tunnel.closeUDP(c.appConn), c.tunnel.closeUDP(c.relayConn))
+	closeErr := c.closeErr
 	c.closeMu.Unlock()
 
 	// Deregister from tunnel (remove from all key entries and allConns).
@@ -177,7 +183,7 @@ func (c *tunnelConn) Close() error {
 	}
 	c.tunnel.connsMu.Unlock()
 
-	return nil
+	return closeErr
 }
 
 func isTimeout(err error) bool {

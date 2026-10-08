@@ -31,10 +31,10 @@ import (
 	"net"
 	stdhttp "net/http"
 	"net/url"
-	"strings"
 	"sync"
 
 	"github.com/sardanioss/httpcloak/transport"
+	utls "github.com/sardanioss/utls"
 	"golang.org/x/net/proxy"
 )
 
@@ -71,19 +71,18 @@ func (own *owner) dialEndpoint(ctx context.Context, address string) (net.Conn, e
 	if err != nil {
 		return nil, err
 	}
-	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	addresses, err := own.resolveIPs(ctx, host)
 	if err != nil {
 		return nil, err
 	}
-	var last error
+	local := own.native.Transport.LocalAddr
+	var candidates []net.IP
 	for _, resolved := range addresses {
-		if err := ctx.Err(); err != nil {
-			return nil, errors.Join(last, err, context.Cause(ctx))
+		if local == "" || (net.ParseIP(local).To4() == nil) == (resolved.To4() == nil) {
+			candidates = append(candidates, resolved)
 		}
-		local := own.native.Transport.LocalAddr
-		if local != "" && (net.ParseIP(local).To4() == nil) != (resolved.IP.To4() == nil) {
-			continue
-		}
+	}
+	return transport.FathomryRaceTCP(ctx, candidates, port, own.settings.MaxAddressRaces, own.settings.AddressRaceDelay, func(ctx context.Context, network, target string) (net.Conn, error) {
 		release, err := own.acquireConnection()
 		if err != nil {
 			return nil, err
@@ -92,27 +91,13 @@ func (own *owner) dialEndpoint(ctx context.Context, address string) (net.Conn, e
 		if local != "" {
 			dialer.LocalAddr = &net.TCPAddr{IP: net.ParseIP(local)}
 		}
-		network := "tcp4"
-		if resolved.IP.To4() == nil {
-			network = "tcp6"
-		}
-		target := net.JoinHostPort(resolved.String(), port)
 		raw, err := dialer.DialContext(ctx, network, target)
 		if err != nil {
 			release()
-			last = err
-			continue
+			return nil, err
 		}
-		conn := &trackedConn{Conn: raw, owner: own, release: release}
-		own.mu.Lock()
-		own.sockets[conn] = struct{}{}
-		own.mu.Unlock()
-		return conn, nil
-	}
-	if last == nil {
-		last = failure(ErrTransport, "address-family")
-	}
-	return nil, last
+		return own.trackConn(raw, release)
+	})
 }
 
 type existingDialer struct{ conn net.Conn }
@@ -246,9 +231,12 @@ func (own *owner) dialRoute(ctx context.Context, host, port string, option Reque
 func bindingKey(address *url.URL, option RequestOptionsV1) string {
 	headers, _ := json.Marshal(option.ConnectHeaders)
 	sum := sha256.Sum256(headers)
-	return address.Scheme + "\x00" + strings.ToLower(address.Host) + "\x00" + option.ProxyURL + "\x00" + string(sum[:])
+	return address.Scheme + "\x00" + address.Host + "\x00" + option.ProxyURL + "\x00" + string(sum[:])
 }
 func (own *owner) checkout(ctx context.Context, address *url.URL, option RequestOptionsV1) (*binding, error) {
+	if err := requestPolicy(own.settings, own.native).authorize(address, option.ProxyURL); err != nil {
+		return nil, err
+	}
 	key := bindingKey(address, option)
 	for {
 		if err := ctx.Err(); err != nil {
@@ -294,6 +282,22 @@ func (own *owner) checkout(ctx context.Context, address *url.URL, option Request
 		own.bindings = append(own.bindings, current)
 		own.mu.Unlock()
 		config := *own.native.Transport
+		proxyTLS := &utls.Config{MinVersion: utls.VersionTLS13}
+		current.verification(own.native.ProxyVerify).Apply(proxyTLS)
+		config.FathomryControls = &transport.FathomryControls{
+			Resolve: own.resolveIPs, ECH: func(ctx context.Context, host string) ([]byte, error) {
+				if option.ProxyURL != "" && len(own.native.Transport.ECHConfig) == 0 && own.native.Transport.ECHConfigDomain == "" {
+					return nil, nil
+				}
+				return own.echConfig(ctx, host)
+			}, InvalidateECH: own.invalidateECH,
+			DialTCP: own.dialEndpoint, ListenUDP: own.listenUDP, DialUDP: own.dialUDP, CloseUDP: own.closeUDP,
+			AcquireQUIC:    func() (func(), error) { return own.acquireWork("quic") },
+			AcquireControl: func() (func(), error) { return own.acquireWork("control") },
+			ProxyURL:       option.ProxyURL, ProxyTLS: proxyTLS, DisableECH: own.settings.DisableECH,
+			MaxAddressRaces: own.settings.MaxAddressRaces, AddressRaceDelay: own.settings.AddressRaceDelay,
+			MaxHeaderBytes: int(own.settings.MaxHeaderBytes),
+		}
 		config.FathomryDialTCP = func(ctx context.Context, host, port string) (net.Conn, error) {
 			return own.dialRoute(ctx, host, port, option, current)
 		}
@@ -308,12 +312,6 @@ func (own *owner) checkout(ctx context.Context, address *url.URL, option Request
 			protocol = transport.ProtocolHTTP3
 		}
 		var err error
-		if protocol == transport.ProtocolHTTP3 {
-			current.udpRelease, err = own.acquireConnection()
-			if err != nil {
-				return nil, errors.Join(err, own.returnBinding(current, true))
-			}
-		}
 		if err := ctx.Err(); err != nil {
 			return nil, errors.Join(err, own.returnBinding(current, true))
 		}
@@ -353,23 +351,6 @@ func (own *owner) retire(current *binding) error {
 		err = current.native.Close()
 	}
 	<-callbacks
-	if current.udpRelease != nil {
-		if current.native == nil || current.native.ResourcesReleased() {
-			current.udpRelease()
-			current.udpRelease = nil
-			own.mu.Lock()
-			delete(own.held, current)
-			own.mu.Unlock()
-		} else {
-			own.mu.Lock()
-			if own.held == nil {
-				own.held = make(map[*binding]struct{})
-			}
-			own.held[current] = struct{}{}
-			own.mu.Unlock()
-			err = errors.Join(err, failure(ErrCleanup, "udp-release-unconfirmed"))
-		}
-	}
 	own.recordCleanup(err)
 	return err
 }

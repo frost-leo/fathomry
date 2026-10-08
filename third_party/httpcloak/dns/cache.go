@@ -54,13 +54,14 @@ func (e *Entry) IsExpired() bool {
 // Cache provides DNS caching with bounded entry lifetime, single-flight
 // deduplication of concurrent lookups, and short negative caching.
 type Cache struct {
-	entries    map[string]*Entry
-	mu         sync.RWMutex
-	resolver   *net.Resolver
-	defaultTTL time.Duration
-	negTTL     time.Duration
-	minTTL     time.Duration
-	preferIPv4 bool // If true, prefer IPv4 over IPv6
+	managedLookup func(context.Context, string) ([]net.IP, error)
+	entries       map[string]*Entry
+	mu            sync.RWMutex
+	resolver      *net.Resolver
+	defaultTTL    time.Duration
+	negTTL        time.Duration
+	minTTL        time.Duration
+	preferIPv4    bool // If true, prefer IPv4 over IPv6
 
 	// network restricts lookups to one address family: "ip4", "ip6", or "" for
 	// both. See SetNetwork.
@@ -169,6 +170,23 @@ func NetworkForLocalAddr(addr string) string {
 // Resolve looks up the IP addresses for a hostname
 // Returns cached result if available and not expired
 func (c *Cache) Resolve(ctx context.Context, host string) ([]net.IP, error) {
+	if c.managedLookup != nil {
+		ips, err := c.managedLookup(ctx, host)
+		if err != nil {
+			return nil, err
+		}
+		c.mu.RLock()
+		network := c.network
+		c.mu.RUnlock()
+		var result []net.IP
+		for _, ip := range ips {
+			if network == "ip4" && ip.To4() == nil || network == "ip6" && ip.To4() != nil {
+				continue
+			}
+			result = append(result, append(net.IP(nil), ip...))
+		}
+		return result, nil
+	}
 	// Fast path: a fresh cached entry (positive or negative) for the family the
 	// cache is currently on. Both are read under one lock so the pair cannot be
 	// torn by a concurrent SetNetwork.

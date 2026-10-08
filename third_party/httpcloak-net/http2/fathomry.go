@@ -21,12 +21,28 @@ package http2
 
 import (
 	"context"
+	"errors"
 	"io"
+	"math"
 
 	http "github.com/sardanioss/http"
 )
 
-const FathomryCompatibilityRevision = "v1"
+const FathomryCompatibilityRevision = "v2"
+
+// FathomryReceiveConnectionWindow returns the initial receive credit actually
+// advertised by the connection preface. A zero override retains native defaults.
+// The total includes the protocol's initial window and must fit signed 31 bits.
+func (transport *Transport) FathomryReceiveConnectionWindow() (uint32, error) {
+	if transport.ConnectionFlow > math.MaxInt32-initialWindowSize {
+		return 0, errors.New("http2: connection receive window exceeds protocol bound")
+	}
+	config := configFromTransport(transport)
+	if config.MaxUploadBufferPerConnection > math.MaxInt32-initialWindowSize {
+		return 0, errors.New("http2: connection receive window exceeds protocol bound")
+	}
+	return uint32(config.MaxUploadBufferPerConnection) + initialWindowSize, nil
+}
 
 type fathomryExactHeadersKey struct{}
 

@@ -22,11 +22,11 @@ package httpcloak
 import (
 	"context"
 	"errors"
+	"net"
 	"sync"
 
 	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/resource"
-	"github.com/sardanioss/httpcloak/fingerprint"
 	"github.com/sardanioss/httpcloak/transport"
 )
 
@@ -42,10 +42,16 @@ type Client struct {
 	observer *invocation.Observer
 }
 type owner struct {
-	held           map[*binding]struct{}
 	retiring       int
 	settings       settings
 	native         NativeOptionsV1
+	budget         Budget
+	packets        map[*net.UDPConn]func()
+	ech            map[string]echEntry
+	dnsActive      int
+	quicActive     int
+	controlActive  int
+	workers        sync.WaitGroup
 	mu             sync.Mutex
 	bindings       []*binding
 	sockets        map[*trackedConn]struct{}
@@ -65,63 +71,26 @@ type binding struct {
 	key                                          string
 	native                                       *transport.FathomryTransport
 	busy                                         bool
-	udpRelease                                   func()
 }
 
 // Select freezes externally supplied configuration and native containers without
 // performing network I/O or registering a global fingerprint.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	native, err := copyNative(options.Native)
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	version := options.Version
-	if version == 0 {
-		version = 1
-	}
-	var preset *fingerprint.Preset
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: func(value settings) error {
-		if err := validate(value); err != nil {
-			return err
-		}
-		var err error
-		preset, err = choosePreset(value, native)
-		return err
-	}}, resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
-	if err != nil {
-		return resource.Selection[Source]{}, err
-	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
-		if err := ctx.Err(); err != nil {
-			return resource.Resource[Source]{}, failure(ErrState, "construct", err)
-		}
-		copied, err := copyNative(native)
-		if err != nil {
-			return resource.Resource[Source]{}, err
-		}
-		copied.Preset = fingerprint.Clone(preset)
-		own := &owner{settings: value, native: copied, done: make(chan struct{}), sockets: make(map[*trackedConn]struct{})}
-		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: own}, Release: own.release}, nil
-	}), nil
+	return prepared.Select(), nil
 }
 
 // LimitsV1 supplies process-local admission bounds for unoverridden options.
 func LimitsV1(options OptionsV1) (resource.Limits, error) {
-	if options.Version != 0 && options.Version != 1 {
-		return resource.Limits{}, failure(ErrInput, "version")
-	}
-	value := defaults(options)
-	if err := validate(value); err != nil {
-		return resource.Limits{}, err
-	}
-	native, err := copyNative(options.Native)
+	options.Name = "limits"
+	prepared, err := PrepareV1(options)
 	if err != nil {
 		return resource.Limits{}, err
 	}
-	if _, err := choosePreset(value, native); err != nil {
-		return resource.Limits{}, err
-	}
-	return value.limits(), nil
+	return prepared.Metadata().Limits, nil
 }
 
 // Bind preserves the source's authoritative identity and limits across aliases.
@@ -138,7 +107,7 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 		return nil, failure(ErrInput, "bind")
 	}
 	value, limits := source.owner.settings, access.Limits()
-	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < value.reservation() || limits.Queued > 0 && limits.QueuedBytes < value.reservation() {
+	if limits.Active > value.MaxActive || limits.Queued > value.QueuedCalls || limits.Bytes < source.owner.budget.WorkBytes || limits.Queued > 0 && limits.QueuedBytes < source.owner.budget.WorkBytes {
 		return nil, failure(ErrInput, "limits")
 	}
 	return &Client{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil
@@ -175,7 +144,7 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 		select {
 		case <-own.done:
 			own.mu.Lock()
-			start = own.connections != 0
+			start = own.connections != 0 || own.quicActive != 0 || own.controlActive != 0 || own.dnsActive != 0
 			own.mu.Unlock()
 		default:
 		}
@@ -186,18 +155,6 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 		own.mu.Lock()
 		own.stopping = true
 		bindings := append([]*binding(nil), own.bindings...)
-		for current := range own.held {
-			found := false
-			for _, candidate := range bindings {
-				if candidate == current {
-					found = true
-					break
-				}
-			}
-			if !found {
-				bindings = append(bindings, current)
-			}
-		}
 		own.mu.Unlock()
 		done := own.done
 		go func() {
@@ -213,6 +170,19 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 			for _, conn := range sockets {
 				_ = conn.Close()
 			}
+			own.mu.Lock()
+			packets := make([]*net.UDPConn, 0, len(own.packets))
+			for conn := range own.packets {
+				packets = append(packets, conn)
+			}
+			own.mu.Unlock()
+			for _, conn := range packets {
+				_ = own.closeUDP(conn)
+			}
+			own.workers.Wait()
+			own.mu.Lock()
+			clear(own.ech)
+			own.mu.Unlock()
 			close(done)
 		}()
 	}
@@ -222,7 +192,7 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 	case <-done:
 		own.mu.Lock()
 		defer own.mu.Unlock()
-		if own.connections != 0 || own.retiring != 0 {
+		if own.connections != 0 || own.retiring != 0 || own.quicActive != 0 || own.controlActive != 0 || own.dnsActive != 0 {
 			return resource.ReleaseResult{Err: own.cleanup, Continue: own.release}
 		}
 		return resource.ReleaseResult{Quiescent: true, Released: true, Err: own.cleanup}

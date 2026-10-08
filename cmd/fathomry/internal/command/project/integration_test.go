@@ -237,7 +237,7 @@ func TestVersionedProjects(t *testing.T) {
 				}
 				t.Logf("%s/%s: generated, tidied, vetted, race-tested and built from the isolated module cache; local programs executed, remote programs reject absent bootstrap", mode, encoding)
 				if mode == "local" && encoding == "yaml" {
-					for _, provider := range []string{"nethttp", "tlsclient", "surf"} {
+					for _, provider := range []string{"nethttp", "tlsclient", "surf", "httpcloak"} {
 						for _, variant := range []string{"direct", "framework"} {
 							fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/httpclient", provider, "v1/testdata", variant, "main.go"))
 							if err != nil {
@@ -276,7 +276,10 @@ func verifyHTTPReplacement(t testing.TB, directory string, environment []string)
 	t.Helper()
 	verified := 0
 	for _, pin := range sdkPins() {
-		if pin.original != "github.com/bogdanfinn/tls-client" && pin.original != "github.com/enetx/surf" && pin.original != "github.com/enetx/http2" && pin.original != "github.com/enetx/http3" {
+		switch pin.original {
+		case "github.com/bogdanfinn/tls-client", "github.com/enetx/surf", "github.com/enetx/http2", "github.com/enetx/http3",
+			"github.com/sardanioss/httpcloak", "github.com/sardanioss/net", "github.com/sardanioss/quic-go", "github.com/sardanioss/udpbara":
+		default:
 			continue
 		}
 		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", pin.original)
@@ -288,7 +291,7 @@ func verifyHTTPReplacement(t testing.TB, directory string, environment []string)
 		}
 		verified++
 	}
-	if verified != 4 {
+	if verified != 8 {
 		t.Fatal("HTTP replacement policy missing")
 	}
 }

@@ -3,8 +3,10 @@ package http3
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/sardanioss/quic-go"
 )
@@ -19,15 +21,24 @@ const streamDatagramQueueLen = 32
 // parent connection, this is done through the streamClearer interface when
 // both the send and receive sides are closed
 type stateTrackingStream struct {
+	readEnded     chan struct{}
+	readEndedOnce sync.Once
+	onReadAbort   func(error)
+	readWatchDone <-chan struct{}
 	*quic.Stream
 
-	sendDatagram func([]byte) error
-	hasData      chan struct{}
-	queue        [][]byte // TODO: use a ring buffer
+	sendDatagram        func([]byte) error
+	sendDatagramContext func(context.Context, []byte) error
+	hasData             chan struct{}
+	queue               [][]byte // TODO: use a ring buffer
 
-	mx      sync.Mutex
-	sendErr error
-	recvErr error
+	mx                sync.Mutex
+	sendErr           error
+	recvErr           error
+	readAbort         error
+	readDeadline      time.Time
+	readChanged       chan struct{}
+	connectionContext context.Context
 
 	clearer streamClearer
 }
@@ -38,12 +49,16 @@ type streamClearer interface {
 	clearStream(quic.StreamID)
 }
 
-func newStateTrackingStream(s *quic.Stream, clearer streamClearer, sendDatagram func([]byte) error) *stateTrackingStream {
+func newStateTrackingStream(s *quic.Stream, connectionContext context.Context, clearer streamClearer, sendDatagram func([]byte) error, sendContext func(context.Context, []byte) error) *stateTrackingStream {
 	t := &stateTrackingStream{
-		Stream:       s,
-		clearer:      clearer,
-		sendDatagram: sendDatagram,
-		hasData:      make(chan struct{}, 1),
+		readEnded:           make(chan struct{}),
+		Stream:              s,
+		connectionContext:   connectionContext,
+		readChanged:         make(chan struct{}),
+		clearer:             clearer,
+		sendDatagram:        sendDatagram,
+		sendDatagramContext: sendContext,
+		hasData:             make(chan struct{}, 1),
 	}
 
 	context.AfterFunc(s.Context(), func() {
@@ -69,7 +84,16 @@ func (s *stateTrackingStream) closeSend(e error) {
 
 func (s *stateTrackingStream) closeReceive(e error) {
 	s.mx.Lock()
-	defer s.mx.Unlock()
+	aborted := s.abortReadLocked(e)
+	defer func() {
+		s.mx.Unlock()
+		if e != nil {
+			s.readEndedOnce.Do(func() { close(s.readEnded) })
+		}
+		if aborted && s.onReadAbort != nil {
+			s.onReadAbort(e)
+		}
+	}()
 
 	// clear the stream the first time both the send
 	// and receive are finished
@@ -79,6 +103,62 @@ func (s *stateTrackingStream) closeReceive(e error) {
 		}
 		s.recvErr = e
 		s.signalHasDatagram()
+	}
+}
+
+func (s *stateTrackingStream) abortReadLocked(err error) bool {
+	if err != nil && !errors.Is(err, io.EOF) && s.readAbort == nil {
+		s.readAbort = err
+		close(s.readChanged)
+		return true
+	}
+	return false
+}
+
+func (s *stateTrackingStream) SetReadDeadline(deadline time.Time) error {
+	if err := s.Stream.SetReadDeadline(deadline); err != nil {
+		return err
+	}
+	s.mx.Lock()
+	s.readDeadline = deadline
+	if s.readAbort == nil {
+		close(s.readChanged)
+		s.readChanged = make(chan struct{})
+	}
+	s.mx.Unlock()
+	return nil
+}
+
+func (s *stateTrackingStream) SetDeadline(deadline time.Time) error {
+	return errors.Join(s.SetReadDeadline(deadline), s.Stream.SetWriteDeadline(deadline))
+}
+
+func (s *stateTrackingStream) waitQPACK(ctx context.Context, inserted <-chan struct{}) error {
+	s.mx.Lock()
+	err, deadline, changed := s.readAbort, s.readDeadline, s.readChanged
+	s.mx.Unlock()
+	if err != nil {
+		return err
+	}
+	var expired <-chan time.Time
+	if !deadline.IsZero() {
+		timer := time.NewTimer(time.Until(deadline))
+		defer timer.Stop()
+		expired = timer.C
+	}
+	select {
+	case <-inserted:
+		return nil
+	case <-changed:
+		return nil
+	case <-expired:
+		return os.ErrDeadlineExceeded
+	case <-ctx.Done():
+		return errors.Join(ctx.Err(), context.Cause(ctx))
+	case <-s.connectionContext.Done():
+		return context.Cause(s.connectionContext)
+	case <-s.Stream.FathomryReceiveAbort():
+		return s.Stream.FathomryReceiveError()
 	}
 }
 
@@ -103,6 +183,9 @@ func (s *stateTrackingStream) Write(b []byte) (int, error) {
 func (s *stateTrackingStream) CancelRead(e quic.StreamErrorCode) {
 	s.closeReceive(&quic.StreamError{StreamID: s.StreamID(), ErrorCode: e})
 	s.Stream.CancelRead(e)
+	if s.readWatchDone != nil {
+		<-s.readWatchDone
+	}
 }
 
 func (s *stateTrackingStream) Read(b []byte) (int, error) {
@@ -122,6 +205,32 @@ func (s *stateTrackingStream) SendDatagram(b []byte) error {
 	}
 
 	return s.sendDatagram(b)
+}
+
+func (s *stateTrackingStream) SendDatagramContext(ctx context.Context, b []byte) error {
+	s.mx.Lock()
+	err := s.sendErr
+	s.mx.Unlock()
+	if err != nil {
+		return err
+	}
+	sendContext := s.Stream.Context()
+	work, cancel := context.WithCancelCause(ctx)
+	joined := make(chan struct{})
+	stop := context.AfterFunc(sendContext, func() {
+		defer close(joined)
+		cancel(context.Cause(sendContext))
+	})
+	defer func() {
+		if !stop() {
+			<-joined
+		}
+		cancel(nil)
+	}()
+	if cause := context.Cause(sendContext); cause != nil {
+		cancel(cause)
+	}
+	return s.sendDatagramContext(work, b)
 }
 
 func (s *stateTrackingStream) signalHasDatagram() {

@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sardanioss/qpack"
 	"github.com/sardanioss/quic-go"
 	"github.com/sardanioss/quic-go/http3/qlog"
+	qpack "github.com/sardanioss/quic-go/internal/fathomryqpack"
 	"github.com/sardanioss/quic-go/qlogwriter"
 	"github.com/sardanioss/quic-go/quicvarint"
 )
@@ -55,7 +55,12 @@ type ClientConn struct {
 	conn          *quic.Conn
 	rawConn       *rawConn
 
-	decoder *qpack.Decoder
+	decoder       *qpack.Decoder
+	controlMu     sync.Mutex
+	controlWork   sync.WaitGroup
+	controlClosed bool
+	controlActive int
+	qpackFeedback chan []byte
 
 	// Additional HTTP/3 settings.
 	// It is invalid to specify any settings defined by RFC 9114 (HTTP/3) and RFC 9297 (HTTP Datagrams).
@@ -113,7 +118,7 @@ func newClientConn(
 		lastStreamID:       invalidStreamID,
 		logger:             logger,
 		qlogger:            qlogger,
-		decoder:            qpack.NewDecoder(),
+		decoder:            qpack.NewDecoderWithLimits(additionalSettings[settingQPACKMaxTableCapacity], additionalSettings[settingQPACKBlockedStreams]),
 	}
 	if maxResponseHeaderBytes <= 0 {
 		c.maxResponseHeaderBytes = defaultMaxResponseHeaderBytes
@@ -132,6 +137,14 @@ func newClientConn(
 	)
 	// Set the QPACK encoder instruction handler to enable dynamic table support
 	c.rawConn.qpackEncoderInstructionHandler = c.handleQPACKEncoderInstructions
+	c.rawConn.schedule = c.startControl
+	c.rawConn.qpackEncoderFinish = c.decoder.FinishEncoder
+	c.rawConn.qpackDecoderHandler = c.handleQPACKDecoderStream
+	if additionalSettings[settingQPACKMaxTableCapacity] > qpack.MaxTableCapacity || additionalSettings[settingQPACKBlockedStreams] > qpack.MaxBlockedStreams {
+		c.failQPACK(ErrCodeSettingsError, errors.New("QPACK settings exceed owned limits"))
+		return c
+	}
+	c.qpackFeedback = make(chan []byte, max(16, 2*int(additionalSettings[settingQPACKBlockedStreams])+8))
 	// send the SETTINGs frame synchronously to ensure they're sent before any request
 	// Extract QPACK settings from AdditionalSettings for Chrome-like order
 	// Real iOS Safari/Chrome sends only: QPACK_MAX_TABLE_CAPACITY, QPACK_BLOCKED_STREAMS, GREASE
@@ -172,6 +185,8 @@ func newClientConn(
 
 	// Open QPACK decoder stream (Chrome opens this even without dynamic table)
 	c.openQPACKDecoderStream()
+	c.startControl(c.writeQPACKFeedback)
+	c.startControl(c.watchQPACKCriticalStreams)
 
 	// Small delay to ensure control/QPACK streams are transmitted before request stream.
 	// QUIC has no cross-stream-type ordering guarantee: unidirectional streams (control,
@@ -235,9 +250,15 @@ func (c *ClientConn) openRequestStream(
 	hstr := c.rawConn.TrackStream(str)
 	rsp := &http.Response{}
 	trace := httptrace.ContextClientTrace(ctx)
+	decoder := &streamQPACKDecoder{client: c, ctx: ctx, streamID: str.StreamID(), stream: hstr}
+	if !decoder.watchRead() {
+		hstr.CancelRead(quic.StreamErrorCode(ErrCodeExcessiveLoad))
+		hstr.CancelWrite(quic.StreamErrorCode(ErrCodeExcessiveLoad))
+		return nil, errors.New("http3: receive watcher capacity exceeded")
+	}
 	return newRequestStream(
 		newStream(hstr, c.rawConn, trace, func(r io.Reader, hf *headersFrame) error {
-			hdr, err := decodeTrailers(r, hf, maxHeaderBytes, c.decoder, c.qlogger, str.StreamID())
+			hdr, err := decodeTrailers(r, hf, maxHeaderBytes, decoder, c.qlogger, str.StreamID())
 			if err != nil {
 				return err
 			}
@@ -246,7 +267,7 @@ func (c *ClientConn) openRequestStream(
 		}, c.qlogger),
 		requestWriter,
 		reqDone,
-		c.decoder,
+		decoder,
 		disableCompression,
 		maxHeaderBytes,
 		rsp,
@@ -389,7 +410,12 @@ func (c *ClientConn) roundTrip(req *http.Request) (*http.Response, error) {
 			// fall back to its document value rather than skipping the frame.
 			priorityValue = "u=0, i"
 		}
-		_ = c.rawConn.MaybeSendPriorityUpdate(str.StreamID(), priorityValue)
+		if err := c.rawConn.MaybeSendPriorityUpdateContext(req.Context(), str.StreamID(), priorityValue); err != nil {
+			str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestCanceled))
+			str.CancelRead(quic.StreamErrorCode(ErrCodeRequestCanceled))
+			close(reqDone)
+			return nil, err
+		}
 	}
 
 	// Request Cancellation:
@@ -619,6 +645,7 @@ func appendQPACKPrefixedInt(b []byte, prefixBits uint8, pattern byte, v uint64) 
 func (c *ClientConn) openQPACKEncoderStream() {
 	str, err := c.rawConn.OpenUniStream()
 	if err != nil {
+		c.failQPACK(ErrCodeInternalError, err)
 		if c.logger != nil {
 			c.logger.Debug("failed to open QPACK encoder stream", "error", err)
 		}
@@ -628,6 +655,7 @@ func (c *ClientConn) openQPACKEncoderStream() {
 	b := make([]byte, 0, 8)
 	b = quicvarint.Append(b, streamTypeQPACKEncoderStream)
 	if _, err := str.Write(b); err != nil {
+		c.failQPACK(ErrCodeClosedCriticalStream, err)
 		if c.logger != nil {
 			c.logger.Debug("failed to write QPACK encoder stream type", "error", err)
 		}
@@ -662,8 +690,8 @@ func (c *ClientConn) sendQPACKTableCapacity(capacity uint64) {
 		return
 	}
 	// Set Dynamic Table Capacity: 001xxxxx, 5-bit prefix. RFC 9204 4.3.1.
-	if _, err := str.Write(appendQPACKPrefixedInt(nil, 5, 0x20, capacity)); err != nil && c.logger != nil {
-		c.logger.Debug("failed to write QPACK Set Dynamic Table Capacity", "error", err)
+	if _, err := str.Write(appendQPACKPrefixedInt(nil, 5, 0x20, capacity)); err != nil {
+		c.failQPACK(ErrCodeClosedCriticalStream, err)
 	}
 }
 
@@ -672,6 +700,7 @@ func (c *ClientConn) sendQPACKTableCapacity(capacity uint64) {
 func (c *ClientConn) openQPACKDecoderStream() {
 	str, err := c.rawConn.OpenUniStream()
 	if err != nil {
+		c.failQPACK(ErrCodeInternalError, err)
 		if c.logger != nil {
 			c.logger.Debug("failed to open QPACK decoder stream", "error", err)
 		}
@@ -681,6 +710,7 @@ func (c *ClientConn) openQPACKDecoderStream() {
 	b := make([]byte, 0, 8)
 	b = quicvarint.Append(b, streamTypeQPACKDecoderStream)
 	if _, err := str.Write(b); err != nil {
+		c.failQPACK(ErrCodeClosedCriticalStream, err)
 		if c.logger != nil {
 			c.logger.Debug("failed to write QPACK decoder stream type", "error", err)
 		}
@@ -701,18 +731,12 @@ func (c *ClientConn) openQPACKDecoderStream() {
 // and one response: push an Insert With Literal Name, serve the response, and
 // see whether anything at all comes back on the decoder stream.
 func (c *ClientConn) handleQPACKEncoderInstructions(data []byte) error {
+	c.qpackMx.Lock()
+	defer c.qpackMx.Unlock()
 	before := c.decoder.InsertCount()
 	err := c.decoder.ProcessEncoderInstructions(data)
-	if inserted := c.decoder.InsertCount() - before; inserted > 0 {
-		c.qpackMx.Lock()
-		str := c.qpackDecoderStr
-		c.qpackMx.Unlock()
-		if str != nil {
-			// Insert Count Increment: 00xxxxxx, 6-bit prefix. RFC 9204 4.4.3.
-			if _, werr := str.Write(appendQPACKPrefixedInt(nil, 6, 0x00, inserted)); werr != nil && c.logger != nil {
-				c.logger.Debug("failed to write QPACK Insert Count Increment", "error", werr)
-			}
-		}
+	if inserted := c.decoder.InsertCount() - before; inserted > 0 && err == nil {
+		err = c.enqueueQPACK(appendQPACKPrefixedInt(nil, 6, 0x00, inserted))
 	}
 	return err
 }

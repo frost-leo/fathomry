@@ -54,7 +54,7 @@ func TestConsumingBinaryAndIndependentProviderImports(t *testing.T) {
 	if err := json.Unmarshal(output, &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Go != runtime.Version() || result.Provider != ProviderID || result.Patch != "v1" || result.SDKs["github.com/sardanioss/httpcloak"] != "v1.7.2" || len(result.SDKs) != 6 {
+	if result.Go != runtime.Version() || result.Provider != ProviderID || result.Patch != "v2" || result.SDKs["github.com/sardanioss/httpcloak"] != "v1.7.2" || len(result.SDKs) != 6 {
 		t.Fatal("actual consuming build facts changed")
 	}
 	for _, module := range []string{"github.com/sardanioss/httpcloak", "github.com/sardanioss/quic-go", "github.com/sardanioss/net", "github.com/sardanioss/udpbara"} {

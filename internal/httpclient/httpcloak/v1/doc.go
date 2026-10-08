@@ -21,23 +21,27 @@
 // controlled finite requests and decoded response streams. It is an internal Go
 // integration, not a public HTTP facade or Temporal Workflow implementation.
 //
-// Select freezes one explicit named preset, strict JSON preset or native preset.
-// Compose LimitsV1 / resource.WithLimits / resource.Assemble, then Bind with a
+// PrepareV1 freezes one explicit named preset, strict JSON preset or native
+// preset and derives its authoritative native resource envelope before construction.
+// Compose prepared.Select / resource.WithLimits / resource.Assemble, then Bind with a
 // required invocation Inbox. Aliases borrow the same identity and all allowances.
 // Neither the Client nor its results expose an SDK client, transport or shutdown
 // handle. Open streams must be closed; Do uses a separate cleanup-wait context.
 //
-// RequestOptionsV1 freezes dynamic TCP proxy routing, CONNECT headers and native
+// RequestOptionsV1 freezes dynamic proxy routing, CONNECT headers and native
 // header controls before admission. Request readers and GetBody callbacks remain
 // borrowed through receipt release; Close must unblock Read. Native callbacks,
 // cookie jars, root certificates and key-log writers must obey their concurrent-use
 // contracts, must not reenter the same operation and may not start unmanaged work.
+// RootCAs pools remain immutable caller-owned borrows through actual release;
+// preparation copies their wrapper, not opaque pool memory or lazy authority.
 // Redirect callbacks receive metadata-only copies and may veto, not mutate, a hop.
 // The explicit call context supplies native context values; request.Context also
 // cancels admission and work. Cancellation cannot forcibly terminate user code.
 //
-// Version 1 supports explicit H1, H2 and direct H3. It does not silently race or
-// downgrade protocols, support UDP/MASQUE proxies, expose native Session setters,
+// Version 1 supports explicit H1, H2 and H3 with controlled TCP/SOCKS UDP/MASQUE
+// routing, source-owned resolver/ECH authority and bounded address racing. It does
+// not silently race or downgrade protocols, expose native Session setters,
 // or supply business retries, Cookie/token acquisition, refresh, rotation or Redis.
 // Native exchanges may retry; attempt observations are not an exact wire count.
 // Bounded exclusive checkouts reuse native connections but do not multiplex

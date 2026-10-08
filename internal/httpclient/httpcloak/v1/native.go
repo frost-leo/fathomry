@@ -43,6 +43,26 @@ func nilLike(value any) bool {
 	return false
 }
 func copyNative(value NativeOptionsV1) (NativeOptionsV1, error) {
+	if _, err := nativeDataBytes(value.Preset, 1<<20); err != nil {
+		return NativeOptionsV1{}, err
+	}
+	if value.Transport != nil {
+		config := value.Transport
+		if config.EnableSpeculativeTLS {
+			return NativeOptionsV1{}, failure(ErrUnsupported, "speculative-tls")
+		}
+		if len(config.ConnectTo) > 128 || len(config.ECHConfig) > 1<<16 || len(config.ECHConfigDomain) > 253 || len(config.CustomJA3) > 1<<16 || len(config.CustomPseudoOrder) > 4 || len(config.LocalAddr) > 64 {
+			return NativeOptionsV1{}, failure(ErrLimit, "native-options")
+		}
+		for key, target := range config.ConnectTo {
+			if key == "" || target == "" || len(key) > 253 || len(target) > 253 || !fieldValue(key) || !fieldValue(target) {
+				return NativeOptionsV1{}, failure(ErrInput, "connect-to")
+			}
+		}
+		if _, err := nativeDataBytes(config.CustomJA3Extras, 1<<16); err != nil {
+			return NativeOptionsV1{}, err
+		}
+	}
 	value.Preset = fingerprint.Clone(value.Preset)
 	if value.Jar != nil && nilLike(value.Jar) {
 		return NativeOptionsV1{}, failure(ErrInput, "jar")
@@ -51,7 +71,7 @@ func copyNative(value NativeOptionsV1) (NativeOptionsV1, error) {
 		value.Transport = &transport.TransportConfig{}
 	} else {
 		source := value.Transport
-		if source.FathomryDialTCP != nil || source.FathomryMaxHeaderBytes != 0 || source.SessionCacheBackend != nil || source.SessionCacheErrorCallback != nil {
+		if source.FathomryControls != nil || source.FathomryDialTCP != nil || source.FathomryMaxHeaderBytes != 0 || source.SessionCacheBackend != nil || source.SessionCacheErrorCallback != nil {
 			return NativeOptionsV1{}, failure(ErrUnsupported, "native-ownership")
 		}
 		copied := *source
@@ -91,16 +111,10 @@ func copyNative(value NativeOptionsV1) (NativeOptionsV1, error) {
 	}
 	if value.Verify != nil {
 		copy := *value.Verify
-		if copy.RootCAs != nil {
-			copy.RootCAs = copy.RootCAs.Clone()
-		}
 		value.Verify = &copy
 	}
 	if value.ProxyVerify != nil {
 		copy := *value.ProxyVerify
-		if copy.RootCAs != nil {
-			copy.RootCAs = copy.RootCAs.Clone()
-		}
 		value.ProxyVerify = &copy
 	}
 	if value.Transport.KeyLogWriter != nil && nilLike(value.Transport.KeyLogWriter) {
@@ -127,7 +141,11 @@ func choosePreset(value settings, native NativeOptionsV1) (*fingerprint.Preset, 
 	}
 	preset := fingerprint.Clone(native.Preset)
 	if value.PresetName != "" {
-		preset = fingerprint.GetStrict(value.PresetName)
+		var err error
+		preset, err = fingerprint.FathomryGetStrictBounded(value.PresetName, 1<<20)
+		if err != nil {
+			return nil, failure(ErrLimit, "preset-containers", err)
+		}
 	}
 	if value.PresetJSON != "" {
 		file, err := fingerprint.LoadPresetFromJSONStrict([]byte(value.PresetJSON))
@@ -144,6 +162,9 @@ func choosePreset(value settings, native NativeOptionsV1) (*fingerprint.Preset, 
 	}
 	if preset == nil {
 		return nil, failure(ErrInput, "unknown-preset")
+	}
+	if _, err := nativeDataBytes(preset, 1<<20); err != nil {
+		return nil, err
 	}
 	preset = fingerprint.Clone(preset)
 	if err := presetHeaders(preset, value.MaxHeaderBytes); err != nil {

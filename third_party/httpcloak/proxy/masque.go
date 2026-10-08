@@ -6,17 +6,22 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/dunglas/httpsfv"
 	http "github.com/sardanioss/http"
+	"github.com/sardanioss/httpcloak/internal/managed"
 	tls "github.com/sardanioss/utls"
 
 	"github.com/sardanioss/quic-go"
 	"github.com/sardanioss/quic-go/http3"
+	"github.com/sardanioss/quic-go/quicvarint"
 )
 
 const (
@@ -83,8 +88,15 @@ type MASQUEConn struct {
 	// Datagram receive channel - datagrams from QUIC connection
 	datagramCh chan []byte
 	// Context for background goroutine
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx                       context.Context
+	cancel                    context.CancelCauseFunc
+	controls                  *managed.Controls
+	controlRelease            func()
+	workers                   sync.WaitGroup
+	closeDone                 chan struct{}
+	closeErr                  error
+	readContext, writeContext context.Context
+	readCancel, writeCancel   func(error)
 }
 
 // NewMASQUEConn creates a new MASQUE connection to the specified proxy URL.
@@ -111,7 +123,11 @@ func NewMASQUEConn(proxyURL string) (*MASQUEConn, error) {
 		proxyHost:  host,
 		proxyPort:  port,
 		datagramCh: make(chan []byte, 100),
+		closeDone:  make(chan struct{}),
 	}
+	conn.ctx, conn.cancel = context.WithCancelCause(context.Background())
+	conn.resetReadContext()
+	conn.resetWriteContext()
 
 	// Extract credentials if present
 	if parsed.User != nil {
@@ -127,7 +143,10 @@ func NewMASQUEConn(proxyURL string) (*MASQUEConn, error) {
 
 // EstablishWithQUICConfig establishes the MASQUE tunnel with custom QUIC config.
 // This allows maintaining browser fingerprinting on the proxy connection.
-func (c *MASQUEConn) EstablishWithQUICConfig(ctx context.Context, targetHost string, targetPort int, tlsConfig *tls.Config, quicConfig *quic.Config) error {
+func (c *MASQUEConn) EstablishWithQUICConfig(ctx context.Context, targetHost string, targetPort int, tlsConfig *tls.Config, quicConfig *quic.Config) (resultErr error) {
+	ctx, cancelSetup := context.WithCancelCause(ctx)
+	stopSource := context.AfterFunc(c.ctx, func() { cancelSetup(context.Cause(c.ctx)) })
+	defer func() { stopSource(); cancelSetup(nil) }()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -153,8 +172,17 @@ func (c *MASQUEConn) EstablishWithQUICConfig(ctx context.Context, targetHost str
 	// Step 1: Dial QUIC connection to proxy
 	// Pre-resolve proxy hostname using CGO-compatible resolver
 	// (required for shared library usage where Go's pure-Go resolver doesn't work)
-	resolver := &net.Resolver{PreferGo: false}
-	proxyIPs, err := resolver.LookupHost(ctx, c.proxyHost)
+	var proxyIPs []string
+	var err error
+	if c.controls != nil {
+		var addresses []net.IP
+		addresses, err = c.controls.Resolve(ctx, c.proxyHost)
+		for _, address := range addresses {
+			proxyIPs = append(proxyIPs, address.String())
+		}
+	} else {
+		proxyIPs, err = (&net.Resolver{PreferGo: false}).LookupHost(ctx, c.proxyHost)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to resolve proxy host %s: %w", c.proxyHost, err)
 	}
@@ -180,18 +208,30 @@ func (c *MASQUEConn) EstablishWithQUICConfig(ctx context.Context, targetHost str
 			return
 		}
 		if c.quicConn != nil {
-			c.quicConn.CloseWithError(0, "establish failed")
+			resultErr = errors.Join(resultErr, c.quicConn.CloseWithError(0, ""))
+			<-c.quicConn.Context().Done()
+			if c.clientConn != nil {
+				resultErr = errors.Join(resultErr, c.clientConn.FathomryCloseSenders())
+			}
 		}
 		if quicTransport != nil {
-			quicTransport.Close()
+			resultErr = errors.Join(resultErr, quicTransport.Close())
 		}
 		if udpConn != nil {
-			udpConn.Close()
+			resultErr = errors.Join(resultErr, c.closeUDP(udpConn))
 		}
+		if c.controlRelease != nil {
+			c.controlRelease()
+			c.controlRelease = nil
+		}
+		c.quicConn, c.clientConn, c.requestStream = nil, nil, nil
 	}()
 
 	// Create TLS config for proxy connection
 	proxyTLSConfig := tlsConfig.Clone()
+	if c.controls != nil {
+		proxyTLSConfig = c.controls.ProxyTLS.Clone()
+	}
 	proxyTLSConfig.ServerName = c.proxyHost
 	proxyTLSConfig.NextProtos = []string{http3.NextProtoH3}
 
@@ -218,19 +258,27 @@ func (c *MASQUEConn) EstablishWithQUICConfig(ctx context.Context, targetHost str
 		if ip == nil {
 			continue
 		}
-		sock, sockErr := net.ListenUDP("udp", nil)
+		var sock *net.UDPConn
+		var sockErr error
+		if c.controls != nil {
+			sock, sockErr = c.controls.ListenUDP("udp", nil)
+		} else {
+			sock, sockErr = net.ListenUDP("udp", nil)
+		}
 		if sockErr != nil {
 			dialErr = fmt.Errorf("failed to create UDP socket: %w", sockErr)
 			continue
 		}
 		tr := &quic.Transport{Conn: sock}
-		conn, err := tr.Dial(ctx, &net.UDPAddr{IP: ip, Port: port}, proxyTLSConfig, proxyCfg)
+		dial := func(ctx context.Context) (*quic.Conn, error) {
+			return tr.Dial(ctx, &net.UDPAddr{IP: ip, Port: port}, proxyTLSConfig, proxyCfg)
+		}
+		conn, err := c.controls.DialQUIC(ctx, dial)
 		if err != nil {
 			dialErr = err
 			// Tear down the failed attempt fully: stop the Transport's read
 			// goroutine on this socket, then release the fd, before the next addr.
-			tr.Close()
-			sock.Close()
+			dialErr = errors.Join(dialErr, tr.Close(), c.closeUDP(sock))
 			continue
 		}
 		udpConn = sock
@@ -245,9 +293,19 @@ func (c *MASQUEConn) EstablishWithQUICConfig(ctx context.Context, targetHost str
 		return fmt.Errorf("failed to dial QUIC to proxy: %w", dialErr)
 	}
 	c.quicConn = quicConn
+	setupClosed := make(chan struct{})
+	stopSetup := context.AfterFunc(ctx, func() { defer close(setupClosed); _ = quicConn.CloseWithError(0, "") })
+	defer func() {
+		if !stopSetup() {
+			<-setupClosed
+		}
+	}()
 
 	// Step 2: Create HTTP/3 client connection
-	tr := &http3.Transport{EnableDatagrams: true}
+	tr := &http3.Transport{EnableDatagrams: true, AdditionalSettings: map[uint64]uint64{0x33: 1}}
+	if c.controls != nil {
+		tr.MaxResponseHeaderBytes = c.controls.MaxHeaderBytes
+	}
 	c.clientConn = tr.NewClientConn(quicConn)
 
 	// Wait for server settings to confirm Extended CONNECT support
@@ -282,8 +340,10 @@ func (c *MASQUEConn) EstablishWithQUICConfig(ctx context.Context, targetHost str
 	// c.requestStream can't mutate what the running receiver is reading — the
 	// old receiver drains on its snapshotted ctx and exits cleanly when that
 	// snapshot's cancel fires.
-	c.ctx, c.cancel = context.WithCancel(context.Background())
-	go c.receiveDatagrams(c.ctx, c.requestStream)
+	receiverContext, receiverStream, receiverCancel := c.ctx, c.requestStream, c.cancel
+	c.workers.Add(2)
+	go func() { defer c.workers.Done(); c.receiveDatagrams(receiverContext, receiverStream, receiverCancel) }()
+	go func() { defer c.workers.Done(); c.receiveCapsules(receiverStream, receiverCancel) }()
 
 	c.established = true
 	c.udpConn = udpConn             // track so Close/Reset can release the socket
@@ -313,8 +373,18 @@ func (c *MASQUEConn) Establish(ctx context.Context, targetHost string, targetPor
 // sendConnectUDP sends the Extended CONNECT request to establish the UDP tunnel.
 // Uses proper HTTP/3 framing via OpenRequestStream and SendRequestHeader.
 func (c *MASQUEConn) sendConnectUDP(ctx context.Context) error {
+	if c.targetPort < 1 || c.targetPort > 65535 || c.targetHost == "" || len(c.targetHost) > 253 || strings.ContainsAny(c.targetHost, " /?#[]@%\\") {
+		return errors.New("invalid CONNECT-UDP target")
+	}
+	if c.controls != nil {
+		release, err := c.controls.AcquireControl()
+		if err != nil {
+			return err
+		}
+		c.controlRelease = release
+	}
 	// Open a request stream for Extended CONNECT
-	rstr, err := c.clientConn.OpenRequestStream(ctx)
+	rstr, err := c.clientConn.OpenRequestStream(c.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to open request stream: %w", err)
 	}
@@ -323,7 +393,8 @@ func (c *MASQUEConn) sendConnectUDP(ctx context.Context) error {
 	// Build the request URL with well-known MASQUE path
 	// Format: /.well-known/masque/udp/{target_host}/{target_port}/
 	path := fmt.Sprintf("/.well-known/masque/udp/%s/%d/", c.targetHost, c.targetPort)
-	reqURL, _ := url.Parse(fmt.Sprintf("https://%s:%s%s", c.proxyHost, c.proxyPort, path))
+	reqURL := &url.URL{Scheme: "https", Host: net.JoinHostPort(c.proxyHost, c.proxyPort), Path: path,
+		RawPath: fmt.Sprintf("/.well-known/masque/udp/%s/%d/", url.QueryEscape(c.targetHost), c.targetPort)}
 
 	// Build headers
 	headers := http.Header{
@@ -347,6 +418,17 @@ func (c *MASQUEConn) sendConnectUDP(ctx context.Context) error {
 	}
 
 	// Send the request headers
+	readDone := make(chan struct{})
+	stopRead := context.AfterFunc(ctx, func() {
+		defer close(readDone)
+		rstr.CancelRead(quic.StreamErrorCode(http3.ErrCodeRequestCanceled))
+		rstr.CancelWrite(quic.StreamErrorCode(http3.ErrCodeRequestCanceled))
+	})
+	defer func() {
+		if !stopRead() {
+			<-readDone
+		}
+	}()
 	if err := rstr.SendRequestHeader(req); err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
@@ -362,28 +444,9 @@ func (c *MASQUEConn) sendConnectUDP(ctx context.Context) error {
 		rstr.SetReadDeadline(dl)
 		defer rstr.SetReadDeadline(time.Time{})
 	}
-	type connectUDPResult struct {
-		rsp *http.Response
-		err error
-	}
-	respCh := make(chan connectUDPResult, 1)
-	go func() {
-		rsp, err := rstr.ReadResponse()
-		respCh <- connectUDPResult{rsp: rsp, err: err}
-	}()
-
-	var rsp *http.Response
-	select {
-	case <-ctx.Done():
-		// Abandon the parked read so ReadResponse unblocks, then fail fast.
-		rstr.CancelRead(quic.StreamErrorCode(http3.ErrCodeRequestCanceled))
-		rstr.CancelWrite(quic.StreamErrorCode(http3.ErrCodeRequestCanceled))
-		return fmt.Errorf("CONNECT-UDP response timed out: %w", ctx.Err())
-	case res := <-respCh:
-		if res.err != nil {
-			return fmt.Errorf("failed to read response: %w", res.err)
-		}
-		rsp = res.rsp
+	rsp, err := rstr.ReadResponse()
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", errors.Join(err, context.Cause(ctx)))
 	}
 
 	// Check for success (2xx status code)
@@ -397,6 +460,15 @@ func (c *MASQUEConn) sendConnectUDP(ctx context.Context) error {
 			return errors.New("proxy could not reach target")
 		default:
 			return fmt.Errorf("proxy responded with %d", rsp.StatusCode)
+		}
+	}
+	if c.controls != nil {
+		capsule, err := httpsfv.UnmarshalItem(rsp.Header.Values(http3.CapsuleProtocolHeader))
+		if enabled, ok := capsule.Value.(bool); err != nil || !ok || !enabled {
+			return errors.Join(errors.New("proxy did not confirm capsule protocol"), err)
+		}
+		if rsp.StatusCode == 204 || rsp.StatusCode == 205 || rsp.StatusCode == 206 || len(rsp.Header.Values("Content-Length")) != 0 || len(rsp.Header.Values("Content-Type")) != 0 || len(rsp.Header.Values("Transfer-Encoding")) != 0 {
+			return errors.New("proxy capsule response has prohibited content semantics")
 		}
 	}
 
@@ -414,7 +486,7 @@ func (c *MASQUEConn) sendConnectUDP(ctx context.Context) error {
 // launcher) rather than reading c.ctx/c.requestStream directly, so a concurrent
 // Reset()/re-Establish that reassigns those fields can't race with — or nil out
 // from under — the running receiver.
-func (c *MASQUEConn) receiveDatagrams(ctx context.Context, rstr *http3.RequestStream) {
+func (c *MASQUEConn) receiveDatagrams(ctx context.Context, rstr *http3.RequestStream, cancel context.CancelCauseFunc) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -426,7 +498,8 @@ func (c *MASQUEConn) receiveDatagrams(ctx context.Context, rstr *http3.RequestSt
 		// The datagram may include a context ID prefix per RFC 9298
 		data, err := rstr.ReceiveDatagram(ctx)
 		if err != nil {
-			// Connection closed or context cancelled
+			// The joined capsule reader owns stream termination. Its parser must
+			// distinguish truncated capsules from the raw stream's clean EOF.
 			return
 		}
 
@@ -436,12 +509,63 @@ func (c *MASQUEConn) receiveDatagrams(ctx context.Context, rstr *http3.RequestSt
 		if payload == nil {
 			continue
 		}
+		if len(payload) > 65527 {
+			cancel(errors.New("oversized CONNECT-UDP datagram"))
+			return
+		}
 
 		// Send to channel (non-blocking)
 		select {
 		case c.datagramCh <- payload:
 		default:
 			// Channel full, drop packet
+		}
+	}
+}
+
+func (c *MASQUEConn) receiveCapsules(stream *http3.RequestStream, cancel context.CancelCauseFunc) {
+	reader := quicvarint.NewReader(stream)
+	var scratch [4096]byte
+	for {
+		kind, capsule, err := http3.ParseCapsule(reader)
+		if err != nil {
+			cancel(fmt.Errorf("MASQUE control stream: %w", err))
+			return
+		}
+		if kind != 0 {
+			if _, err := io.CopyBuffer(io.Discard, capsule, scratch[:]); err != nil {
+				cancel(fmt.Errorf("MASQUE capsule: %w", err))
+				return
+			}
+			continue
+		}
+		contextID, err := quicvarint.Read(quicvarint.NewReader(capsule))
+		if err != nil {
+			if err == io.EOF {
+				err = io.ErrUnexpectedEOF
+			}
+			cancel(fmt.Errorf("MASQUE datagram context: %w", err))
+			return
+		}
+		if contextID != 0 {
+			if _, err := io.CopyBuffer(io.Discard, capsule, scratch[:]); err != nil {
+				cancel(fmt.Errorf("MASQUE capsule: %w", err))
+				return
+			}
+			continue
+		}
+		payload, err := io.ReadAll(io.LimitReader(capsule, 65528))
+		if err != nil {
+			cancel(fmt.Errorf("MASQUE datagram capsule: %w", err))
+			return
+		}
+		if len(payload) > 65527 {
+			cancel(errors.New("oversized CONNECT-UDP capsule"))
+			return
+		}
+		select {
+		case c.datagramCh <- payload:
+		default:
 		}
 	}
 }
@@ -457,7 +581,7 @@ func (c *MASQUEConn) unwrapDatagram(data []byte) []byte {
 	// We need to read the varint and skip it
 
 	contextID, bytesRead := readVarInt(data)
-	if bytesRead == 0 || bytesRead >= len(data) {
+	if bytesRead == 0 || bytesRead > len(data) {
 		// Invalid or no payload
 		return nil
 	}
@@ -483,125 +607,107 @@ func (c *MASQUEConn) wrapDatagram(data []byte) []byte {
 
 // WriteTo implements net.PacketConn - writes a UDP datagram through the MASQUE tunnel
 func (c *MASQUEConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	c.mu.RLock()
-	if c.closed {
+	if len(b) > 65527 {
+		return 0, errors.New("oversized CONNECT-UDP datagram")
+	}
+	if err := c.beginIO(); err != nil {
+		return 0, err
+	}
+	defer c.workers.Done()
+	wrapped := c.wrapDatagram(b)
+	for {
+		c.mu.RLock()
+		ctx, stream := c.writeContext, c.requestStream
 		c.mu.RUnlock()
-		return 0, net.ErrClosed
+		err := stream.SendDatagramContext(ctx, wrapped)
+		if err == nil {
+			return len(b), nil
+		}
+		if errors.Is(context.Cause(ctx), errDeadlineChanged) {
+			continue
+		}
+		return 0, masqueIOError("write", errors.Join(err, context.Cause(ctx)))
 	}
-	if !c.established {
-		c.mu.RUnlock()
-		return 0, errors.New("MASQUE connection not established")
-	}
-	rstr := c.requestStream
-	c.mu.RUnlock()
-
-	// Wrap with context ID (RFC 9298)
-	wrappedData := c.wrapDatagram(b)
-
-	// Send as HTTP/3 datagram via the RequestStream
-	// The stream handles the quarter stream ID prefix (RFC 9297)
-	err := rstr.SendDatagram(wrappedData)
-	if err != nil {
-		return 0, fmt.Errorf("failed to send datagram: %w", err)
-	}
-
-	return len(b), nil
 }
 
 // ReadFrom implements net.PacketConn - reads a UDP datagram from the MASQUE tunnel
 func (c *MASQUEConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	c.mu.RLock()
-	if c.closed {
-		c.mu.RUnlock()
-		return 0, nil, net.ErrClosed
+	if err := c.beginIO(); err != nil {
+		return 0, nil, err
 	}
-	if !c.established {
-		c.mu.RUnlock()
-		return 0, nil, errors.New("MASQUE connection not established")
-	}
-	c.mu.RUnlock()
-
-	// Check deadline
-	var deadline <-chan time.Time
-	c.mu.RLock()
-	if !c.readDeadline.IsZero() {
-		timer := time.NewTimer(time.Until(c.readDeadline))
-		defer timer.Stop()
-		deadline = timer.C
-	}
-	c.mu.RUnlock()
-
-	select {
-	case <-c.ctx.Done():
-		return 0, nil, net.ErrClosed
-	case <-deadline:
-		return 0, nil, &net.OpError{Op: "read", Err: errors.New("i/o timeout")}
-	case data := <-c.datagramCh:
-		n := copy(b, data)
-		// Return the resolved target address (set by SetResolvedTarget)
+	defer c.workers.Done()
+	for {
 		c.mu.RLock()
-		targetAddr := c.resolvedTarget
-		c.mu.RUnlock()
-		if targetAddr == nil {
-			// Fallback if not set
-			targetAddr = &net.UDPAddr{
-				IP:   net.ParseIP(c.targetHost),
-				Port: c.targetPort,
-			}
-			if targetAddr.IP == nil {
-				targetAddr.IP = net.IPv4zero
-			}
+		ctx := c.readContext
+		target := c.resolvedTarget
+		if target == nil {
+			target = &net.UDPAddr{IP: net.ParseIP(c.targetHost), Port: c.targetPort}
 		}
-		return n, targetAddr, nil
+		address := *target
+		address.IP = append(net.IP(nil), target.IP...)
+		c.mu.RUnlock()
+		if ctx.Err() != nil {
+			if errors.Is(context.Cause(ctx), errDeadlineChanged) {
+				continue
+			}
+			return 0, nil, masqueIOError("read", context.Cause(ctx))
+		}
+		select {
+		case <-ctx.Done():
+			if errors.Is(context.Cause(ctx), errDeadlineChanged) {
+				continue
+			}
+			return 0, nil, masqueIOError("read", context.Cause(ctx))
+		case data := <-c.datagramCh:
+			return copy(b, data), &address, nil
+		}
 	}
 }
 
 // Close closes the MASQUE connection and all underlying resources
 func (c *MASQUEConn) Close() error {
+	c.cancel(net.ErrClosed)
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.closed {
-		return nil
+		done := c.closeDone
+		c.mu.Unlock()
+		<-done
+		return c.closeErr
 	}
 	c.closed = true
-
-	// Cancel background goroutine
-	if c.cancel != nil {
-		c.cancel()
+	stream, connection, client, transport, socket, release := c.requestStream, c.quicConn, c.clientConn, c.quicTransport, c.udpConn, c.controlRelease
+	c.mu.Unlock()
+	var err error
+	if stream != nil {
+		stream.CancelRead(quic.StreamErrorCode(http3.ErrCodeRequestCanceled))
+		stream.CancelWrite(quic.StreamErrorCode(http3.ErrCodeRequestCanceled))
 	}
-
-	var errs []error
-
-	// Close the request stream
-	if c.requestStream != nil {
-		if err := c.requestStream.Close(); err != nil {
-			errs = append(errs, err)
-		}
+	if connection != nil {
+		err = errors.Join(err, connection.CloseWithError(0, ""))
+		<-connection.Context().Done()
 	}
-
-	// Close the QUIC connection
-	if c.quicConn != nil {
-		if err := c.quicConn.CloseWithError(0, "closed"); err != nil {
-			errs = append(errs, err)
-		}
+	if client != nil {
+		err = errors.Join(err, client.FathomryCloseSenders())
 	}
-
-	// Stop the Transport's read goroutine, then close the underlying UDP socket —
-	// quic-go won't do either, so skipping this leaks the socket and its goroutine.
-	if c.quicTransport != nil {
-		c.quicTransport.Close()
-		c.quicTransport = nil
+	if transport != nil {
+		err = errors.Join(err, transport.Close())
 	}
-	if c.udpConn != nil {
-		c.udpConn.Close()
-		c.udpConn = nil
+	if socket != nil {
+		err = errors.Join(err, c.closeUDP(socket))
 	}
-
-	if len(errs) > 0 {
-		return errs[0]
+	c.workers.Wait()
+	if release != nil {
+		release()
 	}
-	return nil
+	c.mu.Lock()
+	c.closeErr = err
+	c.controlRelease = nil
+	for len(c.datagramCh) > 0 {
+		<-c.datagramCh
+	}
+	close(c.closeDone)
+	c.mu.Unlock()
+	return err
 }
 
 // Reset tears down the current tunnel so the next Establish dials a fresh one.
@@ -609,33 +715,26 @@ func (c *MASQUEConn) Close() error {
 // over an already-closed QUIC connection, plus a leaked datagram-receive
 // goroutine and UDP socket) would be reused after refresh.
 func (c *MASQUEConn) Reset() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
+	if c.controls != nil {
+		_ = c.Close()
 		return
 	}
-	if c.cancel != nil {
-		c.cancel()
-	}
-	if c.quicConn != nil {
-		c.quicConn.CloseWithError(0, "reset")
-		c.quicConn = nil
-	}
-	if c.quicTransport != nil {
-		c.quicTransport.Close()
-		c.quicTransport = nil
-	}
-	if c.udpConn != nil {
-		c.udpConn.Close()
-		c.udpConn = nil
-	}
-	c.clientConn = nil
-	c.requestStream = nil
-	c.established = false
+	_ = c.Close()
+	c.mu.Lock()
+	c.closed, c.established, c.closeErr = false, false, nil
+	c.quicConn, c.clientConn, c.requestStream, c.quicTransport, c.udpConn = nil, nil, nil, nil, nil
+	c.closeDone = make(chan struct{})
+	c.datagramCh = make(chan []byte, 100)
+	c.ctx, c.cancel = context.WithCancelCause(context.Background())
+	c.resetReadContext()
+	c.resetWriteContext()
+	c.mu.Unlock()
 }
 
 // LocalAddr returns the local address (simulated for net.PacketConn interface)
 func (c *MASQUEConn) LocalAddr() net.Addr {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.localAddr
 }
 
@@ -645,7 +744,13 @@ func (c *MASQUEConn) LocalAddr() net.Addr {
 func (c *MASQUEConn) SetResolvedTarget(addr *net.UDPAddr) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.resolvedTarget = addr
+	if addr == nil {
+		c.resolvedTarget = nil
+		return
+	}
+	copy := *addr
+	copy.IP = append(net.IP(nil), addr.IP...)
+	c.resolvedTarget = &copy
 }
 
 // SetDeadline sets read and write deadlines
@@ -654,6 +759,8 @@ func (c *MASQUEConn) SetDeadline(t time.Time) error {
 	defer c.mu.Unlock()
 	c.readDeadline = t
 	c.writeDeadline = t
+	c.resetReadContext()
+	c.resetWriteContext()
 	return nil
 }
 
@@ -662,6 +769,7 @@ func (c *MASQUEConn) SetReadDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.readDeadline = t
+	c.resetReadContext()
 	return nil
 }
 
@@ -670,6 +778,7 @@ func (c *MASQUEConn) SetWriteDeadline(t time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.writeDeadline = t
+	c.resetWriteContext()
 	return nil
 }
 

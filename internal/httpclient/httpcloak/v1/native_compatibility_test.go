@@ -50,7 +50,7 @@ func TestNativeCompatibilityUnitControls(t *testing.T) {
 	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	env := append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOFLAGS=")
+	env := append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off", "GONOPROXY=none", "GOSUMDB=off", "GOFLAGS=-p=1")
 	run := func(args ...string) []byte {
 		command := exec.CommandContext(ctx, goBinary, args...)
 		command.Env = env
@@ -61,7 +61,7 @@ func TestNativeCompatibilityUnitControls(t *testing.T) {
 		return output
 	}
 	selected := make(map[string]string)
-	for _, line := range strings.Split(string(run("list", "-mod=readonly", "-deps", "-test", "-f", "{{if .Module}}{{.Module.Path}} {{.Module.Version}}{{end}}", ".")), "\n") {
+	for _, line := range strings.Split(string(run("list", "-mod=readonly", "-deps", "-test", "-f", "{{if .Module}}{{.Module.Path}} {{.Module.Version}}{{end}}", ".", "github.com/sardanioss/quic-go/internal/fathomryqpack")), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) == 2 {
 			selected[fields[0]] = fields[1]
@@ -106,7 +106,11 @@ func TestNativeCompatibilityUnitControls(t *testing.T) {
 			if err := os.WriteFile(strings.TrimSuffix(moduleFile, ".mod")+".sum", rootSums, 0600); err != nil {
 				t.Fatal(err)
 			}
-			args := []string{"-C", filepath.Join(root, "third_party", directory), "test", "-modfile=" + moduleFile, "-mod=readonly", "-count=1", "-timeout=60s", "-run=^TestFathomry"}
+			pattern := "^TestFathomry"
+			if directory == "httpcloak-quic-go" {
+				pattern += "|^TestDecoder"
+			}
+			args := []string{"-C", filepath.Join(root, "third_party", directory), "test", "-modfile=" + moduleFile, "-mod=readonly", "-count=1", "-timeout=60s", "-run=" + pattern}
 			if cgo == "1" {
 				args = append(args, "-race")
 			}

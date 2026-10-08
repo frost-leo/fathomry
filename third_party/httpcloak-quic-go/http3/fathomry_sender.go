@@ -25,7 +25,7 @@ import (
 	"sync"
 )
 
-const FathomryCompatibilityRevision = "httpcloak-quic-v1"
+const FathomryCompatibilityRevision = "httpcloak-quic-v2"
 
 type requestSender struct {
 	abortWrite func()
@@ -67,6 +67,7 @@ func (client *ClientConn) startSender(body io.ReadCloser) (*requestSender, error
 // sender. Callers must first close the QUIC connection. A non-cooperating input
 // or callback can delay completion; returning from Close never fabricates a join.
 func (client *ClientConn) FathomryCloseSenders() error {
+	defer client.closeControl()
 	client.senderMu.Lock()
 	client.sendersClosed = true
 	senders := make([]*requestSender, 0, len(client.senders))

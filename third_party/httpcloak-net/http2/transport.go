@@ -1039,6 +1039,13 @@ func (t *Transport) NewClientConn(c net.Conn) (*ClientConn, error) {
 
 func (t *Transport) newClientConn(c net.Conn, singleUse bool, internalStateHook func()) (*ClientConn, error) {
 	conf := configFromTransport(t)
+	receiveWindow, err := t.FathomryReceiveConnectionWindow()
+	if err != nil {
+		if c != nil {
+			err = errors.Join(err, c.Close())
+		}
+		return nil, err
+	}
 	cc := &ClientConn{
 		t:                           t,
 		tconn:                       c,
@@ -1143,10 +1150,7 @@ func (t *Transport) newClientConn(c net.Conn, singleUse bool, internalStateHook 
 	cc.fr.WriteSettings(initialSettings...)
 
 	// Send WINDOW_UPDATE with custom or default connection flow
-	connFlow := t.ConnectionFlow
-	if connFlow == 0 {
-		connFlow = uint32(conf.MaxUploadBufferPerConnection)
-	}
+	connFlow := receiveWindow - initialWindowSize
 	cc.fr.WriteWindowUpdate(0, connFlow)
 
 	// Send PRIORITY frames if configured (for fingerprinting)
@@ -1154,7 +1158,7 @@ func (t *Transport) newClientConn(c net.Conn, singleUse bool, internalStateHook 
 		cc.fr.WritePriority(priority.StreamID, priority.PriorityParam)
 	}
 
-	cc.inflow.init(conf.MaxUploadBufferPerConnection+initialWindowSize, time.Now())
+	cc.inflow.init(int32(receiveWindow), time.Now())
 	cc.bw.Flush()
 	if cc.werr != nil {
 		cc.Close()

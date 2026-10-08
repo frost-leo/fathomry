@@ -106,6 +106,8 @@ const (
 	FacilityTLSClient Facility = 0x201
 	// FacilitySurf owns controlled Surf HTTP and multipart capabilities.
 	FacilitySurf Facility = 0x202
+	// FacilityHTTPcloak owns controlled HTTPcloak HTTP capabilities.
+	FacilityHTTPcloak Facility = 0x203
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -157,6 +159,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityNetHTTP, Module: "fathomry", Component: "http_nethttp"},
 		{Facility: FacilityTLSClient, Module: "fathomry", Component: "http_tlsclient"},
 		{Facility: FacilitySurf, Module: "fathomry", Component: "http_surf"},
+		{Facility: FacilityHTTPcloak, Module: "fathomry", Component: "http_httpcloak"},
 	}
 }
 
