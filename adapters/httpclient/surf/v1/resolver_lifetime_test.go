@@ -43,7 +43,7 @@ func reviewBeginResolver(t *testing.T, owner *Owner, ctx context.Context) <-chan
 	t.Helper()
 	finished := make(chan reviewResolverAnswer, 1)
 	go func() {
-		input, _ := http.NewRequest("GET", "https://review-resolver.invalid:443/", nil)
+		input, _ := http.NewRequest("GET", "https://review-resolver.invalid.:443/", nil)
 		stream, receipt, err := owner.Client().Open(ctx, input)
 		if stream != nil {
 			err = errors.Join(err, stream.Close(context.Background()))

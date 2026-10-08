@@ -129,7 +129,7 @@ func TestNativeResolverPacketFramingAndRecovery(t *testing.T) {
 	quota := &reviewDNSQuota{}
 	client := reviewNativeResolverClient(t, resolver, quota)
 	endpoint, _ := url.Parse(origin.URL)
-	endpoint.Host = net.JoinHostPort("review-resolver.invalid", endpoint.Port())
+	endpoint.Host = net.JoinHostPort("review-resolver.invalid.", endpoint.Port())
 	input, _ := http.NewRequestWithContext(testContext(t), "GET", endpoint.String(), nil)
 	refused := client.FathomryRequest(input).Do()
 	var dnsError *net.DNSError
@@ -193,7 +193,7 @@ func TestNativeResolverPartialConnectionCleanup(t *testing.T) {
 			}}
 			quota := &reviewDNSQuota{}
 			client := reviewNativeResolverClient(t, resolver, quota)
-			input, _ := http.NewRequestWithContext(testContext(t), "GET", "http://review-resolver.invalid:443/", nil)
+			input, _ := http.NewRequestWithContext(testContext(t), "GET", "http://review-resolver.invalid.:443/", nil)
 			result := client.FathomryRequest(input).Do()
 			if !result.IsErr() {
 				t.Fatal("partial/nil DNS constructor dispatched request")
@@ -231,7 +231,7 @@ func TestNativeResolverCanceledCreatorKeepsHealthySharedLookup(t *testing.T) {
 	firstCtx, cancelFirst := context.WithCancel(testContext(t))
 	defer cancelFirst()
 	first := make(chan error, 1)
-	go func() { _, err := selected.LookupIPAddr(firstCtx, "review-resolver.invalid"); first <- err }()
+	go func() { _, err := selected.LookupIPAddr(firstCtx, "review-resolver.invalid."); first <- err }()
 	select {
 	case <-entered:
 	case <-testContext(t).Done():
@@ -249,7 +249,7 @@ func TestNativeResolverCanceledCreatorKeepsHealthySharedLookup(t *testing.T) {
 	}
 	second := make(chan lookupResult, 1)
 	go func() {
-		addresses, err := selected.LookupIPAddr(healthy, "review-resolver.invalid")
+		addresses, err := selected.LookupIPAddr(healthy, "review-resolver.invalid.")
 		second <- lookupResult{addresses: addresses, err: err}
 	}()
 	<-secondStarted

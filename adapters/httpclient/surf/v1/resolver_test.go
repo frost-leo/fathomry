@@ -282,7 +282,7 @@ func TestPublicCustomResolverSuccessAndRefusal(t *testing.T) {
 					t.Fatal("offline resolver selection contacted a peer")
 				}
 				endpoint, _ := url.Parse(peer.URL)
-				endpoint.Host = net.JoinHostPort("review-resolver.invalid", endpoint.Port())
+				endpoint.Host = net.JoinHostPort("review-resolver.invalid.", endpoint.Port())
 				input, _ := http.NewRequest("GET", endpoint.String(), nil)
 				receipt, err := owner.Client().Do(testContext(t), testContext(t), input)
 				value, final := reviewPublicSettled(t, dependencies, receipt)
