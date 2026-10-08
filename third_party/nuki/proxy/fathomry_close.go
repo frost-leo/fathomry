@@ -49,9 +49,9 @@ func (dialer *Dialer) Close() error {
 	}
 	dialer.h3DialLock.Unlock()
 	if closedOnly(result) {
-		return nil
+		return dialer.cleanup
 	}
-	return result
+	return errors.Join(dialer.cleanup, result)
 }
 
 func closedOnly(err error) bool {

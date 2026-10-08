@@ -28,6 +28,8 @@ const (
 	ErrCodeVersionFallback          ErrCode = 0x110
 	ErrCodeDatagramError            ErrCode = 0x33
 	ErrCodeQPACKDecompressionFailed ErrCode = 0x200
+	ErrCodeQPACKEncoderStreamError  ErrCode = 0x201
+	ErrCodeQPACKDecoderStreamError  ErrCode = 0x202
 )
 
 func (e ErrCode) String() string {
@@ -40,6 +42,10 @@ func (e ErrCode) String() string {
 
 func (e ErrCode) string() string {
 	switch e {
+	case ErrCodeQPACKEncoderStreamError:
+		return "QPACK_ENCODER_STREAM_ERROR"
+	case ErrCodeQPACKDecoderStreamError:
+		return "QPACK_DECODER_STREAM_ERROR"
 	case ErrCodeNoError:
 		return "H3_NO_ERROR"
 	case ErrCodeGeneralProtocolError:

@@ -33,18 +33,20 @@ import (
 //     dials its own QUIC connections and shares nothing. The racer is nil when
 //     HTTP/3 is unavailable (no h3 profile, disabled, or the dialer can't).
 type RoundTripper struct {
-	validationErr error
-	life          *nativeLife
-	closeMu       sync.Mutex
-	profile       profiles.ClientProfile
-	dialer        proxy.ContextDialer
-	pinner        *Pinner
-	tracker       bandwidth.Tracker
+	fathomryResolver *net.Resolver
+	validationErr    error
+	life             *nativeLife
+	closeMu          sync.Mutex
+	profile          profiles.ClientProfile
+	dialer           proxy.ContextDialer
+	pinner           *Pinner
+	tracker          bandwidth.Tracker
 
 	tlsConf  *tls.Config
 	quicConf *quic.Config
 
 	clientSessionCache tls.ClientSessionCache
+	ownedSessionCache  *ownedSessionCache
 	disableIPV4        bool
 	disableIPV6        bool
 
@@ -55,9 +57,11 @@ type RoundTripper struct {
 
 func NewRoundTripper(profile profiles.ClientProfile, dialer proxy.ContextDialer, pinner *Pinner, tracker bandwidth.Tracker, tlsConf *tls.Config, quicConf *quic.Config, opts *TransportOptions) *RoundTripper {
 	clientSessionCache := tlsConf.ClientSessionCache
+	var ownedCache *ownedSessionCache
 	spec, validationErr := clientHelloSpec(profile)
 	if clientSessionCache == nil && supportsSessionResumption(spec) {
-		clientSessionCache = tls.NewLRUClientSessionCache(32)
+		ownedCache = newOwnedSessionCache()
+		clientSessionCache = ownedCache
 	}
 
 	var disableKeepAlives bool
@@ -90,6 +94,7 @@ func NewRoundTripper(profile profiles.ClientProfile, dialer proxy.ContextDialer,
 		quicConf: quicConf,
 
 		clientSessionCache: clientSessionCache,
+		ownedSessionCache:  ownedCache,
 		disableIPV4:        disableIPV4,
 		disableIPV6:        disableIPV6,
 	}
@@ -332,7 +337,7 @@ func (rt *RoundTripper) dialQuic(ctx context.Context, addr string, tlscfg *tls.C
 	defer rt.life.work.Done()
 	ctx, cancel := rt.life.context(ctx)
 	defer cancel()
-	udpaddr, err := resolveUDP(ctx, rt.restrict("udp"), addr)
+	udpaddr, err := resolveUDPWith(ctx, rt.restrict("udp"), addr, rt.fathomryResolver)
 	if err != nil {
 		return nil, err
 	}
