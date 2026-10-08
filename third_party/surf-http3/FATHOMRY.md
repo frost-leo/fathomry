@@ -23,7 +23,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 - Module: `github.com/enetx/http3 v1.0.9`.
 - Origin: `ba6a50293c3c477f83648f3faa9e58adaa807206`.
-- Compatibility revision: `v3`.
+- Compatibility revision: `v4`.
 - Original source hashes: [UPSTREAM.json](UPSTREAM.json).
 
 Native request-writing goroutines retain registered work through body writes,
@@ -55,6 +55,15 @@ Read cancellation never uses QUIC's completed send-half context. A local decoded
 header limit cancels only its section; malformed references/instructions and critical
 stream failures use their actual connection error codes. Normal connection shutdown
 does not manufacture protocol failure when the QUIC context notification is delayed.
+
+Revision v4 observes peer STOP_SENDING on an idle outgoing decoder critical stream
+without waiting for another encoder instruction or feedback write. Connection
+shutdown still joins the same worker; no polling or additional goroutine is added.
+The selected QUIC receive API exposes a request-stream reset through a subsequent
+read, not a receive context. A section already blocked on QPACK retains its owned
+wait until table progress, request cancellation/timeout or connection shutdown;
+immediate remote-reset notification is not promised. A completed send half or
+normal FIN must not cancel a valid section awaiting encoder instructions.
 
 The selected upstream module archive and inspected upstream license endpoint provide no standalone
 LICENSE file. The upstream README identifies its quic-go HTTP/3 basis, but that

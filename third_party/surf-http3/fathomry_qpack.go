@@ -224,6 +224,9 @@ func (state *qpackConnection) writeFeedback() {
 			select {
 			case <-ctx.Done():
 				return
+			case <-stream.Context().Done():
+				state.fail(ErrCodeClosedCriticalStream, context.Cause(stream.Context()))
+				return
 			case <-state.notify:
 			}
 			continue
