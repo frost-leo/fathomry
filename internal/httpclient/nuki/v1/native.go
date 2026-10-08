@@ -35,6 +35,7 @@ import (
 	http "github.com/nukilabs/http"
 	"github.com/nukilabs/http/http2"
 	quic "github.com/nukilabs/quic-go"
+	http3 "github.com/nukilabs/quic-go/http3"
 	"github.com/nukilabs/quic-go/qlogwriter"
 	sdk "github.com/nukilabs/tlsclient"
 	"github.com/nukilabs/tlsclient/bandwidth"
@@ -49,6 +50,13 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 	if err := boundNativeContainers(input); err != nil {
 		return NativeOptionsV1{}, err
 	}
+	if input.ProxyTLS != nil {
+		proxyInput := input
+		proxyInput.TLS = input.ProxyTLS
+		if err := boundNativeContainers(proxyInput); err != nil {
+			return NativeOptionsV1{}, err
+		}
+	}
 	result := input
 	profile := *input.Profile
 	if len(profile.PseudoHeaderOrder) > 16 {
@@ -56,7 +64,7 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 	}
 	profile.PseudoHeaderOrder = slices.Clone(profile.PseudoHeaderOrder)
 	if profile.H2 != nil {
-		if len(profile.H2.Settings) > 128 || len(profile.H2.Priorities) > 128 || profile.H2.ConnectionFlow > 1<<31-1 {
+		if len(profile.H2.Settings) > 128 || len(profile.H2.Priorities) > 128 || profile.H2.ConnectionFlow > (1<<31-1)-65535 {
 			return result, failure(ErrInput, "http2-profile")
 		}
 		copied := *profile.H2
@@ -77,7 +85,14 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 		}
 		copied := *profile.H3
 		copied.Settings = slices.Clone(copied.Settings)
+		seen := make(map[uint64]bool, len(copied.Settings))
 		for _, setting := range copied.Settings {
+			if setting.ID >= 1<<62 || setting.Val >= 1<<62 || setting.ID >= 2 && setting.ID <= 5 ||
+				setting.ID != http3.SettingGrease && seen[setting.ID] ||
+				(setting.ID == http3.SettingExtendedConnect || setting.ID == http3.SettingH3Datagram) && setting.Val > 1 {
+				return result, failure(ErrInput, "http3-setting")
+			}
+			seen[setting.ID] = true
 			if setting.ID == 1 && setting.Val > 64<<20 || setting.ID == 7 && setting.Val > 4096 {
 				return result, failure(ErrInput, "qpack-bound")
 			}
@@ -86,6 +101,12 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 	}
 	result.Profile = &profile
 	result.TLS = cloneTLS(input.TLS)
+	result.ProxyTLS = cloneTLS(input.ProxyTLS)
+	resolver := input.Resolver
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
+	result.Resolver = &net.Resolver{PreferGo: resolver.PreferGo, StrictErrors: resolver.StrictErrors, Dial: resolver.Dial}
 	if input.QUIC == nil {
 		result.QUIC = &quic.Config{}
 	} else {
@@ -101,7 +122,7 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 		copied := *input.Transport
 		result.Transport = &copied
 	}
-	if len(input.Before) > 32 || len(input.After) > 32 {
+	if len(input.Before) > MaxNativeHooks || len(input.After) > MaxNativeHooks {
 		return result, failure(ErrInput, "hooks")
 	}
 	result.Before, result.After = slices.Clone(input.Before), slices.Clone(input.After)
@@ -118,6 +139,9 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 	if result.TLS.GetCertificate != nil || result.TLS.GetConfigForClient != nil || result.TLS.WrapSession != nil || result.TLS.UnwrapSession != nil {
 		return result, failure(ErrUnsupported, "server-tls-callback")
 	}
+	if result.ProxyTLS.GetCertificate != nil || result.ProxyTLS.GetConfigForClient != nil || result.ProxyTLS.WrapSession != nil || result.ProxyTLS.UnwrapSession != nil {
+		return result, failure(ErrUnsupported, "server-proxy-tls-callback")
+	}
 	if input.Pinner != nil {
 		pins, automatic, err := input.Pinner.BoundedPinsSnapshot(256, 32)
 		if err != nil {
@@ -133,7 +157,7 @@ func copyNative(input NativeOptionsV1) (NativeOptionsV1, error) {
 		canonical := make(map[string][]string, len(pins))
 		for host, values := range pins {
 			target, err := canonicalEndpoint(host)
-			if err != nil || len(values) == 0 || len(values) > 32 {
+			if err != nil || len(target) > 8192 || len(values) == 0 || len(values) > 32 {
 				return result, failure(ErrInput, "pins", err)
 			}
 			for _, value := range values {
@@ -179,12 +203,6 @@ func cloneTLS(input *tls.Config) *tls.Config {
 	for index := range result.EncryptedClientHelloKeys {
 		result.EncryptedClientHelloKeys[index].Config = slices.Clone(input.EncryptedClientHelloKeys[index].Config)
 		result.EncryptedClientHelloKeys[index].PrivateKey = slices.Clone(input.EncryptedClientHelloKeys[index].PrivateKey)
-	}
-	if input.RootCAs != nil {
-		result.RootCAs = input.RootCAs.Clone()
-	}
-	if input.ClientCAs != nil {
-		result.ClientCAs = input.ClientCAs.Clone()
 	}
 	return result
 }
@@ -280,12 +298,18 @@ func (owner *owner) protectNative(native NativeOptionsV1) NativeOptionsV1 {
 		if spec == nil {
 			return nil
 		}
+		if err := sdk.ValidateFathomryProfile(spec, owner.settings.MaxProfileBytes); err != nil {
+			panic(err)
+		}
 		if owner.settings.Mode == HTTP1Only {
 			for _, extension := range spec.Extensions {
 				if alpn, ok := extension.(*tls.ALPNExtension); ok {
 					alpn.AlpnProtocols = []string{"http/1.1"}
 				}
 			}
+		}
+		if err := sdk.ValidateFathomryProfile(spec, owner.settings.MaxProfileBytes); err != nil {
+			panic(err)
 		}
 		return spec
 	}
@@ -302,60 +326,61 @@ func (owner *owner) protectNative(native NativeOptionsV1) NativeOptionsV1 {
 			return callback(metadataRequest(req))
 		}
 	}
-	config := native.TLS
-	if callback := config.VerifyPeerCertificate; callback != nil {
-		config.VerifyPeerCertificate = func(raw [][]byte, chains [][]*x509.Certificate) error {
-			if !owner.callbacks.enter() {
-				return failure(ErrState, "tls-callback")
+	for _, config := range []*tls.Config{native.TLS, native.ProxyTLS} {
+		if callback := config.VerifyPeerCertificate; callback != nil {
+			config.VerifyPeerCertificate = func(raw [][]byte, chains [][]*x509.Certificate) error {
+				if !owner.callbacks.enter() {
+					return failure(ErrState, "tls-callback")
+				}
+				defer owner.callbacks.leave()
+				return callback(raw, chains)
 			}
-			defer owner.callbacks.leave()
-			return callback(raw, chains)
 		}
-	}
-	if callback := config.VerifyConnection; callback != nil {
-		config.VerifyConnection = func(state tls.ConnectionState) error {
-			if !owner.callbacks.enter() {
-				return failure(ErrState, "tls-callback")
+		if callback := config.VerifyConnection; callback != nil {
+			config.VerifyConnection = func(state tls.ConnectionState) error {
+				if !owner.callbacks.enter() {
+					return failure(ErrState, "tls-callback")
+				}
+				defer owner.callbacks.leave()
+				return callback(state)
 			}
-			defer owner.callbacks.leave()
-			return callback(state)
 		}
-	}
-	if callback := config.EncryptedClientHelloRejectionVerify; callback != nil {
-		config.EncryptedClientHelloRejectionVerify = func(state tls.ConnectionState) error {
-			if !owner.callbacks.enter() {
-				return failure(ErrState, "tls-callback")
+		if callback := config.EncryptedClientHelloRejectionVerify; callback != nil {
+			config.EncryptedClientHelloRejectionVerify = func(state tls.ConnectionState) error {
+				if !owner.callbacks.enter() {
+					return failure(ErrState, "tls-callback")
+				}
+				defer owner.callbacks.leave()
+				return callback(state)
 			}
-			defer owner.callbacks.leave()
-			return callback(state)
 		}
-	}
-	if callback := config.GetClientCertificate; callback != nil {
-		config.GetClientCertificate = func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-			if !owner.callbacks.enter() {
-				return nil, failure(ErrState, "tls-callback")
+		if callback := config.GetClientCertificate; callback != nil {
+			config.GetClientCertificate = func(info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+				if !owner.callbacks.enter() {
+					return nil, failure(ErrState, "tls-callback")
+				}
+				defer owner.callbacks.leave()
+				return callback(info)
 			}
-			defer owner.callbacks.leave()
-			return callback(info)
 		}
-	}
-	if callback := config.Time; callback != nil {
-		config.Time = func() time.Time {
-			if !owner.callbacks.enter() {
-				return time.Time{}
+		if callback := config.Time; callback != nil {
+			config.Time = func() time.Time {
+				if !owner.callbacks.enter() {
+					return time.Time{}
+				}
+				defer owner.callbacks.leave()
+				return callback()
 			}
-			defer owner.callbacks.leave()
-			return callback()
 		}
-	}
-	if config.Rand != nil {
-		config.Rand = guardedReader{owner, config.Rand}
-	}
-	if config.KeyLogWriter != nil {
-		config.KeyLogWriter = guardedWriter{owner, config.KeyLogWriter}
-	}
-	if config.ClientSessionCache != nil {
-		config.ClientSessionCache = guardedCache{owner, config.ClientSessionCache}
+		if config.Rand != nil {
+			config.Rand = guardedReader{owner, config.Rand}
+		}
+		if config.KeyLogWriter != nil {
+			config.KeyLogWriter = guardedWriter{owner, config.KeyLogWriter}
+		}
+		if config.ClientSessionCache != nil {
+			config.ClientSessionCache = guardedCache{owner, config.ClientSessionCache}
+		}
 	}
 	if native.Jar != nil {
 		native.Jar = &guardedJar{owner: owner, jar: native.Jar}

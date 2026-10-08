@@ -97,6 +97,12 @@ func (c *h3conn) live() bool {
 	return c.err == nil && c.cc != nil && c.cc.Context().Err() == nil
 }
 
+func (c *h3conn) retire() {
+	if c.cc != nil {
+		_ = c.cc.CloseWithError(quic.ApplicationErrorCode(http3.ErrCodeNoError), "")
+	}
+}
+
 // connection returns a QUIC connection to serve req over HTTP/3. It returns
 // errUseTCP when HTTP/3 should not be used and the request — still unsent —
 // should go over TCP instead. A forced request that cannot reach HTTP/3 returns
@@ -175,6 +181,7 @@ func (r *racer) acquire(addr string, forced bool) (*h3conn, error) {
 				return nil, errUseTCP
 			}
 			fails = c.fails // carry the count forward so backoff escalates
+			c.retire()
 			delete(r.conns, addr)
 		default:
 			return c, nil // dial in flight
@@ -240,15 +247,9 @@ func (r *racer) markFailed(c *h3conn, err error) {
 	c.retryAt = time.Now().Add(backoff)
 }
 
-// forget drops a connection that failed mid-request and closes it. cc is the
-// connection handed out by connection; the entry is only removed if it still
-// holds that same connection.
-//
-// It does not close the connection. HTTP/3 multiplexes many requests over one
-// connection, so closing it here would abort every other in-flight request on
-// it (surfacing to them as H3_NO_ERROR). A dead connection is already closing on
-// its own; a still-live one stays usable for its other streams, so only a dead
-// connection is evicted from the pool for the next request to redial.
+// forget joins a dead connection's HTTP/3 work before removing its origin slot.
+// Raw QUIC termination does not prove its control workers have exited. A live
+// multiplexed connection remains usable after an isolated stream failure.
 func (r *racer) forget(addr string, cc *http3.ClientConn) {
 	if cc.Context().Err() == nil {
 		return // still alive: an isolated stream failure, keep the connection
@@ -258,6 +259,7 @@ func (r *racer) forget(addr string, cc *http3.ClientConn) {
 		select {
 		case <-c.ready:
 			if c.cc == cc {
+				c.retire()
 				delete(r.conns, addr)
 			}
 		default:
@@ -359,6 +361,7 @@ func (r *racer) pruneLocked() {
 			select {
 			case <-c.ready:
 				if !c.live() && now.After(c.retryAt) {
+					c.retire()
 					delete(r.conns, addr)
 				}
 			default:
@@ -381,9 +384,7 @@ func (r *racer) close() {
 	r.transport.CloseIdleConnections()
 
 	for _, c := range conns {
-		if c.cc != nil {
-			c.cc.CloseWithError(quic.ApplicationErrorCode(http3.ErrCodeNoError), "")
-		}
+		c.retire()
 	}
 }
 

@@ -44,9 +44,11 @@ const (
 )
 
 // NativeOptionsV1 is runtime contract 1. Profile is required. Containers are
-// copied, while functions, private keys, randomness, session caches, Jar and
+// copied, while functions, private keys, immutable trust pools, randomness, session caches, Jar and
 // Tracker are borrowed until assembly release. Borrowed objects must support
 // concurrent use and may not retain callback arguments or start unaccounted work.
+// RootCAs/ClientCAs pointers are frozen but their pools are not copied or enumerated.
+// Keep pools immutable through source release; clone them before preparing changed trust.
 // Profile factories must transfer fresh, independent mutable ClientHello specs.
 // Dial/Listen callbacks transfer one physical socket and its full ownership.
 // ListenPacket receives the native remote-address hint, not a local bind address.
@@ -56,8 +58,12 @@ const (
 // discovery. Protocol selection and source ceilings constrain native inputs.
 type NativeOptionsV1 struct {
 	private
-	Profile       *profiles.ClientProfile
-	TLS           *tls.Config
+	Profile *profiles.ClientProfile
+	TLS     *tls.Config
+	// ProxyTLS never inherits origin credentials or trust; nil uses normal verification.
+	ProxyTLS *tls.Config
+	// Resolver configuration is copied; Dial remains a source-owned cooperative callback.
+	Resolver      *net.Resolver
 	QUIC          *quic.Config
 	Transport     *sdk.TransportOptions
 	Pinner        *sdk.Pinner
@@ -71,6 +77,9 @@ type NativeOptionsV1 struct {
 	Before                        []func(context.Context, *http.Request) error
 	After                         []func(context.Context, Metadata) error
 }
+
+// MaxNativeHooks bounds each borrowed hook list before copying its descriptors.
+const MaxNativeHooks = 32
 
 // OptionsV1 configures one externally named source. Version zero selects 1.
 // Native profile selection is required and never inferred from the Name.
@@ -90,6 +99,10 @@ type OptionsV1 struct {
 	QueuedCalls          int
 	MaxRoutes            int
 	MaxConnections       int
+	// MaxProxyTunnels counts retained CONNECT/CONNECT-UDP streams, not shared proxy sockets.
+	MaxProxyTunnels int
+	// MaxProfileBytes bounds initial encoded lazy ClientHello installation.
+	MaxProfileBytes      int64
 	MaxOrigins           int
 	MaxRequestBytes      int64
 	MaxResponseBytes     int64
@@ -113,6 +126,8 @@ type settings struct {
 	QueuedCalls          int           `json:"queued_calls"`
 	MaxRoutes            int           `json:"max_routes"`
 	MaxConnections       int           `json:"max_connections"`
+	MaxProxyTunnels      int           `json:"max_proxy_tunnels"`
+	MaxProfileBytes      int64         `json:"max_profile_bytes"`
 	MaxOrigins           int           `json:"max_origins"`
 	MaxRequestBytes      int64         `json:"max_request_bytes"`
 	MaxResponseBytes     int64         `json:"max_response_bytes"`
@@ -131,6 +146,7 @@ func defaults(options OptionsV1) settings {
 		FollowRedirects: options.FollowRedirects, DisableDecompression: options.DisableDecompression,
 		MaxActive: options.MaxActive, QueuedCalls: options.QueuedCalls, MaxRoutes: options.MaxRoutes,
 		MaxConnections: options.MaxConnections, MaxOrigins: options.MaxOrigins,
+		MaxProxyTunnels: options.MaxProxyTunnels, MaxProfileBytes: options.MaxProfileBytes,
 		MaxRequestBytes: options.MaxRequestBytes, MaxResponseBytes: options.MaxResponseBytes,
 		MaxEncodedBytes: options.MaxEncodedBytes, MaxHeaderBytes: options.MaxHeaderBytes,
 		MaxNativeHeaderBytes: options.MaxNativeHeaderBytes, MaxExchanges: options.MaxExchanges, MaxReplays: options.MaxReplays,
@@ -146,6 +162,12 @@ func defaults(options OptionsV1) settings {
 	}
 	if value.MaxConnections == 0 {
 		value.MaxConnections = 32
+	}
+	if value.MaxProxyTunnels == 0 {
+		value.MaxProxyTunnels = 64
+	}
+	if value.MaxProfileBytes == 0 {
+		value.MaxProfileBytes = 1 << 20
 	}
 	if value.MaxOrigins == 0 {
 		value.MaxOrigins = 64
@@ -187,6 +209,7 @@ func validate(value settings) error {
 	if value.Mode != Native && value.Mode != HTTP1Only && value.Mode != HTTP2Negotiated && value.Mode != HTTP3Only ||
 		value.MaxActive < 1 || value.MaxActive > 1024 || value.QueuedCalls < 0 || value.QueuedCalls > 4096 ||
 		value.MaxRoutes < 1 || value.MaxRoutes > 1024 || value.MaxConnections < 1 || value.MaxConnections > 4096 ||
+		value.MaxProxyTunnels < 1 || value.MaxProxyTunnels > 4096 || value.MaxProfileBytes < 1024 || value.MaxProfileBytes > 1<<20 ||
 		value.MaxOrigins < 1 || value.MaxOrigins > 1024 || value.MaxExchanges < 1 || value.MaxExchanges > 128 ||
 		value.MaxReplays < 1 || value.MaxReplays > 128 ||
 		value.MaxHeaderBytes < 1024 || value.MaxHeaderBytes > 1<<20 ||
@@ -209,7 +232,7 @@ func validate(value settings) error {
 
 func (value settings) reservation() int64 {
 	return value.MaxRequestBytes + 2*value.MaxResponseBytes + value.MaxEncodedBytes +
-		2*value.MaxNativeHeaderBytes + value.MaxHeaderBytes*int64(4*value.MaxExchanges+8) + 64<<20
+		2*value.MaxNativeHeaderBytes + value.MaxHeaderBytes*int64(4*value.MaxExchanges+12) + 2*value.MaxProfileBytes + 64<<20
 }
 func (value settings) evidenceBytes() int64 {
 	return value.MaxResponseBytes + 4*value.MaxHeaderBytes + int64(value.MaxReplays+value.MaxExchanges)*1024 + 4096

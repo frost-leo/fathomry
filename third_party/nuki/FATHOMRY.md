@@ -19,15 +19,15 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Local Nuki compatibility work
 
-**Status:** local correction v1 for the internal Nuki Provider. Native
+**Status:** local correction v2 for the internal and public Nuki capabilities. Native
 regressions and loopback behavior do not establish production support or resolve
-the separate SOCKS publication-permission concern.
+the separate HTTP/SOCKS publication-permission concerns.
 
 ## Source and separate versions
 
 - SDK: github.com/nukilabs/tlsclient v1.8.8.
 - Tag and module-proxy origin: a39f4b559907b309f376eb1022172f03d35102e2.
-- Local correction: v1, exported as FathomryCompatibilityRevision.
+- Local correction: v2, exported as FathomryCompatibilityRevision.
 - Go minimum: upstream 1.27; the owner permits project Go 1.27.0.
 - Configuration/native/request contracts and Provider import major remain separate.
 - UPSTREAM.json records original runtime-file hashes and module provenance.
@@ -62,6 +62,12 @@ the separate SOCKS publication-permission concern.
 This is not a general certificate for all native APIs. No business profile,
 profile allowlist, token/Cookie refresh, business retry or Provider rotation is added.
 
+The automatic 32-entry session cache is source-owned and cleared on terminal
+Close; explicitly supplied caches remain borrowed and are never cleared.
+Source-wide tunnel admission covers both HTTP CONNECT and CONNECT-UDP, separately
+from the physical proxy socket count. This bounds multiplexed H2 origin handshakes
+and cached tunnels rather than treating one proxy socket as one origin resource.
+
 ## Dependency corrections and verification
 
 The separately documented [QUIC](../nuki-quic-go/FATHOMRY.md) and
@@ -69,10 +75,31 @@ The separately documented [QUIC](../nuki-quic-go/FATHOMRY.md) and
 and bounded dynamic decoding. [SOCKS](../nuki-socks/FATHOMRY.md) retains control
 and datagram socket ownership. Root go.mod TODOs and source manifests keep these
 revisions separate from official releases and other Providers.
+The owner-authorized [HTTP correction](../nuki-http/FATHOMRY.md) retains v1.3.2
+while making advertised H2 receive windows authoritative, including omitted and
+explicit-zero settings. Its source-notice/redistribution record remains explicit.
 
 The Provider suite exercises these modules using the actual consumer dependency
 versions, with offline/restricted-cache controls and a combined existing-Provider
-consumer. Native MASQUE write deadlines remain unqualified by the Provider.
+consumer. The #121 correction adds bounded lazy ClientHello installation,
+explicit resolver authority and controlled CONNECT-UDP templates with separate
+proxy TLS. Tunnel addresses are fixed; setup interruption, read/write deadlines
+and terminal capsule/I/O cleanup are joined. A source-wide tunnel bound is
+separate from physical sockets. Context-aware native datagram enqueue replaces
+uncancelable timeout wrappers. Independent local qualification assumes sufficient
+encapsulation MTU and does not qualify arbitrary or production routes.
+CONNECT-UDP ingress now combines bounded context-zero DATAGRAM capsules and
+QUIC datagrams; unknown capsules/contexts are streamed past. The capsule parser
+retains clean EOF versus incomplete framing/reset, and Close joins both receive
+workers, entered I/O and stopped deadline callbacks before releasing the tunnel.
+The selected, already declared httpsfv v1.1.0 parses Capsule-Protocol as a Boolean
+Item with ignorable parameters. Duplicate/malformed negotiation and prohibited
+content fields/statuses cannot establish a tunnel. No owning PacketConn or tunnel
+is added to the public Adapter, and unreliable queue acceptance is not delivery.
+Dead origin entries and cached MASQUE outer clients are synchronously retired
+through the owning HTTP/3 ClientConn before their slot/pointer is discarded.
+Raw QUIC context termination alone is not a control-worker join. Live multiplexed
+connections remain in the pool after isolated stream failures.
 Private original failures, experiments and owner/agent reviews must not be
 uploaded with this source. Repeat the consuming-graph gates before dependency
 upgrades and integration changes.

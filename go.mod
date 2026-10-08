@@ -263,6 +263,8 @@ replace github.com/bogdanfinn/tls-client => ./third_party/tls-client
 
 replace github.com/nukilabs/tlsclient => ./third_party/nuki
 
+replace github.com/nukilabs/http => ./third_party/nuki-http
+
 // TODO(gh-53): Retire after upstream supports owned generic UDP sockets and
 // joins SOCKS control-connection cleanup under the consuming dependency graph.
 replace github.com/nukilabs/socks => ./third_party/nuki-socks

@@ -152,6 +152,7 @@ The authoritative first-party manifest is
 | 0x201 | fathomry / http_tlsclient | [Native-profile HTTP, racing, streams and measured bandwidth](../../adapters/httpclient/tlsclient/v1/interface.md) |
 | 0x202 | fathomry / http_surf | [Surf protocol, incremental upload and response ownership](../../adapters/httpclient/surf/v1/interface.md) |
 | 0x203 | fathomry / http_httpcloak | [Controlled HTTPcloak HTTP capabilities](../../adapters/httpclient/httpcloak/v1/interface.md) |
+| 0x204 | fathomry / http_nuki | [Controlled Nuki HTTP capabilities](../../adapters/httpclient/nuki/v1/interface.md) |
 
 Unlisted first-party facilities cannot be used by definitions. Future modules add
 reviewed entries in their capability range. The previous unreleased settings slot

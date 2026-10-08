@@ -7,7 +7,6 @@ import (
 	"github.com/nukilabs/http"
 	"github.com/nukilabs/http/httptrace"
 	"io"
-	"sync"
 	"time"
 
 	"github.com/nukilabs/quic-go"
@@ -39,6 +38,7 @@ type datagramStream interface {
 // When writing to and reading from the stream, data is framed in HTTP/3 DATA frames.
 type Stream struct {
 	datagramStream
+	readScope   *requestQPACK
 	conn        *rawConn
 	frameParser *frameParser
 
@@ -189,11 +189,10 @@ func (s *Stream) ReceiveDatagram(ctx context.Context) ([]byte, error) {
 // This is only needed for advanced use case, e.g. WebTransport and the various
 // MASQUE proxying protocols.
 type RequestStream struct {
-	upload          *requestUpload
-	cancelQPACK     func(uint64)
-	cancelQPACKOnce sync.Once
-	requestContext  context.Context
-	str             *Stream
+	upload         *requestUpload
+	readScope      *requestQPACK
+	requestContext context.Context
+	str            *Stream
 
 	responseBody io.ReadCloser // set by ReadResponse
 
@@ -276,8 +275,8 @@ func (s *RequestStream) Close() error {
 // See [quic.Stream.CancelRead] for more details.
 func (s *RequestStream) CancelRead(errorCode quic.StreamErrorCode) {
 	s.str.CancelRead(errorCode)
-	if s.cancelQPACK != nil {
-		s.cancelQPACKOnce.Do(func() { s.cancelQPACK(uint64(s.StreamID())) })
+	if s.readScope != nil {
+		s.readScope.finish(&quic.StreamError{StreamID: s.StreamID(), ErrorCode: errorCode})
 	}
 }
 
@@ -316,6 +315,16 @@ func (s *RequestStream) SetDeadline(t time.Time) error {
 // as the server might drop datagrams which it can't associate with an existing request.
 func (s *RequestStream) SendDatagram(b []byte) error {
 	return s.str.SendDatagram(b)
+}
+
+// SendDatagramContext bounds local send-queue waiting without canceling sibling streams.
+func (s *RequestStream) SendDatagramContext(ctx context.Context, b []byte) error {
+	if sender, ok := s.str.datagramStream.(interface {
+		SendDatagramContext(context.Context, []byte) error
+	}); ok {
+		return sender.SendDatagramContext(ctx, b)
+	}
+	return errors.New("context-aware datagram sender unavailable")
 }
 
 // ReceiveDatagram receives HTTP Datagrams (RFC 9297).
@@ -392,19 +401,31 @@ func (s *RequestStream) ReadResponse() (*http.Response, error) {
 		s.str.CancelWrite(quic.StreamErrorCode(ErrCodeRequestIncomplete))
 		return nil, fmt.Errorf("http3: failed to read response headers: %w", err)
 	}
-	decodeFn := s.decoder.DecodeForStreamContext(s.requestContext, int64(s.str.StreamID()), headerBlock, uint64(s.maxHeaderBytes))
+	decodeContext := s.requestContext
+	if decodeContext == nil {
+		decodeContext = context.Background()
+	}
+	if s.readScope != nil {
+		var stop func()
+		decodeContext, stop = s.readScope.section(decodeContext)
+		defer stop()
+	}
+	decodeFn := s.decoder.DecodeForStreamContext(decodeContext, int64(s.str.StreamID()), headerBlock, uint64(s.maxHeaderBytes))
 	var hfs []qpack.HeaderField
 	if s.str.qlogger != nil {
 		hfs = make([]qpack.HeaderField, 0, 16)
 	}
 	res := s.response
 	err = updateResponseFromHeaders(res, decodeFn, s.maxHeaderBytes, &hfs)
+	if s.readScope != nil {
+		s.readScope.client.classifyQPACK(decodeContext, err)
+	}
 	if s.str.qlogger != nil {
 		qlogParsedHeadersFrame(s.str.qlogger, s.str.StreamID(), hf, hfs)
 	}
 	if err != nil {
 		errCode := ErrCodeMessageError
-		if s.requestContext.Err() != nil {
+		if decodeContext.Err() != nil {
 			errCode = ErrCodeRequestCanceled
 		} else if _, ok := errors.AsType[*qpackError](err); ok {
 			errCode = ErrCodeQPACKDecompressionFailed

@@ -49,7 +49,10 @@ var defaultQuicConfig = &quic.Config{
 // ClientConn is an HTTP/3 client doing requests to a single remote server.
 type ClientConn struct {
 	qpackCancellations chan uint64
-	qpackDone          chan struct{}
+	controlMu          sync.Mutex
+	controlWork        sync.WaitGroup
+	controlActive      int
+	controlClosed      bool
 	conn               *quic.Conn
 	rawConn            *rawConn
 
@@ -131,21 +134,28 @@ func newClientConn(
 	// and (below) open our decoder stream to acknowledge inserts and sections.
 	qpackMaxTableCapacity := additionalSettings[SettingQpackMaxTableCapacity]
 	if qpackMaxTableCapacity > 0 {
-		c.decoder = qpack.NewDecoder(qpack.WithMaxTableCapacity(qpackMaxTableCapacity))
-		c.decoder.SetDecoderStream(&qpackControlWriter{conn: conn})
+		c.decoder = qpack.NewDecoder(qpack.WithMaxTableCapacity(qpackMaxTableCapacity), qpack.WithMaxBlockedStreams(additionalSettings[SettingQpackBlockedStreams]))
+		c.decoder.SetDecoderStream(&qpackControlWriter{client: c})
 		c.qpackCancellations = make(chan uint64, 128)
-		c.qpackDone = make(chan struct{})
-		go c.runQPACKCancellations()
-		c.rawConn.qpackEncoderStrHandler = func(str *quic.ReceiveStream) {
-			c.decoder.ParseEncoderStream(str)
-		}
+		c.startOwnedControl(c.runQPACKCancellations)
 	} else {
 		c.decoder = qpack.NewDecoder()
 	}
-	context.AfterFunc(conn.Context(), func() { _ = c.decoder.Close() })
+	c.rawConn.qpackEncoderStrHandler = c.handleEncoderStream
+	c.rawConn.qpackDecoderStrHandler = c.handleDecoderStream
+	c.rawConn.watchCriticalReceive = c.watchCriticalReceive
+	c.rawConn.watchCriticalSend = c.watchCriticalSend
+	c.rawConn.schedule = c.startOwnedControl
+	c.startOwnedControl(func() {
+		<-conn.Context().Done()
+		c.controlMu.Lock()
+		c.controlClosed = true
+		c.controlMu.Unlock()
+		_ = c.decoder.Close()
+	})
 
 	// send the SETTINGs frame, using 0-RTT data, if possible
-	go func() {
+	c.startOwnedControl(func() {
 		_, err := c.rawConn.openControlStream(&settingsFrame{
 			Datagram:            enableDatagrams,
 			Other:               additionalSettings,
@@ -159,7 +169,7 @@ func newClientConn(
 			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeInternalError), "")
 			return
 		}
-	}()
+	})
 	return c
 }
 
@@ -202,11 +212,15 @@ func (c *ClientConn) openRequestStream(
 	}
 
 	hstr := c.rawConn.TrackStream(str)
+	readScope := c.newRequestQPACK(hstr)
 	rsp := &http.Response{}
 	trace := httptrace.ContextClientTrace(ctx)
 	requestStream := newRequestStream(
 		newStream(hstr, c.rawConn, trace, func(r io.Reader, hf *headersFrame) error {
-			hdr, err := decodeTrailersContext(ctx, r, hf, maxHeaderBytes, c.decoder, c.qlogger, str.StreamID())
+			decodeContext, stop := readScope.section(ctx)
+			defer stop()
+			hdr, err := decodeTrailersContext(decodeContext, r, hf, maxHeaderBytes, c.decoder, c.qlogger, str.StreamID())
+			c.classifyQPACK(decodeContext, err)
 			if err != nil {
 				return err
 			}
@@ -221,7 +235,8 @@ func (c *ClientConn) openRequestStream(
 		rsp,
 	)
 	requestStream.requestContext = ctx
-	requestStream.cancelQPACK = c.cancelQPACK
+	requestStream.readScope = readScope
+	requestStream.str.readScope = readScope
 	return requestStream, nil
 }
 
@@ -271,7 +286,7 @@ func (c *ClientConn) handleControlStream(str *quic.ReceiveStream, fp *frameParse
 		hasActiveStreams := c.rawConn.hasActiveStreams()
 		// immediately close the connection if there are currently no active requests
 		if !hasActiveStreams {
-			c.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
+			c.conn.CloseWithError(quic.ApplicationErrorCode(ErrCodeNoError), "")
 			return
 		}
 	}
@@ -379,7 +394,7 @@ func (c *ClientConn) roundTrip(req *http.Request) (*http.Response, error) {
 
 	rsp, err := c.doRequest(req, str)
 	if err != nil { // if any error occurred
-		str.cancelQPACKOnce.Do(func() { c.cancelQPACK(uint64(str.StreamID())) })
+		str.CancelRead(quic.StreamErrorCode(ErrCodeRequestCanceled))
 		close(reqDone)
 		<-done
 		return nil, maybeReplaceError(err)
@@ -404,9 +419,7 @@ func (c *ClientConn) Settings() *Settings {
 // It is invalid to call this function after the connection was closed.
 func (c *ClientConn) CloseWithError(code quic.ApplicationErrorCode, msg string) error {
 	err := c.conn.CloseWithError(code, msg)
-	if c.qpackDone != nil {
-		<-c.qpackDone
-	}
+	c.closeOwnedControl()
 	return err
 }
 

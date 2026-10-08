@@ -234,6 +234,9 @@ func (rt *RoundTripper) Close() error {
 		_ = packet.close()
 	}
 	life.packetWork.Wait()
+	if rt.ownedSessionCache != nil {
+		rt.ownedSessionCache.close()
+	}
 	if closer, ok := rt.dialer.(io.Closer); ok {
 		life.record(closer.Close())
 	}

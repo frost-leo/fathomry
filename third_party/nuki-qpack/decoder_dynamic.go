@@ -90,6 +90,12 @@ func (d *Decoder) ParseEncoderStream(r io.Reader) error {
 		// the buffered instructions have been drained.
 		if br.Buffered() == 0 {
 			d.sendInsertCountIncrement()
+			d.mutex.Lock()
+			closed, cause := d.closed, d.closeErr
+			d.mutex.Unlock()
+			if closed {
+				return cause
+			}
 		}
 	}
 }
@@ -147,6 +153,9 @@ func (d *Decoder) parseEncoderInstruction(first byte, br *bufio.Reader) error {
 		}
 		d.mutex.Lock()
 		defer d.mutex.Unlock()
+		if d.closed {
+			return d.closeErr
+		}
 		return d.dt.setCapacity(capacity)
 	default: // 000xxxxx: Duplicate (Section 4.3.4)
 		relIdx, err := readIntFrom(first, 5, br)
@@ -155,6 +164,9 @@ func (d *Decoder) parseEncoderInstruction(first byte, br *bufio.Reader) error {
 		}
 		d.mutex.Lock()
 		defer d.mutex.Unlock()
+		if d.closed {
+			return d.closeErr
+		}
 		if err := d.dt.duplicate(relIdx); err != nil {
 			return err
 		}
@@ -168,6 +180,9 @@ func (d *Decoder) parseEncoderInstruction(first byte, br *bufio.Reader) error {
 func (d *Decoder) applyInsert(name, value string) error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
+	if d.closed {
+		return d.closeErr
+	}
 	if err := d.dt.insert(name, value); err != nil {
 		return err
 	}
@@ -178,17 +193,25 @@ func (d *Decoder) applyInsert(name, value string) error {
 // sendInsertCountIncrement emits an Insert Count Increment instruction
 // (RFC 9204, Section 4.4.3) acknowledging inserts not yet acknowledged.
 func (d *Decoder) sendInsertCountIncrement() {
+	d.writeGate <- struct{}{}
+	defer func() { <-d.writeGate }()
 	d.mutex.Lock()
 	delta := d.dt.insertCount - d.ackedInsertCount
 	if delta == 0 {
 		d.mutex.Unlock()
 		return
 	}
-	d.ackedInsertCount = d.dt.insertCount
+	count := d.dt.insertCount
 	d.mutex.Unlock()
 
 	buf := appendVarInt(nil, 6, delta) // 00xxxxxx
-	d.writeDecoderStream(buf)
+	if err := d.writeDecoderStreamLocked(context.Background(), buf); err != nil {
+		d.abort(err)
+		return
+	}
+	d.mutex.Lock()
+	d.ackedInsertCount = count
+	d.mutex.Unlock()
 }
 
 // sendSectionAcknowledgment emits a Section Acknowledgment instruction

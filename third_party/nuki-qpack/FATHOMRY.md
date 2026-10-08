@@ -19,7 +19,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Nuki QPACK compatibility correction
 
-**Status:** local revision v1 used by the Nuki QUIC correction, not a general
+**Status:** local revision v2 used by the Nuki QUIC correction, not a general
 certification of every peer/encoding.
 
 Source: github.com/nukilabs/qpack v0.7.0 at
@@ -34,6 +34,22 @@ before allocation. Decoder-control write failures retain their causes and short
 writes are errors. The Nuki HTTP3 integration supplies a context-aware atomic
 writer; a generic caller-provided io.Writer still has its declared cooperative
 lifetime.
+
+The #121 correction additionally checks the field section's Required Insert Count
+for indexed, name-reference and both post-base dynamic references. Existing table
+membership is insufficient: undeclared references are rejected before section
+acknowledgement. Base/index arithmetic is checked without unsigned wrap. Tests
+retain valid representations alongside zero/insufficient-count rejecting controls.
+
+Explicit terminal Decoder.Close clears owned dynamic-table entries under the
+existing mutex and wakes blocked decoders. It preserves the table object,
+immutable capacity bound, insert counters and any earlier encoder failure cause;
+later encoder instructions cannot recreate the released storage. Finite
+ParseEncoderStream EOF remains distinct and still permits decoding previously
+received entries until explicit Close. The retained positive codec helpers are
+not silently replaced by connection-level shutdown semantics. Joined H3 workers
+and table release do not imply immediate reclamation of every old request graph;
+the Internal operation budget separately covers retained native graphs.
 
 The existing background-context APIs remain available for native callers.
 This is the distinct github.com/nukilabs/qpack namespace; it does not replace or

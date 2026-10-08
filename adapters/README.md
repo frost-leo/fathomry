@@ -62,6 +62,7 @@ automatically own or construct the packages below it.
 | `httpclient/tlsclient/v1` | data-provider | [Explicit native profiles, protocol racing, finite/stream responses and measured TLS/TCP bandwidth](../docs/reference/adapters/httpclient/tlsclient/v1/interface.md) |
 | `httpclient/surf/v1` | data-provider | [Surf profiles, owned h2c and incremental multipart with explicit replay](../docs/reference/adapters/httpclient/surf/v1/interface.md) |
 | `httpclient/httpcloak/v1` | data-provider | [HTTPcloak native HTTP, controlled routes and response ownership](../docs/reference/adapters/httpclient/httpcloak/v1/interface.md) |
+| `httpclient/nuki/v1` | data-provider | [Nuki native HTTP, controlled routes and response ownership](../docs/reference/adapters/httpclient/nuki/v1/interface.md) |
 | `internal/errorbridge` | private | [Bounded error forwarding/inspection; no public registry or execution engine](../docs/reference/adapters/internal/errorbridge/interface.md) |
 
 Public package version and native SDK version are separate: for example, public

@@ -3,8 +3,10 @@ package http3
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/nukilabs/quic-go"
 )
@@ -21,13 +23,17 @@ const streamDatagramQueueLen = 32
 type stateTrackingStream struct {
 	*quic.Stream
 
-	sendDatagram func([]byte) error
-	hasData      chan struct{}
-	queue        [][]byte // TODO: use a ring buffer
+	sendDatagram        func([]byte) error
+	sendDatagramContext func(context.Context, []byte) error
+	hasData             chan struct{}
+	queue               [][]byte // TODO: use a ring buffer
 
-	mx      sync.Mutex
-	sendErr error
-	recvErr error
+	mx           sync.Mutex
+	sendErr      error
+	recvErr      error
+	readDeadline time.Time
+	readChanged  chan struct{}
+	onReadAbort  func(error)
 
 	clearer streamClearer
 }
@@ -44,6 +50,7 @@ func newStateTrackingStream(s *quic.Stream, clearer streamClearer, sendDatagram 
 		clearer:      clearer,
 		sendDatagram: sendDatagram,
 		hasData:      make(chan struct{}, 1),
+		readChanged:  make(chan struct{}),
 	}
 
 	context.AfterFunc(s.Context(), func() {
@@ -69,7 +76,7 @@ func (s *stateTrackingStream) closeSend(e error) {
 
 func (s *stateTrackingStream) closeReceive(e error) {
 	s.mx.Lock()
-	defer s.mx.Unlock()
+	var aborted func(error)
 
 	// clear the stream the first time both the send
 	// and receive are finished
@@ -79,7 +86,30 @@ func (s *stateTrackingStream) closeReceive(e error) {
 		}
 		s.recvErr = e
 		s.signalHasDatagram()
+		if e != nil && !errors.Is(e, io.EOF) {
+			aborted = s.onReadAbort
+		}
 	}
+	s.mx.Unlock()
+	if aborted != nil {
+		aborted(e)
+	}
+}
+
+func (s *stateTrackingStream) SetReadDeadline(deadline time.Time) error {
+	if err := s.Stream.SetReadDeadline(deadline); err != nil {
+		return err
+	}
+	s.mx.Lock()
+	s.readDeadline = deadline
+	close(s.readChanged)
+	s.readChanged = make(chan struct{})
+	s.mx.Unlock()
+	return nil
+}
+
+func (s *stateTrackingStream) SetDeadline(deadline time.Time) error {
+	return errors.Join(s.SetReadDeadline(deadline), s.Stream.SetWriteDeadline(deadline))
 }
 
 func (s *stateTrackingStream) Close() error {
@@ -130,6 +160,28 @@ func (s *stateTrackingStream) SendDatagram(b []byte) error {
 	}
 
 	return s.sendDatagram(b)
+}
+
+func (s *stateTrackingStream) SendDatagramContext(ctx context.Context, b []byte) error {
+	s.mx.Lock()
+	err := s.sendErr
+	s.mx.Unlock()
+	if err != nil {
+		return err
+	}
+	if s.sendDatagramContext == nil {
+		return errors.New("context-aware datagram sender unavailable")
+	}
+	work, cancel := context.WithCancelCause(ctx)
+	done := make(chan struct{})
+	stop := context.AfterFunc(s.Context(), func() { defer close(done); cancel(context.Cause(s.Context())) })
+	defer func() {
+		if !stop() {
+			<-done
+		}
+		cancel(nil)
+	}()
+	return s.sendDatagramContext(work, b)
 }
 
 func (s *stateTrackingStream) signalHasDatagram() {

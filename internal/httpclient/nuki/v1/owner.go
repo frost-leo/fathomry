@@ -28,6 +28,7 @@ import (
 	"net"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -40,6 +41,7 @@ import (
 type owner struct {
 	settings     settings
 	native       NativeOptionsV1
+	budget       Budget
 	callbacks    activity
 	routeMu      sync.Mutex
 	routes       map[routeKey]*route
@@ -48,6 +50,7 @@ type owner struct {
 	closing      bool
 	pending      int
 	nativeDials  int
+	tunnels      int
 	sockets      map[*socket]struct{}
 	cleanup      error
 	closeDone    chan struct{}
@@ -75,8 +78,10 @@ func newOwner(value settings, native NativeOptionsV1) (*owner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &owner{settings: value, native: copied, routes: make(map[routeKey]*route), origins: make(map[originKey]struct{}),
-		sockets: make(map[*socket]struct{}), recorders: make(map[*guardedRecorder]struct{})}, nil
+	instance := &owner{settings: value, native: copied, budget: value.budget(copied), routes: make(map[routeKey]*route), origins: make(map[originKey]struct{}),
+		sockets: make(map[*socket]struct{}), recorders: make(map[*guardedRecorder]struct{})}
+	instance.native.Resolver = instance.guardResolver(copied.Resolver)
+	return instance, nil
 }
 
 func (owner *owner) admitOrigin(choice routeChoice, request *http.Request) error {
@@ -158,9 +163,12 @@ func (owner *owner) routeFor(choice routeChoice) (result *route, err error) {
 	if err != nil {
 		return nil, err
 	}
-	dialer, err := proxy.NewWithDialer(address, owner.settings.Timeout, native.TLS, &baseDialer{owner}, choice.headers, options.MaxResponseHeaderBytes)
+	dialer, err := proxy.NewWithDialer(address, owner.settings.Timeout, native.ProxyTLS, &baseDialer{owner}, choice.headers, options.MaxResponseHeaderBytes)
 	if err != nil {
 		return nil, failure(ErrInput, "route", err)
+	}
+	if managed, ok := dialer.(*proxy.Dialer); ok {
+		managed.ConfigureFathomry(native.Resolver, owner.reserveTunnel)
 	}
 	if options.ForceHTTP3 && !dialer.SupportHTTP3() {
 		return nil, failure(ErrUnsupported, "http3-route")
@@ -177,7 +185,11 @@ func (owner *owner) routeFor(choice routeChoice) (result *route, err error) {
 	}
 	client := sdk.New(*native.Profile, clientOptions...)
 	raw := client.Transport.(*sdk.RoundTripper)
+	raw.SetFathomryResolver(native.Resolver)
 	if err := raw.ValidationError(); err != nil {
+		if errors.Is(err, sdk.ErrFathomryProfileLimit) {
+			return nil, failure(ErrLimit, "native-profile", err, raw.Close())
+		}
 		return nil, failure(ErrInput, "native-profile", err, raw.Close())
 	}
 	client.Jar = native.Jar
@@ -219,7 +231,7 @@ func (owner *owner) release(ctx context.Context) resource.ReleaseResult {
 		}
 		owner.routeMu.Unlock()
 		owner.mu.Lock()
-		pending, cleanup := len(owner.sockets)+len(owner.recorders)+owner.pending+owner.nativeDials+nativePending, owner.cleanup
+		pending, cleanup := len(owner.sockets)+len(owner.recorders)+owner.pending+owner.nativeDials+owner.tunnels+nativePending, owner.cleanup
 		owner.mu.Unlock()
 		if pending != 0 {
 			return resource.ReleaseResult{Err: failure(ErrCleanup, "sockets-retained", cleanup), Continue: owner.retryRelease}
@@ -382,7 +394,7 @@ func (base *baseDialer) DialContext(ctx context.Context, network, address string
 	if callback := base.owner.native.DialContext; callback != nil {
 		conn, err = callback(ctx, network, address)
 	} else {
-		conn, err = (&net.Dialer{Timeout: base.owner.settings.Timeout}).DialContext(ctx, network, address)
+		conn, err = (&net.Dialer{Timeout: base.owner.settings.Timeout, Resolver: base.owner.native.Resolver}).DialContext(ctx, network, address)
 	}
 	if nilObject(conn) {
 		conn = nil
@@ -465,19 +477,48 @@ func parseProxy(address string) (*url.URL, error) {
 	if address == "" {
 		return nil, nil
 	}
+	if len(address) > 8192 || !fieldValue(address) {
+		return nil, failure(ErrInput, "proxy")
+	}
 	value, err := url.Parse(address)
 	if err != nil || len(address) > 8192 || !fieldValue(address) || value == nil || value.Hostname() == "" ||
-		value.Fragment != "" || value.RawQuery != "" || value.Port() == "" ||
+		value.Fragment != "" || value.Opaque != "" || value.Port() == "" ||
 		value.Scheme != "http" && value.Scheme != "https" && value.Scheme != "socks5" && value.Scheme != "socks5h" {
 		return nil, failure(ErrInput, "proxy", err)
 	}
-	if strings.Contains(value.Path, "{") || strings.Contains(value.Path, "%7B") {
-		return nil, failure(ErrUnsupported, "masque-write-deadline")
+	port, err := strconv.ParseUint(value.Port(), 10, 16)
+	if err != nil || port == 0 {
+		return nil, failure(ErrInput, "proxy-port", err)
+	}
+	if strings.Contains(value.Path, "{") || strings.Contains(value.RawQuery, "{") || strings.Contains(strings.ToLower(value.RawQuery), "%7b") {
+		for _, char := range address {
+			if char < 0x21 || char > 0x7e {
+				return nil, failure(ErrInput, "masque-template-ascii")
+			}
+		}
+		if err := proxy.ValidateFathomryTemplate(value); err != nil {
+			return nil, failure(ErrInput, "masque-template", err)
+		}
+		return value, nil
+	}
+	if value.RawQuery != "" {
+		return nil, failure(ErrInput, "proxy-query")
 	}
 	if value.Path != "" && value.Path != "/" {
 		return nil, failure(ErrInput, "proxy-path")
 	}
 	return value, nil
+}
+
+func (owner *owner) reserveTunnel() (func(), error) {
+	owner.mu.Lock()
+	if owner.closing || owner.tunnels >= owner.settings.MaxProxyTunnels {
+		owner.mu.Unlock()
+		return nil, failure(ErrCapacity, "proxy-tunnels")
+	}
+	owner.tunnels++
+	owner.mu.Unlock()
+	return sync.OnceFunc(func() { owner.mu.Lock(); owner.tunnels--; owner.mu.Unlock() }), nil
 }
 
 func headerDigest(header http.Header) [32]byte {

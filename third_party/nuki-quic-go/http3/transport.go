@@ -57,7 +57,11 @@ func (r *roundTripperWithCount) Close() error {
 	r.cancel()
 	<-r.dialing
 	if r.conn != nil {
-		return r.conn.CloseWithError(0, "")
+		err := r.conn.CloseWithError(0, "")
+		if controlled, ok := r.clientConn.(*ClientConn); ok {
+			controlled.closeOwnedControl()
+		}
+		return err
 	}
 	return nil
 }
@@ -402,15 +406,19 @@ func (t *Transport) dial(ctx context.Context, hostname string) (*quic.Conn, clie
 		return nil, nil, err
 	}
 	clientConn := t.newClientConn(conn)
-	go func() {
-		for {
-			str, err := conn.AcceptUniStream(context.Background())
-			if err != nil {
-				return
+	if controlled, ok := clientConn.(*ClientConn); ok {
+		controlled.acceptOwnedControl()
+	} else {
+		go func() {
+			for {
+				str, err := conn.AcceptUniStream(context.Background())
+				if err != nil {
+					return
+				}
+				go clientConn.handleUnidirectionalStream(str)
 			}
-			go clientConn.handleUnidirectionalStream(str)
-		}
-	}()
+		}()
+	}
 	return conn, clientConn, nil
 }
 
@@ -459,15 +467,7 @@ func (t *Transport) NewClientConn(conn *quic.Conn) *ClientConn {
 		t.DisableCompression,
 		t.Logger,
 	)
-	go func() {
-		for {
-			str, err := conn.AcceptUniStream(context.Background())
-			if err != nil {
-				return
-			}
-			go c.handleUnidirectionalStream(str)
-		}
-	}()
+	c.acceptOwnedControl()
 	return c
 }
 

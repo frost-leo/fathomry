@@ -23,6 +23,10 @@ import (
 	"context"
 	"errors"
 	"io"
+	"maps"
+	"net"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -70,7 +74,7 @@ func (client *Client) start(ctx context.Context, id fault.Correlation, request *
 		shape = invocation.Stream
 	}
 	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: "request", Correlation: id, Shape: shape,
-		Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.AdmissionTimeout}},
+		Bytes: client.owner.budget.WorkBytes, EvidenceBytes: client.owner.budget.EvidenceBytes, Admission: invocation.Budget{Limit: value.AdmissionTimeout}},
 		client.inbox, client.observer)
 	if err != nil {
 		return nil, err
@@ -238,6 +242,10 @@ func (op *operation) run(consume func(context.Context, *Response) error) {
 		op.primaryError(failure(ErrState, "execute", err, context.Cause(op.ctx)))
 		return
 	}
+	if err := op.before(op.request); err != nil {
+		op.primaryError(err)
+		return
+	}
 	route, err := op.client.owner.routeFor(op.route)
 	if err != nil {
 		op.primaryError(err)
@@ -248,6 +256,10 @@ func (op *operation) run(consume func(context.Context, *Response) error) {
 		logical.Jar = &guardedJar{owner: op.client.owner, jar: op.client.owner.native.Jar, op: op}
 	}
 	res, err := logical.Do(op.request)
+	if res != nil {
+		op.nativeResponse = res
+		op.data.metadata = responseMetadata(res, res.ContentLength)
+	}
 	if err != nil {
 		op.primaryError(failure(ErrTransport, "request", err, op.ctx.Err(), context.Cause(op.ctx)))
 		return
@@ -280,6 +292,12 @@ func (op *operation) run(consume func(context.Context, *Response) error) {
 			return
 		}
 		op.view.revoke()
+		// Returning the callback revokes new reads. Interrupt an entered read
+		// before inspecting the byte budget it holds during native Read.
+		if !op.finalBody.eofSnapshot() {
+			_ = op.finalBody.Close()
+		}
+		op.finalBody.reading.Wait()
 	}
 	if op.finalBody.reachedEOF() {
 		if op.wireBody != nil {
@@ -338,21 +356,7 @@ func (transport exchangeTransport) RoundTrip(request *http.Request) (*http.Respo
 	if limit {
 		return nil, failure(ErrLimit, "exchanges")
 	}
-	copied := request.Clone(request.Context())
-	copied.Response = nil
-	for _, hook := range transport.owner.native.Before {
-		view := metadataRequest(copied)
-		if err := hook(op.ctx, view); err != nil {
-			return nil, failure(ErrCallback, "before", err)
-		}
-		if view.Body != nil || view.GetBody != nil || view.Response != nil || view.TLS != nil || view.Cancel != nil {
-			return nil, failure(ErrUnsupported, "hook-owning-input")
-		}
-		if err := validateRequestMetadata(view, transport.owner.settings); err != nil {
-			return nil, err
-		}
-		copied.Method, copied.URL, copied.Host, copied.Header, copied.Trailer = view.Method, view.URL, view.Host, view.Header, view.Trailer
-	}
+	copied := snapshotRequest(request, request.Context())
 	if err := canonicalizeURL(copied.URL); err != nil {
 		return nil, err
 	}
@@ -441,6 +445,9 @@ func (owner *owner) redirect(request *http.Request, via []*http.Request) error {
 	if len(via) >= owner.settings.MaxExchanges {
 		return failure(ErrLimit, "redirect")
 	}
+	origin := requestOrigin(request)
+	userinfo := request.URL.User
+	inherited := map[string][]string{"Cookie": credentialValues(request.Header, "Cookie"), "Authorization": credentialValues(request.Header, "Authorization")}
 	if callback := owner.native.CheckRedirect; callback != nil {
 		copied := metadataRequest(request)
 		history := make([]*http.Request, len(via))
@@ -453,7 +460,26 @@ func (owner *owner) redirect(request *http.Request, via []*http.Request) error {
 		if copied.Body != nil || copied.GetBody != nil || copied.Response != nil || copied.TLS != nil || copied.Cancel != nil {
 			return failure(ErrUnsupported, "redirect-owning-input")
 		}
-		request.Method, request.URL, request.Host, request.Header, request.Trailer = copied.Method, copied.URL, copied.Host, copied.Header, copied.Trailer
+		if err := op.applyMetadata(request, copied); err != nil {
+			return err
+		}
+	}
+	if err := op.before(request); err != nil {
+		return err
+	}
+	if origin != requestOrigin(request) {
+		if request.URL.User == userinfo {
+			request.URL.User = nil
+		}
+		for name, values := range inherited {
+			if slices.Equal(values, credentialValues(request.Header, name)) {
+				for key := range request.Header {
+					if strings.EqualFold(key, name) {
+						delete(request.Header, key)
+					}
+				}
+			}
+		}
 	}
 	validation := *request
 	validation.Response = nil
@@ -461,4 +487,80 @@ func (owner *owner) redirect(request *http.Request, via []*http.Request) error {
 		return err
 	}
 	return owner.validateRouteRequest(request, op.route)
+}
+
+func (op *operation) before(request *http.Request) error {
+	origin := requestOrigin(request)
+	userinfo := request.URL.User
+	inherited := map[string][]string{"Cookie": credentialValues(request.Header, "Cookie"), "Authorization": credentialValues(request.Header, "Authorization")}
+	for _, hook := range op.client.owner.native.Before {
+		view := metadataRequest(request)
+		if err := hook(op.ctx, view); err != nil {
+			return failure(ErrCallback, "before", err)
+		}
+		if err := op.applyMetadata(request, view); err != nil {
+			return err
+		}
+	}
+	if err := canonicalizeURL(request.URL); err != nil {
+		return err
+	}
+	if origin != requestOrigin(request) {
+		if request.URL.User == userinfo {
+			request.URL.User = nil
+		}
+		for name, values := range inherited {
+			if slices.Equal(values, credentialValues(request.Header, name)) {
+				for key := range request.Header {
+					if strings.EqualFold(key, name) {
+						delete(request.Header, key)
+					}
+				}
+			}
+		}
+	}
+	return op.client.owner.validateRouteRequest(request, op.route)
+}
+
+func (op *operation) applyMetadata(request, view *http.Request) error {
+	if view.Body != nil || view.GetBody != nil || view.Response != nil || view.TLS != nil || view.Cancel != nil {
+		return failure(ErrUnsupported, "hook-owning-input")
+	}
+	if err := validateRequestMetadata(view, op.client.owner.settings); err != nil {
+		return err
+	}
+	location := *view.URL
+	request.Method, request.URL, request.Host = view.Method, &location, view.Host
+	request.Header, request.Trailer = view.Header.Clone(), view.Trailer.Clone()
+	request.Priority, request.DiscardResponseCookies = view.Priority, view.DiscardResponseCookies
+	request.ExcludedCookies = maps.Clone(view.ExcludedCookies)
+	return nil
+}
+
+func requestOrigin(request *http.Request) string {
+	if request == nil || request.URL == nil {
+		return ""
+	}
+	copy := *request.URL
+	_ = canonicalizeURL(&copy)
+	port := copy.Port()
+	if port == "" {
+		if copy.Scheme == "http" {
+			port = "80"
+		} else if copy.Scheme == "https" {
+			port = "443"
+		}
+	}
+	return copy.Scheme + "://" + net.JoinHostPort(strings.ToLower(copy.Hostname()), port)
+}
+
+func credentialValues(header http.Header, name string) []string {
+	var values []string
+	for key, items := range header {
+		if strings.EqualFold(key, name) {
+			values = append(values, items...)
+		}
+	}
+	slices.Sort(values)
+	return values
 }

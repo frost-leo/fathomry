@@ -44,9 +44,12 @@ type Decoder struct {
 	decoderStr io.Writer
 	writeMutex sync.Mutex
 
-	// ackedInsertCount is the number of inserts acknowledged via Insert Count
-	// Increment instructions so far.
+	// ackedInsertCount includes implicit credit from Section Acknowledgements.
+	// Feedback selection and this count are serialized by writeGate.
 	ackedInsertCount uint64
+	maxBlocked       uint64
+	blocked          uint64
+	blockedStreams   map[int64]uint64
 
 	closed    bool
 	closeErr  error
@@ -81,6 +84,19 @@ func WithDecoderStream(w io.Writer) DecoderOption {
 	}
 }
 
+// WithMaxBlockedStreams selects the exact advertised SETTINGS_QPACK_BLOCKED_STREAMS.
+// Zero forbids blocked sections. Streams with multiple sections count once.
+func WithMaxBlockedStreams(maximum uint64) DecoderOption {
+	return func(d *Decoder) { d.maxBlocked = maximum }
+}
+
+// BlockedStreams reports current distinct blocked streams without starting work.
+func (d *Decoder) BlockedStreams() uint64 {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	return d.blocked
+}
+
 // SetDecoderStream sets the writer for the outgoing QPACK decoder stream after
 // construction. This is useful when the stream is opened asynchronously. It is
 // safe for concurrent use.
@@ -92,7 +108,7 @@ func (d *Decoder) SetDecoderStream(w io.Writer) {
 
 // NewDecoder returns a new Decoder.
 func NewDecoder(opts ...DecoderOption) *Decoder {
-	d := &Decoder{}
+	d := &Decoder{maxBlocked: ^uint64(0), blockedStreams: make(map[int64]uint64)}
 	for _, opt := range opts {
 		opt(d)
 	}
@@ -102,13 +118,19 @@ func NewDecoder(opts ...DecoderOption) *Decoder {
 }
 
 // Close shuts the Decoder down, unblocking any header-block decode that is
-// waiting for dynamic table inserts.
+// waiting for dynamic table inserts and releasing owned dynamic table storage.
+// Encoder-stream EOF alone preserves its entries for finite-input decoding.
 func (d *Decoder) Close() error {
 	d.mutex.Lock()
 	defer d.mutex.Unlock()
 	d.closed = true
 	if d.closeErr == nil {
 		d.closeErr = errDecoderClosed
+	}
+	if d.dt != nil {
+		clear(d.dt.entries)
+		d.dt.entries = nil
+		d.dt.size = 0
 	}
 	d.cond.Broadcast()
 	return nil
@@ -156,15 +178,18 @@ func (d *Decoder) decodeStatic(p []byte) DecodeFunc {
 		}
 
 		if !readDeltaBase {
-			base, rest, err := readVarInt(7, p)
+			if len(p) == 0 {
+				return HeaderField{}, io.ErrUnexpectedEOF
+			}
+			if p[0]&0x80 != 0 {
+				return HeaderField{}, errors.New("qpack: negative Base with zero Required Insert Count")
+			}
+			_, rest, err := readVarInt(7, p)
 			if err != nil {
 				return HeaderField{}, err
 			}
 			p = rest
 			readDeltaBase = true
-			if base != 0 {
-				return HeaderField{}, errors.New("expected Base to be zero")
-			}
 		}
 
 		if len(p) == 0 {

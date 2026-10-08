@@ -13,7 +13,22 @@ import (
 	tls "github.com/nukilabs/utls"
 )
 
-func (d *Dialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+func (d *Dialer) DialContext(ctx context.Context, network, addr string) (result net.Conn, resultErr error) {
+	release := func() {}
+	if d.acquireTunnel != nil {
+		var err error
+		release, err = d.acquireTunnel()
+		if err != nil {
+			return nil, err
+		}
+	}
+	defer func() {
+		if result == nil {
+			release()
+		} else {
+			result = &ownedTCPTunnel{Conn: result, release: release}
+		}
+	}()
 	d.createMu.Lock()
 	defer d.createMu.Unlock()
 	if d.closed {
@@ -62,7 +77,9 @@ func (d *Dialer) DialContext(ctx context.Context, network, addr string) (net.Con
 		return c, nil
 	case "https":
 		tlsConf := d.tlsConf.Clone()
-		tlsConf.ServerName = d.proxyURL.Hostname()
+		if tlsConf.ServerName == "" {
+			tlsConf.ServerName = d.proxyURL.Hostname()
+		}
 		tlsConf.NextProtos = []string{"http/1.1", "h2"}
 		rawConn, err := d.base.DialContext(ctx, network, d.proxyURL.Host)
 		if err != nil {

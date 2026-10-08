@@ -173,6 +173,12 @@ func (s *Stream) CancelRead(errorCode StreamErrorCode) {
 	s.receiveStr.CancelRead(errorCode)
 }
 
+// FathomryReadAbort observes effective receive cancellation, independently of
+// Context's send-half completion and the receive side's ordinary FIN/EOF.
+func (s *Stream) FathomryReadAbort() (<-chan struct{}, error) {
+	return s.receiveStr.FathomryReadAbort()
+}
+
 // SetReceiveFinalSizeCallback sets a callback that is called when the receive side's final size is known.
 // See [ReceiveStream.SetReceiveFinalSizeCallback] for more details.
 // Most applications don't need this. It is mainly useful for protocol layers

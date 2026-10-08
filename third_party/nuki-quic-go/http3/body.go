@@ -73,6 +73,9 @@ func (r *body) Read(b []byte) (int, error) {
 
 func (r *body) Close() error {
 	r.str.CancelRead(quic.StreamErrorCode(ErrCodeRequestCanceled))
+	if r.str.readScope != nil {
+		r.str.readScope.finish(context.Canceled)
+	}
 	return nil
 }
 
@@ -117,6 +120,9 @@ func (r *hijackableBody) Read(b []byte) (int, error) {
 	n, err := r.body.Read(b)
 	if err != nil {
 		r.requestDone()
+		if r.body.str.readScope != nil {
+			r.body.str.readScope.finish(err)
+		}
 	}
 	return n, maybeReplaceError(err)
 }
@@ -133,5 +139,8 @@ func (r *hijackableBody) Close() error {
 	r.requestDone()
 	// If the EOF was read, CancelRead() is a no-op.
 	r.body.str.CancelRead(quic.StreamErrorCode(ErrCodeRequestCanceled))
+	if r.body.str.readScope != nil {
+		r.body.str.readScope.finish(context.Canceled)
+	}
 	return nil
 }

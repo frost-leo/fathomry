@@ -82,7 +82,7 @@ func TestProviderHTTPSH2ProxySharesPhysicalQuotaNotStreamCancellation(t *testing
 	defer second.Close()
 	options := providerOptions()
 	options.ProxyURL = proxy.URL
-	options.Native.TLS = testRoots(proxy)
+	options.Native.ProxyTLS = testRoots(proxy)
 	options.MaxConnections = 1
 	fixture := bindProvider(t, options)
 	partial, err := fixture.client.Consume(testContext(t), fault.Correlation{Call: "h2-cancel"}, nativeRequest(t, "GET", first.URL+"/slow", nil), func(_ context.Context, response *Response) error {

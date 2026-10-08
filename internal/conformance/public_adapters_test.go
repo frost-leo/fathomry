@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/bogdanfinn/tls-client/profiles"
+	nukiprofiles "github.com/nukilabs/tlsclient/profiles"
 
 	kafka "github.com/frost-leo/fathomry/adapters/broker/kafka/v1"
 	broker "github.com/frost-leo/fathomry/adapters/broker/v1"
@@ -43,6 +44,7 @@ import (
 	database "github.com/frost-leo/fathomry/adapters/database/v1"
 	httpcloak "github.com/frost-leo/fathomry/adapters/httpclient/httpcloak/v1"
 	nethttp "github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1"
+	nuki "github.com/frost-leo/fathomry/adapters/httpclient/nuki/v1"
 	surf "github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	tlsclient "github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
@@ -80,6 +82,16 @@ func TestPublicAdapterContracts(t *testing.T) {
 			func(runtime *adapters.Runtime, inbox *adapters.Inbox[httpcloak.Result]) httpcloak.Dependencies {
 				return httpcloak.Dependencies{Runtime: runtime, Evidence: inbox, Native: dependencies}
 			}, httpcloak.Open, canary)
+	})
+	t.Run("nuki", func(t *testing.T) {
+		profile := nukiprofiles.Chrome150
+		dependencies := nuki.NativeOptions{Profile: &profile}
+		value := nuki.Settings{Name: "contract", ProxyURL: "http://" + canary + "@127.0.0.1:1"}
+		checkPublicAdapter(t, value, nuki.Validate, func(value nuki.Settings) (httpclient.Policy, error) { return nuki.Recommend(value, dependencies) },
+			func(value httpclient.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[nuki.Result]) nuki.Dependencies {
+				return nuki.Dependencies{Runtime: runtime, Evidence: inbox, Native: dependencies}
+			}, nuki.Open, canary)
 	})
 	t.Run("tlsclient", func(t *testing.T) {
 		profile := profiles.Chrome_144

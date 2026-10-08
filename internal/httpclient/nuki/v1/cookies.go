@@ -77,7 +77,7 @@ func (jar *guardedJar) SetCookies(address *url.URL, cookies []*http.Cookie) {
 	jar.jar.SetCookies(&location, copied)
 }
 func copyCookies(cookies []*http.Cookie, limit int64) ([]*http.Cookie, error) {
-	if int64(len(cookies))*256 > limit {
+	if int64(len(cookies)) > limit/256 {
 		return nil, failure(ErrLimit, "cookies")
 	}
 	total := int64(len(cookies)) * 256
@@ -85,8 +85,19 @@ func copyCookies(cookies []*http.Cookie, limit int64) ([]*http.Cookie, error) {
 		if cookie == nil {
 			return nil, failure(ErrInput, "cookie")
 		}
-		total += int64(len(cookie.Name) + len(cookie.Value) + len(cookie.Path) + len(cookie.Domain) + len(cookie.Raw) + len(cookie.RawExpires))
+		for _, value := range []string{cookie.Name, cookie.Value, cookie.Path, cookie.Domain, cookie.Raw, cookie.RawExpires} {
+			if int64(len(value)) > limit-total {
+				return nil, failure(ErrLimit, "cookies")
+			}
+			total += int64(len(value))
+		}
+		if int64(len(cookie.Unparsed)) > (limit-total)/32 {
+			return nil, failure(ErrLimit, "cookies")
+		}
 		for _, value := range cookie.Unparsed {
+			if int64(len(value)) > limit-total-32 {
+				return nil, failure(ErrLimit, "cookies")
+			}
 			total += int64(len(value)) + 32
 		}
 		if total > limit {

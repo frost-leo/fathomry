@@ -41,6 +41,8 @@ type ReceiveStream struct {
 	cancelledLocally    bool
 	cancelErr           *StreamError
 	closeForShutdownErr error
+	fathomryAbort       chan struct{}
+	fathomryAbortErr    error
 
 	readPos      protocol.ByteCount
 	reliableSize protocol.ByteCount
@@ -119,6 +121,7 @@ func (s *ReceiveStream) Read(p []byte) (int, error) {
 
 	s.mutex.Lock()
 	queuedStreamWindowUpdate, queuedConnWindowUpdate, n, err := s.readImpl(p)
+	s.publishFathomryAbort()
 	completed := s.isNewlyCompleted()
 	s.mutex.Unlock()
 
@@ -400,6 +403,7 @@ func (s *ReceiveStream) dequeueNextFrame() {
 func (s *ReceiveStream) CancelRead(errorCode StreamErrorCode) {
 	s.mutex.Lock()
 	queuedNewControlFrame := s.cancelReadImpl(errorCode)
+	s.publishFathomryAbort()
 	completed := s.isNewlyCompleted()
 	s.mutex.Unlock()
 
@@ -470,6 +474,7 @@ func (s *ReceiveStream) handleStreamFrameImpl(frame *wire.StreamFrame, now monot
 func (s *ReceiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame, now monotime.Time) error {
 	s.mutex.Lock()
 	err := s.handleResetStreamFrameImpl(frame, now)
+	s.publishFathomryAbort()
 	completed := s.isNewlyCompleted()
 	size, callback := s.takeReceiveFinalSizeCallback()
 	s.mutex.Unlock()
@@ -564,9 +569,40 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 func (s *ReceiveStream) closeForShutdown(err error) {
 	s.mutex.Lock()
 	s.closeForShutdownErr = err
+	s.publishFathomryAbort()
 	s.receiveFinalSizeCallback = nil
 	s.mutex.Unlock()
 	s.signalRead()
+}
+
+// FathomryReadAbort observes only an effective receive error. A normal FIN/EOF
+// and send-side completion do not abort a buffered application field section.
+// The channel is allocated lazily and owns no goroutine. Reliable reset prefixes
+// remain readable until the native receive state makes their reset effective.
+func (s *ReceiveStream) FathomryReadAbort() (<-chan struct{}, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	if s.fathomryAbort == nil {
+		s.fathomryAbort = make(chan struct{})
+	}
+	s.publishFathomryAbort()
+	return s.fathomryAbort, s.fathomryAbortErr
+}
+
+func (s *ReceiveStream) publishFathomryAbort() {
+	if s.fathomryAbort == nil || s.fathomryAbortErr != nil || s.currentFrameIsLast && s.currentFrame == nil {
+		return
+	}
+	var err error
+	if s.cancelledLocally || s.isRemoteCancellationEffective() {
+		err = s.cancelErr
+	} else {
+		err = s.closeForShutdownErr
+	}
+	if err != nil {
+		s.fathomryAbortErr = err
+		close(s.fathomryAbort)
+	}
 }
 
 // signalRead performs a non-blocking send on the readChan

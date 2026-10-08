@@ -32,7 +32,7 @@ import (
 )
 
 func consumerEnvironment() []string {
-	return append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOFLAGS=-p=4")
+	return append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off", "GONOPROXY=none", "GOSUMDB=off")
 }
 func TestProviderActualConsumerAndIndependentImports(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -57,14 +57,14 @@ func TestProviderActualConsumerAndIndependentImports(t *testing.T) {
 		t.Fatal(err)
 	}
 	wanted := map[string]string{"github.com/nukilabs/tlsclient": "v1.8.8", "github.com/nukilabs/http": "v1.3.2", "github.com/nukilabs/utls": "v1.3.3", "github.com/nukilabs/quic-go": "v1.3.0", "github.com/nukilabs/qpack": "v0.7.0", "github.com/nukilabs/socks": "v1.0.1"}
-	if report.Go != runtime.Version() || report.Provider != ProviderID || report.Patch != "v1" || len(report.Modules) != len(wanted) {
+	if report.Go != runtime.Version() || report.Provider != ProviderID || report.Patch != "v2" || len(report.Modules) != len(wanted) {
 		t.Fatal("consuming identity changed")
 	}
 	for module, version := range wanted {
 		if report.Modules[module] != version {
 			t.Fatal("actual SDK version changed", module)
 		}
-		replacement := module != "github.com/nukilabs/http" && module != "github.com/nukilabs/utls"
+		replacement := module != "github.com/nukilabs/utls"
 		if report.Replacements[module] != replacement {
 			t.Fatal("replacement fact changed", module)
 		}

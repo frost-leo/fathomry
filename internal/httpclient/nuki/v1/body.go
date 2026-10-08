@@ -24,6 +24,7 @@ import (
 	"io"
 	"reflect"
 	"sync"
+	"sync/atomic"
 )
 
 type byteBudget struct {
@@ -46,6 +47,7 @@ type body struct {
 	input         bool
 	count         int64
 	eof           bool
+	eofObserved   atomic.Bool
 	mu            sync.Mutex
 	closed        bool
 	reading       sync.WaitGroup
@@ -110,9 +112,12 @@ func (body *body) Read(data []byte) (count int, err error) {
 	}
 	if err == io.EOF {
 		body.eof = true
+		body.eofObserved.Store(true)
 	}
 	return count, err
 }
+
+func (body *body) eofSnapshot() bool { return body.eofObserved.Load() }
 func (body *body) Close() error {
 	body.once.Do(func() {
 		defer func() {

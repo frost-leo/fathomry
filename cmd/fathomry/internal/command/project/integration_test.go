@@ -237,7 +237,7 @@ func TestVersionedProjects(t *testing.T) {
 				}
 				t.Logf("%s/%s: generated, tidied, vetted, race-tested and built from the isolated module cache; local programs executed, remote programs reject absent bootstrap", mode, encoding)
 				if mode == "local" && encoding == "yaml" {
-					for _, provider := range []string{"nethttp", "tlsclient", "surf", "httpcloak"} {
+					for _, provider := range []string{"nethttp", "tlsclient", "surf", "httpcloak", "nuki"} {
 						for _, variant := range []string{"direct", "framework"} {
 							fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/httpclient", provider, "v1/testdata", variant, "main.go"))
 							if err != nil {
@@ -278,7 +278,8 @@ func verifyHTTPReplacement(t testing.TB, directory string, environment []string)
 	for _, pin := range sdkPins() {
 		switch pin.original {
 		case "github.com/bogdanfinn/tls-client", "github.com/enetx/surf", "github.com/enetx/http2", "github.com/enetx/http3",
-			"github.com/sardanioss/httpcloak", "github.com/sardanioss/net", "github.com/sardanioss/quic-go", "github.com/sardanioss/udpbara":
+			"github.com/sardanioss/httpcloak", "github.com/sardanioss/net", "github.com/sardanioss/quic-go", "github.com/sardanioss/udpbara",
+			"github.com/nukilabs/http", "github.com/nukilabs/qpack", "github.com/nukilabs/quic-go", "github.com/nukilabs/socks", "github.com/nukilabs/tlsclient":
 		default:
 			continue
 		}
@@ -291,7 +292,7 @@ func verifyHTTPReplacement(t testing.TB, directory string, environment []string)
 		}
 		verified++
 	}
-	if verified != 8 {
+	if verified != 13 {
 		t.Fatal("HTTP replacement policy missing")
 	}
 }

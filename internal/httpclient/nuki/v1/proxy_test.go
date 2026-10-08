@@ -145,6 +145,47 @@ func TestProviderRuntimeProxyIdentityHeadersAndCredentials(t *testing.T) {
 	}
 }
 
+func TestProviderTCPProxyTunnelQuotaIsSeparateFromPhysicalSockets(t *testing.T) {
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "first") }))
+	defer first.Close()
+	var secondCalls atomic.Int32
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { secondCalls.Add(1); _, _ = io.WriteString(w, "second") }))
+	defer second.Close()
+	proxy := newConnectPeer(t, "")
+	options := providerOptions()
+	options.Mode = HTTP1Only
+	options.ProxyURL = proxy.peer.URL
+	options.MaxConnections = 4
+	options.MaxProxyTunnels = 1
+	fix := bindProvider(t, options)
+	for index, address := range []string{first.URL, second.URL, first.URL} {
+		receipt, err := fix.client.Do(testContext(t), fault.Correlation{Call: "tcp-tunnel-quota"}, nativeRequest(t, "GET", address, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		result := outcome(t, fix, receipt)
+		if index == 1 {
+			if !errors.Is(result.Err(), ErrCapacity) || secondCalls.Load() != 0 {
+				t.Fatal("tunnel quota bypassed", result.Err())
+			}
+		} else if result.Err() != nil || string(result.Outcome.Value.DataCopy()) != "first" {
+			t.Fatal("existing tunnel unavailable", result.Err())
+		}
+	}
+	if proxy.calls.Load() != 1 {
+		t.Fatal("refused tunnel reached proxy", proxy.calls.Load())
+	}
+	if err := fix.assembly.Close(testContext(t)); err != nil {
+		t.Fatal(err)
+	}
+	fix.client.owner.mu.Lock()
+	count := fix.client.owner.tunnels
+	fix.client.owner.mu.Unlock()
+	if count != 0 {
+		t.Fatal("closed TCP tunnel retained quota", count)
+	}
+}
+
 func TestProviderLockedRoutingAndSharedOriginCeiling(t *testing.T) {
 	for _, locked := range []bool{false, true} {
 		options := providerOptions()

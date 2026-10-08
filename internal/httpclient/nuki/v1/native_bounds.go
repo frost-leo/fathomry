@@ -20,6 +20,12 @@
 package nuki
 
 func boundNativeContainers(native NativeOptionsV1) error {
+	if len(native.Before) > MaxNativeHooks || len(native.After) > MaxNativeHooks {
+		return failure(ErrInput, "hooks")
+	}
+	if len(native.Profile.PseudoHeaderOrder) > 16 {
+		return failure(ErrLimit, "pseudo-headers")
+	}
 	for _, name := range native.Profile.PseudoHeaderOrder {
 		if len(name) > 128 || !fieldValue(name) {
 			return failure(ErrInput, "pseudo-header")
@@ -27,6 +33,12 @@ func boundNativeContainers(native NativeOptionsV1) error {
 	}
 	if native.QUIC != nil && len(native.QUIC.Versions) > 16 {
 		return failure(ErrLimit, "quic-versions")
+	}
+	if native.Profile.H2 != nil && (len(native.Profile.H2.Settings) > 128 || len(native.Profile.H2.Priorities) > 128) {
+		return failure(ErrInput, "http2-profile")
+	}
+	if native.Profile.H3 != nil && len(native.Profile.H3.Settings) > 128 {
+		return failure(ErrInput, "http3-profile")
 	}
 	config := native.TLS
 	if config == nil {
@@ -36,30 +48,49 @@ func boundNativeContainers(native NativeOptionsV1) error {
 		len(config.ApplicationSettings) > 64 || len(config.EncryptedClientHelloKeys) > 16 || config.NameToCertificate != nil {
 		return failure(ErrLimit, "tls-containers")
 	}
-	bytes := int64(len(config.EncryptedClientHelloConfigList) + len(config.ServerName))
+	remaining := int64(8 << 20)
+	take := func(length int, overhead int64) bool {
+		if overhead > remaining || int64(length) > remaining-overhead {
+			return false
+		}
+		remaining -= int64(length) + overhead
+		return true
+	}
+	if !take(len(config.EncryptedClientHelloConfigList), 0) || !take(len(config.ServerName), 0) {
+		return failure(ErrLimit, "tls-bytes")
+	}
 	for _, protocol := range config.NextProtos {
-		bytes += int64(len(protocol)) + 32
+		if !take(len(protocol), 32) {
+			return failure(ErrLimit, "tls-bytes")
+		}
 	}
 	for name, value := range config.ApplicationSettings {
-		bytes += int64(len(name)+len(value)) + 64
+		if !take(len(name), 64) || !take(len(value), 0) {
+			return failure(ErrLimit, "tls-bytes")
+		}
 	}
 	for _, certificate := range config.Certificates {
 		if len(certificate.Certificate) > 64 || len(certificate.SignedCertificateTimestamps) > 128 || len(certificate.SupportedSignatureAlgorithms) > 512 {
 			return failure(ErrLimit, "certificate-containers")
 		}
-		bytes += int64(len(certificate.OCSPStaple)) + int64(len(certificate.SupportedSignatureAlgorithms))*2
+		if !take(len(certificate.OCSPStaple), int64(len(certificate.SupportedSignatureAlgorithms))*2) {
+			return failure(ErrLimit, "tls-bytes")
+		}
 		for _, value := range certificate.Certificate {
-			bytes += int64(len(value)) + 32
+			if !take(len(value), 32) {
+				return failure(ErrLimit, "tls-bytes")
+			}
 		}
 		for _, value := range certificate.SignedCertificateTimestamps {
-			bytes += int64(len(value)) + 32
+			if !take(len(value), 32) {
+				return failure(ErrLimit, "tls-bytes")
+			}
 		}
 	}
 	for _, key := range config.EncryptedClientHelloKeys {
-		bytes += int64(len(key.Config)+len(key.PrivateKey)) + 64
-	}
-	if bytes > 8<<20 {
-		return failure(ErrLimit, "tls-bytes")
+		if !take(len(key.Config), 64) || !take(len(key.PrivateKey), 0) {
+			return failure(ErrLimit, "tls-bytes")
+		}
 	}
 	return nil
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/frost-leo/fathomry/adapters/database/postgres/v1"
 	"github.com/frost-leo/fathomry/adapters/httpclient/httpcloak/v1"
 	"github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1"
+	"github.com/frost-leo/fathomry/adapters/httpclient/nuki/v1"
 	"github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	"github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
@@ -61,6 +62,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "http_tlsclient", BaseLocale: "en", Resources: tlsclient.Resources(), Directory: "resources", Definitions: tlsclient.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "http_surf", BaseLocale: "en", Resources: surf.Resources(), Directory: "resources", Definitions: surf.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "http_httpcloak", BaseLocale: "en", Resources: httpcloak.Resources(), Directory: "resources", Definitions: httpcloak.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "http_nuki", BaseLocale: "en", Resources: nuki.Resources(), Directory: "resources", Definitions: nuki.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {

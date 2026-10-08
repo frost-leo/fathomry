@@ -21,8 +21,9 @@
 // github.com/nukilabs/tlsclient SDK. It is not the bogdanfinn integration or a
 // public business HTTP API. Network work belongs outside Temporal Workflows.
 //
-// Select prepares one explicitly named instance and requires an external native
-// profile. resource.WithLimits and resource.Assemble establish authoritative
+// PrepareV1 freezes one explicitly named instance and requires an external native
+// profile. Its metadata declares separate root, evidence and source residence;
+// Select remains a convenience. resource.WithLimits and resource.Assemble establish authoritative
 // ownership; Bind joins it to a separately bounded invocation.Inbox. Borrowed
 // aliases and runtime proxy choices do not create independent allowances.
 //
