@@ -305,6 +305,34 @@ func TestVersionedProjects(t *testing.T) {
 							}
 						}
 					}
+					for _, variant := range []string{"direct", "framework"} {
+						fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/logging/zerolog/v1/testdata", variant, "main.go"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						name := "zerolog-" + variant
+						directory := filepath.Join(destination, "cmd", name)
+						if err := os.MkdirAll(directory, 0700); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(filepath.Join(directory, "main.go"), fixture, 0600); err != nil {
+							t.Fatal(err)
+						}
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy")
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
+						binary := filepath.Join(job, name)
+						runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
+						executePublicConsumer(t, destination, append(append([]string(nil), environment...), "TMPDIR="+job), binary, "zerolog "+variant+" public consumer passed\n")
+						packages := runConsumer(t, destination, environment, goTool(), "list", "-mod=readonly", "-deps", "./cmd/"+name)
+						for _, dependency := range strings.Fields(string(packages)) {
+							if strings.HasPrefix(dependency, "go.opentelemetry.io/") || strings.HasPrefix(dependency, frameworkModule+"/adapters/telemetry/") ||
+								strings.HasPrefix(dependency, frameworkModule+"/internal/telemetry/") || strings.HasPrefix(dependency, "go.uber.org/zap") ||
+								strings.HasPrefix(dependency, frameworkModule+"/adapters/logging/zap/") || strings.HasPrefix(dependency, frameworkModule+"/internal/logging/zap/") ||
+								variant == "direct" && strings.HasPrefix(dependency, frameworkModule+"/framework/") {
+								t.Fatal("versioned local-only zerolog consumer acquired an unnecessary provider", dependency)
+							}
+						}
+					}
 					selected := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
 					if bytes.Contains(selected, []byte("\"Replace\"")) {
 						t.Fatal("public consumer acquired checkout replacement")
@@ -312,12 +340,25 @@ func TestVersionedProjects(t *testing.T) {
 					verifyHTTPReplacement(t, destination, environment)
 					verifyTelemetryReplacement(t, destination, environment)
 					verifyZapSelection(t, destination, environment)
+					verifyZerologSelection(t, destination, environment)
 				}
 			})
 		}
 	}
 	if _, err := os.Stat(filepath.Join(repository(t), "scripts", "install-cli.sh")); err == nil {
 		t.Fatal("unrequested installer appeared")
+	}
+}
+
+func verifyZerologSelection(t testing.TB, directory string, environment []string) {
+	t.Helper()
+	raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", "github.com/rs/zerolog")
+	var selected struct {
+		Version, Sum string
+		Replace      any
+	}
+	if json.Unmarshal(raw, &selected) != nil || selected.Version != "v1.35.1" || selected.Replace != nil || selected.Sum == "" {
+		t.Fatal("versioned zerolog consumer changed the selected original SDK")
 	}
 }
 

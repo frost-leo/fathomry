@@ -93,6 +93,7 @@ overlays. For overlaid settings, consume resolved preparation metadata.
 | nethttp | Frozen `PrepareV1.Metadata` for final data/native selections, H2 buffers and root/evidence/source reservations |
 | OpenTelemetry | Frozen `PrepareV1.Metadata` for final three-signal configuration, queue/span limits, cumulative metric residence, source/work and evidence charges |
 | Zap | Frozen `PrepareV1.Metadata` for final outputs, one physical admission/queue, derived storage, level-width-safe logical policies and work/evidence/file-content ceilings |
+| zerolog | Frozen `PrepareV1.Metadata` for exact kinds/bindings, record/copy/work/evidence costs, stable physical policy/derivation bounds and original file-content ceilings |
 
 This table covers data providers, not every Adapter role. Configuration
 providers retain documented fixed public route envelopes and selected native

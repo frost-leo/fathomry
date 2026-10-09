@@ -23,7 +23,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -43,6 +42,8 @@ type Record struct {
 }
 type recordData struct {
 	time        time.Time
+	pc          uintptr
+	caller      Caller
 	level       Level
 	message     string
 	source      resource.Info
@@ -51,12 +52,38 @@ type recordData struct {
 	json        string
 }
 
+// Caller is copied business ingress information, without a native SDK object.
+// PC is the adjusted instruction PC; Record.PC preserves the original return PC.
+type Caller struct {
+	Defined  bool
+	PC       uintptr
+	File     string
+	Line     int
+	Function string
+}
+
 // Time returns the observed UTC event time, or zero for an absent record.
 func (record Record) Time() time.Time {
 	if record.data == nil {
 		return time.Time{}
 	}
 	return record.data.time
+}
+
+// PC returns the original caller-supplied return PC, or zero when absent.
+func (record Record) PC() uintptr {
+	if record.data == nil {
+		return 0
+	}
+	return record.data.pc
+}
+
+// Caller returns the resolved caller when enabled and supplied, or zero.
+func (record Record) Caller() Caller {
+	if record.data == nil {
+		return Caller{}
+	}
+	return record.data.caller
 }
 
 // Level returns severity, or the empty value for an absent record.
@@ -118,6 +145,10 @@ func copyAttributes(attributes []slog.Attr) []slog.Attr {
 			attr.Value = slog.TimeValue(attr.Value.Time().UTC().Round(0))
 		} else if attr.Value.Kind() == slog.KindString {
 			attr.Value = slog.StringValue(strings.Clone(attr.Value.String()))
+		} else if attr.Value.Kind() == slog.KindAny {
+			if value, ok := attr.Value.Any().(Value); ok {
+				attr.Value = slog.AnyValue(copyValue(value))
+			}
 		}
 		result[index] = attr
 	}
@@ -128,48 +159,56 @@ func validateRecord(level Level, message string, attributes []slog.Attr, limit i
 	if level.rank() < 0 {
 		return failure(ErrInput, "record")
 	}
-	remaining, count := limit-len(message), 0
+	remaining := limit - len(message)
 	if remaining < 0 {
 		return failure(ErrLimit, "record")
 	}
 	if !utf8.ValidString(message) {
 		return failure(ErrInput, "record")
 	}
+	_, err := validateAttributes(attributes, remaining)
+	return err
+}
+
+func validateAttributes(attributes []slog.Attr, limit int) (int, error) {
+	if limit < 0 || limit > 1<<20 {
+		return 0, failure(ErrLimit, "attributes")
+	}
+	budget := dataBudget{bytes: limit, nodes: MaxNodes}
 	var visit func([]slog.Attr, int) error
 	visit = func(attrs []slog.Attr, depth int) error {
-		if depth > MaxDepth || len(attrs) > MaxAttributes-count {
+		if depth > MaxDepth || len(attrs) > MaxAttributes-budget.attributes {
 			return failure(ErrLimit, "attributes")
 		}
 		names := make(map[string]bool, len(attrs))
 		for _, attr := range attrs {
-			count++
-			if len(attr.Key) == 0 || len(attr.Key) > 128 || !utf8.ValidString(attr.Key) || names[attr.Key] {
+			if names[attr.Key] {
 				return failure(ErrInput, "attribute-key")
 			}
+			if err := budget.key(attr.Key); err != nil {
+				return err
+			}
 			names[attr.Key] = true
-			remaining -= len(attr.Key) + 32
-			if remaining < 0 {
-				return failure(ErrLimit, "attributes")
+			if err := budget.take(0, 1); err != nil {
+				return err
 			}
 			switch attr.Value.Kind() {
 			case slog.KindString:
 				value := attr.Value.String()
-				if len(value) > remaining {
-					return failure(ErrLimit, "attributes")
+				if err := budget.take(len(value), 0); err != nil {
+					return err
 				}
 				if !utf8.ValidString(value) {
 					return failure(ErrInput, "attribute-string")
 				}
-				remaining -= len(value)
 			case slog.KindBool, slog.KindInt64, slog.KindUint64, slog.KindDuration:
 			case slog.KindFloat64:
 				value := attr.Value.Float64()
-				if math.IsInf(value, 0) || math.IsNaN(value) {
+				if !finite(value) {
 					return failure(ErrInput, "attribute-number")
 				}
 			case slog.KindTime:
-				year := attr.Value.Time().UTC().Year()
-				if year < 1 || year > 9999 {
+				if !validTime(attr.Value.Time()) {
 					return failure(ErrInput, "attribute-time")
 				}
 			case slog.KindGroup:
@@ -180,19 +219,24 @@ func validateRecord(level Level, message string, attributes []slog.Attr, limit i
 					return err
 				}
 			case slog.KindAny:
-				if attr.Value.Any() != nil {
+				switch value := attr.Value.Any().(type) {
+				case nil:
+				case Value:
+					budget.nodes++ // The closed value includes this attribute's root node.
+					if err := validateValue(value, &budget, depth); err != nil {
+						return err
+					}
+				default:
 					return failure(ErrUnsupported, "attribute-value")
 				}
 			default:
 				return failure(ErrUnsupported, "attribute-value")
 			}
-			if remaining < 0 || count > MaxAttributes {
-				return failure(ErrLimit, "attributes")
-			}
 		}
 		return nil
 	}
-	return visit(attributes, 1)
+	err := visit(attributes, 1)
+	return limit - budget.bytes, err
 }
 
 type capture struct {
@@ -232,7 +276,16 @@ func encodeRecord(ctx context.Context, data *recordData, limit int) error {
 	if !event.Enabled() {
 		return failure(ErrUnsupported, "native-global-level")
 	}
-	event.Ctx(ctx).Str("time", data.time.Format(time.RFC3339Nano)).Str("level", string(data.level)).Str("message", data.message)
+	event.Ctx(ctx)
+	if !data.time.IsZero() {
+		event.Str("time", data.time.Format(time.RFC3339Nano))
+	}
+	event.Str("level", string(data.level)).Str("message", data.message)
+	if data.caller.Defined {
+		caller := event.CreateDict()
+		caller.Str("file", data.caller.File).Int("line", data.caller.Line).Str("function", data.caller.Function)
+		event.Dict("caller", caller)
+	}
 	source := event.CreateDict()
 	source.Str("provider", ProviderID).Str("scope", data.source.Scope).
 		Str("source", data.source.Configuration.Identity.Name).Str("revision", data.source.Configuration.Revision)
@@ -264,7 +317,11 @@ func appendAttributes(event *sdk.Event, attributes []slog.Attr) {
 		case slog.KindTime:
 			event.Str(attr.Key, attr.Value.Time().Format(time.RFC3339Nano))
 		case slog.KindAny:
-			event.RawJSON(attr.Key, []byte("null"))
+			if value, ok := attr.Value.Any().(Value); ok {
+				appendValue(event, attr.Key, value)
+			} else {
+				event.RawJSON(attr.Key, []byte("null"))
+			}
 		case slog.KindGroup:
 			group := event.CreateDict()
 			appendAttributes(group, attr.Value.Group())

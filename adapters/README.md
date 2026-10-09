@@ -68,6 +68,8 @@ automatically own or construct the packages below it.
 | `logging/slog/v1` | ingress | [Restricted, explicitly owned slog ingress with observable refusal and ordered groups](../docs/reference/adapters/logging/slog/v1/interface.md) |
 | `logging/zap/v1` | data-provider | [Zap synchronous local/structured outputs, retained derivations and stable physical file ownership](../docs/reference/adapters/logging/zap/v1/interface.md) |
 | `logging/zap/otel/v1` | composition | [Explicit typed public Zap-to-OTel borrowing, without JSON reparsing or exporter ownership](../docs/reference/adapters/logging/zap/otel/v1/interface.md) |
+| `logging/zerolog/v1` | data-provider | [Seven-severity zerolog logging, typed event recovery and owned file maintenance](../docs/reference/adapters/logging/zerolog/v1/interface.md) |
+| `logging/zerolog/otel/v1` | composition | [Typed independent-event zerolog/OTel composition with separate ownership/evidence](../docs/reference/adapters/logging/zerolog/otel/v1/interface.md) |
 | `internal/errorbridge` | private | [Bounded error forwarding/inspection; no public registry or execution engine](../docs/reference/adapters/internal/errorbridge/interface.md) |
 
 Public package version and native SDK version are separate: for example, public

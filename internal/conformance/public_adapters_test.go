@@ -49,6 +49,7 @@ import (
 	tlsclient "github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
 	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
+	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	doris "github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
@@ -74,6 +75,15 @@ type adapterOwner interface {
 
 func TestPublicAdapterContracts(t *testing.T) {
 	const canary = "adapter-contract-private-canary"
+	t.Run("zerolog", func(t *testing.T) {
+		zero := 0
+		value := zerolog.Settings{Name: canary, Version: 1, Sinks: []zerolog.Sink{{Name: "local", Kind: "writer"}}, QueuedCalls: &zero}
+		checkPublicAdapter(t, value, zerolog.Validate, zerolog.Recommend,
+			func(value zerolog.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[zerolog.Result]) zerolog.Dependencies {
+				return zerolog.Dependencies{Runtime: runtime, Evidence: inbox}
+			}, zerolog.Open, canary)
+	})
 	t.Run("zap", func(t *testing.T) {
 		zero := 0
 		value := zap.Settings{Name: canary, Version: 1, Outputs: []zap.Output{{Name: "local", Kind: "stdout"}}, QueuedCalls: &zero}

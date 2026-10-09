@@ -1,0 +1,107 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "logging_zerolog",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.logging_zerolog.invalid_input",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The logging input or settings are invalid."
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.unsupported_profile",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.unsupported_profile.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested logging capability is unsupported."
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A logging data, work or ownership bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.invalid_state",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.invalid_state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The logging handle cannot perform this operation in its current state."
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.write_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.write_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A logging destination failed; partial effects remain possible."
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.maintenance_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.maintenance_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Owned logging file maintenance failed; effects remain separate."
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Logging cleanup reported a failure; completion is separate."
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zerolog.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Logging runtime value serialization is unsupported."
+      }
+    }
+  ]
+}

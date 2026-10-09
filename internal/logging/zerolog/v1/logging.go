@@ -21,10 +21,10 @@ package zerolog
 
 import (
 	"context"
-	"errors"
-	"io"
 	"log/slog"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -44,9 +44,13 @@ type output struct {
 	failed   error
 }
 type outputs struct {
-	settings settings
-	sinks    []output
-	closed   int
+	prepared        Prepared
+	settings        settings
+	sinks           []output
+	closed          int
+	derivationMu    sync.Mutex
+	derivations     int
+	derivationBytes int64
 }
 
 // Select freezes configuration and validates all layers before any output is
@@ -54,92 +58,19 @@ type outputs struct {
 // reused across independent assemblies require caller-supplied synchronization.
 // Overlays cannot invent, rename or change the kind of a runtime-bound sink.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	if len(options.Sinks) == 0 || len(options.Sinks) > MaxSinks {
-		return resource.Selection[Source]{}, failure(ErrInput, "sink-count")
-	}
-	for _, sink := range options.Sinks {
-		if sink.File != nil && len(sink.File.Directory) > 4096 {
-			return resource.Selection[Source]{}, failure(ErrInput, "directory")
-		}
-	}
-	if !withinBootstrapBudget(options) {
-		location := fault.Context{Provider: ProviderID, Operation: "prepare"}
-		if label(options.Name) {
-			location.Source = options.Name
-		}
-		return resource.Selection[Source]{}, resource.ErrConfiguration.New(location, failure(ErrLimit, "bootstrap-size"))
-	}
-	handles := make(map[string]borrowedSink, len(options.Sinks))
-	for _, sink := range options.Sinks {
-		count := 0
-		if sink.Writer != nil {
-			count++
-		}
-		if sink.Records != nil {
-			count++
-		}
-		if sink.File != nil {
-			count++
-		}
-		if count != 1 || sink.Writer != nil && nilHandle(sink.Writer) || sink.Records != nil && nilHandle(sink.Records) {
-			return resource.Selection[Source]{}, failure(ErrInput, "sink-handles")
-		}
-		if sink.Writer != nil || sink.Records != nil {
-			if _, duplicate := handles[sink.Name]; duplicate {
-				return resource.Selection[Source]{}, failure(ErrInput, "sink-name")
-			}
-			handles[sink.Name] = borrowedSink{sink.Writer, sink.Records}
-		}
-	}
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: func(value settings) error {
-		if err := validate(value); err != nil {
-			return err
-		}
-		for _, sink := range value.Sinks {
-			handle, found := handles[sink.Name]
-			if sink.Kind == "writer" && (!found || handle.writer == nil) ||
-				sink.Kind == "record" && (!found || handle.records == nil) ||
-				sink.Kind == "file" && found {
-				return failure(ErrInput, "sink-binding")
-			}
-		}
-		return nil
-	}}, resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: 1, Layers: layers})
-	if err != nil {
-		return resource.Selection[Source]{}, err
-	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
-		owner := &outputs{settings: value}
-		owned := resource.Resource[Source]{Acquired: true, Capability: Source{owner: owner}, Release: owner.close}
-		if err := nativeProbe(); err != nil {
-			return owned, err
-		}
-		for _, sink := range value.Sinks {
-			if err := ctx.Err(); err != nil {
-				return owned, joined(ErrState, "construct", err, context.Cause(ctx))
-			}
-			item := output{settings: sink, borrowed: handles[sink.Name]}
-			var err error
-			if sink.File != nil {
-				item.file, err = openFile(*sink.File)
-			}
-			owner.sinks = append(owner.sinks, item)
-			if err != nil {
-				return owned, err
-			}
-		}
-		return owned, nil
-	}), nil
+	return legacySelect(options, layers...)
 }
 
 // Logger is a non-owning concurrent facade. Every operation uses the original
 // resource admission and independent evidence inbox, including borrowing aliases.
 type Logger struct {
 	private
-	owner    *outputs
-	access   *resource.Access
-	inbox    *invocation.Inbox[Result]
-	observer *invocation.Observer
+	owner      *outputs
+	access     *resource.Access
+	inbox      *invocation.Inbox[Result]
+	observer   *invocation.Observer
+	policy     *preparedState
+	attributes []slog.Attr
 }
 
 func Bind(assembly *resource.Assembly, selection resource.Selection[Source], inbox *invocation.Inbox[Result], observer *invocation.Observer) (*Logger, error) {
@@ -159,7 +90,7 @@ func Bind(assembly *resource.Assembly, selection resource.Selection[Source], inb
 		limits.Queued > 0 && limits.QueuedBytes < value.reservation() {
 		return nil, failure(ErrInput, "limits")
 	}
-	return &Logger{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil
+	return &Logger{owner: source.owner, access: access, inbox: inbox, observer: observer, policy: source.owner.prepared.state}, nil
 }
 
 // SinkResult reports one selected sink, without paths, record data or context
@@ -167,12 +98,15 @@ func Bind(assembly *resource.Assembly, selection resource.Selection[Source], inb
 // Attempted means actual output entry; Accepted requires full byte write or nil
 // structured-sink acknowledgement. Failures may have effects despite either flag.
 // Rotated/Synced report successful local operations, never power-loss guarantees.
+// Stopped is output failure state, not record rejection; a managed record may
+// fail without stopping later independent records.
 type SinkResult struct {
 	private
 	Name             string
 	Filtered         bool
 	Attempted        bool
 	Accepted         bool
+	Stopped          bool
 	Written          int
 	BytesKnown       bool
 	Rotated          bool
@@ -204,6 +138,7 @@ func (owner *outputs) result() Result {
 	result := Result{sinks: make([]SinkResult, len(owner.sinks))}
 	for index, item := range owner.sinks {
 		result.sinks[index].Name = item.settings.Name
+		result.sinks[index].Stopped = item.failed != nil || item.file != nil && item.file.failed != nil
 	}
 	return result
 }
@@ -215,6 +150,17 @@ func outcome(result Result, extra error) invocation.Outcome[Result] {
 	return invocation.Outcome[Result]{Value: result, Present: true, Primary: joined(ErrWrite, "outputs", causes...)}
 }
 
+// Entry is explicit business ingress metadata. Time zero means no timestamp;
+// PC is a runtime.Callers return PC, not a stack-skip value. No caller callback
+// or native SDK object is admitted. Input is borrowed until LogEntry returns.
+type Entry struct {
+	private
+	Time    time.Time
+	PC      uintptr
+	Level   Level
+	Message string
+}
+
 // Log validates closed, bounded slog attribute kinds without calling user
 // marshalers/LogValuers. Attributes and message are borrowed until return, then
 // independently frozen for structured sinks. Canonical slog groups stay nested;
@@ -224,10 +170,32 @@ func outcome(result Result, extra error) invocation.Outcome[Result] {
 // and Inbox. Sinks run in order without retry; an error does not hide later sinks.
 // A blocked io.Writer/filesystem call cannot be forcibly canceled or released.
 func (logger *Logger) Log(ctx context.Context, id fault.Correlation, level Level, message string, attributes ...slog.Attr) (*invocation.Receipt[Result], error) {
+	var program [1]uintptr
+	runtime.Callers(2, program[:])
+	return logger.LogEntry(ctx, id, Entry{Time: time.Now(), PC: program[0], Level: level, Message: message}, attributes...)
+}
+
+// LogEntry preserves explicit time/PC across a trusted wrapper. It honors caller
+// cancellation just like Log; a restricted slog entry may choose a distinct
+// cancellation context before entering this method. Zero time is not replaced.
+func (logger *Logger) LogEntry(ctx context.Context, id fault.Correlation, input Entry, attributes ...slog.Attr) (*invocation.Receipt[Result], error) {
 	if logger == nil || logger.owner == nil {
 		return nil, failure(ErrInput, "log")
 	}
-	if err := validateRecord(level, message, attributes, logger.owner.settings.MaxRecordBytes); err != nil {
+	if len(attributes) > MaxAttributes-len(logger.attributes) {
+		return nil, failure(ErrLimit, "attributes")
+	}
+	combined := make([]slog.Attr, 0, len(logger.attributes)+len(attributes))
+	combined = append(combined, logger.attributes...)
+	combined = append(combined, attributes...)
+	if err := validateRecord(input.Level, input.Message, combined, logger.owner.settings.MaxRecordBytes); err != nil {
+		return nil, err
+	}
+	if !validTime(input.Time) {
+		return nil, failure(ErrInput, "entry-time")
+	}
+	caller, err := resolveCaller(input.PC, logger.owner.settings.Caller)
+	if err != nil {
 		return nil, err
 	}
 	call, err := logger.begin(ctx, id, "log")
@@ -238,16 +206,17 @@ func (logger *Logger) Log(ctx context.Context, id fault.Correlation, level Level
 	_ = call.Execute(ctx, invocation.Budget{Limit: logger.owner.settings.Timeout}, func(work context.Context, _ invocation.Scope) invocation.Outcome[Result] {
 		result := logger.owner.result()
 		enabled := false
-		for index, item := range logger.owner.sinks {
-			filtered := level.rank() < Level(logger.owner.settings.MinLevel).rank() || level.rank() < Level(item.settings.MinLevel).rank()
+		for index := range logger.owner.sinks {
+			filtered := !logger.enabled(index, input.Level)
 			result.sinks[index].Filtered = filtered
 			enabled = enabled || !filtered
 		}
 		if !enabled {
 			return outcome(result, nil)
 		}
-		data := &recordData{time: time.Now().UTC(), level: level, message: strings.Clone(message), source: logger.access.Info(),
-			correlation: id, attributes: copyAttributes(attributes)}
+		data := &recordData{time: input.Time.UTC().Round(0), pc: input.PC, caller: caller, level: input.Level,
+			message: strings.Clone(input.Message), source: logger.access.Info(), correlation: fault.Correlation{
+				Call: strings.Clone(id.Call), Parent: strings.Clone(id.Parent), Owner: strings.Clone(id.Owner)}, attributes: copyAttributes(combined)}
 		if err := encodeRecord(work, data, logger.owner.settings.MaxRecordBytes); err != nil {
 			return outcome(result, err)
 		}
@@ -263,14 +232,18 @@ func (logger *Logger) Log(ctx context.Context, id fault.Correlation, level Level
 			}
 			if item.failed != nil {
 				report.WriteError = failure(ErrState, "sink-stopped", item.failed)
+				report.Stopped = true
 				continue
 			}
 			if item.file != nil {
 				item.file.write(work, record.JSONCopy(), report)
+				report.Stopped = item.file.failed != nil
 			} else {
 				report.Attempted = true
 				item.borrowed.write(work, record, report)
-				item.failed = report.WriteError
+				if report.Stopped {
+					item.failed = report.WriteError
+				}
 			}
 		}
 		return outcome(result, nil)
@@ -278,29 +251,44 @@ func (logger *Logger) Log(ctx context.Context, id fault.Correlation, level Level
 	return receipt, nil
 }
 
-func (sink borrowedSink) write(ctx context.Context, record Record, report *SinkResult) {
-	returned := false
-	defer func() {
-		_ = recover()
-		if !returned {
-			report.WriteError = failure(ErrWrite, "sink-panic")
-		}
-	}()
-	if sink.writer != nil {
-		data := record.JSONCopy()
-		count, err := sink.writer.Write(data)
-		report.Written, report.BytesKnown = count, count >= 0 && count <= len(data)
-		if count != len(data) {
-			err = errors.Join(err, io.ErrShortWrite)
-		}
-		report.WriteError = joined(ErrWrite, "writer", err)
-		report.Accepted = report.BytesKnown && count == len(data) && err == nil
-	} else {
-		err := sink.records.WriteRecord(ctx, record)
-		report.WriteError = joined(ErrWrite, "record-writer", err)
-		report.Accepted = err == nil
+func resolveCaller(pc uintptr, enabled bool) (Caller, error) {
+	if !enabled || pc == 0 {
+		return Caller{}, nil
 	}
-	returned = true
+	frame, _ := runtime.CallersFrames([]uintptr{pc}).Next()
+	if frame.PC == 0 || frame.File == "" {
+		return Caller{}, nil
+	}
+	if len(frame.File) > 4096 || len(frame.Function) > 4096 {
+		return Caller{}, failure(ErrLimit, "entry-caller")
+	}
+	return Caller{Defined: true, PC: frame.PC, File: strings.Clone(frame.File), Line: frame.Line, Function: strings.Clone(frame.Function)}, nil
+}
+
+// With returns a non-owning view with independently frozen cumulative fields.
+// Views share all physical admission, ordering and failure state. A source has
+// one cumulative bounded view allowance; policy updates never reset it.
+func (logger *Logger) With(attributes ...slog.Attr) (*Logger, error) {
+	if logger == nil || logger.owner == nil {
+		return nil, failure(ErrInput, "with")
+	}
+	if len(attributes) > MaxAttributes-len(logger.attributes) {
+		return nil, failure(ErrLimit, "attributes")
+	}
+	combined := make([]slog.Attr, 0, len(logger.attributes)+len(attributes))
+	combined = append(combined, logger.attributes...)
+	combined = append(combined, attributes...)
+	bytes, err := validateAttributes(combined, logger.owner.settings.MaxRecordBytes)
+	if err != nil {
+		return nil, err
+	}
+	frozen := copyAttributes(combined)
+	if err := logger.owner.reserveDerivation(int64(bytes+retainedAttributeHeaders(frozen)) + 256); err != nil {
+		return nil, err
+	}
+	view := *logger
+	view.attributes = frozen
+	return &view, nil
 }
 
 // Sync synchronously syncs owned active files only. Borrowed outputs retain their
@@ -353,6 +341,7 @@ func (logger *Logger) maintain(ctx context.Context, id fault.Correlation, rotate
 					report.Synced = report.MaintenanceError == nil
 				}
 			}
+			report.Stopped = item.file.failed != nil || item.file.closed
 		}
 		return outcome(result, nil)
 	})

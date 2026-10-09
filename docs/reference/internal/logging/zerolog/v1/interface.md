@@ -22,8 +22,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** framework composition and integration maintainers.
-**Status:** implemented synchronous internal JSON profile; no public logger or
-production telemetry/export certification.
+**Status:** implemented synchronous internal JSON profile, with a separately owned
+[public Adapter](../../../../adapters/logging/zerolog/v1/interface.md); no production certification.
 **Package:** `github.com/frost-leo/fathomry/internal/logging/zerolog/v1`.
 
 ## Contents
@@ -50,10 +50,13 @@ Temporal Workflow command/serialization is implemented here.
 
 ## Capabilities and call sequence
 
-1. `Select(OptionsV1, layers...)` validates/freezes source settings through
+1. Inert `PrepareV1(OptionsV1, layers...)` validates/freezes source settings through
    `resource.Prepare`. It performs no file I/O and discovers no environment,
    default stdout/stderr, config files or log directories.
-2. Composition adds `resource.WithLimits` and calls `resource.Assemble`.
+2. Inspect final Prepared.Metadata, then Prepared.Select with exact BindingsV1.
+   Kind declarations are data; writer/record/managed-record handles are separate.
+   Legacy Select extracts its original live bindings and preserves prior overlay
+   removal/error semantics. Composition adds final `resource.WithLimits` and calls `resource.Assemble`.
    Construction opens only selected owned files. A failed assembly cannot bind;
    retain its returned cleanup responsibility and report.
 3. Create an independent `invocation.Inbox[Result]`, then call `Bind`.
@@ -95,6 +98,7 @@ encoded-default/document limits, including JSON expansion.
 | `QueuedCalls` | 0, immediate overload refusal; 0–64 |
 | `Sinks` | 1–8 unique non-secret names; each selects exactly one output |
 | Sink `MinLevel` | `Trace`; source and sink thresholds both apply |
+| `Caller` | false; opt-in bounded original file/function/frame information |
 
 `Writer` is an explicit borrowed `io.Writer`, including caller-selected stdout
 or stderr. `Records` is an explicit borrowed `RecordWriter`. `File` selects an
@@ -103,11 +107,25 @@ Overlays may select/configure files, but cannot invent, rename or change the kin
 of a runtime-bound sink. Replacing the sink list requires complete entries;
 unselected handles never run.
 
+New inert kinds include explicit managed-record, bound through
+BindingsV1.ManagedRecords. It alone selects the typed independent-event policy;
+legacy RecordWriter and byte/file failure-stop remain unchanged. Prepared.Select
+requires exactly the selected names/kinds and copies the binding maps before use.
+
 `LimitsV1` derives recommended admission from bootstrap options, **before
 overlays**. A changed effective bound needs corresponding limits. `Bind`
 requires exactly one active root, sufficient bytes and a queue no larger than the
 effective setting; aliases cannot reset the original allowance.
 `EvidenceBytesV1` supplies the per-result declared inbox reservation.
+
+Prepared.Metadata is authoritative after overlays. It also reserves physical
+residence, logical policy views, cumulative derivations and logical file content.
+PolicyBytes pads all severity spellings to the maximum admitted width so later
+level-only adoption fits the original envelope. WithPolicy shares the exact
+original Access, queue, output/file/failure state and dependencies. Only source
+and sink thresholds may change; PolicyDescription differs from physical-source
+identity. Public composition bounds live policies and releases the physical owner
+only after its last logical view. There is no new allowance or unlock/reopen trick.
 
 ## Structured records and context
 
@@ -127,9 +145,13 @@ discarded during copying. Top-level empty groups remain `{}` in the output.
 
 There are at most **64 attributes including groups**, **8 levels**, and **128
 UTF-8 bytes per nonempty key**. Duplicate keys in the same group are rejected.
-Arrays, maps, byte slices, errors, `LogValuer`, arbitrary `Any` values,
-marshalers, raw JSON and native callbacks are refused before invocation. No
-caller formatter runs during validation/encoding.
+Closed Value adds null, binary/base64, UTF-8 byte-string, float32, arrays and maps
+through exact slog.Any Value carriers. Nodes are capped at 256; key/depth/record
+bounds still apply. Present empty collections differ from null. Non-finite values
+refuse. Unselected members must be empty, including inactive time/location state.
+Arbitrary Any/byte slices/errors, LogValuer, marshalers, caller raw JSON and native
+callbacks remain refused. Only bounded library-generated fragments reach native
+RawJSON; the user supplies no raw fragment or formatting callback.
 
 Input accounting charges message/string-value/key bytes plus 32 bytes per
 attribute. Both that total and the **complete encoded record including newline
@@ -139,8 +161,21 @@ is attempted. Oversized message/string values are rejected by byte length before
 UTF-8 scanning, including when an oversized value is also malformed. Data is
 never truncated to fit.
 
-JSON has fixed `time`, `level`, `message`, `resource`, `correlation` and
-`attributes` fields. The resource object contains provider, original scope,
+Legacy scalar input keeps its exact 32-byte attribute charge. New closed values
+add their declared node storage. Retained With separately accounts for actual
+attribute headers without shrinking the historical scalar domain: 128 cumulative
+views and 8 MiB per physical source, shared by every policy alias. Maximum view
+storage is MaxRecordBytes+768; these are declared envelopes, not hard RSS.
+
+LogEntry accepts original time/return-PC and resolves the actual frame with
+CallersFrames when Caller is selected. Zero Time/PC are absent. Record.PC keeps
+the original return PC separately from the resolved Caller. Closed float32/64
+encoding preserves default finite numeric fidelity without consulting a mutable
+native precision callback; native global Disabled still refuses event creation.
+
+JSON has fixed `level`, `message`, `resource`, `correlation` and `attributes`
+fields; `time` is omitted for an absent timestamp and `caller` is opt-in.
+The resource object contains provider, original scope,
 source and preparation revision, never file paths/settings. Correlation preserves
 call, parent and opaque owner; it is not authentication or inferred Run/Item state.
 User fields remain inside `attributes` and cannot override these fixed fields.
@@ -162,7 +197,8 @@ event. That adapter's export, buffering, retries and retained-record budgets rem
 explicit separate responsibilities. The implemented
 [OpenTelemetry RecordWriter bridge](../../../telemetry/otel/v1/zerologbridge/interface.md)
 uses this boundary without changing borrowed ownership or local outputs.
-Standard/native `slog.Handler` compatibility is not supplied.
+The public boundary supplies the separately owned restricted shared slog gateway,
+not the selected native Handler or unrestricted standard compatibility.
 
 ## Results, failures and ownership
 
@@ -175,11 +211,16 @@ Each selected sink has separate copied `SinkResult` evidence:
   valid count from absent or malformed evidence; neither proves durability.
 - `Rotated` and `Synced` confirm successful local maintenance only.
 - `WriteError` and `MaintenanceError` retain original causes separately.
+- `Stopped` distinguishes latched destination state from one rejected event.
 
 A failed invocation may have known accepted sinks and untouched or uncertain
 others. An error does not short-circuit later eligible sinks, but context expiry
-prevents their later entry. Failed outputs stop accepting new events until the
-source is explicitly reconstructed; there is no automatic retry or stream repair.
+prevents their later entry. Legacy byte/record and failed file outputs stop until
+explicit reconstruction/recovery. Only a managed-record RecordRejected outcome
+permits the next independent record; it keeps the original event failed and does
+not replay it. RecordAccepted requires nil error, Rejected/Stopped require a
+non-nil/non-typed-nil error. Malformed outcomes and panics stop conservatively.
+Closed/disabled/unknown state remains stopped; no automatic retry or stream repair.
 A maintenance failure can leave archive effects even when `Rotated` is false.
 
 Shared `invocation.Attempts` remains **unobserved** (`Observed=0, Exact=false`)

@@ -20,6 +20,7 @@
 package otel
 
 import (
+	"context"
 	"errors"
 
 	"github.com/frost-leo/fathomry/adapters/internal/errorbridge"
@@ -30,6 +31,48 @@ import (
 	source "github.com/frost-leo/fathomry/internal/resource"
 	native "github.com/frost-leo/fathomry/internal/telemetry/otel/v1"
 )
+
+// AdmissionCanceled proves only the integration's known cancellation boundaries:
+// entry refused before native dispatch, or Emit canceled before SDK enqueue after
+// returning its queue reservation. It preserves error identity and adds no retry
+// policy. Use the current operation's Primary/setup error, not a heterogeneous
+// aggregate or an unrelated nested cause. False is unknown, not proof of effects.
+// Only this provider's native frame and its one known invocation attribution
+// wrapper are inspected; caller cause callbacks are never traversed or invoked.
+// Target lifetime/readiness is a separate fact.
+func AdmissionCanceled(err error) bool {
+	core, ok := failure.Inspect(err)
+	if !ok || core.Diagnostic().Definition.Code != ErrState {
+		return false
+	}
+	for _, cause := range core.Unwrap() {
+		original, ok := cause.(*fault.Error)
+		if !ok || original == nil {
+			continue
+		}
+		diagnostic := original.Diagnostic()
+		if diagnostic.Kind == invocation.ErrFailed && diagnostic.Context.Provider == native.ProviderID && diagnostic.Context.Operation == "emit" {
+			children := original.Unwrap()
+			if len(children) != 1 {
+				continue
+			}
+			original, ok = children[0].(*fault.Error)
+			if !ok || original == nil {
+				continue
+			}
+			diagnostic = original.Diagnostic()
+		}
+		if diagnostic.Kind != native.ErrState || diagnostic.Context.Provider != native.ProviderID || (diagnostic.Context.Operation != "entry" && diagnostic.Context.Operation != "emit") {
+			continue
+		}
+		for _, cancellation := range original.Unwrap() {
+			if cancellation == context.Canceled || cancellation == context.DeadlineExceeded {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func joinErrors(operation string, left, right error) error {
 	if left == nil {
