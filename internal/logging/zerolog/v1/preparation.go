@@ -23,6 +23,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -284,15 +285,18 @@ func (logger *Logger) Enabled(severity Level) bool {
 	return false
 }
 
-func (owner *outputs) reserveDerivation(bytes int64) error {
+func (owner *outputs) freezeDerivation(attributes []slog.Attr, bytes int64) ([]slog.Attr, error) {
 	owner.derivationMu.Lock()
 	defer owner.derivationMu.Unlock()
+	if owner.derivationClosed {
+		return nil, failure(ErrState, "derivation")
+	}
 	if bytes < 1 || owner.derivations == MaxDerivedViews || bytes > MaxDerivedBytes-owner.derivationBytes {
-		return failure(ErrLimit, "derivation")
+		return nil, failure(ErrLimit, "derivation")
 	}
 	owner.derivations++
 	owner.derivationBytes += bytes
-	return nil
+	return copyAttributes(attributes), nil
 }
 
 func (value settings) metadata(encodedBytes int) Metadata {

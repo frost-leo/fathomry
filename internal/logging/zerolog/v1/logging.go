@@ -44,13 +44,14 @@ type output struct {
 	failed   error
 }
 type outputs struct {
-	prepared        Prepared
-	settings        settings
-	sinks           []output
-	closed          int
-	derivationMu    sync.Mutex
-	derivations     int
-	derivationBytes int64
+	prepared         Prepared
+	settings         settings
+	sinks            []output
+	closed           int
+	derivationMu     sync.Mutex
+	derivations      int
+	derivationBytes  int64
+	derivationClosed bool
 }
 
 // Select freezes configuration and validates all layers before any output is
@@ -282,8 +283,8 @@ func (logger *Logger) With(attributes ...slog.Attr) (*Logger, error) {
 	if err != nil {
 		return nil, err
 	}
-	frozen := copyAttributes(combined)
-	if err := logger.owner.reserveDerivation(int64(bytes+retainedAttributeHeaders(frozen)) + 256); err != nil {
+	frozen, err := logger.owner.freezeDerivation(combined, int64(bytes+retainedAttributeHeaders(combined))+256)
+	if err != nil {
 		return nil, err
 	}
 	view := *logger
@@ -349,6 +350,9 @@ func (logger *Logger) maintain(ctx context.Context, id fault.Correlation, rotate
 }
 
 func (owner *outputs) close(ctx context.Context) resource.ReleaseResult {
+	owner.derivationMu.Lock()
+	owner.derivationClosed = true
+	owner.derivationMu.Unlock()
 	var causes []error
 	for owner.closed < len(owner.sinks) {
 		if ctx.Err() != nil {

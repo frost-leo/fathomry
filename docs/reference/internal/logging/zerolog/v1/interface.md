@@ -164,7 +164,9 @@ never truncated to fit.
 Legacy scalar input keeps its exact 32-byte attribute charge. New closed values
 add their declared node storage. Retained With separately accounts for actual
 attribute headers without shrinking the historical scalar domain: 128 cumulative
-views and 8 MiB per physical source, shared by every policy alias. Maximum view
+views and 8 MiB per physical source, shared by every policy alias. Reservation and
+copy are serialized against physical close; a closed or exhausted owner refuses
+before copying payloads. Maximum view
 storage is MaxRecordBytes+768; these are declared envelopes, not hard RSS.
 
 LogEntry accepts original time/return-PC and resolves the actual frame with

@@ -42,21 +42,23 @@ type View struct {
 	attributes []slog.Attr
 }
 type viewFamily struct {
-	call     *adapters.Call[Result]
-	guard    adapters.Guard
-	client   *Client
-	state    *sourceState
-	release  func()
-	stop     func()
-	mu       sync.Mutex
-	views    int
-	bytes    int64
-	closing  bool
-	gateway  bool
-	handler  *ingress.Handler
-	gate     chan struct{}
-	complete atomic.Bool
-	final    error
+	call      *adapters.Call[Result]
+	guard     adapters.Guard
+	client    *Client
+	state     *sourceState
+	release   func()
+	stop      func()
+	mu        sync.Mutex
+	views     int
+	bytes     int64
+	preparing int
+	settled   bool
+	closing   bool
+	gateway   bool
+	handler   *ingress.Handler
+	gate      chan struct{}
+	complete  atomic.Bool
+	final     error
 }
 
 // Retain captures the actual generation and reserves bounded storage/child work.
@@ -161,24 +163,46 @@ func (view *View) With(attributes ...slog.Attr) (*View, error) {
 	if len(attributes) > native.MaxAttributes-len(view.attributes) {
 		return nil, fail(ErrLimit, "attributes")
 	}
-	all := append(append([]slog.Attr(nil), view.attributes...), attributes...)
-	limit := view.family.state.prepared.metadata.MaxRecordBytes
-	frozen, err := freezeAttributes(all, limit)
-	if err != nil {
-		return nil, err
-	}
 	family := view.family
 	family.mu.Lock()
-	defer family.mu.Unlock()
 	if family.closing || family.call.Context().Err() != nil {
+		family.mu.Unlock()
 		return nil, fail(ErrState, "with")
 	}
 	charge := family.state.prepared.metadata.ViewBytes
-	if family.views >= maxDerivedViews || charge > derivedBytes-family.bytes {
+	reservation := 2 * charge
+	if family.views >= maxDerivedViews || reservation > derivedBytes-family.bytes {
+		family.mu.Unlock()
 		return nil, fail(ErrLimit, "with")
 	}
 	family.views++
-	family.bytes += charge
+	family.bytes += reservation
+	family.preparing++
+	family.mu.Unlock()
+	committed := false
+	defer func() {
+		family.mu.Lock()
+		defer family.mu.Unlock()
+		family.preparing--
+		if committed {
+			family.bytes -= charge
+		} else {
+			family.views--
+			family.bytes -= reservation
+		}
+		family.settleCloseLocked()
+	}()
+	all := append(append([]slog.Attr(nil), view.attributes...), attributes...)
+	frozen, err := freezeAttributes(all, family.state.prepared.metadata.MaxRecordBytes)
+	family.mu.Lock()
+	defer family.mu.Unlock()
+	if err == nil && (family.closing || family.call.Context().Err() != nil) {
+		err = fail(ErrState, "with")
+	}
+	if err != nil {
+		return nil, err
+	}
+	committed = true
 	return &View{family: family, attributes: frozen}, nil
 }
 func (view *View) Log(ctx context.Context, level Level, message string, attributes ...slog.Attr) (*adapters.Receipt[Result], error) {
@@ -248,6 +272,13 @@ func (family *viewFamily) beginCloseLocked() {
 	if !family.closing {
 		family.closing = true
 		_ = family.call.Cancel(nil)
+	}
+	family.settleCloseLocked()
+}
+
+func (family *viewFamily) settleCloseLocked() {
+	if family.closing && family.preparing == 0 && !family.settled {
+		family.settled = true
 		snapshot, _ := family.call.Receipt().Snapshot()
 		_ = family.call.Resolve(adapters.Outcome[Result]{Present: true, Value: Result{source: info(family.state.physical.info), policyRevision: family.state.prepared.native.Description().Revision, attribution: publicAttribution(snapshot.Info())}})
 		_ = family.guard.Release()

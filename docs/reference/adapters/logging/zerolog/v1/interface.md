@@ -88,8 +88,14 @@ never JSONCopy. No pooled mutable SDK Event, Logger or writer escapes.
 Retain/With capture one generation. Immutable derived facades share family Close
 authority and never retarget destinations. Four families per physical source,
 128 cumulative views and 8 MiB declared retained storage per family are admitted.
-Direct validation stacks remain caller-owned; input length checks precede copying.
-Native derivations separately share the original source's cumulative accounting.
+With reserves its view and temporary copy budget before copying attributes: two
+ViewBytes during preparation, one retained on success, within the same 8 MiB.
+Concurrent preparation can therefore refuse earlier than sequential derivation.
+Failure, panic and goroutine exit return the reservation; Close joins entered
+preparation, including cooperative public-error projection, before releasing the
+source borrow. Direct validation stacks remain caller-owned. Native derivations
+also check and reserve the original source's cumulative budget before copying;
+policy aliases cannot reset it.
 
 Client.Slog creates one retained safe gateway; View.Slog permits one per family.
 The shared [restricted ingress](../../slog/v1/interface.md) preserves chronology,
