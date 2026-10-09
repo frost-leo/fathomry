@@ -1,0 +1,450 @@
+{
+  "schema": "fathomry.sdk-source/v1",
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "module": "go.opentelemetry.io/otel/sdk/metric",
+  "version": "v1.47.0",
+  "origin_url": "https://github.com/open-telemetry/opentelemetry-go",
+  "origin_commit": "66cfc9520e205b7d450183532772401bc2b6674c",
+  "origin_subdirectory": "sdk/metric",
+  "origin_ref": "refs/tags/sdk/metric/v1.47.0",
+  "module_sum": "h1:lfISg2j93VT6yqdk9OfUaZmw/GfcZqCCV3jdXtsPnKw=",
+  "go_mod_sum": "h1:ypLp+mW1Nt2x+Szt3b5/i1syodyts49lMOwxpDI3VGw=",
+  "archive_sha256": "0d63b5fa4f373296a54137ed76e74dfc0b267bb5e579f313d1e76eb1bd919c37",
+  "local_compatibility_revision": "v1",
+  "upstream_license": {
+    "file": "LICENSE",
+    "spdx": "Apache-2.0",
+    "status": "Original upstream license and source notices retained."
+  },
+  "modified_upstream_files": {
+    "internal/aggregate/histogram.go": "Preserve int64 measurements in explicit-bucket comparisons for cumulative and delta aggregation. Float64 comparison remains unchanged.",
+    "go.mod": "Remove upstream monorepo-relative replacements; retain original exact dependency requirements.",
+    "go.sum": "Include checksums for independently downloaded original sibling requirements."
+  },
+  "original_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "1ae07514be1d7bb33f0698f8d91fb51b8b9fe1463157ec1c72081a49b9bc6f40"
+    },
+    {
+      "path": "README.md",
+      "sha256": "6d17bd4e51f215b5adddcf55c8e124cd385edfcb79073fc66f2da5e5b7bb9f4a"
+    },
+    {
+      "path": "aggregation.go",
+      "sha256": "7702ee13386528aa4ecf8a85be6921d3c79a704e9dd22b9b4a9acf02dfa66d90"
+    },
+    {
+      "path": "aggregation_test.go",
+      "sha256": "9dc3587968c894f6380582aa0cc5745f279b0962274d83b30bff493320dc9478"
+    },
+    {
+      "path": "benchmark_test.go",
+      "sha256": "73ee779dd0f91aa0ee777dc8dca5b03f73648a3acdaf7f7cd507432473a1137a"
+    },
+    {
+      "path": "cache.go",
+      "sha256": "090fce510a47f30c529ffe9fa961715903a91de00a2789d7227157a639c563a0"
+    },
+    {
+      "path": "cache_test.go",
+      "sha256": "f5b94f306da8e1318e7f705070864341b704c5d489e816ffa17fe34352d045e4"
+    },
+    {
+      "path": "config.go",
+      "sha256": "7258839f89d0d4fe8b0846a4329a4aaa6a4fbb5590bf8958b73193130009c01b"
+    },
+    {
+      "path": "config_test.go",
+      "sha256": "b6d7230f04b1a0483dab080dedad85a4b4da52d21e8679e33103619ba48c396c"
+    },
+    {
+      "path": "doc.go",
+      "sha256": "a3a52c8d7f3dc66829a4a8cef945728c543f477bc66d41a1e15c342509049c68"
+    },
+    {
+      "path": "env.go",
+      "sha256": "b71b156609a87015936e5cbc25060064a560a6e04f73ea108abe0ec872d72da2"
+    },
+    {
+      "path": "example_test.go",
+      "sha256": "bfef3f023f171b818b5b6e127335abfe0935ffcfa98d605700d712009a505313"
+    },
+    {
+      "path": "exemplar/README.md",
+      "sha256": "d8f06ebdb95a2bfbc9a488a2889318a3c09c96c26fc48a9670fb40040475eadd"
+    },
+    {
+      "path": "exemplar/benchmark_test.go",
+      "sha256": "6671ab037b19f3cda23a70ba894d9c6175fa1f5200fea740f18be2b560da9ba6"
+    },
+    {
+      "path": "exemplar/doc.go",
+      "sha256": "8c0f05d7bebf9fd001692d45f1c8773ff40450567ae30d258712dc325a8547d6"
+    },
+    {
+      "path": "exemplar/exemplar.go",
+      "sha256": "2671364f33839f30618df1b5a5f704564f4404ec3eec4cf3a19c64001e6fa6e4"
+    },
+    {
+      "path": "exemplar/filter.go",
+      "sha256": "0ce714d18267fd4601a1195766b5e9741b580443bc4b83b41393f953b23d3ef7"
+    },
+    {
+      "path": "exemplar/filter_test.go",
+      "sha256": "bc047b78ce3ba15f703e774f7cb0dde38f7b572c0a0d00b60d70ae3f9ca15296"
+    },
+    {
+      "path": "exemplar/fixed_size_reservoir.go",
+      "sha256": "93b684eabd2271885f6e9daf1d5193619ddd3735f5cb13e9a5f384b6c36078ed"
+    },
+    {
+      "path": "exemplar/fixed_size_reservoir_test.go",
+      "sha256": "ba8801a2e3f2c5738de3c310c58b70fa26269924cd279be5ce455c1ddb4e9e86"
+    },
+    {
+      "path": "exemplar/histogram_reservoir.go",
+      "sha256": "06446e890e666dcbc29edc20596e951a1ace7bfa26d479effe5f97ca1a963f38"
+    },
+    {
+      "path": "exemplar/histogram_reservoir_test.go",
+      "sha256": "9c097ca33de14a7647366589d1c6e5142d35f67b6f971ef49c2cf4af33b16657"
+    },
+    {
+      "path": "exemplar/next_tracker.go",
+      "sha256": "6e6fbb8b979fbdd1f9a45a26f9ed649ecf534b64372f48d317a447aa1326329c"
+    },
+    {
+      "path": "exemplar/reservoir.go",
+      "sha256": "497ff9d327d042a0776ba2a85817c9d8a4a8251fc53105e5d374778b7671eda8"
+    },
+    {
+      "path": "exemplar/reservoir_test.go",
+      "sha256": "23c74840b68d4abeaf99c1266ab5fd103e1f679b1d43359f4d04ab35e9b17ff6"
+    },
+    {
+      "path": "exemplar/storage.go",
+      "sha256": "edd8b98c0302fe14ec6914bd50a9c7a8bb65ecba56417d7e1757a1aa285a82bf"
+    },
+    {
+      "path": "exemplar/value.go",
+      "sha256": "aa16d222612970a90ccf0cbd2208d677f3fc812ac5a08a0fbb666cb128161073"
+    },
+    {
+      "path": "exemplar/value_test.go",
+      "sha256": "7a1570e67f6fd3301bef9792601348b5e5257736fdb68b84365b52e27223fd9e"
+    },
+    {
+      "path": "exemplar.go",
+      "sha256": "41ba2aab4eaf3fada1d18b031100d452226936b36f45c93759a42eb1a36a3ce7"
+    },
+    {
+      "path": "exemplar_test.go",
+      "sha256": "46afee016591e0de624f1ea6c650bf25f80ac89e3b9c6279307da4483bcf07db"
+    },
+    {
+      "path": "exporter.go",
+      "sha256": "fc435ea5047b5233e196e8ef03790659e2432c28566a068bc3bb5b7dd9aeed2a"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "94e81cb346847b1acad47dcecb54795c736d69e69f09346574ab4e7154c98ce6"
+    },
+    {
+      "path": "go.sum",
+      "sha256": "03cb9280f8e084e70c64a7950b79a4d53602ddbf9b0e607fa454e5105af84a5a"
+    },
+    {
+      "path": "instrument.go",
+      "sha256": "030040d8b84d4ee7dd18e7c35720ac56ad01464d542688c66f49a087950797aa"
+    },
+    {
+      "path": "instrument_test.go",
+      "sha256": "2cf1a3c37d8654b1d8b5a9d850fc20311846611e45d00c3005c11476440bc120"
+    },
+    {
+      "path": "instrumentkind_string.go",
+      "sha256": "831320193a15cc112989f433c719e66b8c418cd78b8bf5991ac1cf2c3db522ff"
+    },
+    {
+      "path": "internal/aggregate/aggregate.go",
+      "sha256": "028d5d4356d0e149924dccf91d3e7710ab172d427e9ba2bcc9e66be399d5d644"
+    },
+    {
+      "path": "internal/aggregate/aggregate_test.go",
+      "sha256": "f83e3055589ccaeae02a5784230eef52a635fea9153aa9d14bb5bcbb85ab591a"
+    },
+    {
+      "path": "internal/aggregate/atomic.go",
+      "sha256": "354c0b8e1499b62a40a01429b7860a94fcfc4593a707ad157ee4fe38a2380ff0"
+    },
+    {
+      "path": "internal/aggregate/atomic_test.go",
+      "sha256": "fa6075091a80aa1af2416023103369a4e78d244688bc95d52b2c8973c0b96613"
+    },
+    {
+      "path": "internal/aggregate/doc.go",
+      "sha256": "1ce021bd7f8b5535b313c0d8e84f136a329a01eca104d181b11c5c7cb08cef58"
+    },
+    {
+      "path": "internal/aggregate/drop.go",
+      "sha256": "5bc41ce9c61d83832593867fb81f631824b185207d95b9641d1522ea1621d21d"
+    },
+    {
+      "path": "internal/aggregate/drop_test.go",
+      "sha256": "1f6be4a479a6ee732c64adcbfbe290ae711fbe720268d3276a69411a0f144b35"
+    },
+    {
+      "path": "internal/aggregate/exemplar.go",
+      "sha256": "0f85ee7d64fa2f7b1e72a0675e027ab5650ef82433bb1e1593db525fe3e2bff7"
+    },
+    {
+      "path": "internal/aggregate/exemplar_test.go",
+      "sha256": "1427b2ade53c5a9e4990626c33baf04369b118fe21e57581f9d5efadb5253880"
+    },
+    {
+      "path": "internal/aggregate/exponential_histogram.go",
+      "sha256": "e770eaa1068992bbb003c3ea62414fc69b63702dece8aa0103592ad08a6386c7"
+    },
+    {
+      "path": "internal/aggregate/exponential_histogram_test.go",
+      "sha256": "3b7fc2d62b3573cd2f07f2bd9f18ec242ddaa2e911b6120ecfcfa93e716ff4ef"
+    },
+    {
+      "path": "internal/aggregate/filtered_reservoir.go",
+      "sha256": "22768f6360a8f79679648265aa215d339a77876353987ba6e816540302ec9e5f"
+    },
+    {
+      "path": "internal/aggregate/filtered_reservoir_test.go",
+      "sha256": "ab9fccb9e722ce942fc62882948a277ec0d8cd83aa5b4bc4ec24531e33f1556c"
+    },
+    {
+      "path": "internal/aggregate/finish_sum.go",
+      "sha256": "2bbfd74b7fbe7a779a88298614351b4837ff3850e4656096722898532c66d775"
+    },
+    {
+      "path": "internal/aggregate/finish_sum_test.go",
+      "sha256": "d5bddc5d18cc808fdf44c66a6508b900fb2d37e833ec082d621e4f87b24f0e7c"
+    },
+    {
+      "path": "internal/aggregate/histogram.go",
+      "sha256": "46518b0dc2cb1f463bd6d4eb809800d20c69b791d57f43632cf00619d8e30a6e"
+    },
+    {
+      "path": "internal/aggregate/histogram_test.go",
+      "sha256": "eb8c8d62a292ddbffe4c2695fb44370752e24518511d1395de48895bed0ebeb4"
+    },
+    {
+      "path": "internal/aggregate/lastvalue.go",
+      "sha256": "65a69efc3b959de7376a0f15398048d417deaba661b64e046caa9b40b6b666fc"
+    },
+    {
+      "path": "internal/aggregate/lastvalue_test.go",
+      "sha256": "972584a857f74a85524c865aa9f4d88e54ef06bb4f9214e24afb5c9fbada8904"
+    },
+    {
+      "path": "internal/aggregate/lazy_attributes.go",
+      "sha256": "ebb5011bca7852242d8f324c3eab0df86df5b204b18d1dbe05afee359113e34b"
+    },
+    {
+      "path": "internal/aggregate/lazy_attributes_test.go",
+      "sha256": "f43cff0ad86da26e38b105260ab084ccbe4cd1c46b531329609216a29bfb4eda"
+    },
+    {
+      "path": "internal/aggregate/limit.go",
+      "sha256": "da575ae506aba36e9b3dc98e02b03e4a1d668f6ed6d270830a21f2a12a9a2ae7"
+    },
+    {
+      "path": "internal/aggregate/limit_test.go",
+      "sha256": "00616697c892959752e788afa978211f34b562d5a1983c472f18fd20144a7bc0"
+    },
+    {
+      "path": "internal/aggregate/sum.go",
+      "sha256": "0c289f91c3405c537d32a198eb00f231e3ea9163d7cdb59df448f2bb3d35685e"
+    },
+    {
+      "path": "internal/aggregate/sum_test.go",
+      "sha256": "e836234a9b008c2bb0f7c4b9355a9b863420146fbe4eccd916b8bb31f4136a4d"
+    },
+    {
+      "path": "internal/attrnorm/dedup.go",
+      "sha256": "53ed477da9b36ed682674fd73276e11bee0f579f1fdc86d8355334d474a08f90"
+    },
+    {
+      "path": "internal/attrnorm/dedup_test.go",
+      "sha256": "f4bef729cd29e86bdb8b4fa4f5056ca392de5b7d180d9fe8837ca7a5804cdb41"
+    },
+    {
+      "path": "internal/attrnorm/distinct.go",
+      "sha256": "e1af3ff336a263f9d033690a7d09fea506a6977346943ef25521c030b20c3651"
+    },
+    {
+      "path": "internal/attrnorm/distinct_test.go",
+      "sha256": "a12d0b4283f88899b8fdde8e63f6ccefce5b6fbaf41dff74cb88abb98dcc3f8c"
+    },
+    {
+      "path": "internal/finish/doc.go",
+      "sha256": "370e1455a4dafdf6a43d332f566fc69a8b5379b33b935f9aaa46ba17f4140c94"
+    },
+    {
+      "path": "internal/finish/lifecycle.go",
+      "sha256": "94605b75b25dbd5c4a03375cdb7ebeb22c97a7a40e7849e346dc41dd42fbc36d"
+    },
+    {
+      "path": "internal/finish/lifecycle_test.go",
+      "sha256": "653a0783cc19a2f97917821f03297cdda1e832eada7de7168d35ea6b4ab0cefc"
+    },
+    {
+      "path": "internal/gen.go",
+      "sha256": "44b09a98b262760c2a63c143f5313ce994e2560e621196ce6eeee833a16ff2b1"
+    },
+    {
+      "path": "internal/observ/instrumentation.go",
+      "sha256": "56917d1b5f888e98465606838c2a9fcae7d09f61842b17aa2c243d4c78e1d4a6"
+    },
+    {
+      "path": "internal/observ/instrumentation_test.go",
+      "sha256": "301cce3b5c8185cf220111da40be836e32d9d86891b65bfa9cf94bb34af24f21"
+    },
+    {
+      "path": "internal/reservoir/concurrent_safe.go",
+      "sha256": "0c3361db80bade65979d332925a28cef67c80c75137bdf1a08b3d3843eeaa466"
+    },
+    {
+      "path": "internal/reservoir/doc.go",
+      "sha256": "aaba9b0463f459097a29f53b82fb06be55f448379259e1585cc555ae51eda904"
+    },
+    {
+      "path": "internal/reuse_slice.go",
+      "sha256": "06230bb61f29b6698b007a4b5b2e41592f55bd90a16eed011da8436fc2ece11c"
+    },
+    {
+      "path": "internal/x/README.md",
+      "sha256": "b87662a4dd8284c2497b59ad023acbc73ef101599249d8cbba98b6a5c10b0e15"
+    },
+    {
+      "path": "internal/x/x.go",
+      "sha256": "930ac234ef459afa5904f9054f5609fe87a08e7023f70b870069445a91972acd"
+    },
+    {
+      "path": "internal/x/x_test.go",
+      "sha256": "c28d1665fb81c17e4780bac6a4cc50d33bca53f78f0fe775973642e9ffc20b1e"
+    },
+    {
+      "path": "manual_reader.go",
+      "sha256": "420e3c63da86b7246bb6c6fc4d103c1da71480f385e3992834fcb1cd03dc7aaf"
+    },
+    {
+      "path": "manual_reader_test.go",
+      "sha256": "557a8bf0c7bce6471eacb61416d32c92d112f1bf8aac66bb7e724ac3747e3b56"
+    },
+    {
+      "path": "meter.go",
+      "sha256": "b53adbad0b7906a78ce860c2539d62d2830ee0fb7540dfabb176e5aebba86c24"
+    },
+    {
+      "path": "meter_test.go",
+      "sha256": "e884c795c343fd4e657fc3da65e5d4731521e0b4d18ee441e1d4b5cdfccf2aec"
+    },
+    {
+      "path": "metricdata/README.md",
+      "sha256": "24ec4087fcef1e5ddb4c9904d481d3a516a535ae2ad32cce227e8693bcaab986"
+    },
+    {
+      "path": "metricdata/data.go",
+      "sha256": "7f2087443a8348ab5cb7e5cc5ba4a6d6d4443fb0864b691334108582710249bd"
+    },
+    {
+      "path": "metricdata/metricdatatest/README.md",
+      "sha256": "d2b69fc12483a39807ef3c398c07aaf203250211bae001ef4fa3924243092ea3"
+    },
+    {
+      "path": "metricdata/metricdatatest/assertion.go",
+      "sha256": "188a70df11ef483a358c5b630d7b9b6547905060d636dbf5564157486461b1e6"
+    },
+    {
+      "path": "metricdata/metricdatatest/assertion_fail_test.go",
+      "sha256": "35ecc82b37d6c0e18e4247584afc8590846a0da3cdb9e9db194466749efa37d6"
+    },
+    {
+      "path": "metricdata/metricdatatest/assertion_test.go",
+      "sha256": "d0fe24316abbbeff97ec53a2409c628b1c1059ad127bbbe94167cbaeb69d9308"
+    },
+    {
+      "path": "metricdata/metricdatatest/comparisons.go",
+      "sha256": "2b6031c7be9f7986773328748d2ba4fce2845b6d2743538badc095cfb087ac9f"
+    },
+    {
+      "path": "metricdata/metricdatatest/example_test.go",
+      "sha256": "d5828700a2f624050854a6a50bfcb08c93c1625d53ea6536e12efc65af49146a"
+    },
+    {
+      "path": "metricdata/temporality.go",
+      "sha256": "0d145538d5b904c2438b911a8f8413d77e610acc0514f5969deaa18649f09c51"
+    },
+    {
+      "path": "metricdata/temporality_string.go",
+      "sha256": "b3e2004de722c7a6cd1389faef7074691dc1b87557e99a9ea6280ed778ed7b9a"
+    },
+    {
+      "path": "periodic_reader.go",
+      "sha256": "894d142c83925fa56df0e60e380abcc944dec7a744386794594b99d92cf32969"
+    },
+    {
+      "path": "periodic_reader_test.go",
+      "sha256": "6bf882211faee78295969efc78f77eb2e225bf9c8a9f99fa40ce47caff335369"
+    },
+    {
+      "path": "pipeline.go",
+      "sha256": "a106112dfe020766339eca87059db78a777a28d407670d4a6fd2f996259a6c3f"
+    },
+    {
+      "path": "pipeline_registry_test.go",
+      "sha256": "836454660d2796d0a263a91c20707b86612048e1fb1527c064ef86de6d1e7c69"
+    },
+    {
+      "path": "pipeline_test.go",
+      "sha256": "0e1e96004f0965e1e1b26fb27bd5682d931e3d0c0172e668ce70d2f08bab9355"
+    },
+    {
+      "path": "provider.go",
+      "sha256": "ad99b24de0250a4fa4844e61d2937cdba00fa03768d1e9996d793548f2c2081b"
+    },
+    {
+      "path": "provider_test.go",
+      "sha256": "f9b41a61e3195fc44f0b4f7238c4550ddc03d813ab2422cb365eabe8b8422519"
+    },
+    {
+      "path": "reader.go",
+      "sha256": "f04761fa4a2d45c03fc604a26414b1cae9661093b592cffcf632b086ddda2749"
+    },
+    {
+      "path": "reader_test.go",
+      "sha256": "12361d27b4d1665aa95372de583c1bb7d2aee3e28d2ad90e92bbca662d75f3da"
+    },
+    {
+      "path": "splitmetrics.go",
+      "sha256": "cd2fd60777feee15f8bff867603e61855ab7a72b54bff809039b67a9d90bfb0f"
+    },
+    {
+      "path": "splitmetrics_test.go",
+      "sha256": "3ea278e6f3715f8eb07fece253f4ea8f82ba7ef211f138a7d7bfeab81d63f65e"
+    },
+    {
+      "path": "version.go",
+      "sha256": "02a4be62518cf10198b3134e5de54e43a0afd8310b14f33278724a004fb098b7"
+    },
+    {
+      "path": "version_test.go",
+      "sha256": "958a9ae59533ff87d16c79afdaada1ad1b54bc1fa96f197aa553af33d1f0a67f"
+    },
+    {
+      "path": "view.go",
+      "sha256": "cffc3bb882c72ee741d14068c559cc5cf868ae056f6967c53bcf2c817d37aab8"
+    },
+    {
+      "path": "view_test.go",
+      "sha256": "7a55f9853c27f2eebfe9574c32c159792efe03494c341205cc87fbe773e9a345"
+    }
+  ]
+}
