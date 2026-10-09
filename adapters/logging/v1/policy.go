@@ -19,7 +19,7 @@
 
 package logging
 
-// Budget reserves one admitted family and each independent result. It grants no
+// Budget declares admitted work and independent result storage. It grants no
 // native concurrency and does not resize caller-owned mechanisms.
 type Budget struct {
 	WorkBytes     int64 `json:"work_bytes"`

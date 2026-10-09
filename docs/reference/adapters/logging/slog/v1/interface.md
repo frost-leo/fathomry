@@ -76,4 +76,3 @@ poisoned derivation or reclaim an independently retained clone as another owner.
 
 See [data](../../v1/interface.md), [Zap gateway](../../zap/v1/interface.md) and
 [implementation/tests](../../../../../../adapters/logging/slog/v1).
-

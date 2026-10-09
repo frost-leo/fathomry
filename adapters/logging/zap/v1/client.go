@@ -38,6 +38,7 @@ import (
 type Client struct {
 	private
 	endpoint adapters.Endpoint[Result]
+	runtime  adapters.Runtime
 	direct   Handle
 	source   *resource.Ref[Handle]
 	lifetime context.Context
@@ -77,7 +78,7 @@ func Using(lifetime context.Context, ref resource.Ref[Handle], budget Budget, de
 	if err != nil {
 		return nil, err
 	}
-	return &Client{endpoint: endpoint, source: &ref, lifetime: lifetime, budget: budget}, nil
+	return &Client{endpoint: endpoint, runtime: *dependencies.Runtime, source: &ref, lifetime: lifetime, budget: budget}, nil
 }
 
 // WithID freezes public correlation without creating another owner or allowance.
@@ -139,6 +140,11 @@ func (client *Client) dispatch(ctx context.Context, name string, work func(*oper
 			reject(err)
 			return
 		}
+		if err := client.checkComposition(state); err != nil {
+			release()
+			reject(err)
+			return
+		}
 		owned, stopOwner := joinContexts(call.Context(), state.call.Context())
 		stop := sync.OnceFunc(func() { stopOwner(); stopLifetime(); release() })
 		guard, err := call.Hold()
@@ -178,6 +184,14 @@ func (client *Client) dispatch(ctx context.Context, name string, work func(*oper
 		return adapters.UsingWithLifetime(ctx, live, client.endpoint, *client.source, req, run)
 	}
 	return client.endpoint.RunWithLifetime(ctx, live, req, func(call *adapters.Call[Result]) { run(call, client.direct) })
+}
+
+func (client *Client) checkComposition(state *sourceState) error {
+	if state.physical.check != nil {
+		runtime := client.runtime
+		return state.physical.check.CheckRuntime(&runtime)
+	}
+	return nil
 }
 
 func joinContexts(parent, other context.Context) (context.Context, func()) {

@@ -30,7 +30,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 Closed `Value`/`Field` represent null, bool, signed/unsigned integers, distinct
 float32/float64, text, binary, byte-string, time, duration, arrays and ordered groups.
-The package also owns minimal `Budget`, `Policy`, `Attribution` and output-name/kind
+The package also owns minimal `Budget`, `Attribution` and output-name/kind
 vocabulary. It has no severity enum, Sync/Rotate interface, source owner, queue,
 SDK logger, exporter or Runtime. Provider-native semantics remain with providers.
 
@@ -66,4 +66,3 @@ and independent evidence acknowledgement are different facts.
 
 See [restricted slog](../slog/v1/interface.md), [Zap](../zap/v1/interface.md),
 [source](../../../../../adapters/logging/v1) and its focused tests.
-

@@ -52,6 +52,8 @@ type Handle struct {
 type physicalSource struct {
 	prepared           Prepared
 	endpoint           adapters.Endpoint[Result]
+	runtime            adapters.Runtime
+	check              RuntimeCheck
 	assembly           *source.Assembly
 	selection          source.Selection[native.Source]
 	call               *adapters.Call[Result]
@@ -149,7 +151,8 @@ func (prepared Prepared) Open(ctx context.Context, deps Dependencies) (*Owner, e
 			_ = call.Resolve(adapters.Outcome[Result]{Primary: primary})
 			return
 		}
-		physical := &physicalSource{prepared: prepared, endpoint: endpoint, selection: selected, call: call, guard: guard, gate: make(chan struct{}, 1)}
+		check, _ := deps.Structured.(RuntimeCheck)
+		physical := &physicalSource{prepared: prepared, endpoint: endpoint, runtime: *deps.Runtime, check: check, selection: selected, call: call, guard: guard, gate: make(chan struct{}, 1)}
 		owner, primary = physical.newPolicy(ctx, prepared, true)
 		if owner == nil {
 			physical.primary = primary
@@ -237,7 +240,7 @@ func (physical *physicalSource) newPolicy(ctx context.Context, prepared Prepared
 		}
 		state.primary = primary
 		if primary == nil {
-			owner.client = &Client{endpoint: physical.endpoint, direct: Handle{state: state}, lifetime: call.Context(), budget: policy.Budget}
+			owner.client = &Client{endpoint: physical.endpoint, runtime: physical.runtime, direct: Handle{state: state}, lifetime: call.Context(), budget: policy.Budget}
 		}
 		go func() { <-call.Context().Done(); _ = owner.Close(context.Background()) }()
 	})

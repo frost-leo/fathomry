@@ -97,6 +97,11 @@ func (client *Client) Retain(ctx context.Context) (*View, error) {
 			reject(err)
 			return
 		}
+		if err := client.checkComposition(state); err != nil {
+			release()
+			reject(err)
+			return
+		}
 		physical := state.physical
 		physical.mu.Lock()
 		if physical.families >= maxFamilies {
@@ -115,7 +120,7 @@ func (client *Client) Retain(ctx context.Context) (*View, error) {
 			return
 		}
 		family := &viewFamily{call: call, guard: guard, state: state, release: releaseFamily, stop: stop, views: 1, bytes: 256, gate: make(chan struct{}, 1)}
-		family.client = &Client{endpoint: client.endpoint, direct: handle, lifetime: call.Context(), budget: client.budget, id: client.id, family: family}
+		family.client = &Client{endpoint: client.endpoint, runtime: client.runtime, direct: handle, lifetime: call.Context(), budget: client.budget, id: client.id, family: family}
 		view = &View{family: family}
 		retained = true
 		go func() { <-call.Context().Done(); _ = view.Close(context.Background()) }()

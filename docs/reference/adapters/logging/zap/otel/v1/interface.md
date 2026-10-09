@@ -58,6 +58,9 @@ latency isolation between synchronous outputs.
 
 Zap.Open invokes CheckRuntime before source effects. A telemetry Client bound to
 the same Runtime is refused even when its allowance happens to be large enough.
+Each Using/retained dispatch rechecks the actual Client Runtime against the
+captured source dependency before native work, including after Follow changes.
+Construction-time checking alone cannot protect a later borrowing binding.
 Use independent explicitly budgeted existing Runtime owners; no shared-runtime
 child-composition alternative is claimed by this bridge.
 

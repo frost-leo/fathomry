@@ -22,6 +22,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 [Zap contract](interface.md)
 
+**Audience:** maintainers and consumers evaluating the admitted logging profile.
+**Status:** implemented native/public capability map with local protocol evidence;
+not production/backend or release certification.
+
 Selected upstream: [Zap v1.28.0](https://github.com/uber-go/zap/tree/5b81b37b81b8e2ed447a6f57991e372ee4fa5c8f).
 Public API/configuration version, native SDK version, physical source revision and
 logical generation/revision are independent axes.
