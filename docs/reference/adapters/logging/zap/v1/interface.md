@@ -148,5 +148,5 @@ receivers. Framework.Close is not a dependency DAG.
 See [source and tests](../../../../../../adapters/logging/zap/v1),
 [Internal interface](../../../../internal/logging/zap/v1/interface.md),
 [file profile](../../../../internal/logging/zap/v1/file-output.md) and the
-[capability matrix](coverage.md). No backend durability, release availability or
+[capability matrix](capabilities.md). No backend durability, release availability or
 production qualification is implied by local native/protocol tests.
