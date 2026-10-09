@@ -21,6 +21,7 @@ package zerolog_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
@@ -113,7 +114,7 @@ func BenchmarkPublicControlledTwoSinks(b *testing.B) {
 			_ = inbox.Seal()
 			for {
 				delivery, err := inbox.NextReleased(context.Background())
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				if err != nil {
