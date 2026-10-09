@@ -95,7 +95,7 @@ func TestIndependentModule(t *testing.T) {
 		}
 	}
 	output, err = run("list", "-m", "-f", "{{.Version}}", "golang.org/x/text")
-	if err != nil || strings.TrimSpace(string(output)) != "v0.41.0" {
+	if err != nil || strings.TrimSpace(string(output)) != "v0.42.0" {
 		t.Fatal("qualified language engine changed")
 	}
 }

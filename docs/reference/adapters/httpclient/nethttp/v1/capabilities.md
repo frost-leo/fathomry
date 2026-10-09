@@ -27,6 +27,10 @@ Native authority is the selected Go 1.27.0 `net/http`, `crypto/tls` and
 `net/http/internal/http2` sources, plus the baseline `golang.org/x/net v0.58.0`
 SOCKS/IDNA helpers used inside owned dialing. No SDK version is upgraded.
 
+The later #128 coordinated telemetry upgrade selects x/net v0.59.0 in the
+consuming module graph. The native HTTP implementation is unchanged; its public
+consumer provenance assertions and behavior are requalified on that graph.
+
 Each public route retains the corresponding Internal behavior; absence and
 inapplicability are not blanket unsupported substitutes.
 

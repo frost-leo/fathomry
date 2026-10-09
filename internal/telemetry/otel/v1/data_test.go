@@ -175,6 +175,116 @@ func TestAttributeMapRejectsCyclesAndRespectsBounds(t *testing.T) {
 	}
 }
 
+func TestTypedValuesAndConfigurationTreesPreserveKindsAndCopies(t *testing.T) {
+	bytes := []byte{0, 1, 255}
+	value := Value{Kind: "map", Map: []TypedAttribute{
+		{Key: "array", Value: Value{Kind: "array", Array: []Value{
+			{}, {Kind: "null"}, {Kind: "bool", Bool: true}, {Kind: "int64", Int64: math.MaxInt64},
+			{Kind: "int64", Int64: math.MinInt64}, {Kind: "float64", Float64: 1.25},
+			{Kind: "string", String: "original"}, {Kind: "bytes", Bytes: bytes},
+			{Kind: "array"}, {Kind: "map"},
+		}}},
+	}}
+	tree, err := Tree(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	budget := dataBudget{bytes: MaxIdentityBytes, nodes: MaxNodes}
+	frozen, err := freezeTypedValue(value, &budget, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	treeBudget := dataBudget{bytes: MaxIdentityBytes, nodes: MaxNodes}
+	configured, err := freezeConfigValue(tree, &treeBudget, 1)
+	if err != nil || !reflect.DeepEqual(configured, frozen) || treeBudget != budget {
+		t.Fatalf("configuration changed data or charge: err=%v, runtime=%+v, config=%+v", err, budget, treeBudget)
+	}
+	bytes[0] = 9
+	value.Map[0].Value.Array[6].String = "changed"
+	value.Map[0].Key = "changed"
+	items := configured.AsMap()[0].Value.AsSlice()
+	if items[3].AsInt64() != math.MaxInt64 || items[4].AsInt64() != math.MinInt64 ||
+		items[6].AsString() != "original" || items[7].AsByteSlice()[0] != 0 || tree.Nodes[0].Keys[0] != "array" {
+		t.Fatal("closed data/configuration retained input aliases or changed integer precision")
+	}
+	expected := []attribute.Type{attribute.EMPTY, attribute.EMPTY, attribute.BOOL, attribute.INT64, attribute.INT64,
+		attribute.FLOAT64, attribute.STRING, attribute.BYTESLICE, attribute.SLICE, attribute.MAP}
+	for index, kind := range expected {
+		if items[index].Type() != kind {
+			t.Errorf("item %d: got %v, want %v", index, items[index].Type(), kind)
+		}
+	}
+}
+
+func TestTypedValueRefusalsAndCumulativeBounds(t *testing.T) {
+	for name, value := range map[string]Value{
+		"unknown": {Kind: "callback"}, "ambiguous": {Kind: "int64", String: "hidden"},
+		"inactive-empty-collection": {Kind: "string", Array: []Value{}},
+		"null-payload":              {Kind: "null", Bool: true}, "nan": {Kind: "float64", Float64: math.NaN()},
+		"infinity": {Kind: "float64", Float64: math.Inf(-1)}, "utf8": {Kind: "string", String: "\xff"},
+		"nul": {Kind: "string", String: "text\x00"}, "nodes": {Kind: "array", Array: make([]Value, MaxNodes)},
+		"bytes":     {Kind: "bytes", Bytes: make([]byte, MaxIdentityBytes)},
+		"duplicate": {Kind: "map", Map: []TypedAttribute{{Key: "same"}, {Key: "same"}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Tree(value); err == nil {
+				t.Fatal("invalid typed value accepted")
+			}
+		})
+	}
+	cycle := Value{Kind: "array", Array: make([]Value, 1)}
+	cycle.Array[0] = cycle
+	if _, err := Tree(cycle); !errors.Is(err, ErrLimit) {
+		t.Fatal("cyclic input bypassed bounded traversal")
+	}
+	deep := Value{Kind: "int64", Int64: 1}
+	for range MaxDepth - 1 {
+		deep = Value{Kind: "array", Array: []Value{deep}}
+	}
+	if _, err := Tree(deep); err != nil {
+		t.Fatal("value at depth limit refused", err)
+	}
+	if _, err := Tree(Value{Kind: "array", Array: []Value{deep}}); !errors.Is(err, ErrLimit) {
+		t.Fatal("depth limit missing")
+	}
+}
+
+func TestConfigurationTreeRejectsAmbiguityAndInvalidTopology(t *testing.T) {
+	for name, nodes := range map[string][]ValueNode{
+		"backward":            {{Kind: "array", Children: []int{0}}},
+		"cycle":               {{Kind: "array", Children: []int{1}}, {Kind: "array", Children: []int{0}}},
+		"unused":              {{Kind: "null"}, {Kind: "bool"}},
+		"shared":              {{Kind: "array", Children: []int{1, 1}}, {Kind: "bool"}},
+		"outside":             {{Kind: "array", Children: []int{2}}, {Kind: "bool"}},
+		"keys":                {{Kind: "map", Keys: []string{"key"}}},
+		"inactive-keys":       {{Kind: "array", Keys: []string{}}},
+		"inactive-children":   {{Kind: "bool", Children: []int{}}},
+		"inactive-bytes":      {{Kind: "null", Base64: "AA=="}},
+		"inactive-scalar":     {{Kind: "array", Int64: 1}},
+		"bad-base64":          {{Kind: "bytes", Base64: "??=="}},
+		"noncanonical-base64": {{Kind: "bytes", Base64: "AB=="}},
+		"base64-newlines":     {{Kind: "bytes", Base64: "AA==\n\n\n\n"}},
+		"duplicate-map-key":   {{Kind: "map", Keys: []string{"key", "key"}, Children: []int{1, 2}}, {}, {}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			budget := dataBudget{bytes: MaxIdentityBytes, nodes: MaxNodes}
+			if _, err := freezeConfigValue(ValueTree{Nodes: nodes}, &budget, 1); err == nil {
+				t.Fatal("invalid configuration value accepted")
+			}
+		})
+	}
+	if _, err := freezeIdentityAttributes(map[string]string{"same": "legacy"}, []ConfigAttribute{{Key: "same"}}); err == nil {
+		t.Fatal("duplicate across legacy and typed identity accepted")
+	}
+	if _, err := freezeIdentityAttributes(nil, []ConfigAttribute{{Key: "service.name"}}); err == nil {
+		t.Fatal("service identity override accepted")
+	}
+	attrs := make([]ConfigAttribute, 17)
+	if _, err := freezeIdentityAttributes(nil, attrs); !errors.Is(err, ErrLimit) {
+		t.Fatal("combined identity count is not bounded")
+	}
+}
+
 func FuzzDataBoundaries(f *testing.F) {
 	f.Add("key", "value", 0)
 	f.Add("fathomry.call", "secret", 8)
@@ -189,5 +299,35 @@ func FuzzDataBoundaries(f *testing.F) {
 		}
 		budget := dataBudget{bytes: 4096, nodes: MaxNodes}
 		_, _ = freezeAttributes([]slog.Attr{attr}, &budget, 1)
+	})
+}
+
+func FuzzTypedValueTrees(f *testing.F) {
+	f.Add("string", "value", "", 0, 1)
+	f.Add("map", "key", "", 1, 2)
+	f.Add("array", "", "", 1, 2)
+	f.Add("bytes", "", "AA==", 0, 1)
+	f.Add("map", "cycle", "", 0, 1)
+	f.Fuzz(func(t *testing.T, kind, text, binary string, child, count int) {
+		if len(kind)+len(text)+len(binary) > 1<<16 {
+			return
+		}
+		count = int(uint(count) % (MaxNodes + 2))
+		nodes := make([]ValueNode, count)
+		if count > 0 {
+			nodes[0] = ValueNode{Kind: kind, String: text, Base64: binary}
+			switch kind {
+			case "array":
+				nodes[0].Children = []int{child}
+			case "map":
+				nodes[0].String = ""
+				nodes[0].Children = []int{child}
+				nodes[0].Keys = []string{text}
+			case "int64":
+				nodes[0].Int64 = int64(child)
+			}
+		}
+		budget := dataBudget{bytes: MaxIdentityBytes, nodes: MaxNodes}
+		_, _ = freezeConfigValue(ValueTree{Nodes: nodes}, &budget, 1)
 	})
 }

@@ -22,7 +22,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** framework composition and integration maintainers.
-**Status:** implemented bounded internal profile; no backend/deployment certification.
+**Status:** bounded Internal profile extended for approved #128; coordinated
+source, public delivery and full acceptance qualification is in progress.
+No backend/deployment certification is implied.
 **Package:** `github.com/frost-leo/fathomry/internal/telemetry/otel/v1` (Go name `otel`).
 
 ## Contents
@@ -54,6 +56,9 @@ reservation. This queue does not imitate native batch-processor semantics:
 full queues reject new data, and only explicit export drains accepted events.
 There is no background export, timer, disk spool, automatic retry or delivery
 callback. Composition owns flush scheduling and the evidence receiver.
+The [public Adapter](../../../../adapters/telemetry/otel/v1/interface.md) supplies
+manual Flush and an explicitly started, per-owner managed schedule. It does not
+enable a native batch processor or periodic reader.
 
 The separate [Zap bridge](zapbridge/interface.md) and
 [zerolog bridge](zerologbridge/interface.md) translate their existing, different
@@ -65,20 +70,25 @@ dependencies. No grouping-level aggregator is introduced.
 
 | Capability | Implemented behavior | Deliberately absent |
 | --- | --- | --- |
-| Logs | String bodies, events, all OTel severities 0–24, typed/nested attributes, copied native records | Arbitrary body kinds, user marshalers, implicit error formatting, exit/panic effects |
-| Traces | Start/End, parent or explicit new root, five native span kinds, links, attributes, events, safe exception annotation, explicit status, parent-based ratio sampling | Native span/provider escape, auto instrumentation, tail sampling, automatic business status |
+| Logs | String or bounded closed typed bodies, events, all OTel severities 0–24, typed/nested attributes, copied native records | Arbitrary reflected values, user marshalers, implicit error formatting, exit/panic effects |
+| Traces | Start/End, explicit event/end time, parent or new root, five native kinds, initial/dynamic links, renaming, recording/context facts, attributes, events, safe exception annotation, status and parent-based sampling | Native span/provider escape, auto instrumentation, tail sampling, automatic business status |
 | Metrics | Fixed manifest of int64/float64 counter, up/down counter, gauge and explicit-bucket histogram; cumulative collection; cardinality overflow | Observable callbacks, dynamic instruments/scopes, arbitrary views, delta/exponential aggregation, exemplars |
 | Context | Explicit W3C traceparent/tracestate; opt-in baggage | Global propagator installation, authorization or automatic baggage-to-label copying |
 | Export | Explicit count/byte-bounded event batching, native HTTP/protobuf, none/gzip, explicit HTTPS CA and optional mTLS; literal-loopback cleartext | gRPC, HTTP/JSON, proxies, redirects, environment credentials, automatic retries, backend storage guarantees |
 
-1. Prepare `OptionsV1` with `Select`, supplying only authorized
-   [resource layers](../../../resource/configuration.md). No network runs here.
-2. Supply `resource.WithLimits` and call `resource.Assemble`. Construction
+1. Freeze `OptionsV1` and authorized
+   [resource layers](../../../resource/configuration.md) with `PrepareV1`.
+   Inspect `Prepared.Metadata` before construction. No SDK provider, transport,
+   timer, goroutine or network operation is acquired here.
+2. Use `Prepared.Select`, apply `resource.WithLimits` with that preparation's
+   resolved `Metadata.Limits`, then call `resource.Assemble`. Construction
    acquires providers/readers/exporters and an owned HTTP transport, but does not
    establish backend readiness. Retain a failed assembly's cleanup responsibility.
 3. Create an independent `invocation.Inbox[Result]` and `Bind` a `Client`.
-   `LimitsV1` and `EvidenceBytesV1` describe bootstrap charges; changed
-   effective overlays need corresponding resolved composition policy.
+   The same frozen Metadata supplies exact native source, work, queue, span and
+   independent-evidence reservations. `Select`, `LimitsV1` and `EvidenceBytesV1`
+   remain bootstrap-compatible conveniences; bootstrap charges are not authority
+   for later changed overlays.
 4. `Emit` queues logs; `Start` returns a span token and context; always
    `End` the span. `MeasureInt64`/`MeasureFloat64` record a declared
    instrument. Use explicit valid `fault.Correlation` for each operation.
@@ -149,6 +159,15 @@ an export can backpressure recording while admission/gate waits remain bounded.
 Live spans retain active calls: saturating all active slots with spans can reject
 logging/flush calls until spans end. Independent sources have independent quotas.
 
+`Prepared.Metadata` separately accounts configuration/native identity data,
+resident queue representations, metric aggregation and configured HTTP/TLS
+transport state. SourceBytes excludes per-operation WorkBytes and EvidenceBytes.
+QueueBytes is shared by queued logs, ended sampled spans and live-span
+reservations; SpanBytes is part of that queue, not another reservation.
+MaxActiveSpans assumes no competing calls or queued data and does not guarantee
+export capacity. Disabled signals do not acquire queue/span capacity. Every
+overlapping source remains charged through actual release.
+
 ### No ambient SDK configuration
 
 Nonempty `OTEL_*` variables reject at preparation, construction and controlled
@@ -184,8 +203,15 @@ No user LogValuer,
 Stringer, reflection, arbitrary error or marshaler is called. Empty values/groups
 remain distinct from absent fields.
 
+`LogRecord.Body == nil` selects the compatibility Message string. A non-nil Body
+selects the closed `Value` representation and requires an empty Message;
+`Value{}` is explicit null. Admitted kinds are null, bool, int64, finite float64,
+string, bytes, heterogeneous arrays and maps of typed attributes. Only the
+selected field may contain data. Inactive nonzero fields, duplicate keys,
+excess depth/nodes/bytes and arbitrary callbacks are rejected rather than coerced.
+
 Durations become integer nanoseconds; attribute times become UTC RFC3339Nano.
-Log/span event timestamps use native nanoseconds; explicit start/log timestamps
+Log/span event timestamps use native nanoseconds; explicit start/log/event/end timestamps
 are restricted to UTC years 1970–2261 to avoid Unix-nanosecond overflow. Local
 year alone does not establish a valid instant. Zero time
 selects the native observation time. Strings/keys require valid UTF-8 without
@@ -201,8 +227,13 @@ are not authoritative per-Item results.
 Resource attributes describe the emitter; instrumentation scope describes its
 code; record attributes describe an event. Resource and scope schema URLs are
 separate optional declarations, not the SDK/protocol/configuration version.
-The resource requires explicit `ServiceName`; optional resource/scope maps
-contain bounded strings and do not override `service.name`.
+The resource requires explicit `ServiceName`. Legacy resource/scope string maps
+remain admitted. TypedResourceAttributes/TypedScopeAttributes add the same closed
+data kinds using strict-loadable `ConfigAttribute` and flat `ValueTree` nodes.
+The combined legacy/typed sets have at most 16 unique keys and 16 KiB each;
+neither overrides `service.name`. Tree rejects cycles, sharing, unused nodes and
+noncanonical binary base64. `Tree` constructs independent configuration data
+from an admitted runtime Value without user marshalers.
 
 Logs/spans receive fixed technical call/parent/owner and original source/scope
 fields. These are not public Run/Item identity or authorization. Returned trace
@@ -215,6 +246,12 @@ log attributes or metric dimensions. Carrier input is bounded to 32 headers and
 as an exception event. Raw causes are not exported. It does not set status or
 fail the invocation. `SetStatus` explicitly preserves native precedence
 Unset < Error < Ok; status is not an Item/Run disposition.
+`RecordAnnotation` accepts a trusted bounded ErrorAnnotation with explicit time;
+the public boundary projects public failure/i18n metadata without requiring an
+Internal fault. `SetName` and `AddLink` consume cumulative mutation budgets;
+initial and dynamic links together may not exceed 16. `AddEventAt` and `EndAt`
+preserve explicit timestamps. IsRecording and SpanContext expose read-only facts,
+not SDK provider authority. Links preserve trace-state as well as IDs/flags.
 
 ## Errors, effects and evidence
 
@@ -301,14 +338,26 @@ remain explicit composition/platform responsibilities.
 
 ## Compatibility and executable evidence
 
-Selected versions, rechecked against current upstream releases:
+Selected source versions and distinct stability axes:
 
-- Core, trace/metric APIs/SDKs and trace/metric exporters: **1.46.0**.
-- Logs API/SDK: **0.22.0 (beta)**; log exporters remain experimental.
+- Core, trace/metric APIs/SDKs, Logs API/SDK and trace/metric exporters: **1.47.0**.
+- HTTP Logs exporter: **0.23.0**, still experimental and not the Logs API/SDK version.
 - Generated OTLP protocol module: **1.11.0**, not the options contract version.
-- The newer **1.47.0-rc.1** is an unselected RC, not a stable Logs upgrade.
-  See the [upstream releases](https://github.com/open-telemetry/opentelemetry-go/releases/tag/v1.46.0)
-  and [RC announcement](https://opentelemetry.io/blog/2026/go-logs-api-sdk-rc/).
+- Origin: [66cfc9520e205b7d450183532772401bc2b6674c](https://github.com/open-telemetry/opentelemetry-go/tree/66cfc9520e205b7d450183532772401bc2b6674c);
+  the pinned [version groups](https://github.com/open-telemetry/opentelemetry-go/blob/66cfc9520e205b7d450183532772401bc2b6674c/versions.yaml)
+  distinguish stable modules from experimental exporters.
+
+Qualification reproduced two remaining upstream limitations. Owner-approved,
+minimal local corrections preserve exact int64 explicit-histogram bucket
+comparisons and span-link trace-state in OTLP conversion. Their exact original
+sources, modified files, licenses, tests and retirement rules are separately
+documented in [otel-metric](../../../../../../third_party/otel-metric/FATHOMRY.md)
+and [otel-trace](../../../../../../third_party/otel-trace/FATHOMRY.md).
+These are not unmodified upstream builds. Native int64 sums and integer bucket
+counts retain applicable exactness; OTLP histogram sum/min/max are intentionally
+floating-point fields. No input-range restriction or float64 integer decoding
+substitutes for native/wire controls. Independent modules need the existing CLI
+delivery mechanism for replacements; parent-module replacements are not inherited.
 
 `Profile` is a non-sensitive projection of frozen mode/limits, **not** complete
 resource/metric schema disclosure or a compatibility certificate. Service mode
@@ -317,19 +366,21 @@ the package supplies no automatic Supported record or semver-wide guarantee.
 Go requirements, selected module versions, configuration format, source revision,
 OTLP schema and backend deployment are separate axes.
 
-The OTLP dependency graph also selects mapstructure **2.5.0**, required by
-grpc-gateway **2.30.0**. Viper's actual consumer expectation and behavioral tests
-are requalified; Viper's runtime contract is unchanged. No unmodified historical
-snapshot is treated as the actual consuming build.
+The current graph retains mapstructure **2.5.0** and grpc-gateway **2.30.0**.
+Affected consumers and original logging bridges require qualification on the
+actual upgraded graph; Viper's runtime contract is unchanged. No historical
+snapshot or earlier acceptance is treated as current-build evidence.
 
 Executable evidence is organized by responsibility:
 
 - [Options](../../../../../../internal/telemetry/otel/v1/options_test.go),
+  [frozen preparation/residence](../../../../../../internal/telemetry/otel/v1/preparation_test.go),
   [errors/privacy](../../../../../../internal/telemetry/otel/v1/errors_test.go),
   [data/copying](../../../../../../internal/telemetry/otel/v1/data_test.go).
 - [Logs](../../../../../../internal/telemetry/otel/v1/logs_test.go),
   [traces](../../../../../../internal/telemetry/otel/v1/traces_test.go),
   [metrics](../../../../../../internal/telemetry/otel/v1/metrics_test.go),
+  [native/wire integral precision](../../../../../../internal/telemetry/otel/v1/metrics_precision_test.go),
   [context](../../../../../../internal/telemetry/otel/v1/context_test.go).
 - [Ownership](../../../../../../internal/telemetry/otel/v1/provider_test.go),
   [dial/connection ownership and native negative controls](../../../../../../internal/telemetry/otel/v1/network_test.go),
@@ -346,7 +397,7 @@ Executable evidence is organized by responsibility:
   requires explicit fixture authorization.
 
 Test-owned protocol/TLS receivers establish only their tested transport boundaries.
-Separately authorized Elastic **9.5.3** acceptance verified direct OTLP HTTPS
+Historical, separately authorized Issue #34 Elastic **9.5.3** acceptance verified direct OTLP HTTPS
 ingestion and independent queries for logs, spans, int64 counter/gauge and
 float64 explicit-histogram data, including both logging bridges. Its existing
 exponential-histogram setting accepts cumulative histograms; the backend stores
@@ -356,9 +407,12 @@ not a claim about every Elastic version, deployment or authentication
 configuration. A separately authorized Playwright check confirmed the six
 expected gauge samples in Kibana Discover with an explicit absolute time range;
 it does not certify saved dashboards, alerting or all Kibana applications.
+Those historical service checks have not been rerun for the #128 graph and are
+not current service-qualification evidence.
 No Collector, Logstash, proxy, production retention/availability,
 cross-platform filesystem or production performance is certified.
 Workflow replay is inapplicable: no Workflow commands,
 durable DTOs or Temporal instrumentation change. Working experiments, exact
 run manifests, failures and handoff remain in the issue's sibling reference
-workspace. Scope provenance: [Issue #34](https://github.com/frost-leo/fathomry/issues/34).
+workspace. Scope provenance: [Issue #34](https://github.com/frost-leo/fathomry/issues/34)
+and the [approved #128 extension](https://github.com/frost-leo/fathomry/issues/128).

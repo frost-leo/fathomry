@@ -91,6 +91,7 @@ overlays. For overlaid settings, consume resolved preparation metadata.
 | Trino | Frozen `PrepareV1` / `PrepareResolvedV1` metadata, including readiness, finite/reader and source reservations |
 | Doris | Frozen `PrepareV1.Reservation`, including finite/page and source work/evidence charges |
 | nethttp | Frozen `PrepareV1.Metadata` for final data/native selections, H2 buffers and root/evidence/source reservations |
+| OpenTelemetry | Frozen `PrepareV1.Metadata` for final three-signal configuration, queue/span limits, cumulative metric residence, source/work and evidence charges |
 
 This table covers data providers, not every Adapter role. Configuration
 providers retain documented fixed public route envelopes and selected native

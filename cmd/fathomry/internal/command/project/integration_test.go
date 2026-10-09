@@ -118,7 +118,7 @@ func qualifyProject(t *testing.T, directory string, environment []string, mode s
 
 }
 
-func executeHTTPConsumer(t testing.TB, directory string, environment []string, binary, expected string) {
+func executePublicConsumer(t testing.TB, directory string, environment []string, binary, expected string) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
@@ -128,7 +128,7 @@ func executeHTTPConsumer(t testing.TB, directory string, environment []string, b
 	process.Stderr = &diagnostics
 	output, err := process.Output()
 	if err != nil || ctx.Err() != nil || string(output) != expected {
-		t.Fatalf("versioned HTTP consumer failed: %v\n%s\n%s", err, output, diagnostics.String())
+		t.Fatalf("versioned public consumer failed: %v\n%s\n%s", err, output, diagnostics.String())
 	}
 	if diagnostics.Len() != 0 {
 		t.Logf("native protocol diagnostics: %s", diagnostics.String())
@@ -207,6 +207,7 @@ func TestVersionedProjects(t *testing.T) {
 	offline := append(append([]string(nil), environment...), "GOPROXY=off", "GONOPROXY=none", "GOSUMDB=off")
 	runConsumerBudget(t, 3*time.Minute, toolDirectory, offline, goTool(), "build", "-mod=readonly", "-o", cli, frameworkModule+"/cmd/fathomry")
 	verifyHTTPReplacement(t, toolDirectory, offline)
+	verifyTelemetryReplacement(t, toolDirectory, offline)
 	for _, mode := range []string{"local", "remote"} {
 		for _, encoding := range []string{"yaml", "toml"} {
 			t.Run(mode+"/"+encoding, func(t *testing.T) {
@@ -255,14 +256,34 @@ func TestVersionedProjects(t *testing.T) {
 							runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
 							binary := filepath.Join(job, name)
 							runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
-							executeHTTPConsumer(t, destination, environment, binary, provider+" "+variant+" public consumer passed\n")
+							executePublicConsumer(t, destination, environment, binary, provider+" "+variant+" public consumer passed\n")
 						}
+					}
+					for _, variant := range []string{"direct", "framework"} {
+						fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/telemetry/otel/v1/testdata", variant, "main.go"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						name := "otel-" + variant
+						directory := filepath.Join(destination, "cmd", name)
+						if err := os.MkdirAll(directory, 0700); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(filepath.Join(directory, "main.go"), fixture, 0600); err != nil {
+							t.Fatal(err)
+						}
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy")
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
+						binary := filepath.Join(job, name)
+						runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
+						executePublicConsumer(t, destination, environment, binary, "otel "+variant+" public consumer passed\n")
 					}
 					selected := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
 					if bytes.Contains(selected, []byte("\"Replace\"")) {
-						t.Fatal("HTTP consumer acquired checkout replacement")
+						t.Fatal("public consumer acquired checkout replacement")
 					}
 					verifyHTTPReplacement(t, destination, environment)
+					verifyTelemetryReplacement(t, destination, environment)
 				}
 			})
 		}
@@ -294,5 +315,42 @@ func verifyHTTPReplacement(t testing.TB, directory string, environment []string)
 	}
 	if verified != 13 {
 		t.Fatal("HTTP replacement policy missing")
+	}
+}
+
+func verifyTelemetryReplacement(t testing.TB, directory string, environment []string) {
+	t.Helper()
+	verified := 0
+	for _, pin := range sdkPins() {
+		if pin.original != "go.opentelemetry.io/otel/sdk/metric" && pin.original != "go.opentelemetry.io/otel/exporters/otlp/otlptrace" {
+			continue
+		}
+		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", pin.original)
+		var selected struct {
+			Version string
+			Replace *struct{ Path, Version, Sum string }
+		}
+		if json.Unmarshal(raw, &selected) != nil || selected.Version != "v1.47.0" || selected.Replace == nil ||
+			selected.Replace.Path != frameworkModule+"/"+pin.directory || selected.Replace.Version != pin.version || selected.Replace.Sum != pin.sum {
+			t.Fatal("actual downloaded telemetry replacement differs from qualified immutable bytes", pin.original)
+		}
+		verified++
+	}
+	if verified != 2 {
+		t.Fatal("telemetry SDK replacement policy missing")
+	}
+	for _, path := range []string{"go.opentelemetry.io/otel", "go.opentelemetry.io/otel/trace", "go.opentelemetry.io/otel/metric", "go.opentelemetry.io/otel/sdk", "go.opentelemetry.io/otel/log", "go.opentelemetry.io/otel/sdk/log", "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp", "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp", "go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"} {
+		var original struct {
+			Version string
+			Replace any
+		}
+		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", path)
+		want := "v1.47.0"
+		if strings.HasSuffix(path, "/otlploghttp") {
+			want = "v0.23.0"
+		}
+		if json.Unmarshal(raw, &original) != nil || original.Version != want || original.Replace != nil {
+			t.Fatalf("selected coordinated telemetry module changed: %s", path)
+		}
 	}
 }

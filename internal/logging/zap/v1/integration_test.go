@@ -164,7 +164,7 @@ func TestActualZapConsumingExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for path, version := range map[string]string{"go.uber.org/zap": "v1.28.0", "go.uber.org/multierr": "v1.10.0", "golang.org/x/sys": "v0.47.0"} {
+	for path, version := range map[string]string{"go.uber.org/zap": "v1.28.0", "go.uber.org/multierr": "v1.10.0", "golang.org/x/sys": "v0.48.0"} {
 		found := false
 		for _, dependency := range build.Deps {
 			if dependency.Path == path {

@@ -176,9 +176,14 @@ to generate empty files or implement identical resource lifecycles for every SDK
 OpenTelemetry lives at `internal/telemetry/otel/v1`, with native capture/aggregation
 and explicit bounded export. Its optional `zapbridge` and `zerologbridge` packages
 own different structured translations and preserve dependency selection:
-core telemetry imports neither logging provider. The main SDK-major path does not
-stabilize the beta Logs modules or version configuration and OTLP together. See
-the [implemented contract](../reference/internal/telemetry/otel/v1/interface.md).
+core telemetry imports neither logging provider. Its public Adapter at
+`adapters/telemetry/otel/v1` owns frozen policy, public operations, safe errors
+and retained source generations. Export scheduling is explicitly started per
+source; it holds no permanent resource lease that could prevent retirement.
+The selected Logs API/SDK 1.47.0 are stable; HTTP Logs exporter 0.23.0 remains a
+different version/stability axis. Configuration and OTLP are separate contracts.
+See the [Internal contract](../reference/internal/telemetry/otel/v1/interface.md)
+and [public contract](../reference/adapters/telemetry/otel/v1/interface.md).
 
 Kafka follows this organization at `internal/broker/franz/v1`. Its
 [contract](../reference/internal/broker/franz/v1/interface.md) combines controlled

@@ -156,7 +156,7 @@ explicit Settings JSON and data/native-cause inspection may expose secrets.
 
 Build inspects the running executable: net/http is identified by Go, not a
 separate SDK module. SDKs also records the already-selected `golang.org/x/net
-v0.58.0` SOCKS/IDNA helper. SOCKS establishment completes inside the owned dial
+v0.59.0` SOCKS/IDNA helper. SOCKS establishment completes inside the owned dial
 callback before the standard Transport performs TLS; its native pool remains
 in use. This preserves remote DNS/authentication and avoids releasing a root
 before a detached post-SOCKS TLS callback has ended. Planned TLS references are

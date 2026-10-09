@@ -58,17 +58,26 @@ func TestActualConsumingBinaryBuildFactsAndProviderIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := map[string]string{
-		"go.opentelemetry.io/otel": "v1.46.0", "go.opentelemetry.io/otel/sdk": "v1.46.0", "go.opentelemetry.io/otel/trace": "v1.46.0",
-		"go.opentelemetry.io/otel/metric": "v1.46.0", "go.opentelemetry.io/otel/log": "v0.22.0", "go.opentelemetry.io/otel/sdk/log": "v0.22.0",
-		"go.opentelemetry.io/otel/sdk/metric": "v1.46.0", "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp": "v0.22.0",
-		"go.opentelemetry.io/otel/exporters/otlp/otlptrace": "v1.46.0", "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp": "v1.46.0",
-		"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp": "v1.46.0", "go.opentelemetry.io/proto/otlp": "v1.11.0",
+		"go.opentelemetry.io/otel": "v1.47.0", "go.opentelemetry.io/otel/sdk": "v1.47.0", "go.opentelemetry.io/otel/trace": "v1.47.0",
+		"go.opentelemetry.io/otel/metric": "v1.47.0", "go.opentelemetry.io/otel/log": "v1.47.0", "go.opentelemetry.io/otel/sdk/log": "v1.47.0",
+		"go.opentelemetry.io/otel/sdk/metric": "v1.47.0", "go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp": "v0.23.0",
+		"go.opentelemetry.io/otel/exporters/otlp/otlptrace": "v1.47.0", "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp": "v1.47.0",
+		"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp": "v1.47.0", "go.opentelemetry.io/proto/otlp": "v1.11.0",
+	}
+	localReplacements := map[string]string{
+		"go.opentelemetry.io/otel/sdk/metric":               "./third_party/otel-metric",
+		"go.opentelemetry.io/otel/exporters/otlp/otlptrace": "./third_party/otel-trace",
 	}
 	for path, version := range expected {
 		found := false
 		for _, module := range build.Deps {
 			if module.Path == path {
-				found = module.Version == version && module.Replace == nil && module.Sum != "" && report.Modules[path] == version
+				found = module.Version == version && report.Modules[path] == version
+				if local, replaced := localReplacements[path]; replaced {
+					found = found && module.Replace != nil && module.Replace.Path == local && module.Replace.Version == "(devel)" && module.Replace.Sum == "" && module.Sum == ""
+				} else {
+					found = found && module.Replace == nil && module.Sum != ""
+				}
 			}
 		}
 		if !found {

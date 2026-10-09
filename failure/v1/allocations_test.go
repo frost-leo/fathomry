@@ -121,6 +121,9 @@ func TestAllocations(t *testing.T) {
 			t.Fatal("Nuki capability allocation changed")
 		}
 		for index, allocation := range allocations {
+			if allocation.Facility == failure.FacilityOTel && (allocation.Module != "fathomry" || allocation.Component != "telemetry_otel" || allocation.Facility != 0x280 || allocation.Facility.Domain() != failure.DomainObservability) {
+				t.Fatal("OTel capability allocation changed")
+			}
 			if allocation.Facility == failure.FacilityTLSClient && (allocation.Module != "fathomry" || allocation.Component != "http_tlsclient" || allocation.Facility != 0x201 || allocation.Facility.Domain() != failure.DomainNetwork) {
 				t.Fatal("tlsclient capability allocation changed")
 			}
@@ -132,6 +135,9 @@ func TestAllocations(t *testing.T) {
 		}
 		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityTLSClient, Module: "fathomry", Component: "http_tlsclient"}) {
 			t.Fatal("tlsclient allocation missing")
+		}
+		if !slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityOTel, Module: "fathomry", Component: "telemetry_otel"}) {
+			t.Fatal("OTel allocation missing")
 		}
 		if failure.ErrCode != 0xA0010001 || failure.ErrSerialization != 0xA0010007 {
 			t.Fatal("published local numbers changed")

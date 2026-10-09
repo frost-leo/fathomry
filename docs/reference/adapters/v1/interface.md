@@ -73,6 +73,11 @@ handle storage. Copies share the same underlying owner; do not concurrently
 overwrite handles while using them. Overwriting one returned Receipt wrapper
 does not alter the independent record or other wrappers.
 
+Endpoint.UsesRuntime compares its actual bound owner, including aliased or closed
+Runtime handles, without exposing that owner. Explicit cross-provider composition
+can reject unsafe nested root admission against the same allowance. Runtime names
+are not unique identities; this query is not a readiness or capacity guarantee.
+
 The [executable example](../../../../adapters/v1/example_test.go) shows a finite
 operation and explicit independent reception. Public SDK facades will own this
 protocol for their callers; no concrete service Adapter is supplied here.

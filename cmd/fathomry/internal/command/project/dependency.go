@@ -60,6 +60,8 @@ func sdkPins() []modulePin {
 		{"github.com/sardanioss/net", "third_party/httpcloak-net", "v0.0.0-20261008143415-2e24df88d7d2", "h1:VJjU8ewLDgxvgIEQU/CHuY8AUBocU9mMkLf7HlJIaAo="},
 		{"github.com/sardanioss/quic-go", "third_party/httpcloak-quic-go", "v0.0.0-20261008143415-2e24df88d7d2", "h1:g8h8TDm/RIxylM4pvp505OjyQG/q+TH3Wq7xyt9DSs8="},
 		{"github.com/sardanioss/udpbara", "third_party/udpbara", "v0.0.0-20261008143415-2e24df88d7d2", "h1:mcqDpvpZrbAWqH1oFIqZdjpapDJAIVSTl72tj2HuDJc="},
+		{"go.opentelemetry.io/otel/exporters/otlp/otlptrace", "third_party/otel-trace", "v0.0.0-20261009025118-8efc1b8e2150", "h1:bVRJycWoOkLqjNrXIoSQ6+QRvRHuAj7dTAaBahTofsA="},
+		{"go.opentelemetry.io/otel/sdk/metric", "third_party/otel-metric", "v0.0.0-20261009025118-8efc1b8e2150", "h1:s6ZXUZMSalzBS6WJDSWExPdjtswsVQQ8fSAC7vpxhBA="},
 		{"go.temporal.io/sdk", "third_party/temporal-sdk", "v0.0.0-20260930074612-e7c164f1d613", "h1:MdY61SwGWMujwmuVY0TYZMl69nTl8kdFQh+fFDWeTdI="},
 	}
 }

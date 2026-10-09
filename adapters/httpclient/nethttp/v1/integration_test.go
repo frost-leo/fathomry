@@ -120,7 +120,7 @@ func TestIndependentConsumers(t *testing.T) {
 			found := false
 			for _, module := range build.Deps {
 				if module.Path == "golang.org/x/net" {
-					found = module.Version == "v0.58.0" && module.Replace == nil && module.Sum != ""
+					found = module.Version == "v0.59.0" && module.Replace == nil && module.Sum != ""
 				}
 			}
 			if !found {

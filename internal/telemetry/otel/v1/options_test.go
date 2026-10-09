@@ -23,6 +23,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"reflect"
 	"testing"
 
 	"github.com/frost-leo/fathomry/internal/resource"
@@ -121,6 +122,91 @@ func TestEnvironmentRejectedAtPreparationAndConstruction(t *testing.T) {
 		t.Fatal("changed environment reached native construction")
 	}
 }
+
+func TestTypedIdentityPreparationFreezesConfigurationAndBudgets(t *testing.T) {
+	options := validOptions()
+	baseline, err := PrepareV1(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, err := Tree(Value{Kind: "int64", Int64: math.MaxInt64})
+	if err != nil {
+		t.Fatal(err)
+	}
+	options.TypedResourceAttributes = []ConfigAttribute{{Key: "integer", Value: tree}}
+	options.ResourceAttributes = map[string]string{"legacy": "original"}
+	layer := resource.Layer{Kind: resource.Variables, Content: []byte(`scope_typed_attributes:
+  - key: structured
+    value:
+      nodes:
+        - kind: map
+          keys: [child]
+          children: [1]
+        - kind: bool
+          bool: true
+`)}
+	prepared, err := PrepareV1(options, layer)
+	if err != nil {
+		t.Fatal("strict schema rejected flat typed configuration", err)
+	}
+	metadata := prepared.Metadata()
+	if metadata.ConfigurationBytes <= baseline.Metadata().ConfigurationBytes || metadata.SourceBytes <= baseline.Metadata().SourceBytes {
+		t.Fatal("typed configuration is missing from final preconstruction residence metadata")
+	}
+	options.TypedResourceAttributes[0].Key = "changed"
+	options.TypedResourceAttributes[0].Value.Nodes[0].Int64 = 0
+	options.ResourceAttributes["legacy"] = "changed"
+	layer.Content[0] = 'X'
+	for range 2 {
+		selection := resource.WithLimits(prepared.Select(), metadata.Limits)
+		assembly, err := resource.Assemble(context.Background(), context.Background(), "typed", selection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		source, _, err := resource.Bind(assembly, selection)
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings := source.owner.settings
+		if settings.ResourceAttributes["legacy"] != "original" || len(settings.TypedResourceAttributes) != 1 ||
+			settings.TypedResourceAttributes[0].Key != "integer" || settings.TypedResourceAttributes[0].Value.Nodes[0].Int64 != math.MaxInt64 ||
+			len(settings.TypedScopeAttributes) != 1 || len(settings.TypedScopeAttributes[0].Value.Nodes) != 2 || !settings.TypedScopeAttributes[0].Value.Nodes[1].Bool {
+			t.Fatal("construction did not use the independently frozen typed final configuration")
+		}
+		actual, err := settings.metadata()
+		if err != nil || !reflect.DeepEqual(metadata, actual) {
+			t.Fatal("construction configuration disagreed with its preconstruction metadata")
+		}
+		settings.TypedResourceAttributes[0].Value.Nodes[0].Int64 = -1
+		settings.TypedScopeAttributes[0].Value.Nodes[0].Keys[0] = "changed"
+		if err := assembly.Close(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestTypedIdentityPreparationRefusesInvalidLayers(t *testing.T) {
+	for _, layer := range []string{
+		`resource_typed_attributes: [{key: count, value: {nodes: [{kind: int64, int64: 9223372036854775808}]}}]`,
+		`resource_typed_attributes: [{key: count, value: {nodes: [{kind: int64, int64: 1.5}]}}]`,
+		`resource_typed_attributes: [{key: count, value: {nodes: [{kind: int64, int64: 1, string: hidden}]}}]`,
+		`resource_typed_attributes: [{key: count, value: {nodes: [{kind: bool, unknown: true}]}}]`,
+		`resource_typed_attributes: [{key: count, value: {nodes: [{kind: array, children: [0]}]}}]`,
+		`scope_typed_attributes: [{key: bytes, value: {nodes: [{kind: bytes, base64: AB==}]}}]`,
+		`scope_typed_attributes: [{key: same}, {key: same}]`,
+		`scope_typed_attributes: [{key: service.name}]`,
+	} {
+		if _, err := PrepareV1(validOptions(), resource.Layer{Kind: resource.Base, Content: []byte(layer)}); err == nil {
+			t.Error("invalid typed configuration accepted", layer)
+		}
+	}
+	options := validOptions()
+	options.ResourceAttributes = map[string]string{"same": "legacy"}
+	if _, err := PrepareV1(options, resource.Layer{Kind: resource.Base, Content: []byte(`resource_typed_attributes: [{key: same}]`)}); err == nil {
+		t.Fatal("final overlay duplicated a legacy resource identity key")
+	}
+}
+
 func FuzzOptionsLayers(f *testing.F) {
 	f.Add([]byte("queue_items: 8\nbatch_size: 2"))
 	f.Add([]byte("sample_ratio: 0"))

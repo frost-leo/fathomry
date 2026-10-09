@@ -54,6 +54,7 @@ import (
 	duckdb "github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
 	trino "github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
 	sqlengine "github.com/frost-leo/fathomry/adapters/sqlengine/v1"
+	otel "github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/internal/conformance"
 	"github.com/frost-leo/fathomry/resource/v1"
@@ -72,6 +73,16 @@ type adapterOwner interface {
 
 func TestPublicAdapterContracts(t *testing.T) {
 	const canary = "adapter-contract-private-canary"
+	t.Run("otel", func(t *testing.T) {
+		zero := 0
+		value := otel.Settings{Name: "contract", ServiceName: "fixture", LogsEndpoint: "http://127.0.0.1:1/v1/logs",
+			Headers: map[string]string{"Authorization": canary}, QueuedCalls: &zero}
+		checkPublicAdapter(t, value, otel.Validate, otel.Recommend,
+			func(value otel.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[otel.Result]) otel.Dependencies {
+				return otel.Dependencies{Runtime: runtime, Evidence: inbox}
+			}, otel.Open, canary)
+	})
 	t.Run("httpcloak", func(t *testing.T) {
 		dependencies := httpcloak.NativeOptions{}
 		value := httpcloak.Settings{Name: "contract", PresetName: "chrome-148", ProxyURL: "http://" + canary + "@127.0.0.1:1"}
