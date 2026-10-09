@@ -110,6 +110,8 @@ const (
 	FacilityHTTPcloak Facility = 0x203
 	// FacilityNuki owns controlled nukilabs HTTP capabilities.
 	FacilityNuki Facility = 0x204
+	// FacilityOTel owns public telemetry signals, propagation and export.
+	FacilityOTel Facility = 0x280
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -163,6 +165,7 @@ func Allocations() []Allocation {
 		{Facility: FacilitySurf, Module: "fathomry", Component: "http_surf"},
 		{Facility: FacilityHTTPcloak, Module: "fathomry", Component: "http_httpcloak"},
 		{Facility: FacilityNuki, Module: "fathomry", Component: "http_nuki"},
+		{Facility: FacilityOTel, Module: "fathomry", Component: "telemetry_otel"},
 	}
 }
 

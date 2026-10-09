@@ -1,0 +1,98 @@
+{
+  "schema": "fathomry.sdk-source/v1",
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "module": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+  "version": "v1.47.0",
+  "origin_url": "https://github.com/open-telemetry/opentelemetry-go",
+  "origin_commit": "66cfc9520e205b7d450183532772401bc2b6674c",
+  "origin_subdirectory": "exporters/otlp/otlptrace",
+  "origin_ref": "refs/tags/exporters/otlp/otlptrace/v1.47.0",
+  "module_sum": "h1:julhjPeUH/q/7hinbSdDdqt5h7Zw9YWmRlWRhI0jd54=",
+  "go_mod_sum": "h1:Ao2mz688LH/tFf0yMAenidq6k2YNSx6SIY2q6jDACck=",
+  "archive_sha256": "a6a41ac372755156c3ba546b861f887052b9ea781d9fc6233e4db5d52a47d1bd",
+  "local_compatibility_revision": "v1",
+  "upstream_license": {
+    "file": "LICENSE",
+    "spdx": "Apache-2.0",
+    "status": "Original upstream license and source notices retained."
+  },
+  "modified_upstream_files": {
+    "internal/tracetransform/span.go": "Preserve initial and dynamic span-link trace-state in the corresponding OTLP field; all other link fields and transformations remain unchanged.",
+    "go.mod": "Remove upstream monorepo-relative replacements; retain original exact dependency requirements.",
+    "go.sum": "Include checksums for independently downloaded original sibling requirements."
+  },
+  "original_files": [
+    {
+      "path": "LICENSE",
+      "sha256": "1ae07514be1d7bb33f0698f8d91fb51b8b9fe1463157ec1c72081a49b9bc6f40"
+    },
+    {
+      "path": "README.md",
+      "sha256": "4ddbf250656394f36df42deffc4f834da253bee8fe4bb240af66b43ca60d99ad"
+    },
+    {
+      "path": "clients.go",
+      "sha256": "fcb605c4e2e44f5fb0e8e8fd4e88245d3deba26bae02a30923cf42c651fb5683"
+    },
+    {
+      "path": "doc.go",
+      "sha256": "c05abf8671f3948a8f729884ba15113cff26b7fef89b3bbdb3a5e8239049f3ac"
+    },
+    {
+      "path": "exporter.go",
+      "sha256": "6876889b4fca81185fc56ebecb6acbb65b4dc724dad854c01f1045045eb9c2b1"
+    },
+    {
+      "path": "exporter_test.go",
+      "sha256": "8a56c01217370d1bd3cd54cedd0a3ec170c51c099d40ea56acd5d55cb04cb141"
+    },
+    {
+      "path": "go.mod",
+      "sha256": "20747da07a4451715182a39f2eb8dbece2a7a5d9918d0b93d3632a1da0ba5cdf"
+    },
+    {
+      "path": "go.sum",
+      "sha256": "426b3d69e8f49f4a20bd4ee6a49e79f3c306f7630a75098fdce280786ce4b10c"
+    },
+    {
+      "path": "internal/tracetransform/attribute.go",
+      "sha256": "bf54c2b55ae3021b3e2d8fab34d66fe90ad0129408d363f832b4a88dda398a37"
+    },
+    {
+      "path": "internal/tracetransform/attribute_test.go",
+      "sha256": "0feda98c77d349b72a4f26e3d565a3653cec6946d8550b7a3ff10c88b4425cbe"
+    },
+    {
+      "path": "internal/tracetransform/instrumentation.go",
+      "sha256": "0105ffeb79d75ac3cfa1e69c736271ff625ac15e9e360db7cbef1a90c2e58032"
+    },
+    {
+      "path": "internal/tracetransform/instrumentation_test.go",
+      "sha256": "3a1ab7044c34df7cefc7b3125750106e1a9ba640ac8924231aae239b90b3a9f7"
+    },
+    {
+      "path": "internal/tracetransform/resource.go",
+      "sha256": "b68d9744e7ec6c780d925ccb051a02608862b99a1eee9a00070c8c26094e3cbe"
+    },
+    {
+      "path": "internal/tracetransform/resource_test.go",
+      "sha256": "158bd52440ed1ccdda98f5a12abb492212d18b78931ef8e7661a2c91bcb40e8c"
+    },
+    {
+      "path": "internal/tracetransform/span.go",
+      "sha256": "f12f0e46846e14bfeefd802ba22b68fddacc27d8f8fbde34da07b212748854e8"
+    },
+    {
+      "path": "internal/tracetransform/span_test.go",
+      "sha256": "5008cee1e6db38e2ececfdc6b0a7fed2d3ea71f90bc8996ce1589d13bef5cc86"
+    },
+    {
+      "path": "version.go",
+      "sha256": "dadb06aa2c013c806e6fbfd801ad6dd56f32686ba9b10e50ffc075e6718fbefb"
+    },
+    {
+      "path": "version_test.go",
+      "sha256": "bc5a7367195bc4677102f9723e0741a77346c1a13e1eb25cfc2e9f50444ea0e6"
+    }
+  ]
+}

@@ -204,7 +204,7 @@ uses that same prepared selection; Bind checks its authoritative work reservatio
 
 Pooled TLS startup reserves operation work before the native detached handshake
 can be scheduled, releasing it only at actual TLSHandshakeDone. SOCKS5/SOCKS5h
-establishment uses the baseline x/net v0.58.0 ContextDialer inside owned dialing,
+establishment uses the selected x/net v0.59.0 ContextDialer inside owned dialing,
 with the same remote-DNS/authentication algorithm as the Go native bundle.
 The tracked physical socket is returned to the standard Transport, preserving
 its pool, TLS/H2 and GotConn ownership. Build records this helper provenance.

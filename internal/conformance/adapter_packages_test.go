@@ -63,6 +63,7 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"httpclient/surf/v1":      {"data-provider", true, nil},
 	"httpclient/httpcloak/v1": {"data-provider", true, nil},
 	"httpclient/nuki/v1":      {"data-provider", true, nil},
+	"telemetry/otel/v1":       {"data-provider", true, nil},
 	"internal/errorbridge":    {"private", false, []string{"bridge.go", "containment.go", "details.go"}},
 }
 

@@ -71,7 +71,7 @@ func TestFacadesHaveNoNativeOrLifecycleEscape(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = ctx
-	conformance.Facade(t, span, "AddEvent", "End", "Receipt", "RecordError", "SetAttributes", "SetStatus", "String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, span, "AddEvent", "AddEventAt", "AddLink", "End", "EndAt", "IsRecording", "Receipt", "RecordAnnotation", "RecordError", "SetAttributes", "SetName", "SetStatus", "SpanContext", "String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	_, err = span.End(context.Background())
 	if err != nil {
 		t.Fatal(err)

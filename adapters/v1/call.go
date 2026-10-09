@@ -57,6 +57,14 @@ type endpoint[T any] struct {
 	declaration Declaration[T]
 }
 
+// UsesRuntime reports binding identity, including aliases and closed owners.
+// It grants no ownership or readiness guarantee. Explicit compositions can
+// reject nested root admission against the same exhausted runtime without
+// exposing the endpoint's owning Runtime or relying on non-unique names.
+func (endpoint Endpoint[T]) UsesRuntime(runtime *Runtime) bool {
+	return endpoint.state != nil && runtime != nil && runtime.state != nil && endpoint.state.runtime == runtime.state
+}
+
 // Bind installs no global registration or worker. Evidence and Copy are required;
 // separate endpoints may explicitly share a runtime and its allowance.
 func Bind[T any](runtime *Runtime, declaration Declaration[T]) (Endpoint[T], error) {

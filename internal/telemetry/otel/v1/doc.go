@@ -32,5 +32,7 @@
 // Callers drain evidence, end every span and arrange dependency lifetimes before
 // closing the assembly. Contexts propagate W3C identifiers rather than SDK
 // handles. This is process-local Activity/worker code, never deterministic
-// Temporal Workflow logic. Logs API/SDK 0.22.0 remain beta despite this v1 path.
+// Temporal Workflow logic. Logs API/SDK 1.47.0 and HTTP Logs exporter 0.23.0
+// have separate stability/version axes; local metric/trace corrections retain
+// distinct source provenance. The public Adapter owns opt-in export scheduling.
 package otel

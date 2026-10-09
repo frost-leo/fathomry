@@ -53,19 +53,29 @@ type SpanInput struct {
 	Links      []Link
 }
 
+// ErrorAnnotation is caller-authorized technical text, not an arbitrary error.
+// Public adapters supply their safe failure projection here. No native cause,
+// formatter or localization callback is evaluated by Internal. Recording an
+// annotation never changes status, retry policy or a business outcome.
+type ErrorAnnotation struct {
+	private
+	Type, Message string
+	Time          time.Time
+}
+
 // Span owns an admitted invocation until End succeeds. Cancellation never ends
 // it implicitly. Methods are concurrency-safe; copies must not be made. The
 // returned context contains only span IDs/flags, not the SDK span/provider.
 // Keeping a span open prevents resource release and consumes an active call.
 type Span struct {
 	private
-	mu                 sync.Mutex
-	owner              *owner
-	native             traceapi.Span
-	call               *invocation.Call[Result]
-	budget             dataBudget
-	attributes, events int
-	ended              bool
+	mu                        sync.Mutex
+	owner                     *owner
+	native                    traceapi.Span
+	call                      *invocation.Call[Result]
+	budget                    dataBudget
+	attributes, events, links int
+	ended                     bool
 }
 
 // Start reserves both independent evidence and a queue slot before native entry.
@@ -108,19 +118,27 @@ func (client *Client) Start(ctx context.Context, id fault.Correlation, input Spa
 	if err != nil {
 		return fail(err)
 	}
+	if parent := traceapi.SpanContextFromContext(work); parent.IsValid() && !input.NewRoot {
+		frozen, err := freezeSpanContext(parent, &budget)
+		if err != nil {
+			return fail(err)
+		}
+		work = traceapi.ContextWithSpanContext(work, frozen)
+	}
 	links := make([]traceapi.Link, 0, len(input.Links))
 	for _, input := range input.Links {
 		if !input.Context.IsValid() {
 			return fail(failure(ErrInput, "link-context"))
 		}
-		if err := budget.charge(64, 1); err != nil {
+		frozen, err := freezeSpanContext(input.Context, &budget)
+		if err != nil {
 			return fail(err)
 		}
 		fields, err := freezeAttributes(input.Attributes, &budget, 1)
 		if err != nil {
 			return fail(err)
 		}
-		links = append(links, traceapi.Link{SpanContext: input.Context, Attributes: fields})
+		links = append(links, traceapi.Link{SpanContext: frozen, Attributes: fields})
 	}
 	if err := client.owner.reserve(client.owner.settings.MaxRecordBytes); err != nil {
 		return fail(err)
@@ -141,9 +159,21 @@ func (client *Client) Start(ctx context.Context, id fault.Correlation, input Spa
 		return fail(nativeFailure(ErrState, "start", work, err))
 	}
 	_, native := client.owner.tracer.Start(work, strings.Clone(input.Name), opts...)
-	span := &Span{owner: client.owner, native: native, call: call, budget: budget, attributes: len(attrs)}
+	span := &Span{owner: client.owner, native: native, call: call, budget: budget, attributes: len(attrs), links: len(links)}
 	// Do not leak the SDK span's TracerProvider through SpanFromContext.
 	return traceapi.ContextWithSpanContext(ctx, native.SpanContext()), span, nil
+}
+
+func freezeSpanContext(input traceapi.SpanContext, budget *dataBudget) (traceapi.SpanContext, error) {
+	text := input.TraceState().String()
+	if err := budget.charge(64+len(text), 1); err != nil {
+		return traceapi.SpanContext{}, err
+	}
+	state, err := traceapi.ParseTraceState(text)
+	if err != nil {
+		return traceapi.SpanContext{}, failure(ErrInput, "span-context")
+	}
+	return input.WithTraceState(state), nil
 }
 
 // Receipt can be observed before End; it remains unresolved until actual End.
@@ -152,6 +182,75 @@ func (span *Span) Receipt() *invocation.Receipt[Result] {
 		return nil
 	}
 	return span.call.Receipt()
+}
+
+// IsRecording reports the native sampling/recording fact without exposing the
+// SDK span or provider. A sampled-out or ended span returns false.
+func (span *Span) IsRecording() bool {
+	if span == nil || span.owner == nil {
+		return false
+	}
+	span.mu.Lock()
+	defer span.mu.Unlock()
+	return !span.ended && span.native.IsRecording()
+}
+
+// SpanContext returns immutable trace IDs/flags and trace state only. It remains
+// available after End; it does not carry a mutable native span or provider.
+func (span *Span) SpanContext() traceapi.SpanContext {
+	if span == nil || span.owner == nil {
+		return traceapi.SpanContext{}
+	}
+	span.mu.Lock()
+	defer span.mu.Unlock()
+	return span.native.SpanContext()
+}
+
+// SetName replaces the native span name while consuming cumulative input budget.
+func (span *Span) SetName(name string) error {
+	if span == nil || span.owner == nil || name == "" || !boundedString(name, 128) {
+		return failure(ErrInput, "span-name")
+	}
+	span.mu.Lock()
+	defer span.mu.Unlock()
+	if span.ended {
+		return failure(ErrState, "ended")
+	}
+	budget := span.budget
+	if err := budget.charge(32+len(name), 1); err != nil {
+		return err
+	}
+	span.native.SetName(strings.Clone(name))
+	span.budget = budget
+	return nil
+}
+
+// AddLink appends one copied link. Initial and dynamic links together may not
+// exceed 16, and all consume the same cumulative span input budget.
+func (span *Span) AddLink(input Link) error {
+	if span == nil || span.owner == nil || !input.Context.IsValid() {
+		return failure(ErrInput, "span-link")
+	}
+	span.mu.Lock()
+	defer span.mu.Unlock()
+	if span.ended {
+		return failure(ErrState, "ended")
+	}
+	if span.links == 16 {
+		return failure(ErrLimit, "span-links")
+	}
+	budget := span.budget
+	frozen, err := freezeSpanContext(input.Context, &budget)
+	if err != nil {
+		return err
+	}
+	attrs, err := freezeAttributes(input.Attributes, &budget, 1)
+	if err != nil {
+		return err
+	}
+	span.native.AddLink(traceapi.Link{SpanContext: frozen, Attributes: attrs})
+	span.budget, span.links = budget, span.links+1
+	return nil
 }
 
 // SetAttributes adds bounded data without modifying business status. Replacements
@@ -169,6 +268,9 @@ func (span *Span) SetAttributes(attrs ...slog.Attr) error {
 		return failure(ErrLimit, "span-attributes")
 	}
 	budget := span.budget
+	if err := budget.charge(32, 1); err != nil {
+		return err
+	}
 	frozen, err := freezeAttributes(attrs, &budget, 1)
 	if err != nil {
 		return err
@@ -180,7 +282,13 @@ func (span *Span) SetAttributes(attrs ...slog.Attr) error {
 
 // AddEvent uses the observation time and accepts at most 32 events per span.
 func (span *Span) AddEvent(name string, attrs ...slog.Attr) error {
-	if span == nil || span.owner == nil || name == "" || !boundedString(name, 128) {
+	return span.AddEventAt(name, time.Time{}, attrs...)
+}
+
+// AddEventAt preserves an explicit event timestamp; zero selects observation
+// time. Event data shares the cumulative 32-event, byte and node span limits.
+func (span *Span) AddEventAt(name string, timestamp time.Time, attrs ...slog.Attr) error {
+	if span == nil || span.owner == nil || name == "" || !boundedString(name, 128) || !timestampValid(timestamp) {
 		return failure(ErrInput, "event")
 	}
 	span.mu.Lock()
@@ -199,7 +307,11 @@ func (span *Span) AddEvent(name string, attrs ...slog.Attr) error {
 	if err != nil {
 		return err
 	}
-	span.native.AddEvent(strings.Clone(name), traceapi.WithAttributes(frozen...))
+	opts := []traceapi.EventOption{traceapi.WithAttributes(frozen...)}
+	if !timestamp.IsZero() {
+		opts = append(opts, traceapi.WithTimestamp(timestamp.UTC().Round(0)))
+	}
+	span.native.AddEvent(strings.Clone(name), opts...)
 	span.budget, span.events = budget, span.events+1
 	return nil
 }
@@ -211,7 +323,17 @@ func (span *Span) RecordError(err *fault.Error) error {
 		return nil
 	}
 	kind := string(err.Diagnostic().Kind)
-	return span.AddEvent("exception", slog.String("exception.type", kind), slog.String("exception.message", kind))
+	return span.RecordAnnotation(ErrorAnnotation{Type: kind, Message: kind})
+}
+
+// RecordAnnotation records a bounded safe projection supplied by a trusted outer
+// boundary. It does not inspect or retain arbitrary error graphs.
+func (span *Span) RecordAnnotation(annotation ErrorAnnotation) error {
+	if annotation.Type == "" || !boundedString(annotation.Type, 128) || !boundedString(annotation.Message, 1024) {
+		return failure(ErrInput, "error-annotation")
+	}
+	return span.AddEventAt("exception", annotation.Time,
+		slog.String("exception.type", annotation.Type), slog.String("exception.message", annotation.Message))
 }
 
 // SetStatus is explicit technical annotation, not an Item/Run outcome. Native
@@ -238,7 +360,14 @@ func (span *Span) SetStatus(code codes.Code, description string) error {
 // wait leaves the token live: retry End with a separately owned usable context.
 // End does not export; Sampled=false is not proof that no correlated logs exist.
 func (span *Span) End(ctx context.Context) (*invocation.Receipt[Result], error) {
-	if span == nil || span.owner == nil {
+	return span.EndAt(ctx, time.Time{})
+}
+
+// EndAt selects the native end timestamp; zero uses the current time. Canceled
+// waiting does not commit this timestamp or end the span. Once End succeeds,
+// later calls return its original receipt and preserve its original timestamp.
+func (span *Span) EndAt(ctx context.Context, timestamp time.Time) (*invocation.Receipt[Result], error) {
+	if span == nil || span.owner == nil || !timestampValid(timestamp) {
 		return nil, failure(ErrInput, "end")
 	}
 	span.mu.Lock()
@@ -268,7 +397,11 @@ func (span *Span) End(ctx context.Context) (*invocation.Receipt[Result], error) 
 		return span.Receipt(), nativeFailure(ErrState, "end", work, err)
 	}
 	sampled := span.native.SpanContext().IsSampled()
-	span.native.End()
+	if timestamp.IsZero() {
+		span.native.End()
+	} else {
+		span.native.End(traceapi.WithTimestamp(timestamp.UTC().Round(0)))
+	}
 	span.ended = true
 	result := SignalResult{Signal: Traces, Sampled: sampled}
 	if sampled {

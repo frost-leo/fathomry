@@ -1,0 +1,111 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "telemetry_otel",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.telemetry_otel.invalid_input",
+      "source": "87538e68c08d169a515dd6126b852a6375431e673857e7b3a1f39766bd328ab5",
+      "forms": {
+        "other": "遥测输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.unsupported_profile",
+      "source": "56166b3d7ebff5e8d7efc94485eef78365147d7b2faa2d4f97d4b00c5b39f86c",
+      "forms": {
+        "other": "不支持所请求的遥测能力。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.ambient_configuration",
+      "source": "726c610af95a88c16fe6b256399917dcd8fd2a3188531d9ebc5040ec50e8fb2b",
+      "forms": {
+        "other": "环境中的遥测配置与显式配置冲突。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.limit_exceeded",
+      "source": "9b795f243ce3a24b125ebe646217ecdcfb1b390a8a084556ad8b876775e0db86",
+      "forms": {
+        "other": "遥测数据、工作量或资源所有权超出限制。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.invalid_state",
+      "source": "1b0b9e9612fd1ba4cfc4f2a2668389800e4968fbb5e87b7cb81c7f41dcdff5d5",
+      "forms": {
+        "other": "遥测句柄无法在当前状态下执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.export_failed",
+      "source": "79c5911e7fdad3ca420379fa5a4dc3538b02d67369716a55bb363a0171ec843d",
+      "forms": {
+        "other": "遥测导出失败；接收端的实际效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.partial_export",
+      "source": "01a57e6b7cbb1364402435400e48734c5996a032975116ea1b0b97fd518e13cd",
+      "forms": {
+        "other": "遥测接收端报告仅接受了部分数据。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.invalid_response",
+      "source": "7b50a23ab149705d0fcb7e1818643655c2a37f3954ee07791f889999ba21a356",
+      "forms": {
+        "other": "遥测交互不符合允许的协议。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.cleanup_failed",
+      "source": "c44097d407825f8c5353b34949891d08239e27cf4b82f2d3fa5d40b169d730fb",
+      "forms": {
+        "other": "遥测清理报告失败；是否完成需要单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.undelivered_records",
+      "source": "ff99008f631386669244d12f9620f1b9d07a1c94cac1b12bdd088cfb27ab5465",
+      "forms": {
+        "other": "遥测清理发现尚未提交的记录。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.recursive_operation",
+      "source": "86f2e7067eaee09f9f2ddb07f1b2a60dfeb97a3d26abf361e770b9726d8ce09b",
+      "forms": {
+        "other": "遥测操作不能递归进入自身处理链路。"
+      }
+    },
+    {
+      "id": "fathomry.telemetry_otel.runtime_serialization",
+      "source": "80489d722c5823e2cf115f603e7dd4dd98de3dca4fb3fe550d9117387a7fcd16",
+      "forms": {
+        "other": "不支持遥测运行时值的序列化。"
+      }
+    }
+  ]
+}

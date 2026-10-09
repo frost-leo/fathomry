@@ -94,6 +94,9 @@ adds bounded logs, spans and synchronous metrics, explicit context propagation,
 native HTTP/protobuf export and independent evidence. Separate Zap/zerolog bridges
 preserve existing local sinks and ownership. Export is explicitly scheduled;
 local protocol/TLS/mTLS tests do not certify a Collector or production backend.
+The [public OpenTelemetry Adapter](reference/adapters/telemetry/otel/v1/interface.md)
+adds standalone and Fixed/Follow access, frozen source budgets, safe errors and
+explicit per-generation export scheduling without a concrete logger dependency.
 
 The pre-release public layers were withdrawn for redesign. The rebuilt
 [failure/v1](reference/failure/v1/interface.md) now supplies
@@ -354,6 +357,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/httpclient/surf/v1`](reference/adapters/httpclient/surf/v1/interface.md) | Surf H1/H2/H3/h2c, incremental multipart, finite/stream responses and exact preparation |
 | [`adapters/httpclient/httpcloak/v1`](reference/adapters/httpclient/httpcloak/v1/interface.md) | HTTPcloak native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/httpclient/nuki/v1`](reference/adapters/httpclient/nuki/v1/interface.md) | Nuki native HTTP, exact preparation and controlled route/response ownership |
+| [`adapters/telemetry/otel/v1`](reference/adapters/telemetry/otel/v1/interface.md) | Public telemetry, frozen preparation, generation-owned spans, explicit export scheduling and capability coverage |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

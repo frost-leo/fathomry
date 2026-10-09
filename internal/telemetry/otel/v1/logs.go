@@ -33,7 +33,9 @@ import (
 )
 
 // LogRecord is borrowed only during Emit. Time zero uses the observation time.
-// Message is a UTF-8 string body. Severity 0–24 has no panic/exit side effects.
+// Body nil uses Message as a UTF-8 string body, including an empty string. Body
+// non-nil selects its closed typed value and requires Message to be empty; a
+// pointer to Value{} denotes an explicit null. Severity 0–24 has no exit effects.
 // Attributes support slog scalars, groups, nil and []byte/string/int64/float64/bool.
 // AttributeMap preserves nested empty groups without slog constructor filtering.
 // Unsigned integers must fit int64; durations are nanoseconds, times RFC3339Nano.
@@ -45,6 +47,7 @@ type LogRecord struct {
 	SeverityText string
 	EventName    string
 	Message      string
+	Body         *Value
 	Attributes   []slog.Attr
 }
 
@@ -59,7 +62,7 @@ func (client *Client) Emit(ctx context.Context, id fault.Correlation, input LogR
 		return nil, failure(ErrUnsupported, "logs-disabled")
 	}
 	limit := client.owner.settings.MaxRecordBytes
-	if input.Severity < 0 || input.Severity > 24 || !timestampValid(input.Time) ||
+	if input.Severity < 0 || input.Severity > 24 || !timestampValid(input.Time) || input.Body != nil && input.Message != "" ||
 		!boundedString(input.Message, limit) || !boundedString(input.SeverityText, 32) || !boundedString(input.EventName, 128) {
 		return nil, failure(ErrInput, "log-record")
 	}
@@ -68,6 +71,14 @@ func (client *Client) Emit(ctx context.Context, id fault.Correlation, input LogR
 		association := client.association(id)
 		if err := budget.charge(256+associationBytes(association)+len(input.Message)+len(input.SeverityText)+len(input.EventName), 0); err != nil {
 			return invocation.Outcome[Result]{Primary: err}
+		}
+		body := attribute.StringValue(strings.Clone(input.Message))
+		if input.Body != nil {
+			var err error
+			body, err = freezeTypedValue(*input.Body, &budget, 1)
+			if err != nil {
+				return invocation.Outcome[Result]{Primary: err}
+			}
 		}
 		attrs, err := freezeAttributes(input.Attributes, &budget, 1)
 		if err != nil {
@@ -88,7 +99,7 @@ func (client *Client) Emit(ctx context.Context, id fault.Correlation, input LogR
 		record.SetSeverity(input.Severity)
 		record.SetSeverityText(strings.Clone(input.SeverityText))
 		record.SetEventName(strings.Clone(input.EventName))
-		record.SetBody(attribute.StringValue(strings.Clone(input.Message)))
+		record.SetBody(body)
 		record.AddAttributes(attrs...)
 		record.AddAttributes(association...)
 		if err := work.Err(); err != nil {

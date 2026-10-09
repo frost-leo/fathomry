@@ -186,7 +186,7 @@ channel owners must escape it appropriately.
 ## Engine and bounds
 
 The profile is qualified against pinned
-[x/text v0.41.0](https://pkg.go.dev/golang.org/x/text@v0.41.0/language), with language
+[x/text v0.42.0](https://pkg.go.dev/golang.org/x/text@v0.42.0/language), with language
 and plural tables declaring CLDR 32. Engine is a qualification baseline, not a
 consuming-build report or a claim of current CLDR coverage. Dependency overrides/
 upgrades require requalification. No timezone, currency/date formatting, general

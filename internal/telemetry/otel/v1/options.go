@@ -77,10 +77,15 @@ type OptionsV1 struct {
 	TLS                                           *TLSV1
 	ServiceName                                   string
 	ResourceAttributes                            map[string]string
+	// Typed identity fields are additive to the legacy string maps. Each combined
+	// resource/scope set permits 16 keys, MaxNodes nodes and MaxIdentityBytes bytes.
+	// Duplicate keys across the two forms and service.name overrides are refused.
+	TypedResourceAttributes []ConfigAttribute
 	// Scope defaults to fathomry, ScopeVersion to 1. Schema URLs are independent
 	// optional declarations for resource and instrumentation attributes.
 	Scope, ScopeVersion, ResourceSchemaURL, ScopeSchemaURL string
 	ScopeAttributes                                        map[string]string
+	TypedScopeAttributes                                   []ConfigAttribute
 	// Timeout: 5s default, 1ms–1min. Applies to admission and execution separately.
 	Timeout time.Duration
 	// ActiveCalls: 16 default, 1–64; QueuedCalls: 0–64. Spans hold active calls.
@@ -121,37 +126,40 @@ type instrumentSettings struct {
 	Boundaries    []float64 `json:"boundaries"`
 }
 type settings struct {
-	LogsEndpoint       string               `json:"logs_endpoint"`
-	TracesEndpoint     string               `json:"traces_endpoint"`
-	MetricsEndpoint    string               `json:"metrics_endpoint"`
-	Headers            map[string]string    `json:"headers"`
-	TLS                *tlsSettings         `json:"tls"`
-	ServiceName        string               `json:"service_name"`
-	ResourceAttributes map[string]string    `json:"resource_attributes"`
-	Scope              string               `json:"scope"`
-	ScopeVersion       string               `json:"scope_version"`
-	ResourceSchemaURL  string               `json:"resource_schema_url"`
-	ScopeSchemaURL     string               `json:"scope_schema_url"`
-	ScopeAttributes    map[string]string    `json:"scope_attributes"`
-	Timeout            time.Duration        `json:"timeout_ns"`
-	ActiveCalls        int                  `json:"active_calls"`
-	QueuedCalls        int                  `json:"queued_calls"`
-	QueueItems         int                  `json:"queue_items"`
-	QueueBytes         int                  `json:"queue_bytes"`
-	MaxRecordBytes     int                  `json:"max_record_bytes"`
-	BatchSize          int                  `json:"batch_size"`
-	MaxRequestBytes    int                  `json:"max_request_bytes"`
-	MaxResponseBytes   int                  `json:"max_response_bytes"`
-	Compression        string               `json:"compression"`
-	SampleRatio        float64              `json:"sample_ratio"`
-	MetricCardinality  int                  `json:"metric_cardinality"`
-	Instruments        []instrumentSettings `json:"instruments"`
+	LogsEndpoint            string               `json:"logs_endpoint"`
+	TracesEndpoint          string               `json:"traces_endpoint"`
+	MetricsEndpoint         string               `json:"metrics_endpoint"`
+	Headers                 map[string]string    `json:"headers"`
+	TLS                     *tlsSettings         `json:"tls"`
+	ServiceName             string               `json:"service_name"`
+	ResourceAttributes      map[string]string    `json:"resource_attributes"`
+	TypedResourceAttributes []ConfigAttribute    `json:"resource_typed_attributes"`
+	Scope                   string               `json:"scope"`
+	ScopeVersion            string               `json:"scope_version"`
+	ResourceSchemaURL       string               `json:"resource_schema_url"`
+	ScopeSchemaURL          string               `json:"scope_schema_url"`
+	ScopeAttributes         map[string]string    `json:"scope_attributes"`
+	TypedScopeAttributes    []ConfigAttribute    `json:"scope_typed_attributes"`
+	Timeout                 time.Duration        `json:"timeout_ns"`
+	ActiveCalls             int                  `json:"active_calls"`
+	QueuedCalls             int                  `json:"queued_calls"`
+	QueueItems              int                  `json:"queue_items"`
+	QueueBytes              int                  `json:"queue_bytes"`
+	MaxRecordBytes          int                  `json:"max_record_bytes"`
+	BatchSize               int                  `json:"batch_size"`
+	MaxRequestBytes         int                  `json:"max_request_bytes"`
+	MaxResponseBytes        int                  `json:"max_response_bytes"`
+	Compression             string               `json:"compression"`
+	SampleRatio             float64              `json:"sample_ratio"`
+	MetricCardinality       int                  `json:"metric_cardinality"`
+	Instruments             []instrumentSettings `json:"instruments"`
 }
 
 func defaulted(options OptionsV1) settings {
 	value := settings{
 		LogsEndpoint: options.LogsEndpoint, TracesEndpoint: options.TracesEndpoint, MetricsEndpoint: options.MetricsEndpoint,
 		Headers: options.Headers, ServiceName: options.ServiceName, ResourceAttributes: options.ResourceAttributes,
+		TypedResourceAttributes: options.TypedResourceAttributes, TypedScopeAttributes: options.TypedScopeAttributes,
 		Scope: options.Scope, ScopeVersion: options.ScopeVersion, ResourceSchemaURL: options.ResourceSchemaURL, ScopeSchemaURL: options.ScopeSchemaURL, ScopeAttributes: options.ScopeAttributes,
 		Timeout: options.Timeout, ActiveCalls: options.ActiveCalls, QueuedCalls: options.QueuedCalls,
 		QueueItems: options.QueueItems, QueueBytes: options.QueueBytes, MaxRecordBytes: options.MaxRecordBytes,
@@ -238,15 +246,11 @@ func validate(value settings) error {
 		!boundedString(value.ScopeVersion, 64) || !schemaURLValid(value.ResourceSchemaURL) || !schemaURLValid(value.ScopeSchemaURL) {
 		return failure(ErrInput, "identity")
 	}
-	for _, attributes := range []map[string]string{value.ResourceAttributes, value.ScopeAttributes} {
-		if len(attributes) > 16 {
-			return failure(ErrLimit, "identity-attributes")
-		}
-		for key, text := range attributes {
-			if !keyValid(key) || !boundedString(text, 256) || key == "service.name" {
-				return failure(ErrInput, "identity-attributes")
-			}
-		}
+	if _, err := freezeIdentityAttributes(value.ResourceAttributes, value.TypedResourceAttributes); err != nil {
+		return err
+	}
+	if _, err := freezeIdentityAttributes(value.ScopeAttributes, value.TypedScopeAttributes); err != nil {
+		return err
 	}
 	if len(value.Headers) > 16 {
 		return failure(ErrLimit, "headers")
@@ -346,13 +350,13 @@ func checkEnvironment() error {
 	return nil
 }
 
-// LimitsV1 returns bootstrap admission charges. Overlays require composition to
-// supply the corresponding resolved limits. Charges are logical work envelopes,
-// not a measured heap bound; resident SDK aggregation and queue limits are separate.
+// LimitsV1 returns bootstrap admission charges. Layered composition must instead
+// use PrepareV1's authoritative Metadata. Charges are logical work envelopes,
+// not a measured heap bound; Metadata separately accounts source residence.
 func LimitsV1(options OptionsV1) resource.Limits { return defaulted(options).limits() }
 
 // EvidenceBytesV1 returns the declared per-operation inbox charge for bootstrap
-// options. Overlays require the corresponding resolved response limit. Arbitrary
+// options. Overlays must use PrepareV1's resolved Metadata. Arbitrary
 // caller-owned cancellation/error graphs and consumer retention are not heap-capped.
 func EvidenceBytesV1(options OptionsV1) int64 { return defaulted(options).evidenceReservation() }
 func (value settings) reservation() int64 {
@@ -407,6 +411,12 @@ func bootstrapBound(options OptionsV1) error {
 	if len(options.Instruments) > 32 || len(options.Headers) > 16 || len(options.ResourceAttributes) > 16 ||
 		len(options.ScopeAttributes) > 16 {
 		return failure(ErrLimit, "bootstrap")
+	}
+	if _, err := freezeIdentityAttributes(options.ResourceAttributes, options.TypedResourceAttributes); err != nil {
+		return err
+	}
+	if _, err := freezeIdentityAttributes(options.ScopeAttributes, options.TypedScopeAttributes); err != nil {
+		return err
 	}
 	bytes := 0
 	add := func(text string) { bytes += len(text) }

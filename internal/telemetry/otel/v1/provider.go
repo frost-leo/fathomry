@@ -86,22 +86,11 @@ type queuedLog struct {
 // environment and native diagnostic globals must not be concurrently changed.
 // Selection is reusable across independent assemblies; no runtime handle is shared.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	if err := checkEnvironment(); err != nil {
-		return resource.Selection[Source]{}, err
-	}
-	if err := bootstrapBound(options); err != nil {
-		return resource.Selection[Source]{}, err
-	}
-	format := options.Format
-	if format == 0 {
-		format = 1
-	}
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaulted(options), Validate: validate},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: format, Layers: layers})
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	return resource.Select(prepared, construct), nil
+	return prepared.Select(), nil
 }
 func construct(ctx context.Context, value settings) (resource.Resource[Source], error) {
 	owner := &owner{settings: value, gate: make(chan struct{}, 1)}
@@ -137,10 +126,16 @@ func construct(ctx context.Context, value settings) (resource.Resource[Source], 
 	if err := owner.makeExporters(ctx); err != nil {
 		return owned, err
 	}
-	attrs := stringAttributes(value.ResourceAttributes)
+	attrs, err := freezeIdentityAttributes(value.ResourceAttributes, value.TypedResourceAttributes)
+	if err != nil {
+		return owned, err
+	}
 	attrs = append(attrs, attribute.String("service.name", value.ServiceName))
 	res := sdkresource.NewWithAttributes(value.ResourceSchemaURL, attrs...)
-	scopeAttrs := stringAttributes(value.ScopeAttributes)
+	scopeAttrs, err := freezeIdentityAttributes(value.ScopeAttributes, value.TypedScopeAttributes)
+	if err != nil {
+		return owned, err
+	}
 	if value.LogsEndpoint != "" {
 		owner.logs = sdklog.NewLoggerProvider(sdklog.WithResource(res), sdklog.WithProcessor(logCapture{owner}),
 			sdklog.WithAttributeCountLimit(MaxAttributes+6), sdklog.WithAttributeValueLengthLimit(value.MaxRecordBytes))
@@ -169,13 +164,6 @@ func construct(ctx context.Context, value settings) (resource.Resource[Source], 
 		return owned, nativeFailure(ErrState, "construct", ctx, err)
 	}
 	return owned, nil
-}
-func stringAttributes(values map[string]string) []attribute.KeyValue {
-	attrs := make([]attribute.KeyValue, 0, len(values))
-	for key, value := range values {
-		attrs = append(attrs, attribute.String(key, value))
-	}
-	return attrs
 }
 
 // Bind connects operation evidence independently of any telemetry export path.

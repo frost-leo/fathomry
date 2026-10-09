@@ -33,6 +33,7 @@ import (
 	"github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
+	"github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages"
@@ -63,6 +64,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "http_surf", BaseLocale: "en", Resources: surf.Resources(), Directory: "resources", Definitions: surf.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "http_httpcloak", BaseLocale: "en", Resources: httpcloak.Resources(), Directory: "resources", Definitions: httpcloak.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "http_nuki", BaseLocale: "en", Resources: nuki.Resources(), Directory: "resources", Definitions: nuki.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "telemetry_otel", BaseLocale: "en", Resources: otel.Resources(), Directory: "resources", Definitions: otel.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {

@@ -24,16 +24,20 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/frost-leo/fathomry/internal/fault"
 	"go.opentelemetry.io/otel/attribute"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	traceapi "go.opentelemetry.io/otel/trace"
 	collog "go.opentelemetry.io/proto/otlp/collector/logs/v1"
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -131,5 +135,156 @@ func TestLogLogicalBytesAndDisabledSignal(t *testing.T) {
 	}
 	if _, err := fixture.client.MeasureInt64(context.Background(), fault.Correlation{Call: "disabled"}, "count", 1); !errors.Is(err, ErrUnsupported) {
 		t.Fatal("disabled metrics falsely supported")
+	}
+}
+
+func TestTypedLogsAndIdentityPreserveIndependentOTLPTypes(t *testing.T) {
+	integer := func(value int64) *commonpb.AnyValue {
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: value}}
+	}
+	text := func(value string) *commonpb.AnyValue {
+		return &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: value}}
+	}
+	cases := []struct {
+		name  string
+		value Value
+		wire  *commonpb.AnyValue
+	}{
+		{"null", Value{}, &commonpb.AnyValue{}},
+		{"bool", Value{Kind: "bool", Bool: true}, &commonpb.AnyValue{Value: &commonpb.AnyValue_BoolValue{BoolValue: true}}},
+		{"int64-max", Value{Kind: "int64", Int64: math.MaxInt64}, integer(math.MaxInt64)},
+		{"int64-min", Value{Kind: "int64", Int64: math.MinInt64}, integer(math.MinInt64)},
+		{"double", Value{Kind: "float64", Float64: 1.25}, &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: 1.25}}},
+		{"string", Value{Kind: "string", String: "original"}, text("original")},
+		{"bytes", Value{Kind: "bytes", Bytes: []byte{0, 1, 255}}, &commonpb.AnyValue{Value: &commonpb.AnyValue_BytesValue{BytesValue: []byte{0, 1, 255}}}},
+		{"array", Value{Kind: "array", Array: []Value{{}, {Kind: "int64", Int64: 9007199254740993}, {Kind: "string", String: "original"}}},
+			&commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{ArrayValue: &commonpb.ArrayValue{Values: []*commonpb.AnyValue{{}, integer(9007199254740993), text("original")}}}}},
+		{"map", Value{Kind: "map", Map: []TypedAttribute{{Key: "text", Value: Value{Kind: "string", String: "original"}}, {Key: "null"}}},
+			&commonpb.AnyValue{Value: &commonpb.AnyValue_KvlistValue{KvlistValue: &commonpb.KeyValueList{Values: []*commonpb.KeyValue{
+				{Key: "null", Value: &commonpb.AnyValue{}}, {Key: "text", Value: text("original")},
+			}}}}},
+		{"empty-array", Value{Kind: "array"}, &commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{ArrayValue: &commonpb.ArrayValue{}}}},
+		{"empty-map", Value{Kind: "map"}, &commonpb.AnyValue{Value: &commonpb.AnyValue_KvlistValue{KvlistValue: &commonpb.KeyValueList{}}}},
+	}
+	typed := make([]ConfigAttribute, len(cases))
+	for index, item := range cases {
+		tree, err := Tree(item.value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		typed[index] = ConfigAttribute{Key: item.name, Value: tree}
+	}
+	received := make(chan *collog.ExportLogsServiceRequest, 1)
+	fixture := newFixture(t, OptionsV1{TypedResourceAttributes: typed, TypedScopeAttributes: typed,
+		ResourceAttributes: map[string]string{"legacy": "resource"}, ScopeAttributes: map[string]string{"legacy": "scope"}},
+		http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			data, err := io.ReadAll(request.Body)
+			var logs collog.ExportLogsServiceRequest
+			if err != nil || proto.Unmarshal(data, &logs) != nil {
+				writer.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			received <- &logs
+			writer.Header().Set("Content-Type", "application/x-protobuf")
+		}))
+	for index := range typed {
+		typed[index].Key = "changed"
+		for node := range typed[index].Value.Nodes {
+			typed[index].Value.Nodes[node].String = "changed"
+		}
+	}
+	eventTime := time.Date(2026, 10, 1, 2, 3, 4, 123456789, time.FixedZone("offset", 8*60*60))
+	for index := range cases {
+		item := &cases[index]
+		receipt, err := fixture.client.Emit(context.Background(), fault.Correlation{Call: "typed-" + strconv.Itoa(index)},
+			LogRecord{Body: &item.value, Time: eventTime, EventName: item.name, Severity: 9, SeverityText: "INFO"})
+		if outcome := outcomeOf(t, receipt, err); outcome.Err() != nil {
+			t.Fatal(item.name, outcome.Err())
+		}
+		if len(item.value.Bytes) != 0 {
+			item.value.Bytes[0] = 9
+		}
+		if len(item.value.Array) != 0 {
+			item.value.Array[0] = Value{Kind: "string", String: "changed"}
+		}
+		if len(item.value.Map) != 0 {
+			item.value.Map[0].Key = "changed"
+		}
+		item.value = Value{Kind: "string", String: "changed"}
+	}
+	for _, message := range []string{"compatibility", ""} {
+		if outcome := emitOne(t, fixture, "legacy", message); outcome.Err() != nil {
+			t.Fatal(outcome.Err())
+		}
+	}
+	if outcome := flushOne(t, fixture); outcome.Err() != nil {
+		t.Fatal(outcome.Err())
+	}
+	var request *collog.ExportLogsServiceRequest
+	select {
+	case request = <-received:
+	default:
+		t.Fatal("successful flush did not reach the independent peer")
+	}
+	if len(request.ResourceLogs) != 1 || len(request.ResourceLogs[0].ScopeLogs) != 1 {
+		t.Fatal("resource/scope identity was not fixed")
+	}
+	resource := request.ResourceLogs[0]
+	scope := resource.ScopeLogs[0]
+	for _, fields := range [][]*commonpb.KeyValue{resource.Resource.Attributes, scope.Scope.Attributes} {
+		byKey := make(map[string]*commonpb.AnyValue, len(fields))
+		for _, field := range fields {
+			byKey[field.Key] = field.Value
+		}
+		for _, item := range cases {
+			if !proto.Equal(byKey[item.name], item.wire) {
+				t.Errorf("identity attribute %q changed type/value: got %v, want %v", item.name, byKey[item.name], item.wire)
+			}
+		}
+		if byKey["legacy"] == nil {
+			t.Error("typed identity replaced the compatible legacy map")
+		}
+	}
+	if len(scope.LogRecords) != len(cases)+2 {
+		t.Fatal("typed/legacy records were dropped")
+	}
+	for index, item := range cases {
+		record := scope.LogRecords[index]
+		if !proto.Equal(record.Body, item.wire) || record.EventName != item.name || record.SeverityNumber != 9 || record.SeverityText != "INFO" {
+			t.Errorf("body %q changed type/value: got %v, want %v", item.name, record.Body, item.wire)
+		}
+		if record.TimeUnixNano != uint64(eventTime.UnixNano()) || record.ObservedTimeUnixNano <= record.TimeUnixNano {
+			t.Error("event time was replaced by observation time")
+		}
+	}
+	for index, message := range []string{"compatibility", ""} {
+		if !proto.Equal(scope.LogRecords[len(cases)+index].Body, text(message)) {
+			t.Error("absent Body stopped selecting the compatible string Message")
+		}
+	}
+}
+
+func TestTypedLogFailuresDoNotQueuePartialRecords(t *testing.T) {
+	fixture := newFixture(t, OptionsV1{MaxRecordBytes: 1024}, nil)
+	for _, value := range []Value{
+		{Kind: "bool", String: "ambiguous"}, {Kind: "float64", Float64: math.Inf(1)},
+		{Kind: "string", String: "\xff"}, {Kind: "bytes", Bytes: make([]byte, 1024)},
+		{Kind: "array", Array: make([]Value, MaxNodes)},
+	} {
+		receipt, err := fixture.client.Emit(context.Background(), fault.Correlation{Call: "refused"},
+			LogRecord{Body: &value, Attributes: []slog.Attr{slog.String("valid", "must-not-queue")}})
+		if err != nil || outcomeOf(t, receipt, err).Err() == nil || len(fixture.owner.pendingLogs) != 0 || fixture.owner.queueItems != 0 || fixture.owner.queueBytes != 0 {
+			t.Fatal("invalid body entered queue or lost its independent refusal")
+		}
+	}
+	for _, input := range []LogRecord{
+		{Body: &Value{}, Message: "ambiguous"}, {Time: time.Unix(-1, 0)}, {Time: time.Date(2262, 1, 1, 0, 0, 0, 0, time.UTC)},
+	} {
+		if receipt, err := fixture.client.Emit(context.Background(), fault.Correlation{Call: "invalid"}, input); !errors.Is(err, ErrInput) || receipt != nil {
+			t.Fatal("invalid selector or timestamp reached operation admission")
+		}
+	}
+	if result := emitOne(t, fixture, "next", "healthy"); result.Err() != nil {
+		t.Fatal("refused record corrupted subsequent independent admission", result.Err())
 	}
 }
