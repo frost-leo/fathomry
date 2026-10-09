@@ -1,0 +1,62 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "logging",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.logging.invalid_input",
+      "source": "c784cc0c1ac8c92e2711c6025f262bda9ebbc309371a73edce981a2e05c71dfc",
+      "forms": {
+        "other": "结构化日志输入或入口选项无效。"
+      }
+    },
+    {
+      "id": "fathomry.logging.unsupported_value",
+      "source": "5c06c303dd01f654f59a6b28e27f412ac20c7ad3edfc2ac0b2cb5100d4fe1884",
+      "forms": {
+        "other": "不支持该日志值或所请求的入口能力。"
+      }
+    },
+    {
+      "id": "fathomry.logging.limit_exceeded",
+      "source": "7a724909c6db6f2b3cdaec0dc171bab20ac3cc3ea4375ceaa976d1a3bbcc6340",
+      "forms": {
+        "other": "结构化日志或保留入口视图超出限制。"
+      }
+    },
+    {
+      "id": "fathomry.logging.invalid_state",
+      "source": "eac27980e3680573660a56d4c78227a3591f565d5534b01bc309e01f98f1d05d",
+      "forms": {
+        "other": "日志入口无法在当前状态下执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.logging.runtime_serialization",
+      "source": "00edc334e353566bcf65e94b440c0444825344e0db63dfa3e27e219636266e37",
+      "forms": {
+        "other": "不支持日志运行时值的序列化。"
+      }
+    }
+  ]
+}

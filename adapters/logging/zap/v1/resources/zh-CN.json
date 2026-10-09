@@ -1,0 +1,97 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "logging_zap",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.logging_zap.invalid_input",
+      "source": "1b42d9768f95faad299347ec6458e15cb0b14c5c463f94ae1cf788e18c19de7c",
+      "forms": {
+        "other": "日志输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.unsupported_profile",
+      "source": "7035c7757bbac3ca38f8c3cf35c72650c9ad209d034f4edba7cb61a5f0b4aede",
+      "forms": {
+        "other": "请求的日志能力不受支持。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.limit_exceeded",
+      "source": "f66e36ead98ed88080fb9e093fd041bdd6fed04a75a3cccd6ef93f64384094ce",
+      "forms": {
+        "other": "超出了日志数据、工作或所有权限制。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.invalid_state",
+      "source": "c6280285689bbd01cccebc6ec1839bcab2651f762327c835d14daa9b77646203",
+      "forms": {
+        "other": "日志句柄在当前状态下无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.write_failed",
+      "source": "0578f3dc15ed96e66d44af844b3dfb6c47985c8f848532da094f42ecd1e9faf1",
+      "forms": {
+        "other": "日志目标写入失败，可能已产生部分效果。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.sync_failed",
+      "source": "8def344a3df79fa497a042b8d500a974051fcb12751955817dbe7965d5702989",
+      "forms": {
+        "other": "日志同步失败，无法确认持久化。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.file_failed",
+      "source": "21e80f5a98f2fafc8e5266fc23798e7b54305289c48867c3be6350d5113114ac",
+      "forms": {
+        "other": "托管日志文件操作失败。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.cleanup_failed",
+      "source": "23a8fae84e335a5608922b74cce7b617b45c2478af21d196163545c8d49d79b2",
+      "forms": {
+        "other": "日志清理报告失败；完成状态需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.recursive_operation",
+      "source": "0b2aa173e43d725192dfb0fa198d48f8a22c3847698e583749712117936bad90",
+      "forms": {
+        "other": "日志不能递归进入自身处理链。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.runtime_serialization",
+      "source": "8cc140dac742d1a5a4fcb102828d9bd91b742385b71a204faa3161838dee30ff",
+      "forms": {
+        "other": "不支持序列化日志运行时值。"
+      }
+    }
+  ]
+}

@@ -22,10 +22,9 @@ package zap
 import (
 	"context"
 	"io"
-	"os"
-	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -72,14 +71,19 @@ type Logger struct {
 	observer *invocation.Observer
 	name     string
 	fields   []zapcore.Field
+	policy   *preparedState
 }
 
 type owner struct {
-	settings  settings
-	extension StructuredSink
-	branches  []*branch
-	closed    bool
-	closeErr  error
+	prepared        Prepared
+	settings        settings
+	extension       StructuredSink
+	branches        []*branch
+	closed          bool
+	closeErr        error
+	derivationMu    sync.Mutex
+	derivations     int
+	derivationBytes int64
 }
 type branch struct {
 	zapcore.Core
@@ -96,65 +100,11 @@ type branch struct {
 // may be nil; no implicit output, global logger, registry or exporter is selected.
 // The explicit extension is borrowed for each assembled source's lifetime.
 func Select(options OptionsV1, extension StructuredSink, layers ...resource.Layer) (resource.Selection[Source], error) {
-	if len(options.Outputs) > MaxSinks || len(options.ExtensionLevel) > 16 {
-		return resource.Selection[Source]{}, failure(ErrLimit, "bootstrap")
-	}
-	for _, output := range options.Outputs {
-		if len(output.Name) > 64 || len(output.Kind) > 16 || len(output.Level) > 16 || len(output.Directory) > 4096 {
-			return resource.Selection[Source]{}, failure(ErrLimit, "bootstrap")
-		}
-	}
-	if extension != nil {
-		value := reflect.ValueOf(extension)
-		switch value.Kind() {
-		case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-			if value.IsNil() {
-				return resource.Selection[Source]{}, failure(ErrInput, "extension")
-			}
-		}
-	}
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options),
-		Validate: func(value settings) error { return validate(value, extension != nil) }},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: 1, Layers: layers})
+	prepared, err := PrepareV1(options, extension != nil, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
-		owner := &owner{settings: value, extension: extension}
-		resourceValue := resource.Resource[Source]{Acquired: true, Capability: Source{owner: owner}, Release: owner.close}
-		for _, output := range value.Outputs {
-			if ctx.Err() != nil {
-				return resourceValue, failure(ErrState, "construct", ctx.Err(), context.Cause(ctx))
-			}
-			minimum, _ := level(output.Level)
-			branch := &branch{name: output.Name, minimum: minimum}
-			var writer zapcore.WriteSyncer
-			switch output.Kind {
-			case "stdout":
-				writer = os.Stdout
-			case "stderr":
-				writer = os.Stderr
-			case "file":
-				file, err := openRotatingFile(output)
-				branch.file = file
-				owner.branches = append(owner.branches, branch)
-				if err != nil {
-					return resourceValue, failure(ErrFile, "open", err)
-				}
-				writer = file
-			}
-			branch.writer = &checkedWriter{native: writer, maximum: value.MaxEntryBytes}
-			branch.Core = zapcore.NewCore(zapcore.NewJSONEncoder(encoderConfig()), branch.writer, minimum)
-			if output.Kind != "file" {
-				owner.branches = append(owner.branches, branch)
-			}
-		}
-		if extension != nil {
-			minimum, _ := level(value.ExtensionLevel)
-			owner.branches = append(owner.branches, &branch{name: "structured", extension: extension, minimum: minimum})
-		}
-		return resourceValue, nil
-	}), nil
+	return prepared.Select(extension)
 }
 
 func encoderConfig() zapcore.EncoderConfig {
@@ -182,7 +132,7 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 		limits.Queued > 0 && limits.QueuedBytes < value.reservation() {
 		return nil, failure(ErrInput, "limits")
 	}
-	return &Logger{owner: source.owner, access: access, inbox: inbox, observer: observer}, nil
+	return &Logger{owner: source.owner, access: access, inbox: inbox, observer: observer, policy: source.owner.prepared.state}, nil
 }
 
 // SinkState describes a single native branch observation. Failure may follow
@@ -221,6 +171,34 @@ func (result Result) SinksCopy() []SinkResult { return append([]SinkResult(nil),
 
 type emissionKey struct{}
 
+// Entry preserves the caller's event metadata. Time zero deliberately omits the
+// native timestamp, and PC zero means no supplied caller. PC is a return program
+// counter from runtime.Callers, resolved only with runtime.CallersFrames. Name
+// optionally extends the Logger's frozen instrumentation name without deriving
+// another retained view. Entry is borrowed until LogEntry returns.
+type Entry struct {
+	private
+	Time    time.Time
+	PC      uintptr
+	Level   zapcore.Level
+	Message string
+	Name    string
+}
+
+type entryKey struct{}
+
+// EntryMetadata exposes this integration's captured ingress metadata to its
+// trusted synchronous structured destination. PC remains the original return PC,
+// while zapcore.Entry.Caller follows native adjusted-PC semantics. It does not
+// inspect arbitrary caller context values or grant native ownership.
+func EntryMetadata(ctx context.Context) (Entry, bool) {
+	if ctx == nil {
+		return Entry{}, false
+	}
+	value, ok := ctx.Value(entryKey{}).(Entry)
+	return value, ok
+}
+
 func (logger *Logger) begin(ctx context.Context, id fault.Correlation, name string) (*invocation.Call[Result], error) {
 	if logger == nil || logger.owner == nil || ctx == nil {
 		return nil, failure(ErrInput, name)
@@ -249,9 +227,34 @@ func (logger *Logger) begin(ctx context.Context, id fault.Correlation, name stri
 // Outputs are synchronous, ordered and non-atomic. Cancellation is checked before
 // each sink; it does not interrupt an entered syscall or erase earlier effects.
 func (logger *Logger) Log(ctx context.Context, id fault.Correlation, severity zapcore.Level, message string, fields ...zapcore.Field) (*invocation.Receipt[Result], error) {
-	if logger == nil || logger.owner == nil || severity < zapcore.DebugLevel || severity > zapcore.ErrorLevel ||
-		len(message) > MaxMessageBytes || !utf8.ValidString(message) || len(logger.fields)+len(fields) > MaxFields {
+	input := Entry{Time: time.Now().UTC(), Level: severity, Message: message}
+	if logger != nil && logger.owner != nil && logger.owner.settings.Caller {
+		var program [1]uintptr
+		runtime.Callers(2, program[:])
+		input.PC = program[0]
+	}
+	return logger.LogEntry(ctx, id, input, fields...)
+}
+
+// LogEntry accepts explicit ingress metadata without recapturing a wrapper's
+// caller or replacing a zero event time. Direct context cancellation remains
+// authoritative; a restricted slog gateway must supply its own bounded owner
+// lifetime while preserving caller association separately.
+func (logger *Logger) LogEntry(ctx context.Context, id fault.Correlation, input Entry, fields ...zapcore.Field) (*invocation.Receipt[Result], error) {
+	if logger == nil || logger.owner == nil || input.Level < zapcore.DebugLevel || input.Level > zapcore.ErrorLevel ||
+		len(input.Message) > MaxMessageBytes || !utf8.ValidString(input.Message) || len(logger.fields)+len(fields) > MaxFields ||
+		input.Name != "" && !fieldKey(input.Name) {
 		return nil, failure(ErrInput, "log")
+	}
+	name := logger.name
+	if input.Name != "" {
+		if name != "" {
+			name += "."
+		}
+		name += input.Name
+	}
+	if len(name) > 128 {
+		return nil, failure(ErrLimit, "name")
 	}
 	combined := make([]zapcore.Field, 0, len(logger.fields)+len(fields))
 	combined = append(combined, logger.fields...)
@@ -272,32 +275,34 @@ func (logger *Logger) Log(ctx context.Context, id fault.Correlation, severity za
 	frozen = append(frozen, sdk.String("fathomry.call", strings.Clone(id.Call)), sdk.String("fathomry.parent", strings.Clone(id.Parent)),
 		sdk.String("fathomry.owner", strings.Clone(id.Owner)), sdk.String("fathomry.source", info.Configuration.Identity.Name),
 		sdk.String("fathomry.provider", ProviderID), sdk.String("fathomry.scope", info.Scope))
-	entry := zapcore.Entry{Time: time.Now().UTC(), Level: severity, Message: strings.Clone(message), LoggerName: logger.name}
-	if logger.owner.settings.Caller {
-		program, file, line, ok := runtime.Caller(1)
-		if ok {
-			function := ""
-			if frame := runtime.FuncForPC(program); frame != nil {
-				function = frame.Name()
-			}
-			if len(file) > 4096 || len(function) > 4096 {
+	input.Message, input.Name = strings.Clone(input.Message), strings.Clone(name)
+	entry := zapcore.Entry{Time: input.Time.UTC().Round(0), Level: input.Level, Message: input.Message, LoggerName: input.Name}
+	if logger.owner.settings.Caller && input.PC != 0 {
+		frames := runtime.CallersFrames([]uintptr{input.PC})
+		frame, _ := frames.Next()
+		if frame.PC != 0 {
+			if len(frame.File) > 4096 || len(frame.Function) > 4096 {
 				call.Complete(invocation.Outcome[Result]{Primary: failure(ErrLimit, "caller")})
 				return call.Receipt(), nil
 			}
-			entry.Caller = zapcore.EntryCaller{Defined: true, PC: program, File: file, Line: line, Function: function}
+			entry.Caller = zapcore.EntryCaller{Defined: true, PC: frame.PC, File: frame.File, Line: frame.Line, Function: frame.Function}
 		}
 	}
 	_ = call.Execute(ctx, invocation.Budget{Limit: logger.owner.settings.Timeout}, func(work context.Context, _ invocation.Scope) invocation.Outcome[Result] {
 		work = context.WithValue(work, emissionKey{}, true)
+		work = context.WithValue(work, entryKey{}, input)
 		results := make([]SinkResult, 0, len(logger.owner.branches))
 		var causes []error
-		for _, branch := range logger.owner.branches {
+		for index, branch := range logger.owner.branches {
 			branch.ctx = work
 			branch.result = SinkResult{Name: branch.name, State: Filtered}
 			if branch.writer != nil {
 				branch.writer.bytes = 0
 			}
-			checked := branch.Check(entry, nil)
+			var checked *zapcore.CheckedEntry
+			if logger.minimum(index).Enabled(entry.Level) {
+				checked = checked.AddCore(entry, branch)
+			}
 			if checked != nil {
 				// Leave ErrorOutput nil: native diagnostics would format write
 				// causes and lose per-call attribution. The branch retains them.
@@ -366,12 +371,7 @@ func (branch *branch) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	}
 	var err error
 	if branch.extension != nil {
-		isolated := append([]zapcore.Field(nil), fields...)
-		for index, field := range isolated {
-			if field.Type == zapcore.BinaryType || field.Type == zapcore.ByteStringType {
-				isolated[index].Interface = append([]byte(nil), field.Interface.([]byte)...)
-			}
-		}
+		isolated := copyFields(fields)
 		err = branch.extension.Write(branch.ctx, entry, isolated)
 	} else {
 		err = branch.Core.Write(entry, fields)

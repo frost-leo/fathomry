@@ -29,6 +29,8 @@ import (
 	"github.com/frost-leo/fathomry/adapters/httpclient/nuki/v1"
 	"github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	"github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
+	logging "github.com/frost-leo/fathomry/adapters/logging/v1"
+	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
 	"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
@@ -65,6 +67,8 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "http_httpcloak", BaseLocale: "en", Resources: httpcloak.Resources(), Directory: "resources", Definitions: httpcloak.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "http_nuki", BaseLocale: "en", Resources: nuki.Resources(), Directory: "resources", Definitions: nuki.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "telemetry_otel", BaseLocale: "en", Resources: otel.Resources(), Directory: "resources", Definitions: otel.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "logging", BaseLocale: "en", Resources: logging.Resources(), Directory: "resources", Definitions: logging.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "logging_zap", BaseLocale: "en", Resources: zap.Resources(), Directory: "resources", Definitions: zap.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {

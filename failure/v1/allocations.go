@@ -112,6 +112,10 @@ const (
 	FacilityNuki Facility = 0x204
 	// FacilityOTel owns public telemetry signals, propagation and export.
 	FacilityOTel Facility = 0x280
+	// FacilityLogging owns bounded shared logging data and safe ingress.
+	FacilityLogging Facility = 0x281
+	// FacilityZap owns the public Zap logging capability.
+	FacilityZap Facility = 0x282
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -166,6 +170,8 @@ func Allocations() []Allocation {
 		{Facility: FacilityHTTPcloak, Module: "fathomry", Component: "http_httpcloak"},
 		{Facility: FacilityNuki, Module: "fathomry", Component: "http_nuki"},
 		{Facility: FacilityOTel, Module: "fathomry", Component: "telemetry_otel"},
+		{Facility: FacilityLogging, Module: "fathomry", Component: "logging"},
+		{Facility: FacilityZap, Module: "fathomry", Component: "logging_zap"},
 	}
 }
 

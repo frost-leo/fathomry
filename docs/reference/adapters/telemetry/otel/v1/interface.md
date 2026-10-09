@@ -64,6 +64,12 @@ a typed `resource.Instance` whose Release delegates to the Owner. `Using` borrow
 a Fixed/Follow Ref under a frozen Budget covering every admitted generation.
 `WithID` produces a correlation view, not new resource or operation capacity.
 
+StableDestination is a pure non-owning routing fact: direct/Fixed clients cannot
+follow replacement endpoints between calls; Follow clients can. It does not
+acquire a lease or promise source existence, readiness, admission or lifetime.
+Explicit logging composition uses this fact to reject hidden destination changes
+behind retained logger views. Standalone telemetry Follow behavior is unchanged.
+
 Each accepted operation retains its actual source and public generation.
 A larger replacement cannot bypass the Using budget. A live span remains on its
 original source across Follow replacement; queued telemetry does not move to the

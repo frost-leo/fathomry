@@ -1,0 +1,127 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "logging_zap",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.logging_zap.invalid_input",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The logging input or settings are invalid."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.unsupported_profile",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.unsupported_profile.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The requested logging capability is unsupported."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A logging data, work or ownership bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.invalid_state",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.invalid_state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The logging handle cannot perform this operation in its current state."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.write_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.write_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A logging destination failed; partial effects remain possible."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.sync_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.sync_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A logging synchronization failed; durability is not established."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.file_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.file_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A managed logging file operation failed."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Logging cleanup reported a failure; completion is separate."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.recursive_operation",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.recursive_operation.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Logging cannot recursively enter its own pipeline."
+      }
+    },
+    {
+      "id": "fathomry.logging_zap.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.logging_zap.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Logging runtime value serialization is unsupported."
+      }
+    }
+  ]
+}

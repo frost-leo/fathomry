@@ -185,6 +185,17 @@ different version/stability axis. Configuration and OTLP are separate contracts.
 See the [Internal contract](../reference/internal/telemetry/otel/v1/interface.md)
 and [public contract](../reference/adapters/telemetry/otel/v1/interface.md).
 
+Public logging data at `adapters/logging/v1` owns closed values, safe diagnostic
+projection and minimal budget/attribution vocabulary, not a universal logger.
+`adapters/logging/slog/v1` is restricted owned ingress with explicit refusal
+status and no operation engine. Concrete `adapters/logging/zap/v1` uses the
+existing public operation/resource mechanisms and its selected Internal source.
+The acyclic `adapters/logging/zap/otel/v1` composition borrows both public
+capabilities; neither core provider imports the other provider or this bridge.
+Level-only logger generations share one physical owner/admission, not competing
+file owners. Explicit producer-before-telemetry-before-receiver termination is
+an application composition obligation; Framework.Close is not a dependency DAG.
+
 Kafka follows this organization at `internal/broker/franz/v1`. Its
 [contract](../reference/internal/broker/franz/v1/interface.md) combines controlled
 production, exact reads, direct consumers and explicit checkpoints. Native

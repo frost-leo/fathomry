@@ -39,88 +39,144 @@ const (
 	MaxMessageBytes = 64 << 10
 )
 
-// freezeFields accepts native scalar, binary, time and *fault.Error fields only.
-// It never invokes user presentation or marshaling code. Errors retain their
-// original cause graphs for deliberate inspection; those graphs are not copied.
-func freezeFields(fields []zapcore.Field) ([]zapcore.Field, error) {
+// FreezeFields accepts native primitives, binary/time/no-op fields, literal null,
+// closed Value carriers and nonnil *fault.Error fields. Caller-owned callbacks
+// never execute. Returned byte/collection storage is independent; native error
+// graphs remain borrowed for deliberate inspection, not copied or heap-capped.
+func FreezeFields(fields []zapcore.Field) ([]zapcore.Field, error) {
 	if err := validateFields(fields); err != nil {
 		return nil, err
 	}
 	return copyFields(fields), nil
 }
 
+func freezeFields(fields []zapcore.Field) ([]zapcore.Field, error) { return FreezeFields(fields) }
+
 func validateFields(fields []zapcore.Field) error {
-	if len(fields) > MaxFields {
-		return failure(ErrLimit, "fields")
+	_, err := validateFieldsBudget(fields, false)
+	return err
+}
+
+func validateFieldsBudget(fields []zapcore.Field, metadata bool) (int, error) {
+	limit := MaxFields
+	if metadata {
+		limit += 6
 	}
-	total := 0
+	if len(fields) > limit {
+		return 0, failure(ErrLimit, "fields")
+	}
+	userBudget := dataBudget{bytes: MaxFieldBytes, nodes: MaxNodes}
+	metadataBudget := dataBudget{bytes: 6 * 384, nodes: 6}
 	names := make(map[string]bool, len(fields))
+	userFields := 0
 	for _, field := range fields {
 		if field.Type == zapcore.SkipType {
+			userFields++
 			continue
 		}
-		if !fieldKey(field.Key) || names[field.Key] {
-			return failure(ErrInput, "field-key")
+		automatic := metadata && metadataKey(field.Key)
+		if !automatic {
+			userFields++
+		}
+		if (!automatic && !fieldKey(field.Key)) || names[field.Key] || automatic && (field.Type != zapcore.StringType || len(field.String) > 128) {
+			return 0, failure(ErrInput, "field-key")
 		}
 		names[field.Key] = true
-		total += len(field.Key) + 128
+		budget := &userBudget
+		if automatic {
+			budget = &metadataBudget
+		}
+		if err := budget.take(len(field.Key)+128, 1); err != nil {
+			return 0, err
+		}
 		switch field.Type {
 		case zapcore.StringType:
 			if len(field.String) > MaxFieldBytes {
-				return failure(ErrLimit, "field-string")
+				return 0, failure(ErrLimit, "field-string")
 			}
 			if !utf8.ValidString(field.String) {
-				return failure(ErrInput, "field-string")
+				return 0, failure(ErrInput, "field-string")
 			}
-			total += len(field.String)
+			if err := budget.take(len(field.String), 0); err != nil {
+				return 0, err
+			}
 		case zapcore.BinaryType, zapcore.ByteStringType:
 			value, ok := field.Interface.([]byte)
 			if !ok {
-				return failure(ErrInput, "field-bytes")
+				return 0, failure(ErrInput, "field-bytes")
 			}
 			if len(value) > MaxFieldBytes {
-				return failure(ErrLimit, "field-bytes")
+				return 0, failure(ErrLimit, "field-bytes")
 			}
 			if field.Type == zapcore.ByteStringType && !utf8.Valid(value) {
-				return failure(ErrInput, "field-bytes")
+				return 0, failure(ErrInput, "field-bytes")
 			}
-			total += len(value)
+			if err := budget.take(len(value), 0); err != nil {
+				return 0, err
+			}
 		case zapcore.BoolType, zapcore.Int64Type, zapcore.Int32Type, zapcore.Int16Type, zapcore.Int8Type,
 			zapcore.Uint64Type, zapcore.Uint32Type, zapcore.Uint16Type, zapcore.Uint8Type, zapcore.DurationType:
 		case zapcore.Float64Type:
 			number := math.Float64frombits(uint64(field.Integer))
 			if math.IsNaN(number) || math.IsInf(number, 0) {
-				return failure(ErrInput, "field-float")
+				return 0, failure(ErrInput, "field-float")
 			}
 		case zapcore.Float32Type:
 			number := float64(math.Float32frombits(uint32(field.Integer)))
 			if math.IsNaN(number) || math.IsInf(number, 0) {
-				return failure(ErrInput, "field-float")
+				return 0, failure(ErrInput, "field-float")
 			}
 		case zapcore.TimeType:
 			if field.Interface != nil {
 				location, ok := field.Interface.(*time.Location)
 				if !ok || location == nil {
-					return failure(ErrInput, "field-time")
+					return 0, failure(ErrInput, "field-time")
 				}
 			}
 		case zapcore.TimeFullType:
 			if _, ok := field.Interface.(time.Time); !ok {
-				return failure(ErrInput, "field-time")
+				return 0, failure(ErrInput, "field-time")
 			}
 		case zapcore.ErrorType:
 			original, ok := field.Interface.(*fault.Error)
 			if !ok || original == nil {
-				return failure(ErrUnsupported, "field-error")
+				return 0, failure(ErrUnsupported, "field-error")
+			}
+		case zapcore.ReflectType:
+			if field.Interface == nil {
+				continue
+			}
+			value, ok := field.Interface.(Value)
+			if !ok {
+				return 0, failure(ErrUnsupported, "field-reflect")
+			}
+			if err := validateValue(value, budget, 1); err != nil {
+				return 0, err
+			}
+		case zapcore.ArrayMarshalerType:
+			value, ok := field.Interface.(frozenArray)
+			if !ok {
+				return 0, failure(ErrUnsupported, "field-array-callback")
+			}
+			if err := validateValue(Value{Kind: "array", Array: []Value(value)}, budget, 1); err != nil {
+				return 0, err
+			}
+		case zapcore.ObjectMarshalerType:
+			value, ok := field.Interface.(frozenMap)
+			if !ok {
+				return 0, failure(ErrUnsupported, "field-object-callback")
+			}
+			if err := validateValue(Value{Kind: "map", Map: []Attribute(value)}, budget, 1); err != nil {
+				return 0, err
 			}
 		default:
-			return failure(ErrUnsupported, "field-type")
-		}
-		if total > MaxFieldBytes {
-			return failure(ErrLimit, "field-bytes")
+			return 0, failure(ErrUnsupported, "field-type")
 		}
 	}
-	return nil
+	if userFields > MaxFields {
+		return 0, failure(ErrLimit, "fields")
+	}
+	return MaxFieldBytes - userBudget.bytes + 6*384 - metadataBudget.bytes, nil
 }
 
 func copyFields(fields []zapcore.Field) []zapcore.Field {
@@ -142,6 +198,16 @@ func copyFields(fields []zapcore.Field) []zapcore.Field {
 			copy = sdk.Time(key, field.Interface.(time.Time).UTC())
 		case zapcore.ErrorType:
 			copy.Interface = field.Interface
+		case zapcore.ReflectType:
+			if field.Interface != nil {
+				copy = valueField(key, copyValue(field.Interface.(Value)))
+			}
+		case zapcore.ArrayMarshalerType:
+			value := copyValue(Value{Kind: "array", Array: []Value(field.Interface.(frozenArray))})
+			copy = valueField(key, value)
+		case zapcore.ObjectMarshalerType:
+			value := copyValue(Value{Kind: "map", Map: []Attribute(field.Interface.(frozenMap))})
+			copy = valueField(key, value)
 		}
 		frozen = append(frozen, copy)
 	}
@@ -149,11 +215,18 @@ func copyFields(fields []zapcore.Field) []zapcore.Field {
 }
 
 func fieldKey(key string) bool {
-	if key == "" || len(key) > 128 || strings.HasPrefix(key, "fathomry.") {
+	if !dataKey(key) || strings.HasPrefix(key, "fathomry.") {
 		return false
 	}
 	switch key {
 	case "ts", "level", "logger", "msg", "caller":
+		return false
+	}
+	return true
+}
+
+func dataKey(key string) bool {
+	if key == "" || len(key) > 128 {
 		return false
 	}
 	for _, char := range key {
@@ -164,9 +237,18 @@ func fieldKey(key string) bool {
 	return true
 }
 
+func metadataKey(key string) bool {
+	switch key {
+	case "fathomry.call", "fathomry.parent", "fathomry.owner", "fathomry.source", "fathomry.provider", "fathomry.scope":
+		return true
+	}
+	return false
+}
+
 // With freezes allowed native fields, including byte storage, before returning
 // an independent derived facade. Duplicate/reserved keys are rejected, not shadowed.
-// Callers own derived facade lifetimes/counts and must bound their aggregate memory.
+// Each successful derivation consumes the physical owner's cumulative count and
+// logical retained-byte allowance. Collection does not recycle this allowance.
 func (logger *Logger) With(fields ...zapcore.Field) (*Logger, error) {
 	if logger == nil || logger.owner == nil {
 		return nil, failure(ErrState, "with")
@@ -179,6 +261,13 @@ func (logger *Logger) With(fields ...zapcore.Field) (*Logger, error) {
 	combined = append(combined, fields...)
 	frozen, err := freezeFields(combined)
 	if err != nil {
+		return nil, err
+	}
+	charge, err := validateFieldsBudget(frozen, false)
+	if err != nil {
+		return nil, err
+	}
+	if err := logger.owner.reserveDerivation(int64(charge + len(logger.name) + 256)); err != nil {
 		return nil, err
 	}
 	derived := *logger
@@ -197,6 +286,9 @@ func (logger *Logger) Named(name string) (*Logger, error) {
 	}
 	if len(name) > 128 {
 		return nil, failure(ErrLimit, "name")
+	}
+	if err := logger.owner.reserveDerivation(int64(len(name) + 256)); err != nil {
+		return nil, err
 	}
 	derived := *logger
 	derived.name = strings.Clone(name)

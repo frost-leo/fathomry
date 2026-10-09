@@ -358,6 +358,10 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/httpclient/httpcloak/v1`](reference/adapters/httpclient/httpcloak/v1/interface.md) | HTTPcloak native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/httpclient/nuki/v1`](reference/adapters/httpclient/nuki/v1/interface.md) | Nuki native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/telemetry/otel/v1`](reference/adapters/telemetry/otel/v1/interface.md) | Public telemetry, frozen preparation, generation-owned spans, explicit export scheduling and capability coverage |
+| [`adapters/logging/v1`](reference/adapters/logging/v1/interface.md) | Bounded closed logging data, safe errors, budgets and attribution |
+| [`adapters/logging/slog/v1`](reference/adapters/logging/slog/v1/interface.md) | Restricted owned slog ingress, ordered groups and out-of-band refusal |
+| [`adapters/logging/zap/v1`](reference/adapters/logging/zap/v1/interface.md) | Public Zap outputs, immutable file-level policy views and retained derivations |
+| [`adapters/logging/zap/otel/v1`](reference/adapters/logging/zap/otel/v1/interface.md) | Optional typed public logging/telemetry composition and shutdown order |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |
