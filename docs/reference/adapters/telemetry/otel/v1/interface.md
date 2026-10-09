@@ -70,6 +70,13 @@ acquire a lease or promise source existence, readiness, admission or lifetime.
 Explicit logging composition uses this fact to reject hidden destination changes
 behind retained logger views. Standalone telemetry Follow behavior is unchanged.
 
+AdmissionCanceled safely inspects the current public failure's exact native
+entry/pre-Emit cancellation boundary (including its known invocation attribution
+frame), not arbitrary cause text/callbacks. It proves cancellation before that
+dispatch/enqueue only; target lifetime and retry policy remain separate. Error
+codes, original identities and occurrence metadata are unchanged. Managed logging
+uses this additive fact to avoid poisoning healthy independent-record targets.
+
 Each accepted operation retains its actual source and public generation.
 A larger replacement cannot bypass the Using budget. A live span remains on its
 original source across Follow replacement; queued telemetry does not move to the

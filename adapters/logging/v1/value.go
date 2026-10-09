@@ -215,22 +215,22 @@ func (state *budget) value(value Value, depth int) (Value, error) {
 		}
 	case StringKind:
 		text := value.StringValue()
-		if !utf8.ValidString(text) {
-			return Value{}, fail(ErrInput, "string")
-		}
 		if err := state.charge(int64(len(text))); err != nil {
 			return Value{}, err
+		}
+		if !utf8.ValidString(text) {
+			return Value{}, fail(ErrInput, "string")
 		}
 		if state.copy {
 			result.data = strings.Clone(text)
 		}
 	case BinaryKind, ByteStringKind:
 		data := value.data.([]byte)
-		if value.kind == ByteStringKind && !utf8.Valid(data) {
-			return Value{}, fail(ErrInput, "byte-string")
-		}
 		if err := state.charge(int64(len(data))); err != nil {
 			return Value{}, err
+		}
+		if value.kind == ByteStringKind && !utf8.Valid(data) {
+			return Value{}, fail(ErrInput, "byte-string")
 		}
 		if state.copy {
 			result.data = slices.Clone(data)

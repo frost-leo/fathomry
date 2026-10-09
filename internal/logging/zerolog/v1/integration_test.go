@@ -55,7 +55,7 @@ func TestFacadePrivacyProfileAndMissingEvidence(t *testing.T) {
 	if err != nil || report.Source.Configuration.Revision != f.logger.access.Info().Configuration.Revision || report.Require(compatibility.Policy{}) == nil {
 		t.Fatal("missing evidence became certified support", err)
 	}
-	conformance.Facade(t, f.logger, "Log", "Rotate", "Sync", "Profile", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, f.logger, "Log", "LogEntry", "With", "WithPolicy", "PolicyDescription", "Enabled", "Rotate", "Sync", "Profile", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	conformance.Runtime(t, f.logger, new(Logger), options.Sinks[0].File.Directory)
 	conformance.Runtime(t, *f.logger, new(Logger), options.Sinks[0].File.Directory)
 	conformance.Runtime(t, options.Sinks[0], new(SinkV1), options.Sinks[0].File.Directory)

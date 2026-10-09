@@ -196,6 +196,12 @@ Level-only logger generations share one physical owner/admission, not competing
 file owners. Explicit producer-before-telemetry-before-receiver termination is
 an application composition obligation; Framework.Close is not a dependency DAG.
 
+`adapters/logging/zerolog/v1` reuses the shared logging/slog boundaries, never Zap's
+concrete implementation. Its typed managed-record contract distinguishes one
+failed independent event from stopped destination state; legacy byte/record/file
+contracts remain conservative. `adapters/logging/zerolog/otel/v1` is the separately
+classified acyclic public composition; it does not install a logger or exporter.
+
 Kafka follows this organization at `internal/broker/franz/v1`. Its
 [contract](../reference/internal/broker/franz/v1/interface.md) combines controlled
 production, exact reads, direct consumers and explicit checkpoints. Native

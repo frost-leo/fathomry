@@ -25,11 +25,12 @@ import (
 
 	logging "github.com/frost-leo/fathomry/adapters/logging/v1"
 	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
+	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
 	"github.com/frost-leo/fathomry/failure/v1"
 )
 
 func TestLoggingOfflineAtlas(t *testing.T) {
-	for _, definition := range append(logging.Definitions(), zap.Definitions()...) {
+	for _, definition := range append(append(logging.Definitions(), zap.Definitions()...), zerolog.Definitions()...) {
 		for _, identity := range []string{definition.Code.String(), string(definition.Identifier)} {
 			for _, locale := range []string{"en", "zh-CN"} {
 				output, diagnostic, err := execute([]string{"error", "explain", identity, "--output", "json", "--lang", locale}, "")

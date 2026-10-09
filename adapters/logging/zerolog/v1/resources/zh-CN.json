@@ -1,0 +1,83 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "logging_zerolog",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.logging_zerolog.invalid_input",
+      "source": "41747d7466e881c036842dd3a4902317ff1cea2a35df85db84cd2f4c9f53a8f3",
+      "forms": {
+        "other": "日志输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.unsupported_profile",
+      "source": "a6388362058ce2675a8a9c1e58dcc6ceb79a279bdfa1e3d650e7b438b435c336",
+      "forms": {
+        "other": "请求的日志能力不受支持。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.limit_exceeded",
+      "source": "0c54fe9b2e2f2b942581354d1cf7e98eaf81e33824fa75011bcd2e5d04e8a992",
+      "forms": {
+        "other": "超出了日志数据、工作或所有权限制。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.invalid_state",
+      "source": "5d9ed0a7b9be4b74d91d6e9ed94724c109c370893c106430399aa95f66385503",
+      "forms": {
+        "other": "日志句柄在当前状态下无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.write_failed",
+      "source": "50c241af3efdc4093464bffd0c88cf63dd4a0571a86e7f9017a8a133c14479dd",
+      "forms": {
+        "other": "日志目标写入失败，可能已产生部分效果。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.maintenance_failed",
+      "source": "e7574ee20fa62c8f3c78cd7f7a111356812d058e7127b3a8f86a4cfefefe528e",
+      "forms": {
+        "other": "托管日志文件维护失败；效果需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.cleanup_failed",
+      "source": "a9560294f5afd906869dcb316fa4987c4c012773f8bc4b5a5e2e334c5df19c05",
+      "forms": {
+        "other": "日志清理报告失败；完成状态需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.logging_zerolog.runtime_serialization",
+      "source": "dff185a69c544e67f98bcc273f8a34861de95a134e2033c04e60808a323b01d1",
+      "forms": {
+        "other": "不支持序列化日志运行时值。"
+      }
+    }
+  ]
+}

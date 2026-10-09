@@ -362,6 +362,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/logging/slog/v1`](reference/adapters/logging/slog/v1/interface.md) | Restricted owned slog ingress, ordered groups and out-of-band refusal |
 | [`adapters/logging/zap/v1`](reference/adapters/logging/zap/v1/interface.md) | Public Zap outputs, immutable file-level policy views and retained derivations |
 | [`adapters/logging/zap/otel/v1`](reference/adapters/logging/zap/otel/v1/interface.md) | Optional typed public logging/telemetry composition and shutdown order |
+| [`adapters/logging/zerolog/v1`](reference/adapters/logging/zerolog/v1/interface.md) | Seven-severity logging, qualified event recovery and owned Sync/Rotate |
+| [`adapters/logging/zerolog/otel/v1`](reference/adapters/logging/zerolog/otel/v1/interface.md) | Typed record-local recovery and independently owned telemetry composition |
 | [`adapters/sqlengine/v1`](reference/adapters/sqlengine/v1/interface.md) | SQL-engine-owned source/operation metadata and independent source/work/evidence budgets, without native implementations |
 | [`adapters/objectstore/v1`](reference/adapters/objectstore/v1/interface.md) | SDK-independent object-storage budgets, attribution and effect evidence |
 | [`adapters/objectstore/minio/v1`](reference/adapters/objectstore/minio/v1/interface.md) | Bounded MinIO operations, multipart sessions, contextual enumeration, restricted signing and retained evidence |

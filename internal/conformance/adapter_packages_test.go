@@ -68,6 +68,8 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"logging/slog/v1":         {"ingress", false, []string{"options.go", "handler.go"}},
 	"logging/zap/v1":          {"data-provider", true, nil},
 	"logging/zap/otel/v1":     {"composition", false, []string{"bridge.go"}},
+	"logging/zerolog/v1":      {"data-provider", true, nil},
+	"logging/zerolog/otel/v1": {"composition", false, []string{"bridge.go"}},
 	"internal/errorbridge":    {"private", false, []string{"bridge.go", "containment.go", "details.go"}},
 }
 
@@ -221,6 +223,9 @@ func adapterDependencyAllowed(path, role, dependency string) bool {
 	case "ingress":
 		return dependency == module+"adapters/logging/v1" || dependency == module+"failure/v1" || dependency == module+"i18n/v1" || dependency == module+"resource/v1" || dependency == module+"adapters/internal/errorbridge"
 	case "composition":
+		if path == "logging/zerolog/otel/v1" {
+			return dependency == module+"adapters/logging/v1" || dependency == module+"adapters/logging/zerolog/v1" || dependency == module+"adapters/telemetry/otel/v1" || dependency == module+"adapters/v1" || dependency == module+"adapters/internal/errorbridge" || dependency == module+"failure/v1" || dependency == module+"resource/v1" || dependency == "go.opentelemetry.io/otel/log"
+		}
 		return path == "logging/zap/otel/v1" && (dependency == module+"adapters/logging/v1" || dependency == module+"adapters/logging/zap/v1" || dependency == module+"adapters/telemetry/otel/v1" || dependency == module+"adapters/v1" || dependency == module+"failure/v1" || dependency == "go.opentelemetry.io/otel/log" || dependency == "go.uber.org/zap/zapcore")
 	case "preparation":
 		return dependency == module+"failure/v1" || dependency == module+"settings/v1" ||

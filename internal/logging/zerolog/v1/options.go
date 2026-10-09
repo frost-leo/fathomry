@@ -85,12 +85,14 @@ type RecordWriter interface {
 	WriteRecord(context.Context, Record) error
 }
 
-// SinkV1 selects exactly one output: borrowed Writer, borrowed Records, or owned
-// File. Borrowed handles are never flushed or closed. No process output is selected
-// implicitly. Names are non-secret labels, unique within this logger.
+// SinkV1 declares writer, record, managed-record or file output. Kind may be
+// omitted by legacy Select when Writer, Records or File identifies it. PrepareV1
+// accepts only inert declarations; live bindings are supplied to Prepared.Select.
+// Borrowed handles are never flushed or closed. No output is implicit.
 type SinkV1 struct {
 	private
 	Name     string
+	Kind     string
 	MinLevel Level
 	Writer   io.Writer
 	Records  RecordWriter
@@ -123,7 +125,9 @@ type OptionsV1 struct {
 	MaxRecordBytes int
 	Timeout        time.Duration
 	QueuedCalls    int
-	Sinks          []SinkV1
+	// Caller includes supplied/captured business ingress information when true.
+	Caller bool
+	Sinks  []SinkV1
 }
 
 type fileSettings struct {
@@ -143,11 +147,13 @@ type settings struct {
 	MaxRecordBytes int            `json:"max_record_bytes"`
 	Timeout        time.Duration  `json:"timeout_ns"`
 	QueuedCalls    int            `json:"queued_calls"`
+	Caller         bool           `json:"caller"`
 	Sinks          []sinkSettings `json:"sinks"`
 }
 type borrowedSink struct {
 	writer  io.Writer
 	records RecordWriter
+	managed ManagedRecordWriter
 }
 
 // This necessary byte bound precedes hashing/serialization, not semantic overlay
@@ -165,7 +171,7 @@ func withinBootstrapBudget(options OptionsV1) bool {
 		return false
 	}
 	for _, sink := range options.Sinks {
-		if !charge(sink.Name) || !charge(string(sink.MinLevel)) {
+		if !charge(sink.Name) || !charge(sink.Kind) || !charge(string(sink.MinLevel)) {
 			return false
 		}
 		if sink.File != nil && !charge(sink.File.Directory) {
@@ -177,7 +183,7 @@ func withinBootstrapBudget(options OptionsV1) bool {
 
 func defaults(options OptionsV1) settings {
 	value := settings{MinLevel: string(options.MinLevel), MaxRecordBytes: options.MaxRecordBytes,
-		Timeout: options.Timeout, QueuedCalls: options.QueuedCalls}
+		Timeout: options.Timeout, QueuedCalls: options.QueuedCalls, Caller: options.Caller}
 	if value.MinLevel == "" {
 		value.MinLevel = string(Info)
 	}
@@ -188,17 +194,21 @@ func defaults(options OptionsV1) settings {
 		value.Timeout = 5 * time.Second
 	}
 	for _, sink := range options.Sinks {
-		item := sinkSettings{Name: sink.Name, MinLevel: string(sink.MinLevel)}
+		item := sinkSettings{Name: sink.Name, Kind: sink.Kind, MinLevel: string(sink.MinLevel)}
 		if item.MinLevel == "" {
 			item.MinLevel = string(Trace)
 		}
-		switch {
-		case sink.Writer != nil:
-			item.Kind = "writer"
-		case sink.Records != nil:
-			item.Kind = "record"
-		case sink.File != nil:
-			item.Kind = "file"
+		if item.Kind == "" {
+			switch {
+			case sink.Writer != nil:
+				item.Kind = "writer"
+			case sink.Records != nil:
+				item.Kind = "record"
+			case sink.File != nil:
+				item.Kind = "file"
+			}
+		}
+		if sink.File != nil {
 			item.File = &fileSettings{Directory: sink.File.Directory, MaxBytes: sink.File.MaxBytes,
 				Backups: sink.File.Backups, Compress: sink.File.Compress}
 			if item.File.MaxBytes == 0 {
@@ -250,7 +260,7 @@ func validate(value settings) error {
 		}
 		names[sink.Name] = true
 		switch sink.Kind {
-		case "writer", "record":
+		case "writer", "record", "managed-record":
 			if sink.File != nil {
 				return failure(ErrInput, "sink")
 			}
@@ -281,24 +291,26 @@ func (value settings) limits() resource.Limits {
 		QueuedBytes: int64(value.QueuedCalls) * value.reservation(), MaxLeases: 1}
 }
 
-// LimitsV1 derives recommended limits before overlays. Bind checks them against
-// effective settings; changed record/queue bounds need corresponding limits.
+// LimitsV1 derives bootstrap limits. Layered construction must use the exact
+// final Metadata from PrepareV1 instead of reconstructing effective defaults.
 func LimitsV1(options OptionsV1) resource.Limits { return defaults(options).limits() }
 
 // EvidenceBytesV1 is the declared reservation per result, excluding arbitrary
 // native error graphs. Injected sink owners must bound their original causes.
 func EvidenceBytesV1() int64 { return 64 << 10 }
 
-// Profile returns independent, payload/path-free effective settings. It reports
-// declarations, not a filesystem durability, telemetry or compatibility certificate.
+// Profile returns this logical policy's payload/path-free effective settings.
+// Physical attribution remains unchanged in evidence; PolicyDescription reports
+// the separate logical revision. This is not a durability/compatibility certificate.
 func (logger *Logger) Profile() compatibility.Profile {
-	if logger == nil || logger.owner == nil {
+	if logger == nil || logger.owner == nil || logger.policy == nil {
 		return compatibility.Profile{}
 	}
-	value := logger.owner.settings
+	value := logger.policy.value
 	options := []compatibility.Option{
 		{Name: "min-level", Value: value.MinLevel}, {Name: "max-record-bytes", Value: strconv.Itoa(value.MaxRecordBytes)},
 		{Name: "timeout-ns", Value: strconv.FormatInt(int64(value.Timeout), 10)}, {Name: "queued-calls", Value: strconv.Itoa(value.QueuedCalls)},
+		{Name: "caller", Value: strconv.FormatBool(value.Caller)},
 		{Name: "delivery", Value: "synchronous-provider-no-retry"}, {Name: "file-policy", Value: "exclusive-sequence-fail-stop"},
 		{Name: "sdk-attempts", Value: "unobserved"},
 	}

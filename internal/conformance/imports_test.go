@@ -135,6 +135,8 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			"github.com/frost-leo/fathomry/adapters/logging/slog/v1",
 			"github.com/frost-leo/fathomry/adapters/logging/zap/v1",
 			"github.com/frost-leo/fathomry/adapters/logging/zap/otel/v1",
+			"github.com/frost-leo/fathomry/adapters/logging/zerolog/v1",
+			"github.com/frost-leo/fathomry/adapters/logging/zerolog/otel/v1",
 			"github.com/frost-leo/fathomry/adapters/broker/kafka/v1",
 			"github.com/frost-leo/fathomry/adapters/cache/v1",
 			"github.com/frost-leo/fathomry/adapters/cache/redis/v1",

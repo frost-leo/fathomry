@@ -31,6 +31,7 @@ import (
 	"github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	logging "github.com/frost-leo/fathomry/adapters/logging/v1"
 	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
+	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
 	"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
@@ -69,6 +70,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "telemetry_otel", BaseLocale: "en", Resources: otel.Resources(), Directory: "resources", Definitions: otel.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "logging", BaseLocale: "en", Resources: logging.Resources(), Directory: "resources", Definitions: logging.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "logging_zap", BaseLocale: "en", Resources: zap.Resources(), Directory: "resources", Definitions: zap.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "logging_zerolog", BaseLocale: "en", Resources: zerolog.Resources(), Directory: "resources", Definitions: zerolog.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {
