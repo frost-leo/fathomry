@@ -64,12 +64,22 @@ automatically own or construct the packages below it.
 | `httpclient/httpcloak/v1` | data-provider | [HTTPcloak native HTTP, controlled routes and response ownership](../docs/reference/adapters/httpclient/httpcloak/v1/interface.md) |
 | `httpclient/nuki/v1` | data-provider | [Nuki native HTTP, controlled routes and response ownership](../docs/reference/adapters/httpclient/nuki/v1/interface.md) |
 | `telemetry/otel/v1` | data-provider | [OpenTelemetry signals, retained spans, propagation and explicit export ownership](../docs/reference/adapters/telemetry/otel/v1/interface.md) |
+| `logging/v1` | logging-data | [Closed bounded logging values, safe public diagnostics, budgets and output attribution](../docs/reference/adapters/logging/v1/interface.md) |
+| `logging/slog/v1` | ingress | [Restricted, explicitly owned slog ingress with observable refusal and ordered groups](../docs/reference/adapters/logging/slog/v1/interface.md) |
+| `logging/zap/v1` | data-provider | [Zap synchronous local/structured outputs, retained derivations and stable physical file ownership](../docs/reference/adapters/logging/zap/v1/interface.md) |
+| `logging/zap/otel/v1` | composition | [Explicit typed public Zap-to-OTel borrowing, without JSON reparsing or exporter ownership](../docs/reference/adapters/logging/zap/otel/v1/interface.md) |
 | `internal/errorbridge` | private | [Bounded error forwarding/inspection; no public registry or execution engine](../docs/reference/adapters/internal/errorbridge/interface.md) |
 
 Public package version and native SDK version are separate: for example, public
 Nacos `v1` uses the selected Internal Nacos `v2` integration. Shared capability
 packages do not import concrete providers; consumers select providers explicitly.
 The private helper is not importable by independent consumers.
+
+Logging-data owns closed values and safe public diagnostic projection, not a
+universal logger or another Runtime. Ingress depends only on that vocabulary and
+existing public ownership/error mechanisms. The explicitly listed composition
+package may import its two concrete providers; neither provider imports it or
+the other provider. Native levels, fields, results and maintenance remain distinct.
 
 ## Common responsibilities, not identical file counts
 

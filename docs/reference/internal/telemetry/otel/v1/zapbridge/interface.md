@@ -29,11 +29,14 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 `New(client)` returns a concurrent `Sink` satisfying the existing
 [Zap StructuredSink](../../../../logging/zap/v1/interface.md) by structural typing.
-It imports native zapcore and core telemetry, not the Fathomry Zap provider,
-zerolog or a third-party bridge. Supply it to the existing Zap `Select`
+It imports native zapcore, the Zap closed semantic snapshot boundary and core
+telemetry, not zerolog or a third-party bridge. Neither provider core imports the
+other. Supply it to the existing Zap `Select`
 extension parameter; keep telemetry alive until all logging consumers close.
 
-`Write` translates the actual supported primitive/binary/time/fault fields,
+`Write` translates supported primitive/binary/time/fault and bounded closed
+null/collection/map fields through `FieldsValues`, without executing private
+encoder callbacks or reparsing JSON,
 preserving caller context, time and severity. Original logger name, provider,
 source, scope and opt-in caller location appear under `logging`; user fields
 appear under `attributes`. Fixed technical correlation comes from the original
@@ -48,6 +51,11 @@ strings or changing local Zap output. Fault fields export safe technical
 diagnostics, never native cause text. Raw errors, namespaces, reflection and
 user marshalers are unsupported. Severity is limited to the existing
 debug/info/warn/error product boundary.
+
+Zero event time remains OTLP's unknown timestamp, not bridge observation time.
+Present empty maps/arrays and binary values remain typed. Local-capable but
+OTLP-incompatible values refuse only this destination, without poisoning the
+source or automatically replaying the rejected record.
 
 ## Ownership, evidence and limits
 

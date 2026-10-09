@@ -21,136 +21,78 @@ package zapbridge
 
 import (
 	"context"
-	"log/slog"
-	"math"
-	"time"
-
 	"github.com/frost-leo/fathomry/internal/fault"
+	zap "github.com/frost-leo/fathomry/internal/logging/zap/v1"
 	otel "github.com/frost-leo/fathomry/internal/telemetry/otel/v1"
 	logapi "go.opentelemetry.io/otel/log"
 	"go.uber.org/zap/zapcore"
+	"log/slog"
+	"math"
+	"strings"
+	"time"
 )
 
-// Sink implements the existing Zap StructuredSink by structural typing, without
-// importing the Fathomry Zap provider. It borrows Client and owns no resources.
+// Sink is explicit typed composition. Neither logger nor telemetry core imports
+// the other core; this bridge borrows Client and owns no resources.
 type Sink struct{ client *otel.Client }
 
-// New returns a concurrent borrowed sink. Order telemetry before its logging
-// consumers and keep its independent evidence inbox drained.
 func New(client *otel.Client) *Sink { return &Sink{client: client} }
+func unsupported(causes ...error) error {
+	return otel.ErrUnsupported.New(fault.Context{Provider: otel.ProviderID, Operation: "zap-bridge"}, causes...)
+}
 
-// Write translates actual supported Zap fields, never JSON or user marshalers.
-// Framework correlation remains fixed, original logger metadata is under logging,
-// and user fields under attributes. Errors export only safe fault diagnostics.
-// Uint64 values outside OTLP's int64 range explicitly fail this sink, not local
-// outputs. Nil means OTel queue acceptance only, not export.
+// Write consumes the logging integration's closed snapshot, not encoder
+// callbacks or local JSON. Nil means queue acceptance only. Local-capable but
+// OTLP-incompatible data refuses this destination without poisoning its source.
 func (sink *Sink) Write(ctx context.Context, entry zapcore.Entry, fields []zapcore.Field) error {
-	fail := func() error {
-		return otel.ErrUnsupported.New(fault.Context{Provider: otel.ProviderID, Operation: "zap-bridge"})
+	if sink == nil || sink.client == nil || len(fields) > 70 || entry.Level < zapcore.DebugLevel || entry.Level > zapcore.ErrorLevel || len(entry.LoggerName) > 128 || len(entry.Caller.File) > 4096 || len(entry.Caller.Function) > 4096 || entry.Stack != "" {
+		return unsupported()
 	}
-	if sink == nil || sink.client == nil || len(fields) > 70 || entry.Level < zapcore.DebugLevel || entry.Level > zapcore.ErrorLevel ||
-		len(entry.LoggerName) > 128 || len(entry.Caller.File) > 4096 || len(entry.Caller.Function) > 4096 || entry.Stack != "" {
-		return fail()
+	values, err := zap.FieldsValues(fields)
+	if err != nil {
+		return unsupported(err)
 	}
 	id := fault.Correlation{}
-	metadata := []slog.Attr{slog.String("name", entry.LoggerName)}
-	attrs := make([]slog.Attr, 0, len(fields))
-	for _, field := range fields {
-		if field.Type == zapcore.SkipType {
-			continue
+	metadata := otel.Value{Kind: "map", Map: []otel.TypedAttribute{{Key: "name", Value: otel.Value{Kind: "string", String: entry.LoggerName}}}}
+	attributes := otel.Value{Kind: "map"}
+	for _, field := range values {
+		converted, err := value(field.Value)
+		if err != nil {
+			return err
 		}
-		switch field.Key {
-		case "fathomry.call", "fathomry.parent", "fathomry.owner", "fathomry.provider", "fathomry.source", "fathomry.scope":
-			if field.Type != zapcore.StringType {
-				return fail()
+		if strings.HasPrefix(field.Key, "fathomry.") {
+			if field.Value.Kind != "string" {
+				return unsupported()
 			}
 			switch field.Key {
 			case "fathomry.call":
-				id.Call = field.String
+				id.Call = field.Value.String
 			case "fathomry.parent":
-				id.Parent = field.String
+				id.Parent = field.Value.String
 			case "fathomry.owner":
-				id.Owner = field.String
-			case "fathomry.provider":
-				metadata = append(metadata, slog.String("provider", field.String))
-			case "fathomry.source":
-				metadata = append(metadata, slog.String("source", field.String))
-			case "fathomry.scope":
-				metadata = append(metadata, slog.String("scope", field.String))
+				id.Owner = field.Value.String
+			case "fathomry.provider", "fathomry.source", "fathomry.scope":
+				metadata.Map = append(metadata.Map, otel.TypedAttribute{Key: strings.TrimPrefix(field.Key, "fathomry."), Value: converted})
+			default:
+				return unsupported()
 			}
-			continue
+		} else {
+			attributes.Map = append(attributes.Map, otel.TypedAttribute{Key: field.Key, Value: converted})
 		}
-		var attr slog.Attr
-		switch field.Type {
-		case zapcore.StringType:
-			attr = slog.String(field.Key, field.String)
-		case zapcore.BoolType:
-			attr = slog.Bool(field.Key, field.Integer == 1)
-		case zapcore.Int64Type:
-			attr = slog.Int64(field.Key, field.Integer)
-		case zapcore.Int32Type:
-			attr = slog.Int64(field.Key, int64(int32(field.Integer)))
-		case zapcore.Int16Type:
-			attr = slog.Int64(field.Key, int64(int16(field.Integer)))
-		case zapcore.Int8Type:
-			attr = slog.Int64(field.Key, int64(int8(field.Integer)))
-		case zapcore.Uint64Type:
-			attr = slog.Uint64(field.Key, uint64(field.Integer))
-		case zapcore.Uint32Type:
-			attr = slog.Uint64(field.Key, uint64(uint32(field.Integer)))
-		case zapcore.Uint16Type:
-			attr = slog.Uint64(field.Key, uint64(uint16(field.Integer)))
-		case zapcore.Uint8Type:
-			attr = slog.Uint64(field.Key, uint64(uint8(field.Integer)))
-		case zapcore.Float64Type:
-			attr = slog.Float64(field.Key, math.Float64frombits(uint64(field.Integer)))
-		case zapcore.Float32Type:
-			attr = slog.Float64(field.Key, float64(math.Float32frombits(uint32(field.Integer))))
-		case zapcore.DurationType:
-			attr = slog.Duration(field.Key, time.Duration(field.Integer))
-		case zapcore.TimeType:
-			attr = slog.Time(field.Key, time.Unix(0, field.Integer).UTC())
-		case zapcore.TimeFullType:
-			value, ok := field.Interface.(time.Time)
-			if !ok {
-				return fail()
-			}
-			attr = slog.Time(field.Key, value)
-		case zapcore.BinaryType, zapcore.ByteStringType:
-			value, ok := field.Interface.([]byte)
-			if !ok {
-				return fail()
-			}
-			if field.Type == zapcore.BinaryType {
-				attr = slog.Any(field.Key, value)
-			} else {
-				attr = slog.String(field.Key, string(value))
-			}
-		case zapcore.ErrorType:
-			value, ok := field.Interface.(*fault.Error)
-			if !ok || value == nil {
-				return fail()
-			}
-			diagnostic := value.Diagnostic()
-			location := diagnostic.Context
-			attr = slog.Group(field.Key, slog.String("kind", string(diagnostic.Kind)),
-				slog.String("operation", location.Operation), slog.String("provider", location.Provider),
-				slog.String("scope", location.Scope), slog.String("source", location.Source),
-				slog.String("call", location.Correlation.Call), slog.String("parent", location.Correlation.Parent),
-				slog.String("owner", location.Correlation.Owner), slog.Bool("has_causes", diagnostic.HasCauses))
-		default:
-			return fail()
-		}
-		attrs = append(attrs, attr)
 	}
 	if entry.Caller.Defined {
-		metadata = append(metadata, slog.Group("caller", slog.String("file", entry.Caller.File),
-			slog.Int("line", entry.Caller.Line), slog.String("function", entry.Caller.Function)))
+		metadata.Map = append(metadata.Map, otel.TypedAttribute{Key: "caller", Value: otel.Value{Kind: "map", Map: []otel.TypedAttribute{
+			{Key: "file", Value: otel.Value{Kind: "string", String: entry.Caller.File}},
+			{Key: "line", Value: otel.Value{Kind: "int64", Int64: int64(entry.Caller.Line)}},
+			{Key: "function", Value: otel.Value{Kind: "string", String: entry.Caller.Function}},
+		}}})
 	}
-	severity := map[zapcore.Level]logapi.Severity{zapcore.DebugLevel: logapi.SeverityDebug, zapcore.InfoLevel: logapi.SeverityInfo,
-		zapcore.WarnLevel: logapi.SeverityWarn, zapcore.ErrorLevel: logapi.SeverityError}[entry.Level]
-	receipt, err := sink.client.Emit(ctx, id, otel.LogRecord{Time: entry.Time, Severity: severity, SeverityText: entry.Level.String(),
-		Message: entry.Message, Attributes: []slog.Attr{slog.GroupAttrs("logging", metadata...), slog.Any("attributes", otel.AttributeMap(attrs))}})
+	timestamp := entry.Time
+	if timestamp.IsZero() {
+		timestamp = time.Unix(0, 0).UTC()
+	}
+	severity := map[zapcore.Level]logapi.Severity{zapcore.DebugLevel: logapi.SeverityDebug, zapcore.InfoLevel: logapi.SeverityInfo, zapcore.WarnLevel: logapi.SeverityWarn, zapcore.ErrorLevel: logapi.SeverityError}[entry.Level]
+	receipt, err := sink.client.Emit(ctx, id, otel.LogRecord{Time: timestamp, Severity: severity, SeverityText: entry.Level.String(), Message: entry.Message, Attributes: []slog.Attr{slog.Any("logging", metadata), slog.Any("attributes", attributes)}})
 	if err != nil {
 		return err
 	}
@@ -158,9 +100,7 @@ func (sink *Sink) Write(ctx context.Context, entry zapcore.Entry, fields []zapco
 	return result.Err()
 }
 
-// Sync has no private buffer to drain. It deliberately does NOT Flush or close
-// telemetry. Composition separately calls Client.Flush with its own correlation,
-// budget and evidence; Zap's maintenance does not gain that ownership.
+// Sync owns no buffer and deliberately does not Flush or close telemetry.
 func (sink *Sink) Sync(ctx context.Context) error {
 	if sink == nil || sink.client == nil || ctx == nil {
 		return otel.ErrInput.New(fault.Context{Provider: otel.ProviderID, Operation: "zap-sync"})
@@ -169,4 +109,58 @@ func (sink *Sink) Sync(ctx context.Context) error {
 		return otel.ErrState.New(fault.Context{Provider: otel.ProviderID, Operation: "zap-sync"}, ctx.Err(), context.Cause(ctx))
 	}
 	return nil
+}
+func value(input zap.Value) (otel.Value, error) {
+	switch input.Kind {
+	case "", "null":
+		return otel.Value{}, nil
+	case "bool":
+		return otel.Value{Kind: "bool", Bool: input.Bool}, nil
+	case "int64":
+		return otel.Value{Kind: "int64", Int64: input.Int64}, nil
+	case "uint64":
+		if input.Uint64 > math.MaxInt64 {
+			return otel.Value{}, unsupported()
+		}
+		return otel.Value{Kind: "int64", Int64: int64(input.Uint64)}, nil
+	case "float32":
+		return otel.Value{Kind: "float64", Float64: float64(input.Float32)}, nil
+	case "float64":
+		return otel.Value{Kind: "float64", Float64: input.Float64}, nil
+	case "string":
+		return otel.Value{Kind: "string", String: input.String}, nil
+	case "bytes":
+		return otel.Value{Kind: "bytes", Bytes: input.Bytes}, nil
+	case "bytestring":
+		return otel.Value{Kind: "string", String: string(input.Bytes)}, nil
+	case "duration":
+		return otel.Value{Kind: "int64", Int64: int64(input.Duration)}, nil
+	case "time":
+		timestamp := input.Time.UTC()
+		if timestamp.Year() < 1 || timestamp.Year() > 9999 {
+			return otel.Value{}, unsupported()
+		}
+		return otel.Value{Kind: "string", String: timestamp.Format(time.RFC3339Nano)}, nil
+	case "array":
+		result := otel.Value{Kind: "array"}
+		for _, item := range input.Array {
+			converted, err := value(item)
+			if err != nil {
+				return otel.Value{}, err
+			}
+			result.Array = append(result.Array, converted)
+		}
+		return result, nil
+	case "map":
+		result := otel.Value{Kind: "map"}
+		for _, item := range input.Map {
+			converted, err := value(item.Value)
+			if err != nil {
+				return otel.Value{}, err
+			}
+			result.Map = append(result.Map, otel.TypedAttribute{Key: item.Key, Value: converted})
+		}
+		return result, nil
+	}
+	return otel.Value{}, unsupported()
 }

@@ -48,14 +48,16 @@ Workflow logic.
 
 ## Composition and call sequence
 
-1. Call `Select(OptionsV1, StructuredSink, layers...)`; nil disables the extension.
+1. Call `PrepareV1(OptionsV1, structured, layers...)`, inspect final Metadata and
+   call its Select with the matching borrowed dependency; nil disables the extension.
+   The legacy Select delegates to this same preparation.
    The strict version-1 preparation validates all selected configuration before
    construction. Structurally invalid, unknown or mistyped fields are rejected in
    every layer, even when overridden. Semantic validation checks the final
    effective settings, not each intermediate layer.
-2. Attach `resource.WithLimits` before assembly. `LimitsV1` reflects bootstrap
-   defaults; when overlays change queue settings, composition supplies the
-   corresponding resolved policy. Bind requires exactly one active call, enough
+2. Attach `resource.WithLimits` with Prepared.Metadata.Limits before assembly.
+   Legacy LimitsV1 reflects bootstrap defaults only; final overlaid preparation
+   owns authoritative source/work/queue/evidence/file/view accounting. Bind requires exactly one active call, enough
    reservation bytes, and a queue no wider than the prepared ceiling.
 3. Assemble with separate caller-owned initialization/cleanup contexts. Retain
    any returned assembly on failure: files already created are not rolled back.
@@ -78,6 +80,14 @@ no new owner or allowance. Independent sources have independent settings.
 A shared extension must be concurrency-safe across all its sources, even though
 each individual source serializes its own calls.
 
+WithPolicy shares the original owner, Access, branch/file state, inbox and queue.
+Only thresholds may differ; names/order/output ownership, timeouts, queues,
+caller/encoding, directories, rotation and retention must be identical.
+PolicyDescription is separate from physical invocation.Source identity. Lowered
+thresholds select the physical core directly, not its old native minimum.
+Internal callers own logical policy-view lifetimes; the public Adapter provides
+bounded source-root/policy-child ownership and last-owner cleanup for generations.
+
 ## Inputs, defaults and boundaries
 
 Exact declarations and bootstrap defaults are documented in
@@ -97,25 +107,29 @@ kind/level spellings. Overlays cannot excuse oversized bootstrap storage.
 | Destinations | 1–8 including the extension; unique safe output names; no duplicate stdout/stderr |
 | Message | 0–64 KiB, valid UTF-8; empty is a present empty message |
 | User fields | At most 64 across bound and call-site fields |
-| Field charge | At most 64 KiB: sum of key bytes, string/binary bytes and 128 bytes per field |
+| Field charge | At most 64 KiB: native field/key/payload charges plus bounded closed node/map storage |
+| Closed data | At most 256 nodes and depth 8; null, arrays and ordered maps, duplicate keys refused per map |
 | Field keys/name | Keys: 1–128 ASCII letters/digits/`._-`; derived name at most 128 bytes |
 | Native JSON | Default maximum 64 KiB per encoded entry; configurable 1 KiB–1 MiB, checked before the writer |
 | Caller | Off by default; opt-in caller path/function information can disclose source layout |
-| History | No logger-owned event history; receiver, error-graph and derived-facade retention remain caller-owned |
+| Derived retention | 128 cumulative With/Named facades and 8 MiB shared physical-owner storage; WithPolicy does not mint another allowance |
+| History | No logger-owned event history; receiver and foreign error-graph retention remain caller-owned |
 
 The input ceiling bounds encoding work even if JSON escaping exceeds the selected
 encoded limit. Such an entry fails the affected local branch before writing.
 The extension has the separate bounded typed-input contract, not the JSON byte
 limit. Neither reservation accounts for arbitrary native cause graphs, extension
-queues, caller-retained contexts or an unlimited number of derived loggers.
+queues or caller-retained contexts.
 Composition must bound those separately.
 
 Native string, boolean, signed/unsigned integer, finite float, duration, binary,
 byte-string and time fields are supported. Time instants normalize to UTC.
 Native no-op fields (including `zap.Error(nil)`) are ignored without retaining
 their values; submitted field count is still bounded.
-Binary storage is copied. Raw reflection, object/array/stringer marshalers,
-namespaces, pointer fields, non-finite floats and arbitrary errors are rejected
+Binary storage is copied. Closed Value data uses only integration-owned fixed
+encoders; literal reflected nil and nil primitive helpers represent null, while
+non-nil native primitive helpers preserve their scalar tags. Raw reflection,
+arbitrary object/array/stringer marshalers, namespaces, non-finite floats and arbitrary errors are rejected
 without executing their callbacks. Error fields must contain a non-nil
 `*fault.Error`; its safe kind is encoded locally while its original cause graph
 remains deliberately inspectable by trusted code. No automatic secret detector
@@ -126,9 +140,12 @@ Duplicate keys across `With` and call-site fields are rejected. `ts`, `level`,
 correlation/source fields are added; this does not define business Run/Item
 identity. Context values are never encoded into local output.
 
+LogEntry preserves supplied Time/return-PC, including zero absence. It resolves
+caller frames with CallersFrames; EntryMetadata retains the original return PC
+for trusted synchronous bridges. Direct Log captures its business ingress.
+
 Caller input must not be concurrently mutated during a call. Derived fields
-own copied storage; caller-created derived facades need their own count/lifetime
-budget. Result slices returned by `SinksCopy` are independent; native errors
+own copied storage under the shared cumulative reservation. Result slices returned by `SinksCopy` are independent; native errors
 retain their original owners' concurrency and lifetime contracts.
 
 ## Results, errors and cancellation

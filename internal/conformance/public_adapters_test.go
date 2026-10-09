@@ -48,6 +48,7 @@ import (
 	surf "github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	tlsclient "github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
+	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	doris "github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
@@ -73,6 +74,15 @@ type adapterOwner interface {
 
 func TestPublicAdapterContracts(t *testing.T) {
 	const canary = "adapter-contract-private-canary"
+	t.Run("zap", func(t *testing.T) {
+		zero := 0
+		value := zap.Settings{Name: canary, Version: 1, Outputs: []zap.Output{{Name: "local", Kind: "stdout"}}, QueuedCalls: &zero}
+		checkPublicAdapter(t, value, zap.Validate, zap.Recommend,
+			func(value zap.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+			func(runtime *adapters.Runtime, inbox *adapters.Inbox[zap.Result]) zap.Dependencies {
+				return zap.Dependencies{Runtime: runtime, Evidence: inbox}
+			}, zap.Open, canary)
+	})
 	t.Run("otel", func(t *testing.T) {
 		zero := 0
 		value := otel.Settings{Name: "contract", ServiceName: "fixture", LogsEndpoint: "http://127.0.0.1:1/v1/logs",

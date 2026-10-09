@@ -34,6 +34,7 @@ import (
 
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
+	nativeZap "github.com/frost-leo/fathomry/internal/logging/zap/v1"
 	"github.com/frost-leo/fathomry/internal/resource"
 	otel "github.com/frost-leo/fathomry/internal/telemetry/otel/v1"
 	collog "go.opentelemetry.io/proto/otlp/collector/logs/v1"
@@ -127,6 +128,16 @@ func TestFieldTranslationAndBorrowedSync(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	closed := nativeZap.Field("tree", nativeZap.Value{Kind: "map", Map: []nativeZap.Attribute{
+		{Key: "null", Value: nativeZap.Value{}},
+		{Key: "empty", Value: nativeZap.Value{Kind: "array"}},
+		{Key: "integer", Value: nativeZap.Value{Kind: "int64", Int64: 1<<53 + 1}},
+		{Key: "binary", Value: nativeZap.Value{Kind: "bytes", Bytes: []byte{255, 0, 1}}},
+		{Key: "text", Value: nativeZap.Value{Kind: "bytestring", Bytes: []byte("text")}},
+	}})
+	if err := sink.Write(context.Background(), zapcore.Entry{Level: zapcore.InfoLevel, Message: "closed"}, append(append([]zapcore.Field(nil), metadata...), closed)); err != nil {
+		t.Fatal(err)
+	}
 	if err := sink.Sync(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -155,12 +166,19 @@ func TestFieldTranslationAndBorrowedSync(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(records) != 1 || len(records[0].ResourceLogs[0].ScopeLogs[0].LogRecords) != 4 {
+	if len(records) != 1 || len(records[0].ResourceLogs[0].ScopeLogs[0].LogRecords) != 5 {
 		t.Fatal("translation/export count changed")
 	}
 	severities := []int32{5, 9, 13, 17}
 	severityTexts := []string{"debug", "info", "warn", "error"}
-	for index, record := range records[0].ResourceLogs[0].ScopeLogs[0].LogRecords {
+	closedRecord := records[0].ResourceLogs[0].ScopeLogs[0].LogRecords[4]
+	closedAttrs := wireAttributes(t, closedRecord.Attributes)
+	userAttrs := wireAttributes(t, closedAttrs["attributes"].GetKvlistValue().Values)
+	tree := wireAttributes(t, userAttrs["tree"].GetKvlistValue().Values)
+	if closedRecord.TimeUnixNano != 0 || tree["null"].Value != nil || tree["empty"].GetArrayValue() == nil || tree["integer"].GetIntValue() != 1<<53+1 || !bytes.Equal(tree["binary"].GetBytesValue(), []byte{255, 0, 1}) || tree["text"].GetStringValue() != "text" {
+		t.Fatal("closed native bridge lost typed values or absent time")
+	}
+	for index, record := range records[0].ResourceLogs[0].ScopeLogs[0].LogRecords[:4] {
 		if int32(record.SeverityNumber) != severities[index] || record.SeverityText != severityTexts[index] {
 			t.Error("native severity mapping changed")
 		}

@@ -260,7 +260,7 @@ func TestRuntimePrivacyAndFacadeSurfaces(t *testing.T) {
 	} {
 		conformance.Runtime(t, value.value, value.target, "payload-canary", options.Outputs[0].Directory)
 	}
-	conformance.Facade(t, fixture.logger, "Log", "Sync", "With", "Named", "Profile", "String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, fixture.logger, "Log", "LogEntry", "Sync", "With", "Named", "Profile", "WithPolicy", "PolicyDescription", "Enabled", "String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	conformance.Facade(t, &source, "String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	for _, value := range []any{(*Logger)(nil), (*OptionsV1)(nil), (*Result)(nil)} {
 		if fmt.Sprintf("%v", value) != "<nil>" {

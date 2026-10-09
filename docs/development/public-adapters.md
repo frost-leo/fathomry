@@ -92,6 +92,7 @@ overlays. For overlaid settings, consume resolved preparation metadata.
 | Doris | Frozen `PrepareV1.Reservation`, including finite/page and source work/evidence charges |
 | nethttp | Frozen `PrepareV1.Metadata` for final data/native selections, H2 buffers and root/evidence/source reservations |
 | OpenTelemetry | Frozen `PrepareV1.Metadata` for final three-signal configuration, queue/span limits, cumulative metric residence, source/work and evidence charges |
+| Zap | Frozen `PrepareV1.Metadata` for final outputs, one physical admission/queue, derived storage, level-width-safe logical policies and work/evidence/file-content ceilings |
 
 This table covers data providers, not every Adapter role. Configuration
 providers retain documented fixed public route envelopes and selected native
@@ -103,6 +104,12 @@ Public policy adds its own documented bridge, attribution, child-evidence and
 source-owner costs. Distinguish root work, independent evidence, queue and resident
 source reservations. These are declared envelopes, not measured RSS, remote
 capacity, exact attempt counts or distributed quotas.
+
+Logging distinguishes one stable physical output from immutable logical policy
+owners. Zap's level-only Adopt shares the original physical reservation and
+admission; different-directory replacement uses Compose for physical overlap.
+Retained field/slog families explicitly reserve their lifetime and child work;
+they do not silently follow later destinations or mint native quota.
 
 `Recommend` covers one source. Before constructing shared owners, reserve
 overlapping generations explicitly: Kafka/Redis have `Compose`, MinIO has

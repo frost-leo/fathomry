@@ -278,18 +278,58 @@ func TestVersionedProjects(t *testing.T) {
 						runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
 						executePublicConsumer(t, destination, environment, binary, "otel "+variant+" public consumer passed\n")
 					}
+					for _, variant := range []string{"direct", "framework"} {
+						fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/logging/zap/v1/testdata", variant, "main.go"))
+						if err != nil {
+							t.Fatal(err)
+						}
+						name := "zap-" + variant
+						directory := filepath.Join(destination, "cmd", name)
+						if err := os.MkdirAll(directory, 0700); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.WriteFile(filepath.Join(directory, "main.go"), fixture, 0600); err != nil {
+							t.Fatal(err)
+						}
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy")
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
+						binary := filepath.Join(job, name)
+						runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
+						executePublicConsumer(t, destination, append(append([]string(nil), environment...), "TMPDIR="+job), binary, "zap "+variant+" public consumer passed\n")
+						packages := runConsumer(t, destination, environment, goTool(), "list", "-mod=readonly", "-deps", "./cmd/"+name)
+						for _, dependency := range strings.Fields(string(packages)) {
+							if strings.HasPrefix(dependency, "go.opentelemetry.io/") || strings.HasPrefix(dependency, frameworkModule+"/adapters/telemetry/") ||
+								strings.HasPrefix(dependency, frameworkModule+"/internal/telemetry/") || strings.HasPrefix(dependency, "github.com/rs/zerolog") ||
+								variant == "direct" && strings.HasPrefix(dependency, frameworkModule+"/framework/") {
+								t.Fatal("versioned local-only Zap consumer acquired an unnecessary provider", dependency)
+							}
+						}
+					}
 					selected := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
 					if bytes.Contains(selected, []byte("\"Replace\"")) {
 						t.Fatal("public consumer acquired checkout replacement")
 					}
 					verifyHTTPReplacement(t, destination, environment)
 					verifyTelemetryReplacement(t, destination, environment)
+					verifyZapSelection(t, destination, environment)
 				}
 			})
 		}
 	}
 	if _, err := os.Stat(filepath.Join(repository(t), "scripts", "install-cli.sh")); err == nil {
 		t.Fatal("unrequested installer appeared")
+	}
+}
+
+func verifyZapSelection(t testing.TB, directory string, environment []string) {
+	t.Helper()
+	raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", "go.uber.org/zap")
+	var selected struct {
+		Version, Sum string
+		Replace      any
+	}
+	if json.Unmarshal(raw, &selected) != nil || selected.Version != "v1.28.0" || selected.Replace != nil || selected.Sum == "" {
+		t.Fatal("versioned Zap consumer changed the selected original SDK")
 	}
 }
 

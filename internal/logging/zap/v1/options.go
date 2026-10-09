@@ -200,19 +200,21 @@ func (value settings) limits() resource.Limits {
 		QueuedBytes: int64(value.QueuedCalls) * value.reservation(), MaxLeases: 1}
 }
 
-// LimitsV1 returns the defaulted bootstrap policy. After overlays change
-// QueuedCalls, composition must supply the corresponding resolved policy.
+// LimitsV1 returns the defaulted bootstrap policy. Layered composition must use
+// the authoritative final limits from PrepareV1.Metadata instead.
 func LimitsV1(options OptionsV1) resource.Limits {
 	return (settings{QueuedCalls: options.QueuedCalls}).limits()
 }
 
-// Profile returns an isolated non-sensitive projection of actual frozen settings.
-// Extension behavior/build/lifecycle require separate owner-supplied evidence.
+// Profile returns an isolated non-sensitive projection of this frozen policy.
+// WithPolicy does not change the original physical source revision in evidence;
+// PolicyDescription identifies the logical policy independently. Extension
+// behavior/build/lifecycle require separate owner-supplied evidence.
 func (logger *Logger) Profile() compatibility.Profile {
-	if logger == nil || logger.owner == nil {
+	if logger == nil || logger.owner == nil || logger.policy == nil {
 		return compatibility.Profile{}
 	}
-	value := logger.owner.settings
+	value := logger.policy.value
 	options := []compatibility.Option{
 		{Name: "encoding", Value: "json"}, {Name: "sampling", Value: "off"}, {Name: "buffering", Value: "off"},
 		{Name: "queued-calls", Value: strconv.Itoa(value.QueuedCalls)}, {Name: "timeout-ns", Value: strconv.FormatInt(int64(value.Timeout), 10)},

@@ -38,6 +38,23 @@ func Classified(err error) bool {
 	return ok
 }
 
+// PublicProjection exposes only this bridge's already-classified presentation
+// graph. Diagnostic projections must not re-traverse its retained private graph.
+// It grants no classification authority for arbitrary wrappers.
+func PublicProjection(err error) (error, bool) {
+	switch value := err.(type) {
+	case *redactedCause:
+		if value != nil {
+			return value.translated, true
+		}
+	case *forwardedOccurrence:
+		if value != nil && value.redactedCause != nil {
+			return value.translated, true
+		}
+	}
+	return nil, false
+}
+
 // Inspect visits at most limit nodes in cause order. It returns deduplicated
 // provider classifications and, only for an entirely public graph behind neutral
 // wrappers, a redacted forwarding representation. Recognized native boundaries
