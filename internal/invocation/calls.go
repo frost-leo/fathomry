@@ -205,6 +205,19 @@ type callState[T any] struct {
 // receives an explicit context. Rejected admission has no accepted SDK operation
 // or receipt; its attributed error is returned to the caller.
 func Begin[T any](ctx context.Context, access *resource.Access, request Request, inbox *Inbox[T], observer *Observer) (*Call[T], error) {
+	call, delivery, err := BeginClaimed(ctx, access, request, inbox, observer)
+	if err == nil {
+		inbox.publish(delivery)
+	}
+	return call, err
+}
+
+// BeginClaimed has the same admission and evidence limits as Begin, but transfers
+// the exact record directly to the caller instead of enqueuing it for Next.
+// Composition must retain this custody until required handling and actual release;
+// a failed admission returns neither a Call nor a DeliveryRecord. This permits
+// bounded synchronous evidence transfer without a competing queue consumer.
+func BeginClaimed[T any](ctx context.Context, access *resource.Access, request Request, inbox *Inbox[T], observer *Observer) (*Call[T], *DeliveryRecord[T], error) {
 	return begin(ctx, access, Scope{}, request, inbox, observer)
 }
 
@@ -215,26 +228,37 @@ func Begin[T any](ctx context.Context, access *resource.Access, request Request,
 // Neither evidence saturation nor a full borrowing tree waits behind itself.
 // Finish/drain bounded child results incrementally, not at session shutdown.
 func BeginNested[T any](ctx context.Context, parent Scope, request Request, inbox *Inbox[T], observer *Observer) (*Call[T], error) {
+	call, delivery, err := BeginNestedClaimed(ctx, parent, request, inbox, observer)
+	if err == nil {
+		inbox.publish(delivery)
+	}
+	return call, err
+}
+
+// BeginNestedClaimed combines BeginNested's existing root reservation with direct
+// custody of the exact child record. Shared Inbox limits remain charged until
+// DeliveryRecord.Release; this never acquires another root admission slot.
+func BeginNestedClaimed[T any](ctx context.Context, parent Scope, request Request, inbox *Inbox[T], observer *Observer) (*Call[T], *DeliveryRecord[T], error) {
 	if parent.lease == nil || request.Bytes != 0 || request.Correlation.Parent != parent.correlation.Call {
-		return nil, ErrInvalid.New(fault.Context{})
+		return nil, nil, ErrInvalid.New(fault.Context{})
 	}
 	return begin(ctx, parent.access, parent, request, inbox, observer)
 }
 
-func begin[T any](ctx context.Context, access *resource.Access, parent Scope, request Request, inbox *Inbox[T], observer *Observer) (*Call[T], error) {
+func begin[T any](ctx context.Context, access *resource.Access, parent Scope, request Request, inbox *Inbox[T], observer *Observer) (*Call[T], *DeliveryRecord[T], error) {
 	if access == nil || !request.valid() || ctx == nil {
-		return nil, ErrInvalid.New(fault.Context{})
+		return nil, nil, ErrInvalid.New(fault.Context{})
 	}
 	info := access.Info()
 	location := fault.Context{Operation: request.Name, Correlation: request.Correlation,
 		Provider: info.Configuration.Identity.Provider, Source: info.Configuration.Identity.Name, Scope: info.Scope}
 	phaseCtx, cancel, err := request.Admission.Context(ctx, Admission)
 	if err != nil {
-		return nil, ErrBudget.New(location, err)
+		return nil, nil, ErrBudget.New(location, err)
 	}
 	defer cancel()
 	if err := inbox.reserve(request.EvidenceBytes); err != nil {
-		return nil, ErrEvidence.New(location, err)
+		return nil, nil, ErrEvidence.New(location, err)
 	}
 	var lease *resource.Lease
 	if parent.lease != nil {
@@ -248,7 +272,7 @@ func begin[T any](ctx context.Context, access *resource.Access, parent Scope, re
 	}
 	if err != nil {
 		inbox.unreserve(request.EvidenceBytes)
-		return nil, ErrFailed.New(location, err)
+		return nil, nil, ErrFailed.New(location, err)
 	}
 	state := &callState[T]{scope: Scope{lease: lease, access: access, correlation: request.Correlation,
 		suppressed: parent.suppressed || observationSuppressed(ctx)},
@@ -256,8 +280,8 @@ func begin[T any](ctx context.Context, access *resource.Access, parent Scope, re
 		ready: make(chan struct{}), finalized: make(chan struct{}), started: time.Now(),
 		attempts: Attempts{Exact: request.AttemptsKnown}, maxAttempts: request.MaxAttempts, observer: observer}
 	call := &Call[T]{state: state}
-	inbox.publish(&Receipt[T]{state: state}, request.EvidenceBytes)
-	return call, nil
+	delivery := &DeliveryRecord[T]{receipt: &Receipt[T]{state: state}, inbox: inbox, bytes: request.EvidenceBytes}
+	return call, delivery, nil
 }
 
 func (call *Call[T]) Receipt() *Receipt[T] {

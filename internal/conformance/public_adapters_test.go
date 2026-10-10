@@ -52,6 +52,7 @@ import (
 	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
+	temporal "github.com/frost-leo/fathomry/adapters/orchestration/temporal/v1"
 	doris "github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	duckdb "github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
 	trino "github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
@@ -223,10 +224,32 @@ func TestPublicAdapterContracts(t *testing.T) {
 	})
 }
 
+func TestPublicAdapterTemporal(t *testing.T) {
+	const canary = "temporal-private-contract"
+	value := temporal.Settings{Name: canary, Endpoint: "127.0.0.1:1", Namespace: "contract", Plaintext: true, Lazy: true}
+	policy, err := temporal.Recommend(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkPublicAdapter(t, value, temporal.Validate, temporal.Recommend,
+		func(value temporal.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+		func(runtime *adapters.Runtime, inbox *adapters.Inbox[temporal.Result]) temporal.Dependencies {
+			workers, err := adapters.NewInbox[temporal.WorkerResult](policy.Workers)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tasks, err := adapters.NewInbox[temporal.TaskResult](policy.Tasks)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return temporal.Dependencies{Runtime: runtime, Evidence: inbox, Workers: workers, Tasks: tasks}
+		}, temporal.Open, canary, true)
+}
+
 func checkPublicAdapter[Settings, Result, Dependencies, Owner, Policy any](t *testing.T, value Settings,
 	validate func(Settings) error, recommend func(Settings) (Policy, error), policyOf func(Policy) adapterPolicy,
 	dependencies func(*adapters.Runtime, *adapters.Inbox[Result]) Dependencies,
-	open func(context.Context, Settings, Dependencies) (*Owner, error), canary string) {
+	open func(context.Context, Settings, Dependencies) (*Owner, error), canary string, retainedClient ...bool) {
 	t.Helper()
 	t.Run("settings", func(t *testing.T) {
 		kind := reflect.TypeFor[Settings]()
@@ -351,6 +374,9 @@ func checkPublicAdapter[Settings, Result, Dependencies, Owner, Policy any](t *te
 				}
 			}
 			for _, forbidden := range []string{"Close", "Release", "ShutdownComplete", "Runtime", "Assembly"} {
+				if method == "Client" && forbidden == "Close" && len(retainedClient) == 1 && retainedClient[0] {
+					continue
+				}
 				if _, exists := reflect.PointerTo(capability).MethodByName(forbidden); exists {
 					t.Fatal("borrowed facade acquired source/runtime shutdown authority")
 				}

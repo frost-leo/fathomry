@@ -81,12 +81,14 @@ func (guard *nexusInbound) StartOperation(ctx context.Context, input interceptor
 		}
 		_, evidence.AsyncCompletion = result.(*nexus.HandlerStartOperationResultAsync)
 		call.Complete(invocation.Outcome[TaskResult]{Value: evidence, Present: true, Primary: primary})
+		binding.finish()
 		<-guard.worker.handlers
 		if recovered != nil {
 			panic(recovered)
 		}
+		err = sdk.FathomryPrepareErrorFinalizationV1(err, binding.decoderGroup)
 	}()
-	result, err = guard.Next.StartOperation(context.WithValue(ctx, taskBindingKey{}, binding), input)
+	result, err = guard.Next.StartOperation(context.WithValue(binding.admissionContext, taskBindingKey{}, binding), input)
 	evidence.HandlerReturned = true
 	return
 }
@@ -110,12 +112,14 @@ func (guard *nexusInbound) CancelOperation(ctx context.Context, input intercepto
 			primary = failure(ErrTask, "nexus-exit")
 		}
 		call.Complete(invocation.Outcome[TaskResult]{Value: evidence, Present: true, Primary: primary})
+		binding.finish()
 		<-guard.worker.handlers
 		if recovered != nil {
 			panic(recovered)
 		}
+		err = sdk.FathomryPrepareErrorFinalizationV1(err, binding.decoderGroup)
 	}()
-	err = guard.Next.CancelOperation(context.WithValue(ctx, taskBindingKey{}, binding), input)
+	err = guard.Next.CancelOperation(context.WithValue(binding.admissionContext, taskBindingKey{}, binding), input)
 	evidence.HandlerReturned = true
 	return
 }
@@ -299,6 +303,7 @@ type NexusDescription struct {
 	*nativeNexusDescription
 	CancellationInfo *NexusCancellation
 	run              *NexusRun
+	identity         Execution
 	decoding         chan struct{}
 	decoder          *sdk.NexusOperationExecutionDescription
 	scopeOwner       *sdk.FathomryScopeOwnerV1
@@ -322,7 +327,7 @@ func (run *NexusRun) Describe(ctx context.Context, correlation fault.Correlation
 			return nil, err
 		}
 		authority := work.Value(nativeCallKey{}).(*nativeCall)
-		result := &NexusDescription{nativeNexusDescription: value, decoder: value, scopeOwner: authority.scopeOwner, run: run, decoding: make(chan struct{}, 1)}
+		result := &NexusDescription{nativeNexusDescription: value, decoder: value, scopeOwner: authority.scopeOwner, run: run, identity: descriptionIdentity(work, evidence), decoding: make(chan struct{}, 1)}
 		if value.CancellationInfo != nil {
 			result.CancellationInfo = &NexusCancellation{nativeNexusCancellation: value.CancellationInfo, description: result}
 		}
@@ -335,7 +340,9 @@ func decodeNexusDescription[T any](ctx context.Context, description *NexusDescri
 	if description == nil || description.nativeNexusDescription == nil {
 		return zero, failure(ErrInput, operation)
 	}
-	return executeNative(ctx, description.run.client, correlation, Execution{Operation: operation, NexusOperationID: description.run.id, RunID: description.run.runID}, func(work context.Context, evidence *Execution) (T, error) {
+	identity := description.identity
+	identity.Operation = operation
+	return executeNative(ctx, description.run.client, correlation, identity, func(work context.Context, evidence *Execution) (T, error) {
 		evidence.NativeCalled = false
 		select {
 		case description.decoding <- struct{}{}:
@@ -489,8 +496,10 @@ func (view *nexusHandleView) Describe(ctx context.Context, options sdk.DescribeN
 		evidence.ResultObtained = err == nil
 		if value != nil {
 			authority := work.Value(nativeCallKey{}).(*nativeCall)
+			identity := descriptionIdentity(work, evidence)
 			value = sdk.FathomryScopeNexusDescriptionV1(value, authority.scopeOwner, func(decode func() error) error {
 				return view.gate(context.WithoutCancel(work), "nexus.description-decode", func(_ context.Context, evidence *Execution) error {
+					evidence.NexusOperationID, evidence.RunID, evidence.IdentityOmitted = identity.NexusOperationID, identity.RunID, identity.IdentityOmitted
 					err := decode()
 					evidence.ResultObtained = err == nil
 					return err

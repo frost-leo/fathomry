@@ -118,6 +118,8 @@ const (
 	FacilityZap Facility = 0x282
 	// FacilityZerolog owns the public zerolog logging capability.
 	FacilityZerolog Facility = 0x283
+	// FacilityTemporal owns the public Temporal orchestration capability.
+	FacilityTemporal Facility = 0x1C0
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -175,6 +177,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityLogging, Module: "fathomry", Component: "logging"},
 		{Facility: FacilityZap, Module: "fathomry", Component: "logging_zap"},
 		{Facility: FacilityZerolog, Module: "fathomry", Component: "logging_zerolog"},
+		{Facility: FacilityTemporal, Module: "fathomry", Component: "temporal"},
 	}
 }
 

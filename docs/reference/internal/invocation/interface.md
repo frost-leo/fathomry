@@ -34,6 +34,7 @@ own business retry/disposition, durable recording or a public capability API.
 | Surface | Calling contract |
 | --- | --- |
 | `Begin`, `BeginNested`, `Request` | Reserve evidence before resource admission; enter native work only after acceptance |
+| `BeginClaimed`, `BeginNestedClaimed` | Transfer exact record custody directly while retaining the same shared Inbox count/byte and resource limits; no forwarding queue |
 | `Budget.Context` | Give each actual phase a caller-owned context |
 | `Call`, `Scope`, `Guard` | One producer, explicit retained users and a guard before any possible early callback |
 | `Resolve`, `Finish`, `Release`, `Complete`, `Execute` | Keep reporting and ending local use separate |
@@ -46,6 +47,13 @@ create a bounded `Inbox`, then `Begin`. Drive the SDK using appropriate phase bu
 and retained use, report facts, confirm local termination, and let the independent
 receiver inspect/release its delivery. A rejected `Begin` accepts no SDK operation
 or receipt. An accepted call cannot be abandoned when the caller stops waiting.
+
+Claimed entrypoints return their exact DeliveryRecord rather than enqueueing it
+for Inbox.Next. Use these only when another already-reserved evidence boundary
+owns synchronous transfer. Release is still forbidden before actual subtree
+termination. Queued and claimed records share one capacity; no receiver may
+discard a claimed record, steal another operation's FIFO receipt, or resend SDK
+work to retry record reception.
 
 ## Ownership and zero values
 

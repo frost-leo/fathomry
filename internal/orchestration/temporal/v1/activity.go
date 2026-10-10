@@ -367,12 +367,14 @@ func (guard *activityInbound) ExecuteActivity(ctx context.Context, input *interc
 			primary = nil
 		}
 		call.Complete(invocation.Outcome[TaskResult]{Value: evidence, Present: true, Primary: primary})
+		binding.finish()
 		<-guard.worker.handlers
 		if recovered != nil {
 			panic(recovered)
 		}
+		err = sdk.FathomryPrepareErrorFinalizationV1(err, binding.decoderGroup)
 	}()
-	work := context.WithValue(ctx, taskBindingKey{}, binding)
+	work := context.WithValue(binding.admissionContext, taskBindingKey{}, binding)
 	for _, argument := range input.Args {
 		if reflect.TypeOf(argument) != nativeActivityValuesType {
 			continue
@@ -404,11 +406,11 @@ type nativeActivityDescription = sdk.ActivityExecutionDescription
 type ActivityDescription struct {
 	private
 	*nativeActivityDescription
-	client            *Executions
-	activityID, runID string
-	decoding          chan struct{}
-	decoder           *sdk.ActivityExecutionDescription
-	scopeOwner        *sdk.FathomryScopeOwnerV1
+	client     *Executions
+	identity   Execution
+	decoding   chan struct{}
+	decoder    *sdk.ActivityExecutionDescription
+	scopeOwner *sdk.FathomryScopeOwnerV1
 }
 
 func (*ActivityDescription) LogValue() slog.Value { return slog.StringValue("temporal[restricted]") }
@@ -429,7 +431,7 @@ func (run *ActivityRun) Describe(ctx context.Context, correlation fault.Correlat
 			return nil, err
 		}
 		authority := work.Value(nativeCallKey{}).(*nativeCall)
-		return &ActivityDescription{nativeActivityDescription: description, decoder: description, scopeOwner: authority.scopeOwner, client: run.client, activityID: run.GetID(), runID: run.GetRunID(), decoding: make(chan struct{}, 1)}, err
+		return &ActivityDescription{nativeActivityDescription: description, decoder: description, scopeOwner: authority.scopeOwner, client: run.client, identity: descriptionIdentity(work, evidence), decoding: make(chan struct{}, 1)}, err
 	})
 }
 
@@ -438,7 +440,9 @@ func decodeActivityDescription[T any](ctx context.Context, description *Activity
 	if description == nil || description.nativeActivityDescription == nil || description.decoding == nil {
 		return zero, failure(ErrInput, operation)
 	}
-	return executeNative(ctx, description.client, correlation, Execution{Operation: operation, ActivityID: description.activityID, RunID: description.runID}, func(work context.Context, evidence *Execution) (T, error) {
+	identity := description.identity
+	identity.Operation = operation
+	return executeNative(ctx, description.client, correlation, identity, func(work context.Context, evidence *Execution) (T, error) {
 		evidence.NativeCalled = false
 		select {
 		case description.decoding <- struct{}{}:
@@ -687,8 +691,10 @@ func (view *activityHandleView) Describe(ctx context.Context, options sdk.Descri
 			if authority == nil {
 				return failure(ErrAuthority, "activity-description-scope")
 			}
+			identity := descriptionIdentity(work, evidence)
 			value = sdk.FathomryScopeActivityDescriptionV1(value, authority.scopeOwner, func(decode func() error) error {
 				return view.gate(context.WithoutCancel(work), "activity.description-decode", func(_ context.Context, evidence *Execution) error {
+					evidence.ActivityID, evidence.RunID, evidence.IdentityOmitted = identity.ActivityID, identity.RunID, identity.IdentityOmitted
 					err := decode()
 					evidence.ResultObtained = err == nil
 					return err

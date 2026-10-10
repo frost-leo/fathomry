@@ -27,6 +27,7 @@ import (
 
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
+	"github.com/google/uuid"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	sdk "go.temporal.io/sdk/client"
@@ -47,7 +48,13 @@ type RPCResult struct {
 	ResponseBytesKnown bool
 	Invoked            bool
 	Acknowledged       bool
+	nativeError        error
+	nativeReturned     bool
 }
+
+// NativeCause exposes the exact captured transport return, deliberately separate
+// from bounded observation errors and attributed result wrappers.
+func (value RPCResult) NativeCause() (error, bool) { return value.nativeError, value.nativeReturned }
 
 type workflowService = workflowservice.WorkflowServiceClient
 
@@ -67,6 +74,9 @@ type operatorView struct {
 // raw connection or lifecycle access. Use a distinct correlation for each logical
 // call. Requests are borrowed until return; replies become the caller's.
 // Each call independently enforces the exact grant, admission and evidence bound.
+// Header, Trailer and Peer output containers are borrowed exclusively until the
+// call returns; they must not be shared with concurrent calls.
+// At most MaxCallOptions options are accepted, including generated StaticMethod.
 func (client *Client) WorkflowService(correlation fault.Correlation) workflowservice.WorkflowServiceClient {
 	return &workflowView{workflowService: workflowservice.NewWorkflowServiceClient(&rpcConnection{client: client, correlation: correlation})}
 }
@@ -80,6 +90,29 @@ func (client *Client) OperatorService(correlation fault.Correlation) operatorser
 type rpcConnection struct {
 	client      *Client
 	correlation fault.Correlation
+}
+
+// WithRPCErrorMapper maps ordinary direct generated-service return errors only.
+// It does not change retained native evidence or errors returned to SDK callbacks.
+// The mapper must be synchronous and must not reenter the same call.
+func WithRPCErrorMapper(client *Client, mapError func(error) error) *Client {
+	if client == nil {
+		return nil
+	}
+	copy := *client
+	copy.mapError = mapError
+	return &copy
+}
+
+// WithFreshRPCIDs gives each invocation of a reusable generated view a distinct
+// local call identity. Other correlation fields and inherited parent scope remain.
+func WithFreshRPCIDs(client *Client) *Client {
+	if client == nil {
+		return nil
+	}
+	copy := *client
+	copy.freshRPCIDs = true
+	return &copy
 }
 
 type activeRPCKey struct{}
@@ -109,8 +142,15 @@ func observeAttempt(ctx context.Context, method string, request, reply any, tran
 	return err
 }
 
-func (connection *rpcConnection) Invoke(ctx context.Context, method string, request, reply any, options ...grpc.CallOption) error {
+func (connection *rpcConnection) Invoke(ctx context.Context, method string, request, reply any, options ...grpc.CallOption) (err error) {
 	client := connection.client
+	if client != nil && client.mapError != nil {
+		defer func() {
+			if err != nil {
+				err = client.mapError(err)
+			}
+		}()
+	}
 	if client == nil || client.owner == nil || ctx == nil {
 		return failure(ErrInput, "rpc")
 	}
@@ -128,9 +168,85 @@ func (connection *rpcConnection) Invoke(ctx context.Context, method string, requ
 			return failure(ErrAuthority, "namespace")
 		}
 	}
+	if err := validateCallOptions(value, options); err != nil {
+		return err
+	}
+	name := "rpc." + strings.ToLower(method[strings.LastIndexByte(method, '/')+1:])
+	correlation := connection.correlation
+	if client.freshRPCIDs {
+		correlation.Call = uuid.NewString()
+	}
+	call, admitted, finish, err := client.begin(ctx, correlation, name)
+	if err != nil {
+		return err
+	}
+	defer finish()
+	evidence := RPCResult{Method: method}
+	returned := false
+	defer func() {
+		if returned {
+			return
+		}
+		recovered := recover()
+		call.Complete(invocation.Outcome[RPCResult]{Value: evidence, Present: true, Primary: failure(ErrRPC, "native-exit")})
+		if recovered != nil {
+			panic(recovered)
+		}
+	}()
+	_ = call.Execute(admitted, invocation.Budget{Limit: value.RPCTimeout}, func(work context.Context, _ invocation.Scope) invocation.Outcome[RPCResult] {
+		frame := newAdmissionFrame(admitted, client.access, call)
+		defer frame.closed.Store(true)
+		requestBytes, err := messageSize(work, input, value.MaxRequestBytes)
+		evidence.RequestBytes = requestBytes
+		if err != nil {
+			return invocation.Outcome[RPCResult]{Value: evidence, Present: true, Primary: err}
+		}
+		nativeContext := context.WithValue(opaqueContext{work}, activeRPCKey{}, call)
+		nativeContext = context.WithValue(nativeContext, transportOwnerKey{}, client.owner)
+		nativeContext = context.WithValue(nativeContext, admissionFrameKey{}, frame)
+		evidence.Invoked = true
+		err = client.owner.transport.Invoke(nativeContext, method, request, reply, boundedCallOptions(value, options)...)
+		evidence.nativeError, evidence.nativeReturned = err, true
+		evidence.Acknowledged = err == nil
+		if err == nil {
+			evidence.ResponseBytes, err = messageSize(work, output, value.MaxResponseBytes)
+			evidence.ResponseBytesKnown = err == nil
+		}
+		if err != nil {
+			err = failure(ErrRPC, name, err, work.Err(), context.Cause(work))
+		}
+		return invocation.Outcome[RPCResult]{Value: evidence, Present: true, Primary: err}
+	})
+	returned = true
+	result, present := call.Receipt().Result()
+	if !present {
+		return failure(ErrRPC, name)
+	}
+	return semanticFailure(result.Err(), evidence.nativeError, evidence.nativeReturned)
+}
+
+// MaxCallOptions includes the StaticMethod marker added by generated methods.
+const MaxCallOptions = 32
+
+func validateCallOptions(value settings, options []grpc.CallOption) error {
+	if len(options) > MaxCallOptions {
+		return failure(ErrLimit, "call-options")
+	}
 	for _, option := range options {
 		switch option := option.(type) {
-		case grpc.StaticMethodCallOption, grpc.HeaderCallOption, grpc.TrailerCallOption, grpc.PeerCallOption, grpc.FailFastCallOption:
+		case grpc.StaticMethodCallOption, grpc.FailFastCallOption:
+		case grpc.HeaderCallOption:
+			if option.HeaderAddr == nil {
+				return failure(ErrInput, "header-option")
+			}
+		case grpc.TrailerCallOption:
+			if option.TrailerAddr == nil {
+				return failure(ErrInput, "trailer-option")
+			}
+		case grpc.PeerCallOption:
+			if option.PeerAddr == nil {
+				return failure(ErrInput, "peer-option")
+			}
 		case grpc.MaxRecvMsgSizeCallOption:
 			if option.MaxRecvMsgSize < 1 || option.MaxRecvMsgSize > value.MaxResponseBytes {
 				return failure(ErrLimit, "receive-option")
@@ -143,36 +259,20 @@ func (connection *rpcConnection) Invoke(ctx context.Context, method string, requ
 			return failure(ErrAuthority, "rpc-option")
 		}
 	}
-	name := "rpc." + strings.ToLower(method[strings.LastIndexByte(method, '/')+1:])
-	call, err := client.begin(ctx, connection.correlation, name)
-	if err != nil {
-		return err
+	return nil
+}
+
+func boundedCallOptions(value settings, options []grpc.CallOption) []grpc.CallOption {
+	send, receive := value.MaxRequestBytes, value.MaxResponseBytes
+	for _, option := range options {
+		switch option := option.(type) {
+		case grpc.MaxRecvMsgSizeCallOption:
+			receive = min(receive, option.MaxRecvMsgSize)
+		case grpc.MaxSendMsgSizeCallOption:
+			send = min(send, option.MaxSendMsgSize)
+		}
 	}
-	_ = call.Execute(ctx, invocation.Budget{Limit: value.RPCTimeout}, func(work context.Context, _ invocation.Scope) invocation.Outcome[RPCResult] {
-		requestBytes, err := messageSize(work, input, value.MaxRequestBytes)
-		if err != nil {
-			return invocation.Outcome[RPCResult]{Value: RPCResult{Method: method}, Present: true, Primary: err}
-		}
-		nativeContext := context.WithValue(opaqueContext{work}, activeRPCKey{}, call)
-		nativeContext = context.WithValue(nativeContext, transportOwnerKey{}, client.owner)
-		boundedOptions := []grpc.CallOption{grpc.MaxCallSendMsgSize(value.MaxRequestBytes), grpc.MaxCallRecvMsgSize(value.MaxResponseBytes)}
-		boundedOptions = append(boundedOptions, options...)
-		err = client.owner.transport.Invoke(nativeContext, method, request, reply, boundedOptions...)
-		result := RPCResult{Method: method, RequestBytes: requestBytes, Invoked: true, Acknowledged: err == nil}
-		if err == nil {
-			result.ResponseBytes, err = messageSize(work, output, value.MaxResponseBytes)
-			result.ResponseBytesKnown = err == nil
-		}
-		if err != nil {
-			err = failure(ErrRPC, name, err, work.Err(), context.Cause(work))
-		}
-		return invocation.Outcome[RPCResult]{Value: result, Present: true, Primary: err}
-	})
-	result, present := call.Receipt().Result()
-	if !present {
-		return failure(ErrRPC, name)
-	}
-	return result.Err()
+	return append(slices.Clone(options), grpc.MaxCallSendMsgSize(send), grpc.MaxCallRecvMsgSize(receive))
 }
 
 // Inspect before proto.Size/Marshal: cyclic caller-built protos must not recurse

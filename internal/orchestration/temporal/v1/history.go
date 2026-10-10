@@ -172,6 +172,30 @@ func (client *Executions) CountWorkflow(ctx context.Context, correlation fault.C
 	})
 }
 
+// ScanWorkflow preserves the native request and page result without mutating
+// caller-owned namespace or continuation state.
+//
+// Deprecated: use ListWorkflow. Server removal remains a native service error.
+func (client *Executions) ScanWorkflow(ctx context.Context, correlation fault.Correlation, request *workflowservice.ScanWorkflowExecutionsRequest) (*workflowservice.ScanWorkflowExecutionsResponse, error) {
+	if request == nil {
+		return nil, failure(ErrInput, "visibility-request")
+	}
+	return executeNative(ctx, client, correlation, Execution{Operation: "workflow.scan"}, func(work context.Context, evidence *Execution) (*workflowservice.ScanWorkflowExecutionsResponse, error) {
+		evidence.NativeCalled = false
+		if _, err := messageSize(work, request, client.owner.settings.MaxRequestBytes); err != nil {
+			return nil, err
+		}
+		copied := proto.Clone(request).(*workflowservice.ScanWorkflowExecutionsRequest)
+		if copied.Namespace != "" && copied.Namespace != client.Namespace() {
+			return nil, failure(ErrAuthority, "namespace")
+		}
+		evidence.NativeCalled = true
+		response, err := client.owner.native.ScanWorkflow(work, copied)
+		evidence.ResultObtained = err == nil
+		return response, err
+	})
+}
+
 // GetSearchAttributes preserves the native schema inspection result.
 func (client *Executions) GetSearchAttributes(ctx context.Context, correlation fault.Correlation) (*workflowservice.GetSearchAttributesResponse, error) {
 	return executeNative(ctx, client, correlation, Execution{Operation: "workflow.search-attributes"}, func(work context.Context, evidence *Execution) (*workflowservice.GetSearchAttributesResponse, error) {

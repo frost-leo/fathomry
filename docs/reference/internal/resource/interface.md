@@ -82,6 +82,10 @@ context returns `ErrSelection`, not success. `Snapshot` on a nil assembly is emp
 metadata, not ownership evidence. Nil/zero `Lease.Release` is a no-op; `Done` is nil,
 not a completed signal. An invalid `Access` cannot admit work.
 
+`Access.SameScope` compares the exact assembly entry, not a name, native source or
+physical connection. Rebinding the same entry retains that identity; independent
+Borrow aliases remain different. It grants no lifecycle or admission authority.
+
 `Prepared` settings and returned provenance use independent storage. Native causes,
 capabilities and callbacks are not generically deep-copied. Do not mutate inputs
 concurrently with preparation or infer physical isolation from distinct names.

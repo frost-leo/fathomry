@@ -61,7 +61,7 @@ func copyClientOptions(options sdk.Options) sdk.Options {
 	options.Plugins = slices.Clone(options.Plugins)
 	options.ConnectionOptions.DialOptions = slices.Clone(options.ConnectionOptions.DialOptions)
 	if options.ConnectionOptions.TLS != nil {
-		options.ConnectionOptions.TLS = options.ConnectionOptions.TLS.Clone()
+		options.ConnectionOptions.TLS = copyTLSContainers(options.ConnectionOptions.TLS)
 	}
 	return options
 }
@@ -183,8 +183,10 @@ func (owner *connection) finalizeClientOptions(options sdk.Options) (sdk.Options
 	owner.effective = copyClientOptions(options)
 	owner.effective.Plugins = nil
 	owner.effective.ConnectionOptions.DialOptions = nil
+	options.HostPort = nativeEndpoint(options.HostPort)
+	options.ConnectionOptions.DialOptions = owner.transportLifetime.dialOptions(options.ConnectionOptions.DialOptions, effective)
 	if options.ConnectionOptions.TLS != nil {
-		options.ConnectionOptions.DialOptions = owner.transportLifetime.secureDialOptions(options.ConnectionOptions.DialOptions, options.ConnectionOptions.TLS)
+		options.Plugins = append(options.Plugins, &transportPlugin{scope: &owner.transportLifetime})
 	}
 	options.Interceptors = nil
 	for _, extension := range effective.Interceptors {
@@ -208,10 +210,29 @@ func (owner *connection) pollingOptions(transport grpc.UnaryClientInterceptor, l
 		options.Plugins = append(options.Plugins, &clientPluginName{name: plugin.name})
 	}
 	options.ConnectionOptions.DialOptions = ownedDialOptions(transport)
+	options.HostPort = nativeEndpoint(options.HostPort)
+	options.ConnectionOptions.DialOptions = lifetime.dialOptions(options.ConnectionOptions.DialOptions, owner.runtime)
 	if options.ConnectionOptions.TLS != nil {
-		options.ConnectionOptions.DialOptions = lifetime.secureDialOptions(options.ConnectionOptions.DialOptions, options.ConnectionOptions.TLS)
+		options.Plugins = append(options.Plugins, &transportPlugin{scope: lifetime})
 	}
 	return options
+}
+
+type transportPlugin struct {
+	sdk.PluginBase
+	scope *transportLifetime
+}
+
+func (*transportPlugin) Name() string { return "fathomry-owned-transport-v1" }
+
+func (plugin *transportPlugin) NewClient(ctx context.Context, options sdk.PluginNewClientOptions, next func(context.Context, sdk.PluginNewClientOptions) error) error {
+	// Native credentials may replace TLS after ConfigureClient. Scope the final
+	// configuration here instead of capturing a pre-credential config pointer.
+	connection := &options.ClientOptions.ConnectionOptions
+	if connection.TLS != nil {
+		connection.DialOptions = plugin.scope.secureDialOptions(slices.Clone(connection.DialOptions), connection.TLS)
+	}
+	return next(ctx, options)
 }
 
 func ownedDialOptions(transport grpc.UnaryClientInterceptor) []grpc.DialOption {
@@ -234,6 +255,9 @@ func (adapter *clientPluginAdapter) NewClient(ctx context.Context, options sdk.P
 	exposed := options
 	exposed.ClientOptions = copyClientOptions(adapter.owner.effective)
 	exposed.ClientOptions.MetricsHandler = options.ClientOptions.MetricsHandler
+	if options.ClientOptions.ConnectionOptions.TLS != nil {
+		exposed.ClientOptions.ConnectionOptions.TLS = copyTLSContainers(options.ClientOptions.ConnectionOptions.TLS)
+	}
 	exposed.ClientOptions.Plugins = nil
 	exposed.ClientOptions.ConnectionOptions.DialOptions = nil
 	if options.FromExisting != nil {

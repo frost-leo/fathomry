@@ -245,6 +245,36 @@ func TestCallBorrowingPreservesScopeShutdownAndDependencies(t *testing.T) {
 	}
 }
 
+func TestAccessSameScopeUsesExactAssemblyEntryIdentity(t *testing.T) {
+	owner, selected, access := limited(t, limits(), complete)
+	again, err := resource.AccessFor(owner, selected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copy := *access
+	if !access.SameScope(again) || !access.SameScope(&copy) {
+		t.Fatal("same bound entry lost its retained-scope identity")
+	}
+	borrowed := resource.Borrow("alias", owner, selected)
+	borrower := assemble(t, "borrower", borrowed)
+	other, err := resource.AccessFor(borrower, borrowed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if access.SameScope(other) || other.SameScope(access) || access.SameScope(nil) || new(resource.Access).SameScope(new(resource.Access)) {
+		t.Fatal("another alias or invalid access inherited retained authority")
+	}
+	if err := borrower.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := owner.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !access.SameScope(again) {
+		t.Fatal("closure changed identity instead of revoking admission")
+	}
+}
+
 func TestBorrowTreeChargesOneUseAndBoundsRetainedAncestors(t *testing.T) {
 	policy := limits()
 	policy.MaxLeases = 3

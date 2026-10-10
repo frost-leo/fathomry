@@ -69,6 +69,12 @@ adds bounded object operations, owned multipart sessions, incremental version
 enumeration and restricted presigning. It consumes SDK-independent
 [object-storage contracts](docs/reference/adapters/objectstore/v1/interface.md)
 and supports direct or explicit Fixed/Follow composition with independent evidence.
+The public [Temporal Adapter](docs/reference/adapters/orchestration/temporal/v1/interface.md)
+preserves the selected native SDK capabilities, retained source/use identity,
+scoped lazy results and actual Worker join with independent evidence. Its local
+compatibility SDK replacement must be selected explicitly by independent modules;
+versioned distribution and service qualification remain separate gates.
+
 The public [Kafka Adapter](docs/reference/adapters/broker/kafka/v1/interface.md)
 adds asynchronous production, exact/direct reads, classic group sessions and
 explicit checkpoints, with the same direct/Framework ownership paths.

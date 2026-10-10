@@ -157,6 +157,7 @@ The authoritative first-party manifest is
 | 0x281 | fathomry / logging | [Bounded logging data and restricted safe ingress](../../adapters/logging/v1/interface.md) |
 | 0x282 | fathomry / logging_zap | [Public Zap logging ownership and per-output operations](../../adapters/logging/zap/v1/interface.md) |
 | 0x283 | fathomry / logging_zerolog | [Public zerolog logging, typed event recovery and file maintenance](../../adapters/logging/zerolog/v1/interface.md) |
+| 0x1C0 | fathomry / temporal | [Public Temporal orchestration, Worker lifecycle and native semantic errors](../../adapters/orchestration/temporal/v1/interface.md) |
 
 Unlisted first-party facilities cannot be used by definitions. Future modules add
 reviewed entries in their capability range. The previous unreleased settings slot

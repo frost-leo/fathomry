@@ -33,7 +33,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/frost-leo/fathomry/internal/resource"
 	"go.temporal.io/api/operatorservice/v1"
 	"go.temporal.io/api/workflowservice/v1"
 	sdk "go.temporal.io/sdk/client"
@@ -41,6 +40,7 @@ import (
 	"go.temporal.io/sdk/interceptor"
 	nativelog "go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/workflow"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -149,7 +149,7 @@ func validNetworkAddress(address string) bool {
 		portError == nil && portNumber >= 1 && portNumber <= 65535
 }
 
-func validEndpoint(endpoint string) bool {
+func validEndpoint(endpoint string, customSchemes ...string) bool {
 	if !validText(endpoint, 512) {
 		return false
 	}
@@ -179,13 +179,14 @@ func validEndpoint(endpoint string) bool {
 			return false
 		}
 	default:
-		return false
+		return slices.Contains(customSchemes, target.Scheme) && validText(target.Host+target.Path, 512) &&
+			target.Path != "/" && !strings.ContainsAny(target.Host+target.Path, "\\ \t")
 	}
 	return validNetworkAddress(strings.TrimPrefix(target.Path, "/"))
 }
 
-func validate(value settings) error {
-	if !validEndpoint(value.Endpoint) ||
+func validate(value settings, customSchemes ...string) error {
+	if !validEndpoint(value.Endpoint, customSchemes...) ||
 		value.ServerName != "" && !validText(value.ServerName, 255) || strings.ContainsAny(value.APIKey, "\x00\r\n") ||
 		!validText(value.Namespace, 255) || !validText(value.Identity, 128) ||
 		value.ConnectTimeout <= 0 || value.ConnectTimeout > time.Minute ||
@@ -261,15 +262,6 @@ func KnownRPCs() []string {
 	return methods
 }
 
-func prepare(options OptionsV1, layers []resource.Layer) (resource.Prepared[settings], error) {
-	format := options.Version
-	if format == 0 {
-		format = 1
-	}
-	return resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: validate},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: format, Layers: layers})
-}
-
 // RuntimeOptions contains explicit, borrowed native extensions. Unlike OptionsV1,
 // it is not configuration data and cannot be reconstructed by configuration layers.
 // Values are copied by SelectWithRuntime; the referenced objects remain borrowed.
@@ -322,8 +314,29 @@ type RuntimeOptions struct {
 	Plugins []sdk.Plugin
 	// ConnectionOptions preserves native TLS, keepalive and compression options.
 	// Namespace/endpoint, wire bounds and the owned dial chain cannot be changed
-	// through it; opaque DialOptions are refused. TLS material/callbacks are borrowed.
-	ConnectionOptions          sdk.ConnectionOptions
+	// through it; opaque DialOptions are refused. TLS config/certificate/ECH entry
+	// structs and option containers are copied. Encoded DER/OCSP/SCT/ECH/private-key
+	// bytes, private keys and parsed certificates/pools remain borrowed and must
+	// not be mutated during use. Callback, cache and I/O objects remain borrowed
+	// and concurrency-safe through actual source shutdown.
+	ConnectionOptions sdk.ConnectionOptions
+	// ResolverBuilders are explicit, source-local bindings. The supplied Scheme
+	// avoids invoking extension code during offline preparation. Native Scheme
+	// must agree when Build runs. Returned resolvers must join their background
+	// work in Close. Results allow at most 256 address entries per update;
+	// service configs, opaque attributes and address authority overrides are
+	// refused. Default DNS/passthrough builders are pinned per source.
+	ResolverBuilders []ResolverBinding
+	// ContextDialer is an explicit TCP/proxy route; nil uses native direct TCP.
+	// Entered callbacks and returned connections remain owned through actual
+	// cleanup. Cancellation cannot forcibly stop a noncooperative callback.
+	// A returned connection is transferred, not borrowed, and must not be reused.
+	// Each transport admits at most MaxTransportConnections simultaneous dial
+	// attempts/returned connections. Saturation refuses before callback entry.
+	ContextDialer func(context.Context, string) (net.Conn, error)
+	// UserAgent is a printable ASCII prefix, at most 256 bytes, added to the
+	// native gRPC user agent. It never grants replacement dial-chain authority.
+	UserAgent                  string
 	Credentials                sdk.Credentials
 	HeadersProvider            HeadersProvider
 	TrafficController          TrafficController
@@ -333,6 +346,13 @@ type RuntimeOptions struct {
 	// ReportWorkerEnvironment explicitly enables native environment reporting.
 	ReportWorkerEnvironment bool
 	PayloadLimits           sdk.PayloadLimitOptions
+}
+
+// ResolverBinding binds one borrowed native builder without global registration.
+// Scheme is lowercase and must match Builder.Scheme at native construction.
+type ResolverBinding struct {
+	Scheme  string
+	Builder resolver.Builder
 }
 
 // HeadersProvider matches the native client.Options hook, whose interface type
@@ -364,7 +384,7 @@ func nilRuntime(value any) bool {
 func freezeRuntime(value RuntimeOptions) (RuntimeOptions, error) {
 	if value.Logger != nil && nilRuntime(value.Logger) || value.MetricsHandler != nil && nilRuntime(value.MetricsHandler) ||
 		value.DataConverter != nil && nilRuntime(value.DataConverter) || value.FailureConverter != nil && nilRuntime(value.FailureConverter) ||
-		len(value.Interceptors) > 32 || len(value.ContextPropagators) > 32 || len(value.ExternalStorage.Drivers) > 32 || len(value.Plugins) > 32 ||
+		len(value.Interceptors) > 32 || len(value.ContextPropagators) > 32 || len(value.ExternalStorage.Drivers) > 32 || len(value.Plugins) > 32 || len(value.ResolverBuilders) > 16 ||
 		value.ExternalStorage.PayloadSizeThreshold < 0 || value.ExternalStorage.DriverSelector != nil && nilRuntime(value.ExternalStorage.DriverSelector) {
 		return RuntimeOptions{}, failure(ErrInput, "runtime-binding")
 	}
@@ -373,10 +393,25 @@ func freezeRuntime(value RuntimeOptions) (RuntimeOptions, error) {
 		value.SdkName != "" && !validText(value.SdkName, 128) || value.SdkVersion != "" && !validText(value.SdkVersion, 128) {
 		return RuntimeOptions{}, failure(ErrInput, "native-options")
 	}
+	if len(value.UserAgent) > 256 || strings.TrimFunc(value.UserAgent, func(character rune) bool { return character >= ' ' && character <= '~' }) != "" {
+		return RuntimeOptions{}, failure(ErrInput, "user-agent")
+	}
+	seenSchemes := make(map[string]bool, len(value.ResolverBuilders))
+	for _, binding := range value.ResolverBuilders {
+		if !validResolverScheme(binding.Scheme) || seenSchemes[binding.Scheme] || nilRuntime(binding.Builder) {
+			return RuntimeOptions{}, failure(ErrInput, "resolver-binding")
+		}
+		seenSchemes[binding.Scheme] = true
+	}
 	for _, extension := range []any{value.Credentials, value.HeadersProvider, value.TrafficController, value.ConnectionOptions.GrpcCompression} {
 		if extension != nil && nilRuntime(extension) {
 			return RuntimeOptions{}, failure(ErrInput, "native-extension")
 		}
+	}
+	switch value.ConnectionOptions.GrpcCompression.(type) {
+	case nil, *sdk.GrpcCompressionGzip, *sdk.GrpcCompressionNone:
+	default:
+		return RuntimeOptions{}, failure(ErrInput, "native-compression")
 	}
 	for _, plugin := range value.Plugins {
 		if nilRuntime(plugin) {
@@ -402,8 +437,21 @@ func freezeRuntime(value RuntimeOptions) (RuntimeOptions, error) {
 	value.Interceptors = slices.Clone(value.Interceptors)
 	value.ContextPropagators = slices.Clone(value.ContextPropagators)
 	value.Plugins = slices.Clone(value.Plugins)
+	value.ResolverBuilders = slices.Clone(value.ResolverBuilders)
 	if value.ConnectionOptions.TLS != nil {
-		value.ConnectionOptions.TLS = value.ConnectionOptions.TLS.Clone()
+		value.ConnectionOptions.TLS = copyTLSContainers(value.ConnectionOptions.TLS)
 	}
 	return value, nil
+}
+
+func validResolverScheme(scheme string) bool {
+	if scheme == "" || len(scheme) > 64 || scheme[0] < 'a' || scheme[0] > 'z' {
+		return false
+	}
+	for _, character := range scheme {
+		if (character < 'a' || character > 'z') && (character < '0' || character > '9') && character != '+' && character != '-' && character != '.' {
+			return false
+		}
+	}
+	return true
 }

@@ -239,7 +239,10 @@ func (gate *clientContinuation[PollInput, PollOutput]) UpdateWorkflow(ctx contex
 	return clientContinue(ctx, gate, func(work context.Context) (sdk.WorkflowUpdateHandle, error) {
 		value, err := gate.Next.UpdateWorkflow(work, input)
 		value, scopeErr := gate.resultUpdate(work, value)
-		return value, gate.resultError(work, errors.Join(err, scopeErr))
+		if scopeErr != nil {
+			err = errors.Join(err, scopeErr)
+		}
+		return value, gate.resultError(work, err)
 	})
 }
 
@@ -261,7 +264,10 @@ func (gate *clientContinuation[PollInput, PollOutput]) UpdateWithStartWorkflow(c
 	return clientContinue(ctx, gate, func(work context.Context) (sdk.WorkflowUpdateHandle, error) {
 		value, err := gate.Next.UpdateWithStartWorkflow(work, input)
 		value, scopeErr := gate.resultUpdate(work, value)
-		return value, gate.resultError(work, errors.Join(err, scopeErr))
+		if scopeErr != nil {
+			err = errors.Join(err, scopeErr)
+		}
+		return value, gate.resultError(work, err)
 	})
 }
 
@@ -479,14 +485,22 @@ func (gate *clientContinuation[PollInput, PollOutput]) resultValue(ctx context.C
 	if value == nil {
 		return nil
 	}
+	if nilRuntime(value) {
+		return &interceptorValue{guard: func(func() error) error { return failure(ErrExecution, "encoded-value-nil") }}
+	}
 	authority := ctx.Value(nativeCallKey{}).(*nativeCall)
 	if !gate.nextOnly {
-		if view, ok := value.(*interceptorValue); ok && view.factory == gate.factory && view.authority == authority {
+		if view := encodedInterceptorView(value); view != nil && view.factory == gate.factory && view.authority == authority {
 			return view.native
 		}
 		return value
 	}
-	return &interceptorValue{native: value, factory: gate.factory, authority: authority, guard: gate.resultGuard(ctx), present: value.HasValue(), scopeError: func(err error) error { return gate.resultError(ctx, err) }}
+	presence, release, err := transferEncodedValue(ctx, gate.factory.owner, authority, value)
+	defer release()
+	if err != nil {
+		return &interceptorValue{guard: func(func() error) error { return err }}
+	}
+	return encodedInterceptorResult(&interceptorValue{native: value, factory: gate.factory, authority: authority, guard: gate.resultGuard(ctx), present: presence.HasValue(), scopeError: func(err error) error { return gate.resultError(ctx, err) }})
 }
 
 func (gate *clientContinuation[PollInput, PollOutput]) resultError(ctx context.Context, value error) error {
@@ -548,6 +562,9 @@ func borrowedResultContext(origin, supplied context.Context) (context.Context, f
 	}
 	if evidence := origin.Value(executionEvidenceKey{}); evidence != nil {
 		work = context.WithValue(work, executionEvidenceKey{}, evidence)
+	}
+	if frame, ok := origin.Value(admissionFrameKey{}).(*admissionFrame); ok && !frame.closed.Load() {
+		work = context.WithValue(work, admissionFrameKey{}, frame)
 	}
 	return work, release
 }

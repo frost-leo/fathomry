@@ -178,6 +178,14 @@ func (client *Executions) QueryWorkflow(ctx context.Context, correlation fault.C
 	_, err := executeNative(ctx, client, correlation, Execution{Operation: "workflow.query", WorkflowID: workflowID, RunID: runID}, func(work context.Context, evidence *Execution) (struct{}, error) {
 		encoded, err := client.owner.native.QueryWorkflow(work, workflowID, runID, query, args...)
 		if err == nil {
+			if nilRuntime(encoded) {
+				return struct{}{}, failure(ErrExecution, "query-value")
+			}
+			encoded, release, transferErr := transferEncodedValue(work, client.owner, work.Value(nativeCallKey{}).(*nativeCall), encoded)
+			defer release()
+			if transferErr != nil {
+				return struct{}{}, transferErr
+			}
 			err = encoded.Get(result)
 			evidence.ResultObtained = err == nil
 		}
@@ -198,10 +206,21 @@ func (client *Executions) QueryWorkflowWithOptions(ctx context.Context, correlat
 		if err != nil {
 			return nil, err
 		}
+		if response == nil {
+			return nil, failure(ErrExecution, "query-response")
+		}
 		if response.QueryRejected != nil {
 			return response.QueryRejected, nil
 		}
-		err = response.QueryResult.Get(result)
+		if nilRuntime(response.QueryResult) {
+			return nil, failure(ErrExecution, "query-value")
+		}
+		encoded, release, transferErr := transferEncodedValue(work, client.owner, work.Value(nativeCallKey{}).(*nativeCall), response.QueryResult)
+		defer release()
+		if transferErr != nil {
+			return nil, transferErr
+		}
+		err = encoded.Get(result)
 		evidence.ResultObtained = err == nil
 		return nil, err
 	})
@@ -357,7 +376,7 @@ func (operation *WithStartWorkflowOperation) Get(ctx context.Context, correlatio
 // uncertain failure. Retrying intentionally requires explicit native IDs/policies
 // in a new operation. Rejection before invocation admission does not consume it.
 func (client *Executions) UpdateWithStartWorkflow(ctx context.Context, correlation fault.Correlation, operation *WithStartWorkflowOperation, options sdk.UpdateWorkflowOptions) (*WorkflowUpdate, error) {
-	if client == nil || operation == nil || operation.native == nil || operation.client.owner != client.owner {
+	if client == nil || operation == nil || operation.native == nil || !operation.client.access.SameScope(client.access) {
 		return nil, failure(ErrAuthority, "workflow-update-start")
 	}
 	if options.UpdateID == "" {
@@ -384,14 +403,24 @@ func (client *callbackClient) ResetWorkflowExecution(ctx context.Context, reques
 	}
 	return callbackGranted(ctx, client, workflowServicePrefix+"ResetWorkflowExecution", Execution{Operation: "callback.resetworkflowexecution"},
 		func(work context.Context, evidence *Execution) (*workflowservice.ResetWorkflowExecutionResponse, error) {
+			evidence.NativeCalled = false
 			if _, err := messageSize(work, request, client.binding.worker.client.owner.settings.MaxRequestBytes); err != nil {
 				return nil, err
 			}
 			copy := proto.Clone(request).(*workflowservice.ResetWorkflowExecutionRequest)
+			if copy.RequestId == "" {
+				copy.RequestId = uuid.NewString()
+			}
+			evidence.RequestID = copy.RequestId
 			if copy.Namespace != "" && copy.Namespace != client.binding.worker.client.Namespace() {
 				return nil, failure(ErrAuthority, "namespace")
 			}
+			evidence.NativeCalled = true
 			value, err := client.nativeClient.ResetWorkflowExecution(work, copy)
+			evidence.RequestID = ""
+			if validText(copy.RequestId, 1024) {
+				evidence.RequestID = copy.RequestId
+			}
 			evidence.Accepted = err == nil
 			return value, err
 		})
@@ -422,11 +451,11 @@ type nativeWorkflowDescription = sdk.WorkflowExecutionDescription
 type WorkflowDescription struct {
 	private
 	*nativeWorkflowDescription
-	decoder           *sdk.WorkflowExecutionDescription
-	scopeOwner        *sdk.FathomryScopeOwnerV1
-	client            *Executions
-	workflowID, runID string
-	decoding          chan struct{}
+	decoder    *sdk.WorkflowExecutionDescription
+	scopeOwner *sdk.FathomryScopeOwnerV1
+	client     *Executions
+	identity   Execution
+	decoding   chan struct{}
 }
 
 func (*WorkflowDescription) LogValue() slog.Value { return slog.StringValue("temporal[restricted]") }
@@ -440,7 +469,7 @@ func (client *Executions) DescribeWorkflow(ctx context.Context, correlation faul
 		}
 		authority := work.Value(nativeCallKey{}).(*nativeCall)
 		return &WorkflowDescription{nativeWorkflowDescription: native, decoder: native, scopeOwner: authority.scopeOwner, client: client,
-			workflowID: workflowID, runID: runID, decoding: make(chan struct{}, 1)}, err
+			identity: descriptionIdentity(work, evidence), decoding: make(chan struct{}, 1)}, err
 	})
 }
 
@@ -449,7 +478,9 @@ func decodeWorkflowDescription[T any](ctx context.Context, description *Workflow
 	if description == nil || description.decoder == nil {
 		return zero, failure(ErrInput, operation)
 	}
-	return executeNative(ctx, description.client, correlation, Execution{Operation: operation, WorkflowID: description.workflowID, RunID: description.runID}, func(work context.Context, evidence *Execution) (T, error) {
+	identity := description.identity
+	identity.Operation = operation
+	return executeNative(ctx, description.client, correlation, identity, func(work context.Context, evidence *Execution) (T, error) {
 		evidence.NativeCalled = false
 		select {
 		case description.decoding <- struct{}{}:
@@ -487,6 +518,7 @@ func (client *callbackClient) DescribeWorkflow(ctx context.Context, workflowID, 
 			return nil, err
 		}
 		authority := work.Value(nativeCallKey{}).(*nativeCall)
+		identity = descriptionIdentity(work, evidence)
 		identity.Operation = "callback.workflow.describe-decode"
 		return sdk.FathomryScopeWorkflowDescriptionV1(native, authority.scopeOwner, func(decode func() error) error {
 			_, err := callbackNative(context.WithoutCancel(ctx), client, "", identity, func(_ context.Context, evidence *Execution) (struct{}, error) {
@@ -578,16 +610,37 @@ func (run *callbackWorkflowRun) GetWithOptions(ctx context.Context, output any, 
 type callbackValue struct {
 	private
 	native            converter.EncodedValue
+	origin            *nativeCall
+	present           bool
 	borrower          *callbackClient
 	ctx               context.Context
 	workflowID, runID string
+	identityOmitted   bool
 }
 
-func (value *callbackValue) HasValue() bool { return value.native.HasValue() }
+func (value *callbackValue) HasValue() bool { return value.present }
+
+func observeCallbackQueryIdentity(value converter.EncodedValue, evidence *Execution) {
+	var view *callbackValue
+	switch value := value.(type) {
+	case *callbackValue:
+		view = value
+	case *callbackPayloadValue:
+		view = value.callbackValue
+	}
+	if view != nil && evidence != nil {
+		view.workflowID, view.runID, view.identityOmitted = evidence.WorkflowID, evidence.RunID, evidence.IdentityOmitted
+	}
+}
 
 func (value *callbackValue) Get(output any) error {
-	_, err := callbackNative(value.ctx, value.borrower, "", Execution{Operation: "callback.workflow.query-result", WorkflowID: value.workflowID, RunID: value.runID}, func(_ context.Context, evidence *Execution) (struct{}, error) {
-		err := value.native.Get(output)
+	_, err := callbackNative(value.ctx, value.borrower, "", Execution{Operation: "callback.workflow.query-result", WorkflowID: value.workflowID, RunID: value.runID, IdentityOmitted: value.identityOmitted}, func(work context.Context, evidence *Execution) (struct{}, error) {
+		encoded, release, err := transferEncodedValue(work, value.borrower.binding.worker.client.owner, value.origin, value.native)
+		defer release()
+		if err != nil {
+			return struct{}{}, err
+		}
+		err = encoded.Get(output)
 		evidence.ResultObtained = err == nil
 		return struct{}{}, err
 	})
@@ -718,26 +771,46 @@ func (client *callbackClient) CancelWorkflowWithOptions(ctx context.Context, opt
 }
 
 func (client *callbackClient) QueryWorkflow(ctx context.Context, workflowID, runID, query string, args ...any) (converter.EncodedValue, error) {
-	return callbackNative(ctx, client, "", Execution{Operation: "callback.workflow.query", WorkflowID: workflowID, RunID: runID}, func(work context.Context, evidence *Execution) (converter.EncodedValue, error) {
+	var observed *Execution
+	value, err := callbackNative(ctx, client, "", Execution{Operation: "callback.workflow.query", WorkflowID: workflowID, RunID: runID}, func(work context.Context, evidence *Execution) (converter.EncodedValue, error) {
+		observed = evidence
 		value, err := client.nativeClient.QueryWorkflow(work, workflowID, runID, query, args...)
 		evidence.Accepted = err == nil
 		if value != nil {
-			value = &callbackValue{native: value, borrower: client, ctx: context.WithoutCancel(ctx), workflowID: workflowID, runID: runID}
+			var scopeErr error
+			value, scopeErr = newCallbackQueryValue(work, client, ctx, workflowID, runID, value)
+			if scopeErr != nil {
+				return nil, scopeErr
+			}
 		}
 		return value, err
 	})
+	observeCallbackQueryIdentity(value, observed)
+	return value, err
 }
 
 func (client *callbackClient) QueryWorkflowWithOptions(ctx context.Context, options *sdk.QueryWorkflowWithOptionsRequest) (*sdk.QueryWorkflowWithOptionsResponse, error) {
 	if options == nil {
 		return nil, failure(ErrInput, "callback-query")
 	}
-	return callbackNative(ctx, client, "", Execution{Operation: "callback.workflow.query", WorkflowID: options.WorkflowID, RunID: options.RunID}, func(work context.Context, evidence *Execution) (*sdk.QueryWorkflowWithOptionsResponse, error) {
+	var observed *Execution
+	value, err := callbackNative(ctx, client, "", Execution{Operation: "callback.workflow.query", WorkflowID: options.WorkflowID, RunID: options.RunID}, func(work context.Context, evidence *Execution) (*sdk.QueryWorkflowWithOptionsResponse, error) {
+		observed = evidence
 		value, err := client.nativeClient.QueryWorkflowWithOptions(work, options)
 		evidence.Accepted = err == nil
 		if value != nil && value.QueryResult != nil {
-			value.QueryResult = &callbackValue{native: value.QueryResult, borrower: client, ctx: context.WithoutCancel(ctx), workflowID: options.WorkflowID, runID: options.RunID}
+			copy := *value
+			var scopeErr error
+			copy.QueryResult, scopeErr = newCallbackQueryValue(work, client, ctx, options.WorkflowID, options.RunID, value.QueryResult)
+			if scopeErr != nil {
+				return nil, scopeErr
+			}
+			value = &copy
 		}
 		return value, err
 	})
+	if value != nil {
+		observeCallbackQueryIdentity(value.QueryResult, observed)
+	}
+	return value, err
 }

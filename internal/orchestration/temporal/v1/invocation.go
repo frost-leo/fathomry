@@ -53,8 +53,9 @@ import (
 // Results and payloads remain caller-owned, not retained by this evidence record.
 // IDs describe the latest observed native attempt and its successful response,
 // not an atomic ledger of independent targets submitted by custom extensions.
-// IdentityOmitted accompanies ErrLimit when observed IDs exceed the envelope;
-// the original intention's IDs are retained instead, without erasing other facts.
+// IdentityOmitted accompanies ErrLimit when initially observed IDs exceed the
+// envelope; the intention's IDs remain without erasing other facts. A retained
+// Query/description/error-details read carries it even if later decoding succeeds.
 type Execution struct {
 	private
 	Operation              string
@@ -63,6 +64,7 @@ type Execution struct {
 	RunID                  string
 	ActivityID             string
 	UpdateID               string
+	RequestID              string
 	ScheduleID             string
 	NexusOperationID       string
 	DeploymentName         string
@@ -77,17 +79,26 @@ type Execution struct {
 	CancellationRequested  bool
 	ActivityPaused         bool
 	ActivityReset          bool
+	nativeError            error
+	nativeReturned         bool
 }
+
+// NativeCause exposes only this operation's exact captured native return, not an
+// error selected from the attributed evidence graph. The result is sensitive;
+// known lazy errors remain bound to their original retained decoding authority.
+func (value Execution) NativeCause() (error, bool) { return value.nativeError, value.nativeReturned }
 
 // Executions preserves native Temporal operation/options semantics while owning
 // process-local calls and independently retained evidence. It exposes no native
 // client, source Close, or process-global Namespace setting.
 type Executions struct {
 	private
-	owner    *connection
-	access   *resource.Access
-	inbox    *invocation.Inbox[Execution]
-	observer *invocation.Observer
+	owner      *connection
+	access     *resource.Access
+	inbox      *invocation.Inbox[Execution]
+	observer   *invocation.Observer
+	admissions admissions
+	workBytes  int64
 }
 
 // BindExecutions binds a named source to native Workflow/Activity operations.
@@ -136,6 +147,7 @@ type callbackCallKey struct{}
 type nativeCall struct {
 	scopeOwner *sdk.FathomryScopeOwnerV1
 	owner      *connection
+	access     *resource.Access
 	closed     atomic.Bool
 	callback   bool
 	borrower   *callbackClient
@@ -152,6 +164,7 @@ const (
 	identitySchedule
 	identityNexus
 	identityDeployment
+	identityRequest
 	identityCount
 )
 
@@ -202,6 +215,7 @@ func (identity *nativeIdentity) request(request any) {
 		identity.workflow(request.GetExecution())
 	case *workflowservice.ResetWorkflowExecutionRequest:
 		identity.workflow(request.GetWorkflowExecution())
+		identity.set(identityRequest, request.GetRequestId())
 	case *workflowservice.UpdateWorkflowExecutionOptionsRequest:
 		identity.workflow(request.GetWorkflowExecution())
 	case *workflowservice.UpdateWorkflowExecutionRequest:
@@ -382,7 +396,7 @@ func (observed *observedNativeIdentity) apply(evidence *Execution) bool {
 	observed.mu.Lock()
 	defer observed.mu.Unlock()
 	fields := [...]*string{&evidence.WorkflowID, &evidence.RunID, &evidence.ActivityID, &evidence.UpdateID,
-		&evidence.ScheduleID, &evidence.NexusOperationID, &evidence.DeploymentName}
+		&evidence.ScheduleID, &evidence.NexusOperationID, &evidence.DeploymentName, &evidence.RequestID}
 	for field, target := range fields {
 		if observed.identity.fields&(1<<field) != 0 {
 			*target = observed.identity.values[field]
@@ -395,15 +409,15 @@ type executionContext struct{ context.Context }
 
 func (ctx executionContext) Value(key any) any {
 	switch key.(type) {
-	case nativeCallKey, activeRPCKey, taskBindingKey, taskRawKey, executionEvidenceKey, schedulePageKey, callbackCallKey, transportOwnerKey, captureTransportKey:
+	case nativeCallKey, activeRPCKey, taskBindingKey, taskRawKey, executionEvidenceKey, schedulePageKey, callbackCallKey, transportOwnerKey, captureTransportKey, admissionFrameKey:
 		return nil
 	}
 	return ctx.Context.Value(key)
 }
 
 func (value Execution) validIdentity() bool {
-	return len(value.WorkflowID) <= 1024 && len(value.RunID) <= 1024 && len(value.ActivityID) <= 1024 && len(value.UpdateID) <= 1024 && len(value.ScheduleID) <= 1024 && len(value.NexusOperationID) <= 1024 && len(value.DeploymentName) <= 255 &&
-		len(value.WorkflowID)+len(value.RunID)+len(value.ActivityID)+len(value.UpdateID)+len(value.ScheduleID)+len(value.NexusOperationID)+len(value.DeploymentName) <= 3072
+	return len(value.WorkflowID) <= 1024 && len(value.RunID) <= 1024 && len(value.ActivityID) <= 1024 && len(value.UpdateID) <= 1024 && len(value.ScheduleID) <= 1024 && len(value.NexusOperationID) <= 1024 && len(value.DeploymentName) <= 255 && len(value.RequestID) <= 1024 &&
+		len(value.WorkflowID)+len(value.RunID)+len(value.ActivityID)+len(value.UpdateID)+len(value.ScheduleID)+len(value.NexusOperationID)+len(value.DeploymentName)+len(value.RequestID) <= 3072
 }
 
 func executeNative[T any](ctx context.Context, client *Executions, correlation fault.Correlation, evidence Execution, run func(context.Context, *Execution) (T, error)) (T, error) {
@@ -415,13 +429,19 @@ func executeNative[T any](ctx context.Context, client *Executions, correlation f
 		return output, failure(ErrLimit, "execution-identity")
 	}
 	evidence.Namespace = client.Namespace()
-	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: evidence.Operation, Correlation: correlation, Shape: invocation.Finite,
-		Bytes: client.owner.settings.reservation(), EvidenceBytes: ExecutionEvidenceBytes,
-		Admission: invocation.Budget{Limit: client.owner.settings.AdmissionTimeout}}, client.inbox, client.observer)
+	request := invocation.Request{Name: evidence.Operation, Correlation: correlation, Shape: invocation.Finite,
+		Bytes: operationWorkBytes(client.workBytes, client.owner), EvidenceBytes: ExecutionEvidenceBytes,
+		Admission: invocation.Budget{Limit: client.owner.settings.AdmissionTimeout}}
+	parent, scope, err := inheritedAdmission(ctx, client.access, &request)
 	if err != nil {
 		return output, err
 	}
-	return finishNative(ctx, client, call, evidence, run)
+	call, work, finish, err := beginAdmitted(ctx, ctx, parent, request, client.access, scope, client.inbox, client.observer, client.admissions.execution)
+	if err != nil {
+		return output, err
+	}
+	defer finish()
+	return finishNative(work, client, call, evidence, run)
 }
 
 func finishNative[T any](ctx context.Context, client *Executions, call *invocation.Call[Execution], evidence Execution, run func(context.Context, *Execution) (T, error)) (T, error) {
@@ -442,6 +462,7 @@ func finishNative[T any](ctx context.Context, client *Executions, call *invocati
 			evidence.ScheduleID = intention.ScheduleID
 			evidence.NexusOperationID = intention.NexusOperationID
 			evidence.DeploymentName = intention.DeploymentName
+			evidence.RequestID = intention.RequestID
 			evidence.IdentityOmitted = true
 			cause = errors.Join(cause, failure(ErrLimit, "execution-identity"))
 		}
@@ -451,27 +472,39 @@ func finishNative[T any](ctx context.Context, client *Executions, call *invocati
 		}
 	}()
 	_ = call.Execute(ctx, invocation.Budget{Limit: client.owner.settings.RPCTimeout}, func(work context.Context, _ invocation.Scope) invocation.Outcome[Execution] {
+		frame := newAdmissionFrame(ctx, client.access, call)
+		defer frame.closed.Store(true)
 		borrower, callback := ctx.Value(callbackCallKey{}).(*callbackClient)
-		authority := &nativeCall{owner: client.owner, callback: callback, borrower: borrower, scopeOwner: sdk.NewFathomryScopeOwnerV1(), identity: &identity}
+		authority := &nativeCall{owner: client.owner, access: client.access, callback: callback, borrower: borrower, scopeOwner: sdk.NewFathomryScopeOwnerV1(), identity: &identity}
+		if borrower != nil && borrower.binding != nil {
+			authority.scopeOwner = sdk.NewFathomryChildScopeOwnerV1(borrower.binding.decoderGroup)
+		}
 		defer authority.closed.Store(true)
 		// Native propagators/tracers need application values, but neither stale
 		// ownership markers nor caller transport credentials carry into this call.
 		work = metadata.NewOutgoingContext(executionContext{work}, nil)
 		work = context.WithValue(work, nativeCallKey{}, authority)
+		work = withEncodedValueDecoder(work, authority)
 		work = context.WithValue(work, activeRPCKey{}, call)
 		work = context.WithValue(work, executionEvidenceKey{}, &evidence)
+		work = context.WithValue(work, admissionFrameKey{}, frame)
 		evidence.NativeCalled = true
 		output, err = run(work, &evidence)
 		oversized := !evidence.validIdentity()
-		if identity.apply(&evidence) || oversized {
+		identityOmitted := identity.apply(&evidence) || oversized
+		if identityOmitted {
 			evidence.WorkflowID, evidence.RunID, evidence.ActivityID, evidence.UpdateID = intention.WorkflowID, intention.RunID, intention.ActivityID, intention.UpdateID
 			evidence.ScheduleID = intention.ScheduleID
 			evidence.NexusOperationID = intention.NexusOperationID
 			evidence.DeploymentName = intention.DeploymentName
+			evidence.RequestID = intention.RequestID
 			evidence.IdentityOmitted = true
-			err = errors.Join(err, failure(ErrLimit, "execution-identity"))
 		}
 		err = scopeNativeError(work, client, evidence, err)
+		evidence.nativeError, evidence.nativeReturned = err, true
+		if identityOmitted {
+			err = errors.Join(err, failure(ErrLimit, "execution-identity"))
+		}
 		if err != nil {
 			err = failure(ErrExecution, evidence.Operation, err, work.Err(), context.Cause(work))
 		}
@@ -482,7 +515,7 @@ func finishNative[T any](ctx context.Context, client *Executions, call *invocati
 	if !ok {
 		return output, failure(ErrExecution, evidence.Operation)
 	}
-	return output, result.Err()
+	return output, semanticFailure(result.Err(), evidence.nativeError, evidence.nativeReturned)
 }
 
 func scopeNativeError(ctx context.Context, client *Executions, origin Execution, cause error) error {
@@ -490,7 +523,8 @@ func scopeNativeError(ctx context.Context, client *Executions, origin Execution,
 		return nil
 	}
 	identity := Execution{Operation: "execution.error-details", WorkflowID: origin.WorkflowID, RunID: origin.RunID, ActivityID: origin.ActivityID,
-		UpdateID: origin.UpdateID, ScheduleID: origin.ScheduleID, NexusOperationID: origin.NexusOperationID, DeploymentName: origin.DeploymentName}
+		UpdateID: origin.UpdateID, ScheduleID: origin.ScheduleID, NexusOperationID: origin.NexusOperationID, DeploymentName: origin.DeploymentName, IdentityOmitted: origin.IdentityOmitted}
+	identity.RequestID = origin.RequestID
 	authority, _ := ctx.Value(nativeCallKey{}).(*nativeCall)
 	if authority == nil {
 		return cause
@@ -505,7 +539,7 @@ func scopeNativeError(ctx context.Context, client *Executions, origin Execution,
 			_, err := callbackNative(context.WithoutCancel(ctx), callback, "", identity, invoke)
 			return err
 		}
-		_, err := executeNative(context.WithoutCancel(ctx), client, fault.Correlation{Call: uuid.NewString()}, identity, invoke)
+		_, err := executeNative(context.WithoutCancel(executionContext{ctx}), client, fault.Correlation{Call: uuid.NewString()}, identity, invoke)
 		return err
 	})
 }
@@ -514,6 +548,17 @@ func validateNativeRequest(ctx context.Context, value settings, request any) err
 	input, ok := request.(proto.Message)
 	if !ok || !input.ProtoReflect().IsValid() {
 		return failure(ErrInput, "native-request")
+	}
+	if reset, ok := request.(*workflowservice.ResetWorkflowExecutionRequest); ok {
+		if evidence, ok := ctx.Value(executionEvidenceKey{}).(*Execution); ok &&
+			(evidence.Operation == "workflow.reset" || evidence.Operation == "callback.resetworkflowexecution") {
+			if len(reset.RequestId) > 1024 {
+				return failure(ErrLimit, "reset-request-id")
+			}
+			if !validText(reset.RequestId, 1024) {
+				return failure(ErrInput, "reset-request-id")
+			}
+		}
 	}
 	if namespace := input.ProtoReflect().Descriptor().Fields().ByName("namespace"); namespace != nil {
 		if namespace.Kind() != protoreflect.StringKind || input.ProtoReflect().Get(namespace).String() != value.Namespace {
@@ -528,13 +573,15 @@ func boundedNativeRPC(ctx context.Context, value settings, method string, reques
 	if err := validateNativeRequest(ctx, value, request); err != nil {
 		return err
 	}
-	options = append(slices.Clone(options), grpc.MaxCallSendMsgSize(value.MaxRequestBytes), grpc.MaxCallRecvMsgSize(value.MaxResponseBytes))
+	options = boundedCallOptions(value, options)
 	err := next(ctx, method, request, reply, connection, options...)
 	if page, ok := ctx.Value(schedulePageKey{}).(*schedulePage); ok && err == nil {
 		switch response := reply.(type) {
 		case *workflowservice.ListSchedulesResponse:
 			page.more = len(response.NextPageToken) > 0
 		case *workflowservice.ListWorkerDeploymentsResponse:
+			page.more = len(response.NextPageToken) > 0
+		case *workflowservice.ListDeploymentsResponse:
 			page.more = len(response.NextPageToken) > 0
 		case *workflowservice.GetWorkflowExecutionHistoryResponse:
 			page.more = len(response.NextPageToken) > 0
@@ -599,13 +646,15 @@ func (worker *Worker) beginTask(ctx context.Context, evidence TaskResult) (*invo
 		return nil, nil, taskAdmission(failure(ErrLimit, "task-handlers"))
 	}
 	correlation := fault.Correlation{Call: uuid.NewString(), Parent: worker.correlation.Call}
-	call, err := invocation.BeginNested(ctx, worker.call.Scope(), invocation.Request{Name: "task." + evidence.Kind, Correlation: correlation, Shape: invocation.Finite,
-		EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: worker.client.owner.settings.AdmissionTimeout}}, worker.tasks, worker.client.observer)
+	request := invocation.Request{Name: "task." + evidence.Kind, Correlation: correlation, Shape: invocation.Finite,
+		EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: worker.client.owner.settings.AdmissionTimeout}}
+	scope := worker.call.Scope()
+	call, work, finish, err := beginAdmitted(ctx, ctx, worker.admissionContext, request, worker.client.access, &scope, worker.tasks, worker.client.observer, worker.client.admissions.task)
 	if err != nil {
 		<-worker.handlers
 		return nil, nil, taskAdmission(err)
 	}
-	return call, &taskBinding{worker: worker, scope: call.Scope(), correlation: correlation}, nil
+	return call, &taskBinding{worker: worker, scope: call.Scope(), correlation: correlation, admissionContext: work, finish: finish, decoderGroup: sdk.NewFathomryScopeOwnerV1()}, nil
 }
 
 func taskAdmission(cause error) error {
@@ -646,13 +695,8 @@ func (connection *callbackConnection) Invoke(ctx context.Context, method string,
 	if ctx == nil || connection.binding == nil {
 		return failure(ErrAuthority, "callback-context")
 	}
-	if len(options) > 1 {
-		return failure(ErrAuthority, "callback-rpc-options")
-	}
-	for _, option := range options {
-		if _, ok := option.(grpc.StaticMethodCallOption); !ok {
-			return failure(ErrAuthority, "callback-rpc-options")
-		}
+	if err := validateCallOptions(connection.binding.worker.client.owner.settings, options); err != nil {
+		return err
 	}
 	ctx = metadata.NewOutgoingContext(executionContext{ctx}, nil)
 	ctx = context.WithValue(ctx, taskBindingKey{}, connection.binding)
@@ -672,27 +716,48 @@ func (binding *taskBinding) invoke(ctx context.Context, owner *connection, metho
 		return failure(ErrAuthority, "callback-rpc")
 	}
 	name := "callback." + strings.ToLower(method[strings.LastIndexByte(method, '/')+1:])
-	call, err := invocation.BeginNested(ctx, binding.scope, invocation.Request{Name: name, Correlation: fault.Correlation{Call: uuid.NewString(), Parent: binding.correlation.Call},
-		Shape: invocation.Finite, EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: owner.settings.AdmissionTimeout}}, binding.worker.client.inbox, binding.worker.client.observer)
+	requestInfo := invocation.Request{Name: name, Correlation: fault.Correlation{Call: uuid.NewString(), Parent: binding.correlation.Call},
+		Shape: invocation.Finite, EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: owner.settings.AdmissionTimeout}}
+	client := binding.worker.client
+	call, admitted, finish, err := beginAdmitted(ctx, ctx, binding.admissionContext, requestInfo, client.access, &binding.scope, client.inbox, client.observer, client.admissions.execution)
 	if err != nil {
 		return err
 	}
+	defer finish()
 	var nativeError error
 	invoked := false
-	_ = call.Execute(ctx, invocation.Budget{Limit: owner.settings.RPCTimeout}, func(work context.Context, _ invocation.Scope) invocation.Outcome[Execution] {
+	evidence := Execution{Operation: name, Namespace: owner.settings.Namespace}
+	returned := false
+	defer func() {
+		if returned {
+			return
+		}
+		recovered := recover()
+		call.Complete(invocation.Outcome[Execution]{Value: evidence, Present: true, Primary: failure(ErrExecution, "native-exit")})
+		if recovered != nil {
+			panic(recovered)
+		}
+	}()
+	_ = call.Execute(admitted, invocation.Budget{Limit: owner.settings.RPCTimeout}, func(work context.Context, _ invocation.Scope) invocation.Outcome[Execution] {
+		frame := newAdmissionFrame(admitted, client.access, call)
+		defer frame.closed.Store(true)
 		var identity observedNativeIdentity
-		authority := &nativeCall{owner: owner, callback: true, scopeOwner: sdk.NewFathomryScopeOwnerV1(), identity: &identity}
+		authority := &nativeCall{owner: owner, callback: true, scopeOwner: sdk.NewFathomryChildScopeOwnerV1(binding.decoderGroup), identity: &identity}
 		defer authority.closed.Store(true)
 		work = metadata.NewOutgoingContext(work, nil)
 		work = context.WithValue(work, activeRPCKey{}, call)
 		work = context.WithValue(work, nativeCallKey{}, authority)
+		work = context.WithValue(work, admissionFrameKey{}, frame)
 		invoked = true
+		evidence.NativeCalled = true
 		nativeError = boundedNativeRPC(work, owner.settings, method, request, reply, connection, next, options...)
 		err := nativeError
-		evidence := Execution{Operation: name, Namespace: owner.settings.Namespace, NativeCalled: true, Accepted: err == nil}
+		evidence.Accepted = err == nil
+		evidence.nativeError, evidence.nativeReturned = nativeError, true
 		if identity.apply(&evidence) {
 			evidence.WorkflowID, evidence.RunID, evidence.ActivityID, evidence.UpdateID = "", "", "", ""
 			evidence.ScheduleID, evidence.NexusOperationID, evidence.DeploymentName = "", "", ""
+			evidence.RequestID = ""
 			evidence.IdentityOmitted = true
 			nativeError = errors.Join(nativeError, failure(ErrLimit, "execution-identity"))
 			err = nativeError
@@ -702,6 +767,7 @@ func (binding *taskBinding) invoke(ctx context.Context, owner *connection, metho
 		}
 		return invocation.Outcome[Execution]{Value: evidence, Present: true, Primary: err}
 	})
+	returned = true
 	if invoked {
 		return nativeError
 	}
@@ -759,23 +825,20 @@ func callbackNative[T any](ctx context.Context, client *callbackClient, namespac
 		return output, failure(ErrLimit, "execution-identity")
 	}
 	evidence.Namespace = executions.Namespace()
-	call, err := invocation.BeginNested(ctx, client.binding.scope, invocation.Request{Name: evidence.Operation,
+	request := invocation.Request{Name: evidence.Operation,
 		Correlation: fault.Correlation{Call: uuid.NewString(), Parent: client.binding.correlation.Call}, Shape: invocation.Finite,
-		EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: executions.owner.settings.AdmissionTimeout}}, executions.inbox, executions.observer)
+		EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: executions.owner.settings.AdmissionTimeout}}
+	call, admitted, finish, err := beginAdmitted(ctx, ctx, client.binding.admissionContext, request, executions.access, &client.binding.scope, executions.inbox, executions.observer, executions.admissions.execution)
 	if err != nil {
 		return output, err
 	}
-	var nativeError error
-	returned := false
-	scopedContext := context.WithValue(ctx, callbackCallKey{}, client)
-	output, err = finishNative(scopedContext, executions, call, evidence, func(work context.Context, evidence *Execution) (T, error) {
-		result, err := invoke(work, evidence)
-		nativeError = scopeNativeError(work, executions, *evidence, err)
-		returned = true
-		return result, err
-	})
-	if returned && nativeError != nil {
-		return output, nativeError
+	defer finish()
+	scopedContext := context.WithValue(admitted, callbackCallKey{}, client)
+	output, err = finishNative(scopedContext, executions, call, evidence, invoke)
+	if result, present := call.Receipt().Result(); present && result.Outcome.Present {
+		if nativeError, captured := result.Outcome.Value.NativeCause(); captured && nativeError != nil {
+			return output, nativeError
+		}
 	}
 	return output, err
 }

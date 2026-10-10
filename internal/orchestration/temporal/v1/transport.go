@@ -23,6 +23,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -30,6 +31,66 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
+
+// TLS option containers are copied. Encoded material, keys and parsed trust
+// objects stay borrowed and must not be mutated during use; callback, cache and
+// I/O objects remain borrowed and concurrency-safe through actual shutdown.
+// Config.Clone alone is shallow.
+func copyTLSContainers(original *tls.Config) *tls.Config {
+	if original == nil {
+		return nil
+	}
+	config := original.Clone()
+	config.NextProtos = slices.Clone(config.NextProtos)
+	config.CipherSuites = slices.Clone(config.CipherSuites)
+	config.CurvePreferences = slices.Clone(config.CurvePreferences)
+	config.Certificates = slices.Clone(config.Certificates)
+	for index := range config.Certificates {
+		config.Certificates[index] = copyTLSCertificateContainers(config.Certificates[index])
+	}
+	if config.NameToCertificate != nil {
+		config.NameToCertificate = make(map[string]*tls.Certificate, len(original.NameToCertificate))
+		for name, certificate := range original.NameToCertificate {
+			var copied *tls.Certificate
+			if certificate != nil {
+				value := copyTLSCertificateContainers(*certificate)
+				copied = &value
+			}
+			config.NameToCertificate[name] = copied
+		}
+	}
+	config.EncryptedClientHelloKeys = slices.Clone(config.EncryptedClientHelloKeys)
+	return config
+}
+
+func copyTLSCertificateContainers(certificate tls.Certificate) tls.Certificate {
+	certificate.Certificate = slices.Clone(certificate.Certificate)
+	certificate.SignedCertificateTimestamps = slices.Clone(certificate.SignedCertificateTimestamps)
+	certificate.SupportedSignatureAlgorithms = slices.Clone(certificate.SupportedSignatureAlgorithms)
+	return certificate
+}
+
+// This is a declared container charge, not a measurement of native TLS heap.
+// Encoded byte material and referenced runtime objects are borrowed, not copied.
+func tlsContainerBytes(config *tls.Config) int64 {
+	if config == nil {
+		return 0
+	}
+	bytes := int64(4096) + int64(len(config.NextProtos))*32 + int64(len(config.CipherSuites)+len(config.CurvePreferences))*8 + int64(len(config.EncryptedClientHelloKeys))*128
+	certificateBytes := func(certificate tls.Certificate) int64 {
+		return 1024 + int64(len(certificate.Certificate)+len(certificate.SignedCertificateTimestamps))*32 + int64(len(certificate.SupportedSignatureAlgorithms))*8
+	}
+	for _, certificate := range config.Certificates {
+		bytes += certificateBytes(certificate)
+	}
+	for _, certificate := range config.NameToCertificate {
+		bytes += 64
+		if certificate != nil {
+			bytes += certificateBytes(*certificate)
+		}
+	}
+	return bytes
+}
 
 // gRPC may return from TLS cancellation while its native handshake goroutine is
 // still in a caller hook (including opaque x509 CertPool constraints). This gate
@@ -39,6 +100,9 @@ type transportLifetime struct {
 	changed           *sync.Cond
 	closing, released bool
 	active            int
+	dialing           int
+	connections       map[*ownedDialConnection]struct{}
+	resolvers         map[*ownedResolver]struct{}
 }
 
 func (scope *transportLifetime) enter(cleanup bool) bool {
@@ -76,11 +140,26 @@ func (scope *transportLifetime) close(release func()) {
 		scope.released = true
 	}()
 	release()
+	scope.mu.Lock()
+	connections := make([]*ownedDialConnection, 0, len(scope.connections))
+	for connection := range scope.connections {
+		connections = append(connections, connection)
+	}
+	resolvers := make([]*ownedResolver, 0, len(scope.resolvers))
+	for resolver := range scope.resolvers {
+		resolvers = append(resolvers, resolver)
+	}
+	scope.mu.Unlock()
+	for _, connection := range connections {
+		_ = connection.Close()
+	}
+	for _, resolver := range resolvers {
+		resolver.Close()
+	}
 }
 
 func (scope *transportLifetime) secureDialOptions(options []grpc.DialOption, config *tls.Config) []grpc.DialOption {
-	// The SDK applies mTLS Credentials after plugin configuration. Defer the
-	// native config clone until gRPC first uses credentials, after that step.
+	// Install only after native credentials have finalized the TLS config.
 	native := sync.OnceValue(func() credentials.TransportCredentials { return credentials.NewTLS(config) })
 	return append(options, grpc.WithTransportCredentials(&ownedTransportCredentials{native: native, scope: scope}))
 }

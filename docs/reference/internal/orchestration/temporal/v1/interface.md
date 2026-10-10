@@ -65,9 +65,14 @@ service/deployment combinations.
 Endpoints accept explicit `host:port`, `dns:///host:port` and
 `passthrough:///host:port` targets. DNS targets may specify a resolver authority;
 its omitted port uses native port 53, while the Temporal service port is required.
-Native DNS resolution and round-robin behavior remain unchanged. Custom resolver
-schemes, process-global resolver replacement and opaque gRPC dial-option overrides
-are not part of this owned transport profile.
+Native DNS resolution and round-robin behavior remain unchanged. Explicit
+source-local ResolverBindings support controlled additional schemes; ContextDialer
+selects an explicit native/proxy route and UserAgent is bounded. Resolver/dial/I/O
+callbacks and transferred connections are retained through actual termination.
+Each transport permits at most 32 concurrent dial/connection slots. Global resolver
+overrides, environment proxy discovery, service-config overrides and opaque
+DialOptions remain refused. Native mTLS credentials are applied before the final
+owned TLS hook; copied setup inputs and effective credentials are both preserved.
 `OptionsV1.Lazy` selects native lazy construction without a service RPC. Capturing
 the private transport does not invoke it or invent readiness; the first admitted
 native operation discovers capabilities when required by the SDK. `Profile` keeps
@@ -80,6 +85,18 @@ envelope until derived-source cleanup completes. Derived binding limits must fit
 that envelope. Namespace and per-source admission remain distinct; the native
 transport, authentication and connection-level RPC instrumentation are inherited.
 This is not a new account-wide rate limiter or a second connection pool.
+
+`PrepareV1` and `PrepareFromExistingV1` expose one frozen selection and its
+authoritative default metadata without extension callbacks. The public Adapter
+adds its declared family/evidence costs and can install `WithWorkEnvelope` over
+the exact bound Access. Roots reserve that envelope; bounded child calls share it.
+Reusing a prepared derived selection requires the same connection owner, retained
+Access scope and declared parent envelope. Correlation-only facade copies retain
+that identity; a distinct Borrow of the same transport does not.
+`WithAdmissions` / `WithRPCAdmission` reserve the public boundary synchronously
+before Inner BeginClaimed. Source construction is reserved by the outer Open;
+Worker, task, explicit operation, callback RPC and delayed-decode scopes are
+distinct. No post-hoc forwarding queue substitutes for these entry boundaries.
 
 Native derivation is always eager, including from a lazy parent. Both direct and
 resolved layered `Lazy` settings are rejected for derivation. Transport overrides
@@ -169,10 +186,30 @@ before Client construction returns. Typed nil is rejected before construction.
 For Update-with-Start, create `NewWithStartWorkflowOperation`, then pass it to
 `UpdateWithStartWorkflow` with native Update options. Its `Get` independently
 observes the start; an Update wait failure does not erase an already acknowledged
-start. The intention is source-bound and single-use after native entry. Evidence
+start. The intention is retained-use-bound and single-use after native entry. Two
+independent Borrow aliases cannot transfer it merely by sharing a source. Evidence
 admission refusal does not consume it. Options and arguments are borrowed until
 the combined call returns. A new intention is not automatically a safe retry:
 native IDs and conflict/reuse policies still determine its meaning.
+
+`ResetWorkflowExecution` returns both the native response and effective RequestID,
+including unknown-response cases. It clones caller input before native defaulting
+and retains a supported request hook's final identity. Execution-option update,
+deprecated Scan, DeploymentClient and build-ID/reachability/versioning-rule
+conveniences call the native validators/converters under their exact grants;
+raw protobuf routes do not replace these ordinary direct semantics.
+
+QueryValue similarly captures native presence and retains one encoded query reply
+and its original converter. Get and optional RawPayloads are separately admitted
+and serialized; the latter copies bounded native payloads. Neither reissues the
+query. External storage stays at the native initial-response retrieval stage.
+Custom encoded wrappers around borrowed interceptor results use the explicit
+`FathomryMapEncodedValueV1` copy-and-map contract described in the
+[public Adapter reference](../../../../adapters/orchestration/temporal/v1/interface.md).
+Only exact-origin children transfer into the admitted consumption window; original
+aliases are not revived. Copied views are sealed together before entered decodes
+are joined. Mapping has separate depth/node limits and does not create an
+additional admission queue or a general-purpose object-graph traversal.
 
 `WorkflowRun` getters are local identity snapshots, never hidden RPCs. A detached
 empty RunID remains unknown until an admitted result observation resolves it.
@@ -196,6 +233,8 @@ wrapper defaults cannot replace that target. This is the latest observed native
 attempt, not proof of remote acceptance or a multi-target effects ledger for custom
 extensions. Oversized observed identities retain the documented intention-only
 fallback with `IdentityOmitted` and `ErrLimit`.
+Retained Query, description and error-details reads preserve that flag when later
+decoding succeeds; decoding does not recover an omitted effective target.
 
 `QueryWorkflowWithOptions` preserves native headers and state-rejection conditions.
 It decodes successful results inside admission and returns a caller-owned native
@@ -244,15 +283,18 @@ presence methods through `ActivityDescription`; decoder getters are separately
 admitted and serialized. The native description getters use background contexts
 internally: observation cancellation cannot forcibly interrupt their conversion or
 payload visitor, and the lease remains held until return. Raw metadata/payloads
-are caller-owned; do not mutate/read them concurrently with decoding. This is not
-yet an external-payload/codec qualification.
+are caller-owned; do not mutate/read them concurrently with decoding. Bounded
+native external-payload/codec controls do not qualify arbitrary storage backends,
+retention policies or UI retrieval.
 
 `CountActivities` preserves native visibility aggregation semantics. Experimental
 `Pause`, `Unpause`, `UpdateOptions` and `RestoreOriginalOptions` require their exact
 configured operational RPC grants. Native clear/set/no-change, jitter and restore
 semantics remain unchanged; a grant does not enable a namespace feature, and
 Unimplemented remains an error. No operational feature flag is changed implicitly.
-High-level Activity enumeration and remaining operational profiles are still open.
+`WalkActivities` provides controlled native enumeration. Implemented operational
+routes and their local conversion tests do not certify a namespace where the
+corresponding experimental Server feature remains disabled or unavailable.
 
 ## Nexus handlers and backed operations
 
@@ -442,9 +484,11 @@ that limit, `ErrLimit` and `IdentityOmitted` retain the original intention's IDs
 instead; other acknowledged facts are not discarded. The caller-owned native
 response/handle is not silently truncated.
 
-Per-call gRPC options may request metadata/peer observations, wait-for-ready, or
+Direct and callback per-call gRPC options may request metadata/peer observations, wait-for-ready, or
 smaller message caps. Codec, credential, authority and callback overrides are
 refused because they would bypass the selected transport/ownership boundary.
+The 32-option bound includes generated StaticMethod. Non-nil output containers are
+borrowed until return; tighter explicit send/receive caps are never widened.
 Source configuration supports explicit plaintext or verified TLS, optional mTLS,
 static or native runtime credentials, explicit header providers and native
 connection options. Opaque dial-chain overrides are refused. Caller/interceptor
@@ -471,6 +515,23 @@ response bytes. Native causes remain inspectable with `errors.Is/As`; ordinary
 Provider-fault formatting does not expose native messages or raw payloads. This
 does not sanitize messages deliberately sent to an explicitly supplied SDK logger.
 
+`NativeError` accepts only the direct known semantic frame; Execution/RPCResult
+also retain their captured NativeCause independently. These deliberately sensitive
+paths are separate from ordinary fault/public formatting and never guess a cause
+from an arbitrary user graph. `WithRPCErrorMapper` affects only direct generated
+return errors, not native callback returns or independent evidence.
+
+Managed polling clients wrap native failure conversion without changing its
+serialization context. A returned callback-derived known error can carry an
+isolated finalization copy: only the task group's existing decoder restrictions
+are temporarily replaced during synchronous ErrorToFailure. The conversion window
+seals and joins entered decodes on return/panic/Goexit, using existing Worker
+ownership, not fresh admission. Retained callback Clients and original error
+aliases stay expired. Unscoped user errors and opaque wrapper/join graphs are not
+automatically rewritten. Custom lazy errors needing this transfer explicitly
+implement the SDK's opaque scope-mapping cooperation hook; legacy guard-only
+cooperation remains supported for ordinary scoped decoding, not finalization.
+
 An SDK-decoded `serviceerror.Unimplemented` remains an error. Protocol presence,
 GetSystemInfo success and a server version never turn it into an empty success.
 The compatibility profile records actual selected settings and the observed server
@@ -485,6 +546,13 @@ never attest external business effects. Native service cancellation can precede
 local context cancellation and is not rewritten as an invented local context error.
 
 ## Executable evidence and remaining work
+
+The service/UI qualification descriptions below record the previously qualified
+Internal fixtures and their selected profiles. They are not a claim that every
+historical fixture was rerun for the public Adapter change. The public Adapter's
+`service_integration_test.go` separately exercises its finite technical service
+groups, with explicit authorization, exact test-owned cleanup and no UI access.
+See the [public verification boundary](../../../../adapters/orchestration/temporal/v1/interface.md#independent-consumers-and-verification).
 
 `integration_test.go` exercises actual SDK/gRPC loopback composition, shared alias
 saturation, independent evidence after handled errors, response-loss uncertainty,
@@ -565,8 +633,8 @@ updates, and compares actual Server DST previews with fixed UTC expectations for
 the spring gap and fall fold. Owned deletions are followed by absence observations.
 
 The separately maintained [native lifecycle extension](../../../../../../third_party/temporal-sdk/FATHOMRY.md)
-supports managed Worker joins and has its own native controls. The selected
-Server 1.32.0 / UI 2.54.1 browser profile verifies Workflow identity, history,
+supports managed Worker joins and has its own native controls. The historical
+Server 1.32.0 / UI 2.54.1 browser profile verified Workflow identity, history,
 metadata, Query results and codec rendering, with an encoded-payload negative
 control. It does not qualify external-storage UI, arbitrary UI authorization or
 container security. Historical business migration, unselected backends and a
