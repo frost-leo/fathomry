@@ -46,6 +46,12 @@ Share a mechanism only when its contract is genuinely shared. Native translation
 and lifetime mappings remain provider-owned. Constructors, validation and offline
 catalogs must not install global loggers, exporters or registries.
 
+Each public capability category has a versioned category contract package, with
+concrete providers below it. Keep real SDK-independent data contracts there;
+do not fill a category with placeholder clients or invent identical APIs across
+capability, preparation and logging-data roles. The package-inventory gate rejects
+categories that have only provider packages and no category contract layer.
+
 ## PA-02 — Separate configuration from live authority
 
 Where a provider exposes `Settings` and `Dependencies`, keep loadable data

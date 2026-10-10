@@ -36,6 +36,27 @@ func (Settings) Format(state fmt.State, verb rune)     { private{}.Format(state,
 func (TLS) Format(state fmt.State, verb rune)          { private{}.Format(state, verb) }
 func (Dependencies) Format(state fmt.State, verb rune) { private{}.Format(state, verb) }
 
+func (Info) String() string                            { return private{}.String() }
+func (Info) GoString() string                          { return private{}.GoString() }
+func (Info) Format(state fmt.State, verb rune)         { private{}.Format(state, verb) }
+func (Info) MarshalJSON() ([]byte, error)              { return private{}.MarshalJSON() }
+func (*Info) UnmarshalJSON(data []byte) error          { return (&private{}).UnmarshalJSON(data) }
+func (Attribution) String() string                     { return private{}.String() }
+func (Attribution) GoString() string                   { return private{}.GoString() }
+func (Attribution) Format(state fmt.State, verb rune)  { private{}.Format(state, verb) }
+func (Attribution) MarshalJSON() ([]byte, error)       { return private{}.MarshalJSON() }
+func (*Attribution) UnmarshalJSON(data []byte) error   { return (&private{}).UnmarshalJSON(data) }
+func (SignalResult) String() string                    { return private{}.String() }
+func (SignalResult) GoString() string                  { return private{}.GoString() }
+func (SignalResult) Format(state fmt.State, verb rune) { private{}.Format(state, verb) }
+func (SignalResult) MarshalJSON() ([]byte, error)      { return private{}.MarshalJSON() }
+func (*SignalResult) UnmarshalJSON(data []byte) error  { return (&private{}).UnmarshalJSON(data) }
+func (Fact) String() string                            { return private{}.String() }
+func (Fact) GoString() string                          { return private{}.GoString() }
+func (Fact) Format(state fmt.State, verb rune)         { private{}.Format(state, verb) }
+func (Fact) MarshalJSON() ([]byte, error)              { return private{}.MarshalJSON() }
+func (*Fact) UnmarshalJSON(data []byte) error          { return (&private{}).UnmarshalJSON(data) }
+
 // LogValue redacts configured endpoints, headers and credentials. Normalize
 // optional nil Settings pointers to untyped nil before logging.
 func (Settings) LogValue() slog.Value      { return private{}.LogValue() }

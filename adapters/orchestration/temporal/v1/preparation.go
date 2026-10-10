@@ -83,7 +83,7 @@ func PrepareFromExisting(value Settings, options NativeOptions, parent *Client) 
 	if parent == nil || parent.use == nil {
 		return Prepared{}, fail(ErrInput, "prepare-shared")
 	}
-	nativePrepared, err := native.PrepareFromExistingV1(value.native(), options.native(), parent.raw, parent.use.owner.policy.nativeLimits.Bytes)
+	nativePrepared, err := native.PrepareFromExistingV1(value.native(), options.native(), parent.raw, parent.use.owner.prepared.nativeLimits().Bytes)
 	if err != nil {
 		return Prepared{}, translate(err, "prepare")
 	}
@@ -91,11 +91,11 @@ func PrepareFromExisting(value Settings, options NativeOptions, parent *Client) 
 	if err != nil {
 		return Prepared{}, err
 	}
-	policy, err := prepared.Policy()
+	_, err = prepared.Policy()
 	if err != nil {
 		return Prepared{}, err
 	}
-	prepared.native, err = native.PrepareFromExistingV1(value.native(), options.native(), parent.raw, policy.nativeLimits.Bytes)
+	prepared.native, err = native.PrepareFromExistingV1(value.native(), options.native(), parent.raw, prepared.nativeLimits().Bytes)
 	prepared.parent = parent
 	return prepared, translate(err, "prepare")
 }

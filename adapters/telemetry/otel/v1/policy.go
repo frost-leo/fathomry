@@ -19,27 +19,18 @@
 
 package otel
 
-import "github.com/frost-leo/fathomry/adapters/v1"
+import "github.com/frost-leo/fathomry/adapters/telemetry/v1"
 
 const publicMetadataBytes int64 = 64 << 10
 const exportLoopBytes int64 = 4096
 
 // Budget covers one operation, including its native bridge and detached public
 // observation. It is a declared envelope, not a measured heap/RSS limit.
-type Budget struct {
-	WorkBytes     int64 `json:"work_bytes"`
-	EvidenceBytes int64 `json:"evidence_bytes"`
-}
+type Budget = telemetry.Budget
 
 // Policy explicitly reserves overlapping native sources and public roots.
 // Active span calls consume normal root slots; no hidden Flush slot is promised.
-type Policy struct {
-	Budget              Budget
-	Runtime             adapters.Options
-	Evidence            adapters.EvidenceOptions
-	SourceWorkBytes     int64
-	SourceEvidenceBytes int64
-}
+type Policy = telemetry.Policy
 
 // Recommend covers exactly one source. Compose covers all simultaneously owned
 // generations; a retired source remains charged until actual native release.

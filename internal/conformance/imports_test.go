@@ -124,6 +124,8 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		}
 		switch path {
 		case "github.com/frost-leo/fathomry/adapters/broker/v1",
+			"github.com/frost-leo/fathomry/adapters/orchestration/v1",
+			"github.com/frost-leo/fathomry/adapters/telemetry/v1",
 			"github.com/frost-leo/fathomry/adapters/httpclient/v1",
 			"github.com/frost-leo/fathomry/adapters/httpclient/nethttp/v1",
 			"github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1",

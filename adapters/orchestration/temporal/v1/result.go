@@ -20,20 +20,13 @@
 package temporal
 
 import (
+	"github.com/frost-leo/fathomry/adapters/orchestration/v1"
 	native "github.com/frost-leo/fathomry/internal/orchestration/temporal/v1"
 	enumspb "go.temporal.io/api/enums/v1"
 )
 
 // Attribution identifies actual local use, not a remote effect or business run.
-type Attribution struct {
-	private
-	// SourceID distinguishes physical source constructions, even with identical
-	// names. UseID distinguishes retained aliases; zero denotes the source owner.
-	SourceID        string
-	UseID           uint64
-	Name, Namespace string
-	Generation      uint64
-}
+type Attribution orchestration.Attribution
 
 // Execution is detached process-operation evidence. NativeCalled alone proves
 // neither remote acceptance nor remote completion. Payloads/tokens are excluded.

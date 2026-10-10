@@ -20,6 +20,7 @@
 package temporal
 
 import (
+	"github.com/frost-leo/fathomry/adapters/orchestration/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	source "github.com/frost-leo/fathomry/internal/resource"
 )
@@ -29,21 +30,18 @@ const publicUseBytes int64 = 4096
 
 // Budget bounds the selected source profile admitted through a resource binding.
 // It is a declared working/evidence envelope, not native heap or a remote quota.
-type Budget struct {
-	WorkBytes     int64 `json:"work_bytes"`
-	WorkerBytes   int64 `json:"worker_bytes"`
-	EvidenceBytes int64 `json:"evidence_bytes"`
-}
+type Budget = orchestration.Budget
 
 // Policy covers one source and independently draining operation/Worker/task
 // receivers. Concurrent generations require explicit composition of these costs.
-type Policy struct {
-	Budget                               Budget
-	Runtime                              adapters.Options
-	Evidence, Workers, Tasks             adapters.EvidenceOptions
-	SourceWorkBytes, SourceEvidenceBytes int64
-	NativeWorkBytes, NativeWorkerBytes   int64
-	nativeLimits                         source.Limits
+type Policy = orchestration.Policy
+
+func (prepared Prepared) nativeLimits() source.Limits {
+	meta := prepared.metadata
+	work := max(int64(prepared.settings.FamilyLimit)*meta.WorkBytes, prepared.settings.WorkerWorkBytes)
+	return source.Limits{Active: meta.MaxActive, Queued: meta.QueuedCalls,
+		Bytes: int64(meta.MaxActive) * work, QueuedBytes: int64(meta.QueuedCalls) * work,
+		MaxLeases: prepared.settings.FamilyLimit}
 }
 
 // Recommend prepares the data-only profile. For native extensions use Prepare
@@ -70,7 +68,6 @@ func (prepared Prepared) Policy() (Policy, error) {
 		int64(count)*(3*meta.EvidenceBytes+meta.RPCEvidenceBytes) + publicRecordBytes
 	value := Policy{Budget: Budget{WorkBytes: work, WorkerBytes: worker, EvidenceBytes: publicRecordBytes},
 		NativeWorkBytes: nativeWork, NativeWorkerBytes: prepared.settings.WorkerWorkBytes,
-		nativeLimits:    source.Limits{Active: meta.MaxActive, Queued: meta.QueuedCalls, Bytes: int64(meta.MaxActive) * max(nativeWork, prepared.settings.WorkerWorkBytes), QueuedBytes: int64(meta.QueuedCalls) * max(nativeWork, prepared.settings.WorkerWorkBytes), MaxLeases: prepared.settings.FamilyLimit},
 		SourceWorkBytes: sourceBytes, SourceEvidenceBytes: publicRecordBytes,
 		Runtime: adapters.Options{MaxActive: 1 + meta.MaxActive, MaxQueued: meta.QueuedCalls,
 			MaxWorkBytes:   sourceBytes + int64(meta.MaxActive)*max(work, worker),

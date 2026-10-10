@@ -47,6 +47,8 @@ automatically own or construct the packages below it.
 | `cache/v1` | capability | [Cache/messaging composition budgets and attribution](../docs/reference/adapters/cache/v1/interface.md) |
 | `objectstore/v1` | capability | [Object effects, budgets, generation scaling and attribution](../docs/reference/adapters/objectstore/v1/interface.md) |
 | `httpclient/v1` | capability | [HTTP declared accounting and attribution; no request or runtime interface](../docs/reference/adapters/httpclient/v1/interface.md) |
+| `orchestration/v1` | capability | [Orchestration operation/Worker budgets and retained-use attribution; no workflow model or native authority](../docs/reference/adapters/orchestration/v1/interface.md) |
+| `telemetry/v1` | capability | [Telemetry budgets, signal/effect observations and source attribution; no exporter or runtime](../docs/reference/adapters/telemetry/v1/interface.md) |
 | `configsource/v1` | preparation | [Strict configuration preparation and complete raw Source/Observer contracts](../docs/reference/adapters/configsource/v1/interface.md) |
 | `configsource/viper/v1` | configuration-provider | [Explicit local acquisition, native decoding and owned observation](../docs/reference/adapters/configsource/viper/v1/interface.md) |
 | `configsource/nacos/v1` | configuration-provider | [Nacos acquisition/mutation/search and retained observation](../docs/reference/adapters/configsource/nacos/v1/interface.md) |
@@ -120,6 +122,11 @@ provider Settings, source Owner, SDK selection or provider Recommend API.
 Runtime composition declarations may contain callbacks; they are not loadable DTOs.
 
 ### Capability profile
+
+Every public capability category has a versioned category contract layer, separate
+from its concrete providers. Preparation and logging categories keep their own
+documented roles; consistency does not mean identical APIs or empty placeholder
+packages. Concrete SDK defaults, authority and lifecycle stay provider-owned.
 
 The capability packages share `policy.go`, `metadata.go` and
 `diagnostics.go`. They expose data/vocabulary, not native pools, source owners,

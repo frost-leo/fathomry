@@ -97,6 +97,8 @@ local protocol/TLS/mTLS tests do not certify a Collector or production backend.
 The [public OpenTelemetry Adapter](reference/adapters/telemetry/otel/v1/interface.md)
 adds standalone and Fixed/Follow access, frozen source budgets, safe errors and
 explicit per-generation export scheduling without a concrete logger dependency.
+The [telemetry category contracts](reference/adapters/telemetry/v1/interface.md)
+own SDK-independent budgets, signal/effect observations and source attribution.
 
 The pre-release public layers were withdrawn for redesign. The rebuilt
 [failure/v1](reference/failure/v1/interface.md) now supplies
@@ -358,6 +360,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/httpclient/httpcloak/v1`](reference/adapters/httpclient/httpcloak/v1/interface.md) | HTTPcloak native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/httpclient/nuki/v1`](reference/adapters/httpclient/nuki/v1/interface.md) | Nuki native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/telemetry/otel/v1`](reference/adapters/telemetry/otel/v1/interface.md) | Public telemetry, frozen preparation, generation-owned spans, explicit export scheduling and capability coverage |
+| [`adapters/telemetry/v1`](reference/adapters/telemetry/v1/interface.md) | Shared telemetry budgets, signal/effect observations and source attribution without exporter/SDK authority |
+| [`adapters/orchestration/v1`](reference/adapters/orchestration/v1/interface.md) | Shared orchestration operation/Worker budgets and retained-use attribution without a workflow model or native authority |
 | [`adapters/orchestration/temporal/v1`](reference/adapters/orchestration/temporal/v1/interface.md) | Selected native Temporal capabilities, retained source/use identity, actual Worker join and independent evidence; service qualification remains profile-specific |
 | [`adapters/logging/v1`](reference/adapters/logging/v1/interface.md) | Bounded closed logging data, safe errors, budgets and attribution |
 | [`adapters/logging/slog/v1`](reference/adapters/logging/slog/v1/interface.md) | Restricted owned slog ingress, ordered groups and out-of-band refusal |

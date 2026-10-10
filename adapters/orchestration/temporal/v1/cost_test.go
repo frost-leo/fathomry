@@ -92,7 +92,7 @@ func BenchmarkLoopbackSignalCost(b *testing.B) {
 			var drain func(context.Context) error
 			var closeSource func() error
 			if mode == "internal-borrow" {
-				selected := source.WithLimits(prepared.native.Selection(), policy.nativeLimits)
+				selected := source.WithLimits(prepared.native.Selection(), prepared.nativeLimits())
 				assembly, err := source.Assemble(lifetime, context.Background(), "cost", selected)
 				if err != nil {
 					b.Fatal(err)

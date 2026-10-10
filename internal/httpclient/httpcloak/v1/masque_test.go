@@ -48,12 +48,61 @@ type masqueRoute struct{ host, target string }
 type masqueFixture struct {
 	address                          string
 	active, denied, packets, tunnels atomic.Int32
+	closing, peerClosing             atomic.Bool
 	problems                         chan error
+}
+
+func masqueOrigin(t *testing.T, certificate tls.Certificate, handler http.Handler) string {
+	t.Helper()
+	// Match the native inner tunnel; PMTU probes are not capacity/reuse traffic.
+	return protocolH3PeerConfig(t, &tls.Config{Certificates: []tls.Certificate{certificate}},
+		&officialquic.Config{InitialPacketSize: 1200, DisablePathMTUDiscovery: true}, handler)
+}
+
+func (fixture *masqueFixture) expectedClose(streamID officialquic.StreamID, err error) bool {
+	if !fixture.closing.Load() {
+		return false
+	}
+	// Native Close resets the stream, then closes its connection with code zero.
+	switch closed := err.(type) {
+	case *officialquic.StreamError:
+		return closed != nil && closed.Remote && closed.StreamID == streamID &&
+			closed.ErrorCode == officialquic.StreamErrorCode(officialh3.ErrCodeRequestCanceled)
+	case *officialquic.ApplicationError:
+		if closed == nil || closed.ErrorMessage != "" {
+			return false
+		}
+		if closed.Remote {
+			return closed.ErrorCode == 0
+		}
+		return fixture.peerClosing.Load() && closed.ErrorCode == officialquic.ApplicationErrorCode(officialh3.ErrCodeNoError)
+	default:
+		return false
+	}
 }
 
 func masqueRelay(t *testing.T, certificate tls.Certificate, routes map[string]masqueRoute) *masqueFixture {
 	t.Helper()
 	fixture := &masqueFixture{problems: make(chan error, 16)}
+	t.Cleanup(func() {
+		deadline := time.After(time.Second)
+		for fixture.active.Load() != 0 {
+			select {
+			case <-deadline:
+				t.Error("independent MASQUE peer retained tunnels after shutdown")
+				return
+			case <-time.After(time.Millisecond):
+			}
+		}
+		for {
+			select {
+			case err := <-fixture.problems:
+				t.Error("MASQUE independent peer", err)
+			default:
+				return
+			}
+		}
+	})
 	fixture.address = protocolH3PeerConfig(t, &tls.Config{Certificates: []tls.Certificate{certificate}}, &officialquic.Config{InitialPacketSize: 1400}, http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		auth := strings.TrimPrefix(request.Header.Get("Proxy-Authorization"), "Basic ")
 		credentials, _ := base64.StdEncoding.DecodeString(auth)
@@ -111,6 +160,14 @@ func masqueRelay(t *testing.T, certificate tls.Certificate, routes map[string]ma
 				}
 				data := append([]byte{0}, packet[:count]...)
 				if err := stream.SendDatagram(data); err != nil {
+					if fixture.expectedClose(stream.StreamID(), err) {
+						t.Logf("independent MASQUE peer observed intentional close (%T): %v", err, err)
+						return
+					}
+					t.Logf("unexpected MASQUE datagram failure: source_closing=%t peer_closing=%t payload_bytes=%d cause=%T", fixture.closing.Load(), fixture.peerClosing.Load(), len(data), err)
+					if tooLarge, ok := err.(*officialquic.DatagramTooLargeError); ok && tooLarge != nil {
+						t.Logf("MASQUE peer datagram allowance: %d bytes", tooLarge.MaxDatagramPayloadSize)
+					}
 					select {
 					case fixture.problems <- err:
 					default:
@@ -135,14 +192,51 @@ func masqueRelay(t *testing.T, certificate tls.Certificate, routes map[string]ma
 			}
 		}
 	}))
-	t.Cleanup(func() {
-		select {
-		case err := <-fixture.problems:
-			t.Error("MASQUE independent peer", err)
-		default:
-		}
-	})
+	t.Cleanup(func() { fixture.peerClosing.Store(true) })
 	return fixture
+}
+
+func TestMASQUERelayCloseClassification(t *testing.T) {
+	const streamID officialquic.StreamID = 4
+	canceled := &officialquic.StreamError{StreamID: streamID, ErrorCode: officialquic.StreamErrorCode(officialh3.ErrCodeRequestCanceled), Remote: true}
+	for _, entry := range []struct {
+		name                 string
+		closing, peerClosing bool
+		err                  error
+		want                 bool
+	}{
+		{name: "intentional", closing: true, err: canceled, want: true},
+		{name: "live-tunnel", err: canceled},
+		{name: "local", closing: true, err: &officialquic.StreamError{StreamID: streamID, ErrorCode: canceled.ErrorCode}},
+		{name: "foreign-stream", closing: true, err: &officialquic.StreamError{StreamID: 8, ErrorCode: canceled.ErrorCode, Remote: true}},
+		{name: "other-code", closing: true, err: &officialquic.StreamError{StreamID: streamID, ErrorCode: 1, Remote: true}},
+		{name: "other-error", closing: true, err: context.Canceled},
+		{name: "joined-failure", closing: true, err: errors.Join(canceled, errors.New("independent transport failure"))},
+		{name: "nil", closing: true},
+		{name: "typed-nil", closing: true, err: (*officialquic.StreamError)(nil)},
+		{name: "connection-close", closing: true, err: &officialquic.ApplicationError{Remote: true}, want: true},
+		{name: "live-connection", err: &officialquic.ApplicationError{Remote: true}},
+		{name: "local-connection", closing: true, err: &officialquic.ApplicationError{}},
+		{name: "connection-code", closing: true, err: &officialquic.ApplicationError{Remote: true, ErrorCode: 1}},
+		{name: "connection-message", closing: true, err: &officialquic.ApplicationError{Remote: true, ErrorMessage: "unexpected close"}},
+		{name: "connection-typed-nil", closing: true, err: (*officialquic.ApplicationError)(nil)},
+		{name: "peer-close", closing: true, peerClosing: true, err: &officialquic.ApplicationError{ErrorCode: officialquic.ApplicationErrorCode(officialh3.ErrCodeNoError)}, want: true},
+		{name: "peer-before-source", peerClosing: true, err: &officialquic.ApplicationError{ErrorCode: officialquic.ApplicationErrorCode(officialh3.ErrCodeNoError)}},
+		{name: "peer-before-cleanup", closing: true, err: &officialquic.ApplicationError{ErrorCode: officialquic.ApplicationErrorCode(officialh3.ErrCodeNoError)}},
+		{name: "peer-remote-code", closing: true, peerClosing: true, err: &officialquic.ApplicationError{Remote: true, ErrorCode: officialquic.ApplicationErrorCode(officialh3.ErrCodeNoError)}},
+		{name: "peer-other-code", closing: true, peerClosing: true, err: &officialquic.ApplicationError{ErrorCode: 1}},
+		{name: "peer-message", closing: true, peerClosing: true, err: &officialquic.ApplicationError{ErrorCode: officialquic.ApplicationErrorCode(officialh3.ErrCodeNoError), ErrorMessage: "unexpected close"}},
+		{name: "oversized-datagram", closing: true, peerClosing: true, err: &officialquic.DatagramTooLargeError{MaxDatagramPayloadSize: 1402}},
+	} {
+		t.Run(entry.name, func(t *testing.T) {
+			fixture := &masqueFixture{}
+			fixture.closing.Store(entry.closing)
+			fixture.peerClosing.Store(entry.peerClosing)
+			if fixture.expectedClose(streamID, entry.err) != entry.want {
+				t.Fatal("relay suppressed a live/unrelated failure or rejected the exact intentional cancellation")
+			}
+		})
+	}
 }
 
 func TestManagedMASQUERoutesRetainTunnelAndSeparateTLSIdentity(t *testing.T) {
@@ -158,8 +252,8 @@ func TestManagedMASQUERoutesRetainTunnelAndSeparateTLSIdentity(t *testing.T) {
 			_, _ = io.WriteString(writer, want)
 		}
 	}
-	first := protocolH3Peer(t, &tls.Config{Certificates: []tls.Certificate{originCertificate}}, origin("one", &firstCalls))
-	second := protocolH3Peer(t, &tls.Config{Certificates: []tls.Certificate{originCertificate}}, origin("two", &secondCalls))
+	first := masqueOrigin(t, originCertificate, origin("one", &firstCalls))
+	second := masqueOrigin(t, originCertificate, origin("two", &secondCalls))
 	firstURL, _ := url.Parse(first)
 	secondURL, _ := url.Parse(second)
 	relay := masqueRelay(t, proxyCertificate, map[string]masqueRoute{"alpha:first": {"one.invalid", firstURL.Host}, "beta:second": {"two.invalid", secondURL.Host}})
@@ -229,6 +323,7 @@ func TestManagedMASQUERoutesRetainTunnelAndSeparateTLSIdentity(t *testing.T) {
 	if firstCalls.Load() != 2 || secondCalls.Load() != 2 || relay.tunnels.Load() != 2 || relay.active.Load() != 2 || relay.packets.Load() == 0 || originsVerified.Load() != 2 || proxiesVerified.Load() != 2 || queries.Load() != 4 {
 		t.Fatal("MASQUE route/reuse/TLS/DNS observations differ", firstCalls.Load(), secondCalls.Load(), relay.tunnels.Load(), relay.active.Load(), originsVerified.Load(), proxiesVerified.Load(), queries.Load())
 	}
+	relay.closing.Store(true)
 	if err := fixture.assembly.Close(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -386,11 +481,11 @@ func TestManagedMASQUEControlCapacityPreservesHealthyTunnel(t *testing.T) {
 	originCertificate, originRoots := protocolCertificate(t)
 	proxyCertificate, proxyRoots := protocolCertificate(t)
 	var firstCalls, secondCalls atomic.Int32
-	first := protocolH3Peer(t, &tls.Config{Certificates: []tls.Certificate{originCertificate}}, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+	first := masqueOrigin(t, originCertificate, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		firstCalls.Add(1)
 		writer.WriteHeader(http.StatusNoContent)
 	}))
-	second := protocolH3Peer(t, &tls.Config{Certificates: []tls.Certificate{originCertificate}}, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+	second := masqueOrigin(t, originCertificate, http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		secondCalls.Add(1)
 		writer.WriteHeader(http.StatusNoContent)
 	}))
@@ -423,6 +518,7 @@ func TestManagedMASQUEControlCapacityPreservesHealthyTunnel(t *testing.T) {
 	if firstCalls.Load() != 2 || secondCalls.Load() != 0 || relay.tunnels.Load() != 1 || controls != 1 || quic != 2 {
 		t.Fatal("control cap or existing tunnel ownership changed", firstCalls.Load(), secondCalls.Load(), relay.tunnels.Load(), controls, quic)
 	}
+	relay.closing.Store(true)
 	if err := fixture.assembly.Close(testContext(t)); err != nil {
 		t.Fatal(err)
 	}
