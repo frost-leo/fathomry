@@ -21,9 +21,11 @@ package otel
 
 import (
 	"context"
-	"github.com/frost-leo/fathomry/internal/compatibility"
 	"slices"
 	"time"
+
+	"github.com/frost-leo/fathomry/adapters/telemetry/v1"
+	"github.com/frost-leo/fathomry/internal/compatibility"
 )
 
 // BudgetInfo describes the exact prepared native envelopes before acquisition.
@@ -54,13 +56,10 @@ func (prepared Prepared) Metadata() BudgetInfo {
 }
 
 // Fact separates unknown, declared, observed and not-applicable information.
-type Fact struct {
-	private
-	Kind, Value string
-}
+type Fact telemetry.Fact
 
 // Option is one effective non-secret selection, not a compatibility certificate.
-type Option struct{ Name, Value string }
+type Option = telemetry.Option
 
 // Profile is detached frozen selection, not backend readiness or deployment
 // certification. Library/SDK versions are independent from configuration format.

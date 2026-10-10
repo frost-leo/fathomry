@@ -26,12 +26,20 @@ import (
 
 type private struct{}
 
-func (private) String() string                     { return "temporal[restricted]" }
-func (private) GoString() string                   { return "temporal[restricted]" }
-func (private) Format(state fmt.State, _ rune)     { _, _ = state.Write([]byte("temporal[restricted]")) }
-func (private) LogValue() slog.Value               { return slog.StringValue("temporal[restricted]") }
-func (private) MarshalJSON() ([]byte, error)       { return nil, fail(ErrSerialization, "marshal") }
-func (*private) UnmarshalJSON([]byte) error        { return fail(ErrSerialization, "unmarshal") }
+func (private) String() string                 { return "temporal[restricted]" }
+func (private) GoString() string               { return "temporal[restricted]" }
+func (private) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("temporal[restricted]")) }
+func (private) LogValue() slog.Value           { return slog.StringValue("temporal[restricted]") }
+func (private) MarshalJSON() ([]byte, error)   { return nil, fail(ErrSerialization, "marshal") }
+func (*private) UnmarshalJSON([]byte) error    { return fail(ErrSerialization, "unmarshal") }
+
+func (Attribution) String() string                    { return private{}.String() }
+func (Attribution) GoString() string                  { return private{}.GoString() }
+func (Attribution) Format(state fmt.State, verb rune) { private{}.Format(state, verb) }
+func (Attribution) LogValue() slog.Value              { return private{}.LogValue() }
+func (Attribution) MarshalJSON() ([]byte, error)      { return private{}.MarshalJSON() }
+func (*Attribution) UnmarshalJSON(data []byte) error  { return (&private{}).UnmarshalJSON(data) }
+
 func (Settings) Format(state fmt.State, verb rune) { private{}.Format(state, verb) }
 
 // LogValue redacts credentials and endpoints. Normalize optional typed-nil

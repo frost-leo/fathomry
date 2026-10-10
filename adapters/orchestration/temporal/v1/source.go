@@ -142,11 +142,11 @@ func (prepared Prepared) OpenFrom(ctx context.Context, parent *Client, dependenc
 	if parent == nil || parent.use == nil {
 		return nil, fail(ErrInput, "shared-client")
 	}
-	policy, err := prepared.Policy()
+	_, err := prepared.Policy()
 	if err != nil {
 		return nil, err
 	}
-	selected, err := prepared.native.SelectionFromExisting(parent.raw, policy.nativeLimits.Bytes)
+	selected, err := prepared.native.SelectionFromExisting(parent.raw, prepared.nativeLimits().Bytes)
 	if err != nil {
 		return nil, translate(err, "shared-client")
 	}
@@ -171,7 +171,7 @@ func (prepared Prepared) open(ctx context.Context, dependencies Dependencies, se
 		}
 		defer prepared.parent.use.leave()
 	}
-	selected = source.WithLimits(selected, policy.nativeLimits)
+	selected = source.WithLimits(selected, prepared.nativeLimits())
 	admitting, cancelAdmission := context.WithCancelCause(ctx)
 	defer cancelAdmission(nil)
 	if prepared.parent != nil {

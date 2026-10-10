@@ -27,6 +27,11 @@ tracked separately. This does not claim issue #134 completion or universal Serve
 compatibility.
 **Package:** `github.com/frost-leo/fathomry/adapters/orchestration/temporal/v1`.
 
+The [orchestration category contracts](../../v1/interface.md) own shared Budget,
+Policy and attribution data. Existing Budget/Policy names are aliases; Temporal
+attribution remains a provider-defined value with its original diagnostic/error
+semantics. Native options, private limit derivation and lifecycle stay here.
+
 ## Prepare, own and retain
 
 1. Call `Prepare(Settings, NativeOptions)`. It does not dial or invoke extension

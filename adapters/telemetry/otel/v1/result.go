@@ -20,6 +20,7 @@
 package otel
 
 import (
+	"github.com/frost-leo/fathomry/adapters/telemetry/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	source "github.com/frost-leo/fathomry/internal/resource"
@@ -27,73 +28,44 @@ import (
 )
 
 // Signal names a telemetry data family, not a business disposition.
-type Signal string
+type Signal = telemetry.Signal
 
 const (
-	Logs    Signal = "logs"
-	Traces  Signal = "traces"
-	Metrics Signal = "metrics"
+	Logs    = telemetry.Logs
+	Traces  = telemetry.Traces
+	Metrics = telemetry.Metrics
 )
 
 // Effect identifies an observed export boundary. Acknowledgement is receiver
 // acceptance, never proof of indexing, backend durability or evidence custody.
-type Effect string
+type Effect = telemetry.Effect
 
 const (
-	NotAttempted  Effect = ""
-	UnknownEffect Effect = "unknown"
-	Acknowledged  Effect = "acknowledged"
-	PartialEffect Effect = "partial"
+	NotAttempted  = telemetry.NotAttempted
+	UnknownEffect = telemetry.UnknownEffect
+	Acknowledged  = telemetry.Acknowledged
+	PartialEffect = telemetry.PartialEffect
 )
 
 // SignalResult is detached and excludes payloads/endpoints. TransportCalls counts
 // RoundTrip entries, not exact physical attempts. Errors remain deliberately
 // inspectable but their default presentation never formats private native text.
-type SignalResult struct {
-	private
-	Signal                                                      Signal
-	Accepted, Submitted, Acknowledged, Rejected, TransportCalls int
-	Sampled                                                     bool
-	Effect                                                      Effect
-	Err                                                         error
-}
+type SignalResult telemetry.SignalResult
 
 // Info identifies the original frozen source, separately from public generation.
-type Info struct {
-	private
-	Scope, Provider, Name, Revision string
-	FormatVersion                   uint32
-	Provenance                      []LayerInfo
-}
+type Info telemetry.Info
 
 // LayerInfo contains declared field provenance, never endpoint or credential values.
-type LayerInfo struct {
-	Kind   uint8
-	Fields []string
-}
+type LayerInfo = telemetry.LayerInfo
 
 func (value Info) Clone() Info {
-	if value.Provenance == nil {
-		return value
-	}
-	layers := make([]LayerInfo, len(value.Provenance))
-	for index, layer := range value.Provenance {
-		layers[index] = LayerInfo{Kind: layer.Kind, Fields: append([]string(nil), layer.Fields...)}
-	}
-	value.Provenance = layers
-	return value
+	return Info(telemetry.Info(value).Clone())
 }
 
 // Attribution freezes identity and the resource generation actually borrowed.
 // Lifecycle state belongs to the public receipt, not this immutable observation.
 // Zero Source includes direct calls and source construction, not known absence.
-type Attribution struct {
-	private
-	Runtime, Operation, ID string
-	Sequence, Parent       uint64
-	Depth                  int
-	Source                 adapters.Source
-}
+type Attribution telemetry.Attribution
 
 // Result shares immutable private facts between direct receipt and evidence.
 type Result struct {

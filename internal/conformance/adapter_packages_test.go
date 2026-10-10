@@ -47,6 +47,8 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"cache/v1":                  {"capability", false, []string{"policy.go", "metadata.go"}},
 	"objectstore/v1":            {"capability", false, []string{"policy.go", "metadata.go"}},
 	"httpclient/v1":             {"capability", false, []string{"policy.go", "metadata.go"}},
+	"orchestration/v1":          {"capability", false, []string{"policy.go", "metadata.go"}},
+	"telemetry/v1":              {"capability", false, []string{"policy.go", "metadata.go"}},
 	"configsource/v1":           {"preparation", true, []string{"options.go", "schema.go", "prepare.go", "decode.go", "acquisition.go"}},
 	"configsource/viper/v1":     {"configuration-provider", true, []string{"options.go", "client.go", "load.go", "document.go", "watch.go", "acquisition.go"}},
 	"configsource/nacos/v1":     {"configuration-provider", true, []string{"options.go", "client.go", "source.go", "metadata.go", "read.go", "watch.go", "acquisition.go"}},
@@ -106,9 +108,17 @@ func packageInventoryError(packages map[string][]string, profiles map[string]ada
 			return fmt.Errorf("unclassified Adapter package: %s", path)
 		}
 	}
-	for path := range profiles {
+	for path, profile := range profiles {
 		if _, exists := packages[path]; !exists {
 			return fmt.Errorf("documented Adapter package is absent: %s", path)
+		}
+		if profile.role == "mechanism" || profile.role == "private" {
+			continue
+		}
+		category, _, _ := strings.Cut(path, "/")
+		contract := profiles[category+"/v1"]
+		if contract.role != "capability" && contract.role != "preparation" && contract.role != "logging-data" {
+			return fmt.Errorf("Adapter category has no public contract layer: %s", category)
 		}
 	}
 	return nil
@@ -284,5 +294,22 @@ func TestPublicAdapterInventoryRejectingControls(t *testing.T) {
 		if adapterDependencyAllowed("database/mysql/v1", test.role, test.dependency) != test.allowed {
 			t.Fatal("dependency guard failed its control")
 		}
+	}
+}
+
+func TestPublicAdapterCategoryLayerRejectingControls(t *testing.T) {
+	for _, role := range []string{"capability", "preparation", "logging-data", "data-provider", ""} {
+		t.Run(role, func(t *testing.T) {
+			profiles := map[string]adapterPackageProfile{"category/native/v1": {role: "data-provider"}}
+			packages := map[string][]string{"category/native/v1": {"doc.go"}}
+			if role != "" {
+				profiles["category/v1"] = adapterPackageProfile{role: role}
+				packages["category/v1"] = []string{"doc.go"}
+			}
+			allowed := role == "capability" || role == "preparation" || role == "logging-data"
+			if (packageInventoryError(packages, profiles) == nil) != allowed {
+				t.Fatal("category contract guard accepted a missing/provider-only layer or rejected a real contract role")
+			}
+		})
 	}
 }

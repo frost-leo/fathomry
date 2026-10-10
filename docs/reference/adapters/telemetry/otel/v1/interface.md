@@ -27,6 +27,11 @@ with isolated native/protocol and independent-consumer qualification.
 This page does not certify a Collector, production backend or supported release.
 **Package:** `github.com/frost-leo/fathomry/adapters/telemetry/otel/v1`.
 
+The [telemetry category contracts](../../v1/interface.md) own SDK-independent
+budgets, signals/effects and observation data. Existing budget/vocabulary names
+remain aliases; sensitive provider observations retain their OTel diagnostics and
+error codes. Native costs, Compose, Profile and source/span lifecycle stay here.
+
 ## Responsibilities and preparation
 
 The [capability matrix](capabilities.md) connects selected native fields and
