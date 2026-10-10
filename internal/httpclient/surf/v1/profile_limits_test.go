@@ -175,7 +175,9 @@ func reviewPriorityPeer(t *testing.T) (string, <-chan reviewPriorityObservation)
 			return
 		}
 		var stream uint32
-		for stream == 0 {
+		var requestEnded, settingsAcknowledged bool
+		// Do not close this one-shot peer while request or SETTINGS writes remain.
+		for stream == 0 || !requestEnded || !settingsAcknowledged {
 			frame, err := framer.ReadFrame()
 			if err != nil {
 				observed.err = err
@@ -189,13 +191,22 @@ func reviewPriorityPeer(t *testing.T) (string, <-chan reviewPriorityObservation)
 					return
 				}
 			case *peerh2.SettingsFrame:
-				if !frame.IsAck() {
+				if frame.IsAck() {
+					settingsAcknowledged = true
+				} else {
 					if observed.err = framer.WriteSettingsAck(); observed.err != nil {
 						return
 					}
 				}
 			case *peerh2.HeadersFrame:
 				stream = frame.StreamID
+				requestEnded = frame.StreamEnded()
+			case *peerh2.DataFrame:
+				if stream == 0 || frame.StreamID != stream {
+					observed.err = errors.New("request DATA used unexpected stream")
+					return
+				}
+				requestEnded = frame.StreamEnded()
 			}
 		}
 		var block bytes.Buffer

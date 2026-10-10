@@ -217,6 +217,7 @@ type (
 		logger                       log.Logger
 		stopTimeout                  time.Duration
 		fatalErrCb                   func(error)
+		noRepoll                     *atomic.Bool
 		backgroundContextCancel      context.CancelCauseFunc
 		metricsHandler               metrics.Handler
 		sessionTokenBucket           *sessionTokenBucket
@@ -257,7 +258,7 @@ type (
 		lastPollTaskErrStarted time.Time
 		lastPollTaskErrLock    sync.Mutex
 
-		noRepoll atomic.Bool
+		noRepoll *atomic.Bool
 		pollerWG sync.WaitGroup
 	}
 
@@ -361,6 +362,9 @@ func createPollResourceExhaustedRetryPolicy() backoff.RetryPolicy {
 func newBaseWorker(
 	options baseWorkerOptions,
 ) *baseWorker {
+	if options.noRepoll == nil {
+		options.noRepoll = &atomic.Bool{}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	taskLimiterCtx, taskLimiterCancel := context.WithCancel(context.Background())
 	logger := log.With(options.logger, tagWorkerType, options.workerType)
@@ -391,6 +395,7 @@ func newBaseWorker(
 		// 2k pending activities so this channel never needs to be larger than that.
 		eagerTaskQueueCh: make(chan eagerTask, 2000),
 		fatalErrCb:       options.fatalErrCb,
+		noRepoll:         options.noRepoll,
 
 		limiterContext:           ctx,
 		limiterContextCancel:     cancel,
@@ -522,6 +527,10 @@ func (bw *baseWorker) runPoller(taskWorker scalableTaskPoller) {
 				}
 				continue
 			}
+			if bw.noRepoll.Load() {
+				bw.releaseSlot(permit, SlotReleaseReasonUnused)
+				return
+			}
 			if bw.sessionTokenBucket != nil && !bw.sessionTokenBucket.waitForAvailableToken() {
 				bw.releaseSlot(permit, SlotReleaseReasonUnused)
 				return
@@ -563,6 +572,10 @@ func (bw *baseWorker) runAutoscalingPoller(taskWorker scalableTaskPoller) {
 		if err != nil {
 			return
 		}
+		if bw.noRepoll.Load() {
+			releaseActive()
+			return
+		}
 		bw.reserveSlotAsync(ctx, reserveChan, taskWorker)
 
 		var permit *SlotPermit
@@ -579,6 +592,11 @@ func (bw *baseWorker) runAutoscalingPoller(taskWorker scalableTaskPoller) {
 				time.Sleep(time.Second)
 			}
 			continue
+		}
+		if bw.noRepoll.Load() {
+			bw.releaseSlot(permit, SlotReleaseReasonUnused)
+			releaseActive()
+			return
 		}
 
 		if bw.sessionTokenBucket != nil && !bw.sessionTokenBucket.waitForAvailableToken() {
@@ -804,6 +822,9 @@ func (bw *baseWorker) pollTask(taskWorker scalableTaskPoller, slotPermit *SlotPe
 
 	bw.retrier.Throttle(bw.stopCh)
 	if bw.pollLimiter == nil || bw.pollLimiter.Wait(bw.limiterContext) == nil {
+		if bw.noRepoll.Load() {
+			return
+		}
 		task, err = taskWorker.taskPoller.PollTask()
 		bw.logPollTaskError(err)
 		if err != nil {
@@ -925,10 +946,6 @@ func (bw *baseWorker) Stop() {
 	}
 
 	bw.isWorkerStarted = false
-}
-
-func (bw *baseWorker) stopPolling() {
-	bw.noRepoll.Store(true)
 }
 
 func newPollerAutoscaler(options pollerAutoscalerOptions) *pollerAutoscaler {

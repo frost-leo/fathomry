@@ -37,10 +37,12 @@ import (
 	"time"
 
 	"github.com/frost-leo/fathomry/internal/fault"
+	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/orchestration/temporal/v1"
 	"github.com/frost-leo/fathomry/internal/resource"
 	"go.temporal.io/api/workflowservice/v1"
 	sdk "go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -249,18 +251,50 @@ func TestReviewOwnedTLSKeepsNativeMTLSCredentials(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			runtime := temporal.RuntimeOptions{ConnectionOptions: sdk.ConnectionOptions{TLS: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}}}
+			var observedCredentials atomic.Bool
+			runtime.Plugins = []sdk.Plugin{&controlledClientPlugin{create: func(ctx context.Context, options sdk.PluginNewClientOptions, next func(context.Context, sdk.PluginNewClientOptions) error) error {
+				if options.ClientOptions.ConnectionOptions.TLS == nil || len(options.ClientOptions.ConnectionOptions.TLS.Certificates) != 1 {
+					return errors.New("post-credential TLS missing from native plugin view")
+				}
+				observedCredentials.Store(true)
+				return next(ctx, options)
+			}}}
 			if injected {
 				runtime.Credentials = sdk.NewMTLSCredentials(certificate)
 			} else {
 				runtime.ConnectionOptions.TLS.Certificates = []tls.Certificate{certificate}
 			}
-			selected, err := temporal.SelectWithRuntime(temporal.OptionsV1{Name: "review-mtls", Endpoint: listener.Addr().String(), Namespace: "test", ConnectTimeout: 500 * time.Millisecond}, runtime)
+			selected, err := temporal.SelectWithRuntime(temporal.OptionsV1{Name: "review-mtls", Endpoint: listener.Addr().String(), Namespace: "test", ConnectTimeout: 500 * time.Millisecond,
+				MaxActive: 1, MaxRequestBytes: 1024, MaxResponseBytes: 1024}, runtime)
 			if err != nil {
 				t.Fatal(err)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			assembly, err := resource.Assemble(ctx, ctx, "review-mtls", selected)
+			if err == nil {
+				inbox, inboxErr := invocation.NewInbox[temporal.Execution](1, temporal.ExecutionEvidenceBytes)
+				if inboxErr != nil {
+					t.Fatal(inboxErr)
+				}
+				executions, bindErr := temporal.BindExecutions(assembly, selected, inbox, nil)
+				if bindErr != nil {
+					t.Fatal(bindErr)
+				}
+				workers, tasks := workerInboxes(t)
+				lifetime, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				managed, startErr := executions.StartWorker(ctx, lifetime, fault.Correlation{Call: "mtls-polling"}, temporal.WorkerSpec{TaskQueue: "mtls",
+					MaxHandlers: 1, Bytes: 18 << 10, Options: worker.Options{LocalActivityWorkerOnly: true}}, workers, tasks)
+				if managed != nil {
+					if stopErr := managed.Stop(ctx); stopErr != nil {
+						t.Fatal(stopErr)
+					}
+				}
+				if startErr != nil || !observedCredentials.Load() {
+					t.Fatal("post-credential TLS did not reach source plugin and polling client", startErr)
+				}
+			}
 			if assembly != nil {
 				if cleanupErr := assembly.Close(ctx); cleanupErr != nil {
 					t.Fatal("mTLS fixture cleanup failed", cleanupErr)

@@ -40,37 +40,38 @@ type adapterPackageProfile struct {
 }
 
 var adapterPackageProfiles = map[string]adapterPackageProfile{
-	"v1":                      {"mechanism", true, []string{"options.go", "runtime.go", "call.go", "evidence.go"}},
-	"database/v1":             {"capability", false, []string{"policy.go", "metadata.go"}},
-	"sqlengine/v1":            {"capability", false, []string{"policy.go", "metadata.go"}},
-	"broker/v1":               {"capability", false, []string{"policy.go", "metadata.go"}},
-	"cache/v1":                {"capability", false, []string{"policy.go", "metadata.go"}},
-	"objectstore/v1":          {"capability", false, []string{"policy.go", "metadata.go"}},
-	"httpclient/v1":           {"capability", false, []string{"policy.go", "metadata.go"}},
-	"configsource/v1":         {"preparation", true, []string{"options.go", "schema.go", "prepare.go", "decode.go", "acquisition.go"}},
-	"configsource/viper/v1":   {"configuration-provider", true, []string{"options.go", "client.go", "load.go", "document.go", "watch.go", "acquisition.go"}},
-	"configsource/nacos/v1":   {"configuration-provider", true, []string{"options.go", "client.go", "source.go", "metadata.go", "read.go", "watch.go", "acquisition.go"}},
-	"database/postgres/v1":    {"data-provider", true, nil},
-	"database/mysql/v1":       {"data-provider", true, nil},
-	"sqlengine/duckdb/v1":     {"data-provider", true, nil},
-	"sqlengine/trino/v1":      {"data-provider", true, nil},
-	"sqlengine/doris/v1":      {"data-provider", true, nil},
-	"objectstore/minio/v1":    {"data-provider", true, nil},
-	"broker/kafka/v1":         {"data-provider", true, nil},
-	"cache/redis/v1":          {"data-provider", true, nil},
-	"httpclient/nethttp/v1":   {"data-provider", true, nil},
-	"httpclient/tlsclient/v1": {"data-provider", true, nil},
-	"httpclient/surf/v1":      {"data-provider", true, nil},
-	"httpclient/httpcloak/v1": {"data-provider", true, nil},
-	"httpclient/nuki/v1":      {"data-provider", true, nil},
-	"telemetry/otel/v1":       {"data-provider", true, nil},
-	"logging/v1":              {"logging-data", true, []string{"policy.go", "metadata.go", "value.go"}},
-	"logging/slog/v1":         {"ingress", false, []string{"options.go", "handler.go"}},
-	"logging/zap/v1":          {"data-provider", true, nil},
-	"logging/zap/otel/v1":     {"composition", false, []string{"bridge.go"}},
-	"logging/zerolog/v1":      {"data-provider", true, nil},
-	"logging/zerolog/otel/v1": {"composition", false, []string{"bridge.go"}},
-	"internal/errorbridge":    {"private", false, []string{"bridge.go", "containment.go", "details.go"}},
+	"v1":                        {"mechanism", true, []string{"options.go", "runtime.go", "call.go", "evidence.go"}},
+	"database/v1":               {"capability", false, []string{"policy.go", "metadata.go"}},
+	"sqlengine/v1":              {"capability", false, []string{"policy.go", "metadata.go"}},
+	"broker/v1":                 {"capability", false, []string{"policy.go", "metadata.go"}},
+	"cache/v1":                  {"capability", false, []string{"policy.go", "metadata.go"}},
+	"objectstore/v1":            {"capability", false, []string{"policy.go", "metadata.go"}},
+	"httpclient/v1":             {"capability", false, []string{"policy.go", "metadata.go"}},
+	"configsource/v1":           {"preparation", true, []string{"options.go", "schema.go", "prepare.go", "decode.go", "acquisition.go"}},
+	"configsource/viper/v1":     {"configuration-provider", true, []string{"options.go", "client.go", "load.go", "document.go", "watch.go", "acquisition.go"}},
+	"configsource/nacos/v1":     {"configuration-provider", true, []string{"options.go", "client.go", "source.go", "metadata.go", "read.go", "watch.go", "acquisition.go"}},
+	"database/postgres/v1":      {"data-provider", true, nil},
+	"database/mysql/v1":         {"data-provider", true, nil},
+	"sqlengine/duckdb/v1":       {"data-provider", true, nil},
+	"sqlengine/trino/v1":        {"data-provider", true, nil},
+	"sqlengine/doris/v1":        {"data-provider", true, nil},
+	"objectstore/minio/v1":      {"data-provider", true, nil},
+	"broker/kafka/v1":           {"data-provider", true, nil},
+	"cache/redis/v1":            {"data-provider", true, nil},
+	"httpclient/nethttp/v1":     {"data-provider", true, nil},
+	"httpclient/tlsclient/v1":   {"data-provider", true, nil},
+	"httpclient/surf/v1":        {"data-provider", true, nil},
+	"httpclient/httpcloak/v1":   {"data-provider", true, nil},
+	"httpclient/nuki/v1":        {"data-provider", true, nil},
+	"telemetry/otel/v1":         {"data-provider", true, nil},
+	"orchestration/temporal/v1": {"data-provider", true, nil},
+	"logging/v1":                {"logging-data", true, []string{"policy.go", "metadata.go", "value.go"}},
+	"logging/slog/v1":           {"ingress", false, []string{"options.go", "handler.go"}},
+	"logging/zap/v1":            {"data-provider", true, nil},
+	"logging/zap/otel/v1":       {"composition", false, []string{"bridge.go"}},
+	"logging/zerolog/v1":        {"data-provider", true, nil},
+	"logging/zerolog/otel/v1":   {"composition", false, []string{"bridge.go"}},
+	"internal/errorbridge":      {"private", false, []string{"bridge.go", "containment.go", "details.go"}},
 }
 
 func adapterDirectories(root string) (map[string][]string, error) {
@@ -139,7 +140,7 @@ func TestPublicAdapterPackageInventory(t *testing.T) {
 				required = append(required, "definitions.go", "error.go", "resources.go")
 			}
 			if profile.role == "data-provider" {
-				required = append(required, "options.go", "policy.go", "source.go", "client.go", "result.go")
+				required = append(required, adapterOptionsFile(path), "policy.go", "source.go", "client.go", "result.go")
 			}
 			for _, name := range required {
 				if !slices.Contains(packages[path], name) {
@@ -173,8 +174,8 @@ func TestPublicAdapterPackageInventory(t *testing.T) {
 						}
 						for _, specification := range value.Specs {
 							if item, ok := specification.(*ast.TypeSpec); ok {
-								if (profile.role == "data-provider" || profile.role == "configuration-provider") && (item.Name.Name == "Settings" || item.Name.Name == "Dependencies") && name != "options.go" {
-									t.Error("provider settings/dependencies escaped options.go")
+								if (profile.role == "data-provider" || profile.role == "configuration-provider") && (item.Name.Name == "Settings" || item.Name.Name == "Dependencies") && name != adapterOptionsFile(path) {
+									t.Error("provider settings/dependencies escaped their option file")
 								}
 								if profile.role == "capability" && (item.Name.Name == "Policy" || item.Name.Name == "Budget") && name != "policy.go" {
 									t.Error("shared budget vocabulary escaped policy.go")
@@ -186,6 +187,13 @@ func TestPublicAdapterPackageInventory(t *testing.T) {
 			}
 		})
 	}
+}
+
+func adapterOptionsFile(path string) string {
+	if path == "orchestration/temporal/v1" {
+		return "option.go"
+	}
+	return "options.go"
 }
 
 func responsibilityFile(profile adapterPackageProfile, declaration *ast.FuncDecl) string {

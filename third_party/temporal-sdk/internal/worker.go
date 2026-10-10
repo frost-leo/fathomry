@@ -358,8 +358,13 @@ type (
 		// here and in client options.
 		Interceptors []WorkerInterceptor
 
-		// Optional: Callback invoked on fatal error. Immediately after this
-		// returns, Worker.Stop() will be called.
+		// Optional: Callback invoked once for the first fatal error, outside the
+		// reporting poller. Remote polling is disabled before notification;
+		// attempts already past their final stop check may still complete.
+		// Automatic Stop follows notification and native startup completion.
+		// Stop may finish before this callback; FathomryWaitStoppedV1 also joins
+		// the callback when the managed lifecycle extension is enabled.
+		// A callback must not wait for its own complete managed shutdown.
 		OnFatalError func(error)
 
 		// Optional: Disable eager activities. If set to true, activities will not

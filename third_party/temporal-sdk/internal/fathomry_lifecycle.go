@@ -23,14 +23,12 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 )
 
 type fathomryWorkerLifetime struct {
 	work           sync.WaitGroup
 	externalMu     sync.Mutex
 	externalClosed bool
-	stopStarted    atomic.Bool
 	stopReturned   chan struct{}
 	joinOnce       sync.Once
 	joined         chan struct{}

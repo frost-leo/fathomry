@@ -35,13 +35,21 @@ type fathomryDecodeMutex = sync.Mutex
 
 // FathomryScopeOwnerV1 is an opaque, nonzero-sized local owner identity. Never
 // expose it through borrowed SDK options, contexts or callbacks.
-type FathomryScopeOwnerV1 struct{ marker byte }
+type FathomryScopeOwnerV1 struct {
+	marker byte
+	parent *FathomryScopeOwnerV1
+}
 
 func NewFathomryScopeOwnerV1() *FathomryScopeOwnerV1 { return &FathomryScopeOwnerV1{marker: 1} }
 
+func NewFathomryChildScopeOwnerV1(parent *FathomryScopeOwnerV1) *FathomryScopeOwnerV1 {
+	return &FathomryScopeOwnerV1{marker: 1, parent: parent}
+}
+
 type fathomryScopeEntry struct {
-	owner *FathomryScopeOwnerV1
-	guard FathomryDecodeGuardV1
+	owner        *FathomryScopeOwnerV1
+	guard        FathomryDecodeGuardV1
+	finalization bool
 }
 type fathomryDecoderScope struct {
 	entries []fathomryScopeEntry
@@ -53,7 +61,7 @@ func fathomryScope(existing *fathomryDecoderScope, owner *FathomryScopeOwnerV1, 
 		return existing
 	}
 	if existing == nil {
-		return &fathomryDecoderScope{entries: []fathomryScopeEntry{{owner, guard}}}
+		return &fathomryDecoderScope{entries: []fathomryScopeEntry{{owner: owner, guard: guard}}}
 	}
 	if existing.denied {
 		return existing
@@ -68,7 +76,7 @@ func fathomryScope(existing *fathomryDecoderScope, owner *FathomryScopeOwnerV1, 
 	if len(existing.entries) >= 64 {
 		return &fathomryDecoderScope{denied: true}
 	}
-	return &fathomryDecoderScope{entries: append([]fathomryScopeEntry{{owner, guard}}, existing.entries...)}
+	return &fathomryDecoderScope{entries: append([]fathomryScopeEntry{{owner: owner, guard: guard}}, existing.entries...)}
 }
 
 func (scope *fathomryDecoderScope) run(decode func() error) error {
@@ -88,10 +96,27 @@ func (scope *fathomryDecoderScope) run(decode func() error) error {
 	return invoke(0)
 }
 
-type fathomryErrorOrigin struct{ original error }
+type fathomryErrorOrigin struct {
+	original error
+	previous *fathomryErrorOrigin
+}
 
 func (origin fathomryErrorOrigin) Is(target error) bool {
-	return origin.original != nil && target != nil && reflect.TypeOf(target).Comparable() && origin.original == target
+	if target == nil || !reflect.TypeOf(target).Comparable() {
+		return false
+	}
+	// Only SDK-owned copy ancestry is inspected, never user Is/Unwrap callbacks
+	// or semantic causes. This is identity preservation, not cause selection.
+	for remaining := 4096; remaining > 0; remaining-- {
+		if origin.original == target {
+			return true
+		}
+		if origin.previous == nil {
+			return false
+		}
+		origin = *origin.previous
+	}
+	return false
 }
 
 // FathomryScopeErrorV1 clones known native errors without changing their failure
@@ -102,12 +127,39 @@ func FathomryScopeErrorV1(cause error, owner *FathomryScopeOwnerV1, guard Fathom
 	if cause == nil || owner == nil || guard == nil {
 		return cause
 	}
+	result, _ := fathomryMapErrorScopes(cause, func(existing *fathomryDecoderScope) *fathomryDecoderScope {
+		return fathomryScope(existing, owner, guard)
+	}, guard)
+	return result
+}
+
+// FathomryDecoderScopeV1 is opaque decoder authority for cooperating custom
+// errors. Mapping must return an isolated same-shape error, never mutate aliases.
+type FathomryDecoderScopeV1 = fathomryDecoderScope
+
+func (scope *fathomryDecoderScope) Decode(decode func() error) error {
+	if decode == nil {
+		return errors.New("temporal: nil decoder")
+	}
+	return scope.run(decode)
+}
+
+func (*fathomryDecoderScope) MarshalJSON() ([]byte, error) {
+	return nil, errors.New("temporal: decoder scope serialization unsupported")
+}
+
+func (*fathomryDecoderScope) UnmarshalJSON([]byte) error {
+	return errors.New("temporal: decoder scope reconstruction unsupported")
+}
+
+func fathomryMapErrorScopes(cause error, transform func(*fathomryDecoderScope) *fathomryDecoderScope, legacy FathomryDecodeGuardV1) (error, bool) {
 	seen := make(map[error]error)
+	complete := true
 	var scope func(error, int) error
 	details := func(values converter.EncodedValues) converter.EncodedValues {
 		if encoded, ok := values.(*EncodedValues); ok && encoded != nil {
 			copy := *encoded
-			copy.fathomryScope = fathomryScope(encoded.fathomryScope, owner, guard)
+			copy.fathomryScope = transform(encoded.fathomryScope)
 			return &copy
 		}
 		return values
@@ -117,6 +169,7 @@ func FathomryScopeErrorV1(cause error, owner *FathomryScopeOwnerV1, guard Fathom
 			return nil
 		}
 		if depth > 64 || len(seen) > 4096 {
+			complete = false
 			return errors.New("temporal: error scope graph exceeds its bound")
 		}
 		reflected := reflect.ValueOf(value)
@@ -132,46 +185,46 @@ func FathomryScopeErrorV1(cause error, owner *FathomryScopeOwnerV1, guard Fathom
 		case *ApplicationError:
 			copy := *original
 			seen[value] = &copy
-			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original}
+			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original, previous: &original.fathomryErrorOrigin}
 			copy.details = details(original.details)
 			copy.cause = scope(original.cause, depth+1)
 			return &copy
 		case *CanceledError:
 			copy := *original
 			seen[value] = &copy
-			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original}
+			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original, previous: &original.fathomryErrorOrigin}
 			copy.details = details(original.details)
 			copy.cause = scope(original.cause, depth+1)
 			return &copy
 		case *TimeoutError:
 			copy := *original
 			seen[value] = &copy
-			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original}
+			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original, previous: &original.fathomryErrorOrigin}
 			copy.lastHeartbeatDetails = details(original.lastHeartbeatDetails)
 			copy.cause = scope(original.cause, depth+1)
 			return &copy
 		case *ActivityError:
 			copy := *original
 			seen[value] = &copy
-			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original}
+			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original, previous: &original.fathomryErrorOrigin}
 			copy.cause = scope(original.cause, depth+1)
 			return &copy
 		case *ChildWorkflowExecutionError:
 			copy := *original
 			seen[value] = &copy
-			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original}
+			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original, previous: &original.fathomryErrorOrigin}
 			copy.cause = scope(original.cause, depth+1)
 			return &copy
 		case *ServerError:
 			copy := *original
 			seen[value] = &copy
-			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original}
+			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original, previous: &original.fathomryErrorOrigin}
 			copy.cause = scope(original.cause, depth+1)
 			return &copy
 		case *WorkflowExecutionError:
 			copy := *original
 			seen[value] = &copy
-			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original}
+			copy.fathomryErrorOrigin = fathomryErrorOrigin{original: original, previous: &original.fathomryErrorOrigin}
 			copy.cause = scope(original.cause, depth+1)
 			return &copy
 		case *NexusOperationError:
@@ -184,13 +237,26 @@ func FathomryScopeErrorV1(cause error, owner *FathomryScopeOwnerV1, guard Fathom
 			seen[value] = &copy
 			copy.Cause = scope(original.Cause, depth+1)
 			return &copy
+		case *nexus.OperationError:
+			copy := *original
+			seen[value] = &copy
+			copy.Cause = scope(original.Cause, depth+1)
+			return &copy
+		case interface {
+			FathomryMapDecoderScopeV1(func(*FathomryDecoderScopeV1) *FathomryDecoderScopeV1) error
+		}:
+			return original.FathomryMapDecoderScopeV1(transform)
 		case interface {
 			FathomryScopeDecodersV1(func(func() error) error) error
 		}:
-			return original.FathomryScopeDecodersV1(guard)
+			if legacy != nil {
+				return original.FathomryScopeDecodersV1(legacy)
+			}
+			return value
 		default:
 			return value
 		}
 	}
-	return scope(cause, 0)
+	result := scope(cause, 0)
+	return result, complete
 }

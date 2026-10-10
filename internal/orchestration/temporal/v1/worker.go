@@ -139,6 +139,8 @@ type Worker struct {
 	transportOnce     sync.Once
 	connection        *grpc.ClientConn
 	transportLifetime transportLifetime
+	admissionContext  context.Context
+	finishAdmission   func()
 }
 
 func (*Worker) LogValue() slog.Value { return slog.StringValue("temporal[restricted]") }
@@ -170,15 +172,16 @@ func (client *Executions) StartWorker(ctx, lifetime context.Context, correlation
 	spec.Activities = slices.Clone(spec.Activities)
 	spec.NexusServices = slices.Clone(spec.NexusServices)
 	spec.Options = copyWorkerOptions(spec.Options)
-	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: "worker.run", Correlation: correlation, Shape: invocation.Session,
-		Bytes: spec.Bytes, EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: client.owner.settings.AdmissionTimeout}}, inbox, client.observer)
+	request := invocation.Request{Name: "worker.run", Correlation: correlation, Shape: invocation.Session,
+		Bytes: spec.Bytes, EvidenceBytes: ExecutionEvidenceBytes, Admission: invocation.Budget{Limit: client.owner.settings.AdmissionTimeout}}
+	call, admitted, finish, err := beginAdmitted(ctx, lifetime, nil, request, client.access, nil, inbox, client.observer, client.admissions.worker)
 	if err != nil {
 		return nil, err
 	}
-	owned, cancel := context.WithCancel(lifetime)
+	owned, cancel := context.WithCancel(admitted)
 	worker := &Worker{client: client, call: call, tasks: tasks, handlers: make(chan struct{}, spec.MaxHandlers),
 		lifetime: owned, cancel: cancel, spec: spec, correlation: correlation, stopRequested: make(chan struct{}), started: make(chan struct{}), done: make(chan struct{}),
-		status: WorkerResult{Namespace: client.Namespace(), TaskQueue: spec.TaskQueue}}
+		status: WorkerResult{Namespace: client.Namespace(), TaskQueue: spec.TaskQueue}, admissionContext: admitted, finishAdmission: finish}
 	go worker.run(ctx)
 	select {
 	case <-worker.started:
@@ -253,13 +256,17 @@ func contained(operation string, run func() error) (err error) {
 func (worker *Worker) run(startContext context.Context) {
 	defer close(worker.done)
 	defer worker.cancel()
+	defer worker.finishAdmission()
 	var native nativeworker.Worker
 	var nativeClient sdk.Client
 	plugins := &workerPlugins{worker: worker}
 	startErr := contained("worker-construct", func() error {
+		startContext, stop := joinAdmissionContext(startContext, worker.lifetime)
+		defer stop()
 		// Client interception belongs to the admitted source client, not this
 		// private polling connection. Its Worker halves are installed below.
 		options := worker.client.owner.pollingOptions(worker.transport, &worker.transportLifetime)
+		options.FailureConverter = finalizationConverter(options.FailureConverter)
 		startup, cancel, err := (invocation.Budget{Limit: worker.client.owner.settings.ConnectTimeout}).Context(startContext, invocation.Establish)
 		if err != nil {
 			return err
@@ -358,8 +365,11 @@ type taskBindingKey struct{}
 type taskRawKey struct{}
 
 type taskBinding struct {
-	worker      *Worker
-	scope       invocation.Scope
-	correlation fault.Correlation
-	closed      atomic.Bool
+	decoderGroup     *sdk.FathomryScopeOwnerV1
+	worker           *Worker
+	scope            invocation.Scope
+	correlation      fault.Correlation
+	closed           atomic.Bool
+	admissionContext context.Context
+	finish           func()
 }

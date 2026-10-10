@@ -1,0 +1,137 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "temporal",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.temporal.invalid_input",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Temporal input or settings are invalid."
+      }
+    },
+    {
+      "id": "fathomry.temporal.authority_refused",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.authority_refused.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Temporal operation exceeds the selected authority."
+      }
+    },
+    {
+      "id": "fathomry.temporal.connection_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.connection_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Temporal client construction failed; retained ownership requires cleanup."
+      }
+    },
+    {
+      "id": "fathomry.temporal.rpc_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.rpc_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Temporal RPC failed; remote effects may be unknown."
+      }
+    },
+    {
+      "id": "fathomry.temporal.limit_exceeded",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.limit_exceeded.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "A Temporal data, work or ownership bound was exceeded."
+      }
+    },
+    {
+      "id": "fathomry.temporal.cleanup_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.cleanup_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Temporal cleanup failed or remains incomplete."
+      }
+    },
+    {
+      "id": "fathomry.temporal.execution_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.execution_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Temporal operation failed; remote completion is a separate fact."
+      }
+    },
+    {
+      "id": "fathomry.temporal.worker_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.worker_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Temporal Worker failed; actual local join remains separately observable."
+      }
+    },
+    {
+      "id": "fathomry.temporal.task_failed",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.task_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Temporal user callback failed."
+      }
+    },
+    {
+      "id": "fathomry.temporal.invalid_state",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.invalid_state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Temporal handle cannot perform this operation in its current state."
+      }
+    },
+    {
+      "id": "fathomry.temporal.runtime_serialization",
+      "contract": "v1",
+      "context": "Static explanation for fathomry.temporal.runtime_serialization.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Temporal runtime value serialization is unsupported."
+      }
+    }
+  ]
+}

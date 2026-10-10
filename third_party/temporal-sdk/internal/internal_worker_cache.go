@@ -1,16 +1,22 @@
 package internal
 
 import (
+	"errors"
 	"runtime"
 	"sync"
 
 	"go.temporal.io/sdk/internal/common/cache"
 )
 
-// A WorkerCache instance is held by each worker to hold cached data. The contents of this struct should always be
-// pointers for any data shared with other workers, and owned values for any instance-specific caches.
+var errWorkerCacheReleased = errors.New("workflow cache handle is released")
+
+// WorkerCache keeps a stable cache generation and one idempotently released owner.
 type WorkerCache struct {
 	sharedCache      *sharedWorkerCache
+	workflowCache    cache.Cache
+	maxCacheSize     int
+	lifecycleMu      sync.Mutex
+	released         bool
 	closeOnce        sync.Once
 	fathomryLifetime *fathomryWorkerLifetime
 	fathomryMu       sync.Mutex
@@ -59,9 +65,9 @@ func PurgeStickyWorkflowCache() {
 	}
 }
 
-// NewWorkerCache Creates a new WorkerCache, and increases workerRefcount by one. Instances of WorkerCache decrement the refcounter as
-// a hook to runtime.SetFinalizer (ie: When they are freed by the GC). When there are no reachable instances of
-// WorkerCache, shared caches will be cleared
+// NewWorkerCache acquires one shared cache owner. Worker shutdown or replay
+// completion releases it explicitly; the finalizer is only a fallback for
+// unreachable handles and cannot collect handles retained by cached workflows.
 func NewWorkerCache() *WorkerCache {
 	sharedWorkerCacheLock.Lock()
 	desiredWorkflowCacheSize := desiredWorkflowCacheSize
@@ -92,7 +98,9 @@ func newWorkerCache(storeIn *sharedWorkerCache, lock *sync.Mutex, cacheSize int)
 	}
 	storeIn.workerRefcount++
 	newWorkerCache := WorkerCache{
-		sharedCache: storeIn,
+		sharedCache:   storeIn,
+		workflowCache: *storeIn.workflowCache,
+		maxCacheSize:  storeIn.maxWorkflowCacheSize,
 	}
 	runtime.SetFinalizer(&newWorkerCache, func(wc *WorkerCache) {
 		wc.close(lock)
@@ -101,24 +109,31 @@ func newWorkerCache(storeIn *sharedWorkerCache, lock *sync.Mutex, cacheSize int)
 }
 
 func (wc *WorkerCache) getWorkflowCache() cache.Cache {
-	return *wc.sharedCache.workflowCache
+	return wc.workflowCache
 }
 
 func (wc *WorkerCache) close(lock *sync.Mutex) {
 	wc.closeOnce.Do(func() {
+		wc.lifecycleMu.Lock()
+		defer wc.lifecycleMu.Unlock()
+		wc.released = true
 		lock.Lock()
-		defer lock.Unlock()
 
 		wc.sharedCache.workerRefcount--
+		var released cache.Cache
 		if wc.sharedCache.workerRefcount == 0 {
-			// Delete cache if no more outstanding references
+			released = *wc.sharedCache.workflowCache
 			wc.sharedCache.workflowCache = nil
+		}
+		lock.Unlock()
+		if released != nil {
+			released.Clear()
 		}
 	})
 }
 
 func (wc *WorkerCache) getWorkflowContext(runID string) *workflowExecutionContextImpl {
-	o := (*wc.sharedCache.workflowCache).Get(runID)
+	o := wc.workflowCache.Get(runID)
 	if o == nil {
 		return nil
 	}
@@ -127,8 +142,13 @@ func (wc *WorkerCache) getWorkflowContext(runID string) *workflowExecutionContex
 }
 
 func (wc *WorkerCache) putWorkflowContext(runID string, wec *workflowExecutionContextImpl) (*workflowExecutionContextImpl, error) {
+	wc.lifecycleMu.Lock()
+	defer wc.lifecycleMu.Unlock()
+	if wc.released {
+		return wec, errWorkerCacheReleased
+	}
 	wc.fathomryRetain(runID, wec)
-	existing, err := (*wc.sharedCache.workflowCache).PutIfNotExist(runID, wec)
+	existing, err := wc.workflowCache.PutIfNotExist(runID, wec)
 	if err != nil || existing != wec {
 		wc.fathomryEvicted(wec)
 	}
@@ -138,8 +158,8 @@ func (wc *WorkerCache) putWorkflowContext(runID string, wec *workflowExecutionCo
 	return existing.(*workflowExecutionContextImpl), nil
 }
 
-func (wc *WorkerCache) removeWorkflowContext(runID string) {
-	(*wc.sharedCache.workflowCache).Delete(runID)
+func (wc *WorkerCache) removeWorkflowContext(runID string, expected *workflowExecutionContextImpl) {
+	wc.workflowCache.DeleteIf(runID, expected)
 }
 
 // MaxWorkflowCacheSize returns the maximum allowed size of the sticky cache
@@ -147,5 +167,5 @@ func (wc *WorkerCache) MaxWorkflowCacheSize() int {
 	if wc == nil {
 		return desiredWorkflowCacheSize
 	}
-	return wc.sharedCache.maxWorkflowCacheSize
+	return wc.maxCacheSize
 }

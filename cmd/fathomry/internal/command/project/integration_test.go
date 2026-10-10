@@ -208,6 +208,7 @@ func TestVersionedProjects(t *testing.T) {
 	runConsumerBudget(t, 3*time.Minute, toolDirectory, offline, goTool(), "build", "-mod=readonly", "-o", cli, frameworkModule+"/cmd/fathomry")
 	verifyHTTPReplacement(t, toolDirectory, offline)
 	verifyTelemetryReplacement(t, toolDirectory, offline)
+	verifyTemporalReplacement(t, toolDirectory, offline)
 	for _, mode := range []string{"local", "remote"} {
 		for _, encoding := range []string{"yaml", "toml"} {
 			t.Run(mode+"/"+encoding, func(t *testing.T) {
@@ -333,12 +334,34 @@ func TestVersionedProjects(t *testing.T) {
 							}
 						}
 					}
+					for _, variant := range []string{"direct", "framework"} {
+						name := "temporal-" + variant
+						directory := filepath.Join(destination, "cmd", name)
+						if err := os.MkdirAll(directory, 0700); err != nil {
+							t.Fatal(err)
+						}
+						for filename, relative := range map[string]string{"main.go": filepath.Join(variant, "main.go"), "common.go": "common.go"} {
+							fixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/orchestration/temporal/v1/testdata", relative))
+							if err != nil {
+								t.Fatal(err)
+							}
+							if err := os.WriteFile(filepath.Join(directory, filename), fixture, 0600); err != nil {
+								t.Fatal(err)
+							}
+						}
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy")
+						runConsumer(t, destination, environment, goTool(), "mod", "tidy", "-diff")
+						binary := filepath.Join(job, name)
+						runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
+						executePublicConsumer(t, destination, environment, binary, "temporal "+variant+" consumer passed\n")
+					}
 					selected := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
 					if bytes.Contains(selected, []byte("\"Replace\"")) {
 						t.Fatal("public consumer acquired checkout replacement")
 					}
 					verifyHTTPReplacement(t, destination, environment)
 					verifyTelemetryReplacement(t, destination, environment)
+					verifyTemporalReplacement(t, destination, environment)
 					verifyZapSelection(t, destination, environment)
 					verifyZerologSelection(t, destination, environment)
 				}
@@ -348,6 +371,25 @@ func TestVersionedProjects(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repository(t), "scripts", "install-cli.sh")); err == nil {
 		t.Fatal("unrequested installer appeared")
 	}
+}
+
+func verifyTemporalReplacement(t testing.TB, directory string, environment []string) {
+	t.Helper()
+	for _, pin := range sdkPins() {
+		if pin.original != "go.temporal.io/sdk" {
+			continue
+		}
+		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", pin.original)
+		var selected struct {
+			Version string
+			Replace *struct{ Path, Version, Sum string }
+		}
+		if json.Unmarshal(raw, &selected) != nil || selected.Version != "v1.49.0" || selected.Replace == nil || selected.Replace.Path != frameworkModule+"/"+pin.directory || selected.Replace.Version != pin.version || selected.Replace.Sum != pin.sum {
+			t.Fatal("actual downloaded Temporal replacement differs from qualified immutable bytes")
+		}
+		return
+	}
+	t.Fatal("Temporal SDK replacement policy missing")
 }
 
 func verifyZerologSelection(t testing.TB, directory string, environment []string) {

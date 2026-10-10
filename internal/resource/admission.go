@@ -78,6 +78,15 @@ type Access struct {
 	entry    *entry
 }
 
+// SameScope reports exact bound-scope identity, including copies and bindings
+// created separately for the same assembly entry. It grants no readiness, use or
+// shutdown authority. Different borrowing aliases are never the same scope even
+// when they share a physical source; nil and zero Access values never match.
+func (access *Access) SameScope(other *Access) bool {
+	return access != nil && other != nil && access.assembly != nil && access.entry != nil &&
+		access.assembly == other.assembly && access.entry == other.entry
+}
+
 // AccessFor binds the exact selected token, only when its resource has Limits.
 // Existing borrowing scopes may continue after owner shutdown; closing their own
 // scope stops their admission. Binding an alias never resets the shared limits.

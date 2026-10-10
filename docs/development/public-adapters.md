@@ -141,6 +141,14 @@ Keep actual source/generation attribution through callbacks, deferred work,
 sessions and credential replacement. Required evidence custody continues until
 safe transfer and actual local termination; optional diagnostics never own it.
 
+Temporal retains one explicit use across operations and lazy decoders:
+`Using(...).Retain` selects a generation once, not per operation. Its Client.Close
+revokes only that retained use and joins its Worker children; it cannot close
+peer uses or the physical source. Owner.Close seals all uses and joins actual
+native work. WithID copies share use identity; Borrow creates a distinct one.
+This native-shaped exception is covered separately in conformance, not treated
+as a raw owning SDK-client escape.
+
 Nacos also has Open/Owner/Handle, but retains its existing
 `Using(ref, dependencies)` contract without WithID or a data-provider budget
 argument. Viper's `New(dependencies)` constructs a non-owning facade with no

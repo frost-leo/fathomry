@@ -2689,7 +2689,8 @@ func TestResetIfDestroyedTaskPrep(t *testing.T) {
 			metricsHandler: metrics.NopHandler,
 			logger:         ilog.NewNopLogger(),
 			cache: &WorkerCache{
-				sharedCache: &sharedWorkerCache{workflowCache: &cache},
+				workflowCache: cache,
+				maxCacheSize:  1,
 			},
 		},
 	}

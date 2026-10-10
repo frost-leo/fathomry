@@ -43,7 +43,37 @@ to docs, or any other relevant information.
 
 ### :boom: Breaking Changes
 
+- Local maintenance: worker stop plugins and `SimplePlugin.RunContextAfter`
+  must not synchronously call the same worker's `Stop`, which now joins the
+  in-progress cleanup operation and would wait for itself.
+
 ### Fixed
+
+- Local compatibility: opt-in native Update, Activity and Nexus encoded-result
+  consumption carries its original decode hook across cached Gets. Each Get uses
+  its admitted caller context without reviving an interceptor-retained alias;
+  unselected native behavior and polling/cache rules are unchanged.
+
+- Local compatibility: managed task errors can transfer only their own decoder
+  scopes into an isolated native failure-conversion window. Original callback
+  aliases remain expired, foreign scopes remain restrictive, and entered decodes
+  join before conversion returns. Custom lazy errors can explicitly map opaque
+  decoder scopes without exposing owner identity; legacy ordinary scoping remains.
+  Repeated native error copies also preserve intentional `errors.Is` ancestry
+  through bounded SDK-owned identity links, without traversing user callbacks.
+
+- Local maintenance adapted from upstream #2710 and #2747: LocalActivity retry
+  defaults, mTLS certificates and Schedule default workflow IDs no longer mutate
+  caller-owned setup values.
+- Local maintenance reconciled with upstream #2694: stopped native workers and
+  replayers release their cache generation explicitly; late inserts are refused
+  and stale workflow contexts cannot remove replacements. Managed workers retain
+  their stronger per-owner eviction and asynchronous destruction join.
+- Local maintenance adapted from upstream #2731: fatal notifications run outside
+  the reporting poller, all remote workers share a polling-stop signal, and
+  concurrent `Stop` and successful-start `Run` join one cleanup operation while
+  preserving the first fatal cause. Automatic fatal cleanup waits for native
+  startup publication; managed full join also retains the fatal callback.
 
 - Local patch: release an unused eager Workflow reservation when an outbound
   payload visitor errors, panics or exits before receiving a start response.

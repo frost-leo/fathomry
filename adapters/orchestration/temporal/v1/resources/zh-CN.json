@@ -1,0 +1,104 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "temporal",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.temporal.invalid_input",
+      "source": "48051ccbba1d76b5ca4c9c198a804062adc5ff3134a15e392732d7b34b9ede1b",
+      "forms": {
+        "other": "Temporal 输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.authority_refused",
+      "source": "b7df638955245649bbfe51870d02719cefb814ed293dc62a4638e2b7cbc7c6bc",
+      "forms": {
+        "other": "Temporal 操作超出了选定的权限。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.connection_failed",
+      "source": "3005ef8edf2ed17bebdc8003048f78b74470efa711e5831696a33eb5e2298c30",
+      "forms": {
+        "other": "Temporal 客户端构造失败；保留的所有权仍需清理。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.rpc_failed",
+      "source": "45bc4a8504543aa5f3a235c6b6a316297019b668c44edd39b19b7f414b1ba511",
+      "forms": {
+        "other": "Temporal RPC 失败；远端效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.limit_exceeded",
+      "source": "6ed12064a3c8a3ec8ba13d6ae28acb1aa6cedf113bc2010cd8beb181a113e79f",
+      "forms": {
+        "other": "Temporal 数据、工作或所有权超过限制。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.cleanup_failed",
+      "source": "311e48d340b360ff09e89e4644d0719f9daba428b384adadf9a4f215301da9c8",
+      "forms": {
+        "other": "Temporal 清理失败或尚未完成。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.execution_failed",
+      "source": "9271d5b6a12b03e23a5dc4bb5ab1cc624361cfe7fca3a7d4c0bb84723d7264f6",
+      "forms": {
+        "other": "Temporal 操作失败；远端完成状态是独立事实。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.worker_failed",
+      "source": "856be725f8f8c07d8a9aa47a4402fe68c86ca5f654c6ed417f939c1f22fb79db",
+      "forms": {
+        "other": "Temporal Worker 失败；实际本地终止需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.task_failed",
+      "source": "f751487bf0c82569c419aa99a87e57cb32185013d502cb34cced3f9f2fb561ff",
+      "forms": {
+        "other": "Temporal 用户回调失败。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.invalid_state",
+      "source": "ffb5c175dc1682460d2baa72ba4a50a752c37e98d908dd3796f2eedd2fb377e8",
+      "forms": {
+        "other": "Temporal 句柄当前无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.temporal.runtime_serialization",
+      "source": "96d771981e6456c6fff783e9a65664adfc07b72c6bd88d2fe6decb58267be8dc",
+      "forms": {
+        "other": "不支持序列化 Temporal 运行时值。"
+      }
+    }
+  ]
+}

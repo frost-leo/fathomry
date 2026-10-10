@@ -358,6 +358,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/httpclient/httpcloak/v1`](reference/adapters/httpclient/httpcloak/v1/interface.md) | HTTPcloak native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/httpclient/nuki/v1`](reference/adapters/httpclient/nuki/v1/interface.md) | Nuki native HTTP, exact preparation and controlled route/response ownership |
 | [`adapters/telemetry/otel/v1`](reference/adapters/telemetry/otel/v1/interface.md) | Public telemetry, frozen preparation, generation-owned spans, explicit export scheduling and capability coverage |
+| [`adapters/orchestration/temporal/v1`](reference/adapters/orchestration/temporal/v1/interface.md) | Selected native Temporal capabilities, retained source/use identity, actual Worker join and independent evidence; service qualification remains profile-specific |
 | [`adapters/logging/v1`](reference/adapters/logging/v1/interface.md) | Bounded closed logging data, safe errors, budgets and attribution |
 | [`adapters/logging/slog/v1`](reference/adapters/logging/slog/v1/interface.md) | Restricted owned slog ingress, ordered groups and out-of-band refusal |
 | [`adapters/logging/zap/v1`](reference/adapters/logging/zap/v1/interface.md) | Public Zap outputs, immutable file-level policy views and retained derivations |

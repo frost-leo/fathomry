@@ -47,6 +47,35 @@ func failure(kind fault.Kind, operation string, causes ...error) error {
 	return kind.New(fault.Context{Provider: ProviderID, Operation: operation}, causes...)
 }
 
+type semanticError struct {
+	private
+	cause  error
+	native error
+}
+
+func (*semanticError) Error() string { return "temporal: controlled operation failed" }
+
+func (err *semanticError) Unwrap() error { return err.cause }
+
+// NativeError deliberately exposes the exact scoped native return captured by
+// this provider. It only accepts its direct error frame, never a matching error
+// found by scanning an arbitrary user wrapper or multi-cause graph. Native data
+// is potentially sensitive and retains the original borrowed decoder contract.
+func NativeError(err error) (error, bool) {
+	value, ok := err.(*semanticError)
+	if !ok || value == nil {
+		return nil, false
+	}
+	return value.native, true
+}
+
+func semanticFailure(cause, native error, captured bool) error {
+	if cause == nil || !captured {
+		return cause
+	}
+	return &semanticError{cause: cause, native: native}
+}
+
 type private struct{}
 
 func (private) Format(state fmt.State, _ rune) { _, _ = io.WriteString(state, "temporal[restricted]") }

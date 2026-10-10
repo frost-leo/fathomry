@@ -2754,6 +2754,9 @@ func WithLocalActivityOptions(ctx Context, options LocalActivityOptions) Context
 func applyRetryPolicyDefaultsForLocalActivity(policy *RetryPolicy) *RetryPolicy {
 	if policy == nil {
 		policy = &RetryPolicy{}
+	} else {
+		policyCopy := *policy
+		policy = &policyCopy
 	}
 	if policy.BackoffCoefficient == 0 {
 		policy.BackoffCoefficient = 2

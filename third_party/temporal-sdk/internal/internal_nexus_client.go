@@ -359,6 +359,7 @@ type (
 		runID                     string
 		nexusSerializationContext *converter.NexusSerializationContext
 		result                    *ClientPollNexusOperationResultOutput
+		fathomryDecoder           FathomryEncodedValueDecoderV1
 	}
 )
 
@@ -483,7 +484,7 @@ func (h *clientNexusOperationHandleImpl) Get(ctx context.Context, valuePtr any) 
 			if valuePtr == nil {
 				return nil
 			}
-			return h.result.Result.Get(valuePtr)
+			return fathomryDecodeEncodedValue(ctx, h.result.Result, valuePtr, h.fathomryDecoder)
 		}
 	}
 	if err := h.client.ensureInitialized(ctx); err != nil {
@@ -506,10 +507,11 @@ func (h *clientNexusOperationHandleImpl) Get(ctx context.Context, valuePtr any) 
 		}
 		if resp.Result != nil {
 			h.result = &ClientPollNexusOperationResultOutput{Result: resp.Result}
+			h.fathomryDecoder = fathomryEncodedValueDecoder(ctx)
 			if valuePtr == nil {
 				return nil
 			}
-			return resp.Result.Get(valuePtr)
+			return fathomryDecodeEncodedValue(ctx, resp.Result, valuePtr, h.fathomryDecoder)
 		}
 	}
 }

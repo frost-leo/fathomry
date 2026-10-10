@@ -64,6 +64,7 @@ automatically own or construct the packages below it.
 | `httpclient/httpcloak/v1` | data-provider | [HTTPcloak native HTTP, controlled routes and response ownership](../docs/reference/adapters/httpclient/httpcloak/v1/interface.md) |
 | `httpclient/nuki/v1` | data-provider | [Nuki native HTTP, controlled routes and response ownership](../docs/reference/adapters/httpclient/nuki/v1/interface.md) |
 | `telemetry/otel/v1` | data-provider | [OpenTelemetry signals, retained spans, propagation and explicit export ownership](../docs/reference/adapters/telemetry/otel/v1/interface.md) |
+| `orchestration/temporal/v1` | data-provider | [Native Temporal capabilities, retained-use identity, Worker join and independent operation/task evidence](../docs/reference/adapters/orchestration/temporal/v1/interface.md) |
 | `logging/v1` | logging-data | [Closed bounded logging values, safe public diagnostics, budgets and output attribution](../docs/reference/adapters/logging/v1/interface.md) |
 | `logging/slog/v1` | ingress | [Restricted, explicitly owned slog ingress with observable refusal and ordered groups](../docs/reference/adapters/logging/slog/v1/interface.md) |
 | `logging/zap/v1` | data-provider | [Zap synchronous local/structured outputs, retained derivations and stable physical file ownership](../docs/reference/adapters/logging/zap/v1/interface.md) |
@@ -93,6 +94,7 @@ exists; do not create empty files or new APIs to complete a template.
 | --- | --- |
 | `doc.go` | Package purpose, consumers, call sequence, ownership and limits |
 | `options.go` | Configuration/dependency declarations, mapping and validation when exposed |
+| `option.go` | Temporal's owner-selected singular spelling for the same configuration/dependency responsibility |
 | `policy.go` | Budget/Policy vocabulary or public policy computation |
 | `metadata.go` | Detached attribution, source identity, provenance and profile vocabulary |
 | `source.go` | Native source Owner/Handle construction and repeatable shutdown, where such ownership exists |
@@ -171,6 +173,12 @@ not a completed business range or a durable resume token.
 Doris retains local-only construction, single-use SQL connections, bounded
 cursor lifetime and strict Stream Load. Load visibility, row quality and label/
 payload identity are distinct; an admitted canceled page ends its cursor.
+
+Temporal uses `option.go`, cohesive Workflow/Activity/Nexus/Schedule/Deployment
+and description files, and separate native source/use/Worker ownership. Its
+Client.Close revokes one retained use and joins its Workers, not the physical
+source or peers. `Using(...).Retain` selects one Fixed/Follow generation for the
+whole use; it does not retarget lazy native handles per operation.
 
 Redis additionally has real `preparation.go`, `credentials.go`,
 `logging.go` and `profile.go` responsibilities. Do not manufacture empty

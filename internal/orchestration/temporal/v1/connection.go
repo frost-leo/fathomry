@@ -96,34 +96,25 @@ func SelectWithRuntime(options OptionsV1, runtime RuntimeOptions, layers ...reso
 // resource byte limits must fit that envelope. Transport/authentication and its
 // native RPC instrumentation are inherited. Native derivation is always eager.
 func SelectFromExisting(options OptionsV1, runtime RuntimeOptions, parent *Client, parentBytes int64, layers ...resource.Layer) (resource.Selection[Source], error) {
-	if parent == nil || parent.owner == nil || parent.access == nil || parentBytes < 1 || options.Lazy {
-		return resource.Selection[Source]{}, failure(ErrInput, "shared-client")
-	}
-	if options.Endpoint == "" {
-		options.Endpoint = parent.owner.settings.Endpoint
-	}
-	if options.Plaintext && !parent.owner.settings.Plaintext {
-		return resource.Selection[Source]{}, failure(ErrAuthority, "shared-transport")
-	}
-	options.Plaintext = parent.owner.settings.Plaintext
-	if options.MaxRequestBytes == 0 {
-		options.MaxRequestBytes = parent.owner.settings.MaxRequestBytes
-	}
-	if options.MaxResponseBytes == 0 {
-		options.MaxResponseBytes = parent.owner.settings.MaxResponseBytes
+	options, err := inheritSourceOptions(options, parent, parentBytes)
+	if err != nil {
+		return resource.Selection[Source]{}, err
 	}
 	return selectSource(options, runtime, parent, parentBytes, layers...)
 }
 
 func selectSource(options OptionsV1, runtime RuntimeOptions, parent *Client, parentBytes int64, layers ...resource.Layer) (resource.Selection[Source], error) {
-	runtime, err := freezeRuntime(runtime)
+	prepared, err := prepareOptions(options, runtime, parentResolverSchemes(parent), layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	prepared, err := prepare(options, layers)
-	if err != nil {
-		return resource.Selection[Source]{}, err
+	if parent != nil {
+		return sourceSelection(prepared.configuration, prepared.runtime, parent, parentBytes), nil
 	}
+	return prepared.Selection(), nil
+}
+
+func sourceSelection(prepared resource.Prepared[settings], runtime RuntimeOptions, parent *Client, parentBytes int64) resource.Selection[Source] {
 	return resource.Select(prepared, func(ctx context.Context, value settings) (result resource.Resource[Source], err error) {
 		owner := &connection{settings: value, runtime: runtime, sharedBytes: parentBytes}
 		result = resource.Resource[Source]{Capability: Source{owner: owner}, Release: owner.close}
@@ -142,10 +133,8 @@ func selectSource(options OptionsV1, runtime RuntimeOptions, parent *Client, par
 		owner.setupContext = work
 		defer func() { owner.setupContext = nil }()
 		if parent != nil {
-			if value.Lazy || value.Endpoint != parent.owner.settings.Endpoint || value.Plaintext != parent.owner.settings.Plaintext || value.APIKey != "" || value.RootCAPEM != "" || value.CertificatePEM != "" || value.ServerName != "" ||
-				value.MaxRequestBytes > parent.owner.settings.MaxRequestBytes || value.MaxResponseBytes > parent.owner.settings.MaxResponseBytes || parentBytes < value.reservation() ||
-				runtime.Credentials != nil || runtime.HeadersProvider != nil || runtime.TrafficController != nil || !emptyConnectionOptions(runtime.ConnectionOptions) {
-				return result, failure(ErrAuthority, "shared-transport")
+			if err := validateSharedSource(value, runtime, parent, parentBytes); err != nil {
+				return result, err
 			}
 			owner.parentLease, err = parent.access.Acquire(work, parentBytes)
 			if err != nil {
@@ -153,6 +142,9 @@ func selectSource(options OptionsV1, runtime RuntimeOptions, parent *Client, par
 			}
 			owner.root = parent.owner.transportOwner()
 			owner.transport = parent.owner.transport
+			owner.runtime.ResolverBuilders = slices.Clone(parent.owner.runtime.ResolverBuilders)
+			owner.runtime.ContextDialer = parent.owner.runtime.ContextDialer
+			owner.runtime.UserAgent = parent.owner.runtime.UserAgent
 			work = context.WithValue(work, transportOwnerKey{}, owner)
 		}
 		options, err := nativeOptions(value, owner.capture, runtime)
@@ -200,7 +192,7 @@ func selectSource(options OptionsV1, runtime RuntimeOptions, parent *Client, par
 			return result, err
 		}
 		return result, nil
-	}), nil
+	})
 }
 
 type captureTransportKey struct{}
@@ -257,7 +249,7 @@ func (owner *connection) capture(ctx context.Context, method string, request, re
 	if ctx.Value(activeRPCKey{}) == nil {
 		err = boundedNativeRPC(ctx, bound.settings, method, request, reply, transport, next, options...)
 	} else {
-		err = next(ctx, method, request, reply, transport, options...)
+		err = next(ctx, method, request, reply, transport, boundedCallOptions(bound.settings, options)...)
 	}
 	return err
 }
@@ -288,7 +280,7 @@ func nativeOptions(value settings, rpcInterceptor grpc.UnaryClientInterceptor, r
 		if value.Plaintext || value.RootCAPEM != "" || value.CertificatePEM != "" || value.ServerName != "" {
 			return sdk.Options{}, failure(ErrInput, "conflicting-tls-options")
 		}
-		options.ConnectionOptions.TLS = options.ConnectionOptions.TLS.Clone()
+		options.ConnectionOptions.TLS = copyTLSContainers(options.ConnectionOptions.TLS)
 	}
 	if options.ConnectionOptions.TLSDisabled && !value.Plaintext {
 		return sdk.Options{}, failure(ErrInput, "conflicting-tls-options")
@@ -333,10 +325,14 @@ func (owner *connection) close(context.Context) resource.ReleaseResult {
 // Borrowing aliases share native transport and limits; they cannot close it.
 type Client struct {
 	private
-	owner    *connection
-	access   *resource.Access
-	inbox    *invocation.Inbox[RPCResult]
-	observer *invocation.Observer
+	owner       *connection
+	access      *resource.Access
+	inbox       *invocation.Inbox[RPCResult]
+	observer    *invocation.Observer
+	admission   Admission[RPCResult]
+	mapError    func(error) error
+	freshRPCIDs bool
+	workBytes   int64
 }
 
 // Bind rejects limits that do not cover the configured per-RPC wire envelope.
@@ -381,6 +377,10 @@ func (client *Client) Profile() compatibility.Profile {
 		return compatibility.Profile{}
 	}
 	value := client.owner.settings
+	proxy := "disabled"
+	if client.owner.runtime.ContextDialer != nil {
+		proxy = "explicit-dialer"
+	}
 	grants := slices.Clone(value.RPCs)
 	slices.Sort(grants)
 	profile := compatibility.Profile{ImplementationModule: compatibility.FrameworkModule, SDKMode: "temporal-process-rpc-v1",
@@ -395,7 +395,9 @@ func (client *Client) Profile() compatibility.Profile {
 			{Name: "response-bytes", Value: strconv.Itoa(value.MaxResponseBytes)},
 			{Name: "rpc-timeout-ns", Value: strconv.FormatInt(int64(value.RPCTimeout), 10)},
 			{Name: "admission-timeout-ns", Value: strconv.FormatInt(int64(value.AdmissionTimeout), 10)},
-			{Name: "proxy", Value: "disabled"},
+			{Name: "proxy", Value: proxy},
+			{Name: "native-resolvers", Value: strconv.Itoa(len(client.owner.runtime.ResolverBuilders))},
+			{Name: "explicit-user-agent", Value: strconv.FormatBool(client.owner.runtime.UserAgent != "")},
 			{Name: "native-logger", Value: strconv.FormatBool(client.owner.runtime.Logger != nil)},
 			{Name: "native-metrics", Value: strconv.FormatBool(client.owner.runtime.MetricsHandler != nil)},
 			{Name: "native-interceptors", Value: strconv.Itoa(len(client.owner.runtime.Interceptors))},
@@ -411,13 +413,18 @@ func (client *Client) Profile() compatibility.Profile {
 	return profile
 }
 
-func (client *Client) begin(ctx context.Context, correlation fault.Correlation, name string) (*invocation.Call[RPCResult], error) {
+func (client *Client) begin(ctx context.Context, correlation fault.Correlation, name string) (*invocation.Call[RPCResult], context.Context, func(), error) {
 	if client == nil || client.owner == nil {
-		return nil, failure(ErrInput, "rpc")
+		return nil, nil, nil, failure(ErrInput, "rpc")
 	}
-	return invocation.Begin(ctx, client.access, invocation.Request{Name: name, Correlation: correlation,
-		Shape: invocation.Finite, Bytes: client.RPCReservation(), EvidenceBytes: client.EvidenceBytes(),
-		Admission: invocation.Budget{Limit: client.owner.settings.AdmissionTimeout}}, client.inbox, client.observer)
+	request := invocation.Request{Name: name, Correlation: correlation,
+		Shape: invocation.Finite, Bytes: operationWorkBytes(client.workBytes, client.owner), EvidenceBytes: client.EvidenceBytes(),
+		Admission: invocation.Budget{Limit: client.owner.settings.AdmissionTimeout}}
+	parent, scope, err := inheritedAdmission(ctx, client.access, &request)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return beginAdmitted(ctx, ctx, parent, request, client.access, scope, client.inbox, client.observer, client.admission)
 }
 
 type transportOwnerKey struct{}

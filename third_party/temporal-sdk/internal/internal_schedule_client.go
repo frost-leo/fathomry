@@ -604,6 +604,9 @@ func convertToPBScheduleAction(
 ) (*schedulepb.ScheduleAction, error) {
 	switch action := scheduleAction.(type) {
 	case *ScheduleWorkflowAction:
+		actionCopy := *action
+		action = &actionCopy
+
 		// Set header before interceptor run
 		dataConverter := WithContext(ctx, client.dataConverter)
 

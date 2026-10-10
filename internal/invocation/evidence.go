@@ -100,16 +100,17 @@ func (inbox *Inbox[T]) unreserve(bytes int64) {
 	inbox.mu.Unlock()
 }
 
-func (inbox *Inbox[T]) publish(receipt *Receipt[T], bytes int64) {
+func (inbox *Inbox[T]) publish(delivery *DeliveryRecord[T]) {
 	// Every queued record already owns a slot, including concurrent reservations.
 	// Received-but-unreleased records also consume slots, so this send cannot wait.
-	inbox.queue <- &DeliveryRecord[T]{receipt: receipt, inbox: inbox, bytes: bytes}
+	inbox.queue <- delivery
 }
 
 // Next transfers an accepted operation's live receipt to the evidence receiver;
 // it can arrive BEFORE technical completion. The receiver retains unresolved
 // records, inspects missing facts explicitly, and releases only after appropriate
 // handling. There is no implicit acknowledgement, retry, drain worker or close.
+// Directly claimed records are never also offered through Next.
 func (inbox *Inbox[T]) Next(ctx context.Context) (*DeliveryRecord[T], error) {
 	if inbox == nil || inbox.queue == nil || ctx == nil {
 		return nil, ErrEvidence.New(fault.Context{})
