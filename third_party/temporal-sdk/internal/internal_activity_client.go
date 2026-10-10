@@ -398,10 +398,11 @@ type (
 
 	// clientActivityHandleImpl is the default implementation of ClientActivityHandle.
 	clientActivityHandleImpl struct {
-		client *WorkflowClient
-		id     string
-		runID  string
-		result *ClientPollActivityResultOutput
+		client          *WorkflowClient
+		id              string
+		runID           string
+		result          *ClientPollActivityResultOutput
+		fathomryDecoder FathomryEncodedValueDecoderV1
 	}
 )
 
@@ -582,7 +583,7 @@ func (h *clientActivityHandleImpl) Get(ctx context.Context, valuePtr any) error 
 			if valuePtr == nil {
 				return nil
 			}
-			return h.result.Result.Get(valuePtr)
+			return fathomryDecodeEncodedValue(ctx, h.result.Result, valuePtr, h.fathomryDecoder)
 		}
 	}
 	if err := h.client.ensureInitialized(ctx); err != nil {
@@ -607,7 +608,8 @@ func (h *clientActivityHandleImpl) Get(ctx context.Context, valuePtr any) error 
 				return nil
 			}
 			h.result = &ClientPollActivityResultOutput{Result: resp.Result}
-			return resp.Result.Get(valuePtr)
+			h.fathomryDecoder = fathomryEncodedValueDecoder(ctx)
+			return fathomryDecodeEncodedValue(ctx, resp.Result, valuePtr, h.fathomryDecoder)
 		}
 	}
 }

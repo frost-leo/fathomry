@@ -1,0 +1,359 @@
+{
+  "schema": "fathomry.temporal-sdk-maintenance/v1",
+  "license_notice": "fathomry\nCopyright (C) 2026  Frost Leo\nSPDX-License-Identifier: GPL-3.0-or-later\n\nThis program is free software: you can redistribute it and/or modify\nit under the terms of the GNU General Public License as published by\nthe Free Software Foundation, either version 3 of the License, or\n(at your option) any later version.\n\nThis program is distributed in the hope that it will be useful,\nbut WITHOUT ANY WARRANTY; without even the implied warranty of\nMERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the\nGNU General Public License for more details.\n\nYou should have received a copy of the GNU General Public License\nalong with this program. If not, see <http://www.gnu.org/licenses/>.",
+  "module": "go.temporal.io/sdk",
+  "version": "v1.49.0",
+  "origin_commit": "58115b581391037b93451f50ac3628611ea0493b",
+  "local_compatibility_revision": "v1-development",
+  "maintenance_revision": "gh-134/2026-10-10",
+  "product_baseline": "396e55a6698a7d65b88b63085c76bfffc5795bf8",
+  "original_manifest_sha256": "94fe0999bb98fb7e2fbe966953f1ba74435d8063c27a6b85386765d22cd3ec60",
+  "repair_references": [
+    {
+      "pull_request": 2710,
+      "commit": "bd569a57668113c9158c9f22f5dde94162738479",
+      "treatment": "Copy caller RetryPolicy before LocalActivity defaulting."
+    },
+    {
+      "pull_request": 2747,
+      "commit": "def71078bba0938270c073bdfe921e82864fb6e5",
+      "treatment": "Clone TLS config with independent certificate slice; copy ScheduleWorkflowAction before defaulting."
+    },
+    {
+      "pull_request": 2694,
+      "commit": "8b8ac9edb6e62a3b7f86ffa08d9af4bbcc53b2a2",
+      "treatment": "Adapt immutable generation, explicit idempotent release, rejected late inserts and conditional normal removal; retain local handle API, metrics and managed per-owner asynchronous destruction join."
+    },
+    {
+      "pull_request": 2731,
+      "commit": "abb808c0a7e88a78c20845aeb9f1e287aeb6fd84",
+      "treatment": "Adapt shared remote noRepoll, slot/rate rechecks, off-poller fatal notification, first-cause Run and concurrent Stop/plugin join. Additionally defer automatic fatal Stop until startup completion and retain fatal notification in managed full join."
+    }
+  ],
+  "unchanged_original_file_count": 273,
+  "changed_original_files": [
+    {
+      "path": ".github/workflows/docker/dynamic-config-custom.yaml",
+      "sha256": "02abca91c151e0cc5083169defb671a0c13cb70a7e334fcb30c182db23c2179f",
+      "baseline_sha256": "02abca91c151e0cc5083169defb671a0c13cb70a7e334fcb30c182db23c2179f",
+      "original_sha256": "c656038d3b6da4d474b1c325a019d83de28a075fa43ea6473b9afb8546f19f6d"
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "a5a649d25f2f551d82a5739b179ae1f05c31567cec9630055988917a58174e1c",
+      "baseline_sha256": "a5a649d25f2f551d82a5739b179ae1f05c31567cec9630055988917a58174e1c",
+      "original_sha256": "70b56d2eab450a0b20350db8cef831c7c366badaff0eb543fc1fd0ce9f1e90e1"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "7d15f460f8c8f04ef3f26ed9074420f99c2b81f2ff059799ce60df3441af0b35",
+      "baseline_sha256": "207650179cbb4aa7a3263ad3dcd7b5526a17f2c400e33b5c55e0bd9617973536",
+      "original_sha256": "0dcb57d3dab88f4731ee725001aaf77fec3c285495f9607f548a7dc20f3dc200"
+    },
+    {
+      "path": "README.md",
+      "sha256": "098c1738d1014196da1d0abe46cba2a8c221204ee27fbfa3b323350ce2ec2c06",
+      "baseline_sha256": "098c1738d1014196da1d0abe46cba2a8c221204ee27fbfa3b323350ce2ec2c06",
+      "original_sha256": "0997dffc286ce096bd4eb2611f85c84565d621dc3ab1e3a6b0dd16efadbeecce"
+    },
+    {
+      "path": "internal/client.go",
+      "sha256": "16ebb2f10809a5cc4895beb996d9af5f84e5910c7974a71c71bb07d902827e74",
+      "baseline_sha256": "1f97a3e3980d05de142e531b0ba1c7a0ef792c416cf905c836976393279b8e33",
+      "original_sha256": "7ca4ac88b74726397772a912795dec19fbc1e2deffbccc19ad646bbc0bcab43e"
+    },
+    {
+      "path": "internal/cmd/prepare-release/main.go",
+      "sha256": "367071972daebd7e0d1a5f53055ecef199c6423e1a5a4926eb15006cfd80600c",
+      "baseline_sha256": "367071972daebd7e0d1a5f53055ecef199c6423e1a5a4926eb15006cfd80600c",
+      "original_sha256": "4a7ee119f32e75f562a8290153bb5f59a2c70c2afa888acef7ac66d105a72afa"
+    },
+    {
+      "path": "internal/common/cache/cache.go",
+      "sha256": "ca3ae2ed00c34efd26b70339f400a889ebf1f8302b706053423b7734af739aff",
+      "baseline_sha256": "ca3ae2ed00c34efd26b70339f400a889ebf1f8302b706053423b7734af739aff",
+      "original_sha256": "77dce763d4b1806fbc7f041d0bc68252c044f9f2e946f944cf4b2b1c314429fb"
+    },
+    {
+      "path": "internal/common/cache/lru.go",
+      "sha256": "80150e869dde629b6ef8b1f3518fccb5847c7dedc42bbc7723c8988c7d388257",
+      "baseline_sha256": "80150e869dde629b6ef8b1f3518fccb5847c7dedc42bbc7723c8988c7d388257",
+      "original_sha256": "223334e2f598f9f4d3ce02578263c78f800dbdf3aef3051296ef99fe90244403"
+    },
+    {
+      "path": "internal/error.go",
+      "sha256": "2b7e65e1be60146914d1f3c64194f597122338698e8e6d4d071ced229b0eab77",
+      "baseline_sha256": "2b7e65e1be60146914d1f3c64194f597122338698e8e6d4d071ced229b0eab77",
+      "original_sha256": "02ca68280fe1994bab92ec9191cbc0110321b163a67a53b8f28b764766fc6a65"
+    },
+    {
+      "path": "internal/extstore/extstore.go",
+      "sha256": "0e00c46e4c21a85fe47a1e93bbe9d6acb4827e633db090f0bc51f0a76b65a8af",
+      "baseline_sha256": "0e00c46e4c21a85fe47a1e93bbe9d6acb4827e633db090f0bc51f0a76b65a8af",
+      "original_sha256": "c6d390cdd5380a77a65f285a521eac9d29dbeeb144d9d9223d4dd35c6883ecff"
+    },
+    {
+      "path": "internal/internal_activity_client.go",
+      "sha256": "c43dc7f21eee7eaf016a47cd1d5ce7e7856a642c4ce4ab5b96c804c6b955dde1",
+      "baseline_sha256": "732337f3418917cf5274c57e0f0b1b9c4dd7607dc8c9661e6c282d26a0729c87",
+      "original_sha256": "4c022782f8bf42cc70331abd2a450c3ba14bc7f94cd03457822ebd31cb90f264"
+    },
+    {
+      "path": "internal/internal_nexus_client.go",
+      "sha256": "f3efa1df29b2cc395dd31e9e352cb01b1959a87908f11a1e2b6914679f348184",
+      "baseline_sha256": "739a5304c2531f7f996b86cfa3097b97e72c1651be82e7c676f759898168c950",
+      "original_sha256": "913c387fde9d379116ac28ff5f150dedcb50979a28390636f3a1a0ec30eb46e8"
+    },
+    {
+      "path": "internal/internal_nexus_task_poller.go",
+      "sha256": "0d1c6f3b8e519b1ce1dfe88dc754542b8706d4f900a1195a827aabb65a94a933",
+      "baseline_sha256": "0d1c6f3b8e519b1ce1dfe88dc754542b8706d4f900a1195a827aabb65a94a933",
+      "original_sha256": "e2d2aafd062e72c7b7aa0e4d28c17c56a82feefaf94a1695a247e8007a0287ab"
+    },
+    {
+      "path": "internal/internal_nexus_worker.go",
+      "sha256": "544c32af624aca6e775f7dd26805ee2c74258ae753b2a2c96fbbef27e253782c",
+      "baseline_sha256": "f1bb9ac5eedfe0d0cfc0cb427ab7a0326c06d2ed93a9c64c478e537acc83b01f",
+      "original_sha256": "ec156c5fd040c6ee17190ff7f4afc48f2551c25123b35a71567ef8f8f720f9c1"
+    },
+    {
+      "path": "internal/internal_schedule_client.go",
+      "sha256": "d8cb9a8de3f3e32e0c9093eaac7ad11de5ca3004fa52e637517f034ec608a69f",
+      "baseline_sha256": "ce663323232593ccaac941b7f5d4ba7d7345dddd75234c90a90d90d7ce488b37",
+      "original_sha256": "ce663323232593ccaac941b7f5d4ba7d7345dddd75234c90a90d90d7ce488b37"
+    },
+    {
+      "path": "internal/internal_task_handlers.go",
+      "sha256": "37cccaaaeb6f2d5315845901f3ae08f72ac9081f39f837bc8ee3395f6cf09714",
+      "baseline_sha256": "52f34cf3b11174779a00ff1e920b4d6bebd47154ec6379a62c14465f203b45f3",
+      "original_sha256": "b008886c201db0131d469b7d196568a5477db3dfd48aaa9267fe6e23a0487402"
+    },
+    {
+      "path": "internal/internal_task_handlers_test.go",
+      "sha256": "eab0064cf3b702f52142732c68d6a0c0c5a64052e9d321f59f7d7255c0067b80",
+      "baseline_sha256": "f6f01c606704d1509c2f76aec1de740982f3676613ed054d60318c729c9acd58",
+      "original_sha256": "f6f01c606704d1509c2f76aec1de740982f3676613ed054d60318c729c9acd58"
+    },
+    {
+      "path": "internal/internal_task_pollers.go",
+      "sha256": "f687e78b4323cbc9271bd73492b1d210e6659f996ecb7ffaafa60d76053e25a2",
+      "baseline_sha256": "f687e78b4323cbc9271bd73492b1d210e6659f996ecb7ffaafa60d76053e25a2",
+      "original_sha256": "b254d8024b07374006f450c00de7cd2b093f43d49b70202b8201fbd2e19dac88"
+    },
+    {
+      "path": "internal/internal_worker.go",
+      "sha256": "395216c59fd03a867333ae033768779a951e9c86dc3d4b3475fa2be5f942dfe9",
+      "baseline_sha256": "5399c5079c3345a4b2bf75d698515b8ced8e837f01cade31e750731f8a4726de",
+      "original_sha256": "5dde1a3dfb953340edc9fd61816fd2a7dc58a701009a3818b99b8ea9edbc392d"
+    },
+    {
+      "path": "internal/internal_worker_base.go",
+      "sha256": "272ed877a1e19f5ace5e9a29992ab8544709c5cc605e4c9e09e11f989382d37e",
+      "baseline_sha256": "5b52649a5f928eae32e501efd78e940afada11c823094a8271a687ec0351f30d",
+      "original_sha256": "706877b73945f0ad119de63c4cf95d338aa4e01fb4925d3ad6671b66eaab79a4"
+    },
+    {
+      "path": "internal/internal_worker_cache.go",
+      "sha256": "601e3f831f84214b6afcbdfd878bc4a311355c4f7d04871852d8a82f05e411f7",
+      "baseline_sha256": "d1a6f13c114427641cfa6e0b0f641251f5ae8ccc5ee1d840c0291b84d91cbf1b",
+      "original_sha256": "17e79d6f0308cc8f91a46af679667ed1b49055f48da83b54bf22f2cd037f9817"
+    },
+    {
+      "path": "internal/internal_worker_heartbeat.go",
+      "sha256": "4ebcf371eab89c142d6d4b3a73b8f6a61fec52c02523003bc3fb7cda92c8fa72",
+      "baseline_sha256": "4ebcf371eab89c142d6d4b3a73b8f6a61fec52c02523003bc3fb7cda92c8fa72",
+      "original_sha256": "7d7d6ce94a90f2a21c0579e372e4afce10cd0b28a317ebf82055b48e6857a8d4"
+    },
+    {
+      "path": "internal/internal_workflow.go",
+      "sha256": "e4c71a446c7ccb345fe88ee08349d65e80eda2dcc8a1898e19601512f7e4aaf4",
+      "baseline_sha256": "e4c71a446c7ccb345fe88ee08349d65e80eda2dcc8a1898e19601512f7e4aaf4",
+      "original_sha256": "2c6962821d78ce68a48508af59edd110d5b8ebd4393990faa819951cbd90046a"
+    },
+    {
+      "path": "internal/internal_workflow_client.go",
+      "sha256": "3d5571d7d6c5286761750253e4d9eab8c9fc56a21a95381b799dea0360dfe4c7",
+      "baseline_sha256": "31d20d3c3bfee2cad0302390d403e634f95f064f1c3e5528f1a7c71759b2c759",
+      "original_sha256": "4762caa7ca1fe6fcffcaa9044ec713194575307eed048673880a249e0a37221e"
+    },
+    {
+      "path": "internal/plugin.go",
+      "sha256": "465554d5fac55ea24e0e78ddbfadddbc665e008c437f107aa500edec63a14ce6",
+      "baseline_sha256": "e845e7c77b4246c625bcff78d6f753938b4f6ff032a587ba3fa320e50eef4dae",
+      "original_sha256": "e63a5945881b9c492cc736367ef350b247cd5619fb0777b3a5ca0483adf0da0c"
+    },
+    {
+      "path": "internal/tuning.go",
+      "sha256": "42d55ccff23652c87b321a827cec939761b99ee7e87f4d9386ee462ba1e0e091",
+      "baseline_sha256": "42d55ccff23652c87b321a827cec939761b99ee7e87f4d9386ee462ba1e0e091",
+      "original_sha256": "a19833a38e392e4b08127ff64738306fef93cd9ab2ed30c5403200fdcbc7473e"
+    },
+    {
+      "path": "internal/worker.go",
+      "sha256": "f744cad9ccfdcd5af9dc940cc91c50ab7c559cae5778e2b4e2dbdc5801f59c04",
+      "baseline_sha256": "f2f87bc8f7218357ec5334c5bdc142fa27c3d0e525b5e0d7f2d37422b78f4ae9",
+      "original_sha256": "9013276fb3dcc6a9a5414ae88213977ed3c17a16bc337fa45d6ba9786e7c4254"
+    },
+    {
+      "path": "internal/worker_version_sets.go",
+      "sha256": "75cb69f4049022c3e14270f77c80fdc895cd586b77e276a5bf028334569501ff",
+      "baseline_sha256": "75cb69f4049022c3e14270f77c80fdc895cd586b77e276a5bf028334569501ff",
+      "original_sha256": "d67aae49cafab039b2d54050705645ef4625aaa14e76ef500a6804ecf0658a9b"
+    },
+    {
+      "path": "internal/worker_versioning_rules.go",
+      "sha256": "6fee2ab5dbaca6d31d8d3b48f70f609ffb0b76727955da36a7cf0333fad1eb4a",
+      "baseline_sha256": "6fee2ab5dbaca6d31d8d3b48f70f609ffb0b76727955da36a7cf0333fad1eb4a",
+      "original_sha256": "433103fb758fc5358a3ab6c041168986640bbe290ad0f66fcbe0a5e43994d3e2"
+    },
+    {
+      "path": "internal/workflow.go",
+      "sha256": "413d983222b0270cf7f02be0fa05b4372a3ef2a9865e28c9f3bb941634650e39",
+      "baseline_sha256": "87b26d70f8cf0a07e0c2409b48051cd5a8042bf0e00bea00b6e8048e38c891ae",
+      "original_sha256": "87b26d70f8cf0a07e0c2409b48051cd5a8042bf0e00bea00b6e8048e38c891ae"
+    },
+    {
+      "path": "internal/workflow_testsuite.go",
+      "sha256": "c6266b6b2a4bf6a97bab34898dd275b71012da913c39814c991c2eacc1139867",
+      "baseline_sha256": "c6266b6b2a4bf6a97bab34898dd275b71012da913c39814c991c2eacc1139867",
+      "original_sha256": "e680843262fb3b23ab08d1c9014a16280e6b62f9b027b4c65a6a51a2fd749831"
+    },
+    {
+      "path": "mocks/mock_test.go",
+      "sha256": "c8d5e9b6ae292a9a60d259aabed49cda2960882d811ecfb7661fc446135c3df1",
+      "baseline_sha256": "c8d5e9b6ae292a9a60d259aabed49cda2960882d811ecfb7661fc446135c3df1",
+      "original_sha256": "ce710d71d59ac9693568580a3497428b5b8e7a4af84bb4604c4ecab3edfc30db"
+    },
+    {
+      "path": "worker/worker.go",
+      "sha256": "12d60f5cff73ff8f7c40644032d3ed541f75b23e8b74d6546b27e20040eefe60",
+      "baseline_sha256": "170e0f9f41c74a00b0913b7a46880ec83dd9a554ba2767bcd3eb4bbb1ab38c0c",
+      "original_sha256": "170e0f9f41c74a00b0913b7a46880ec83dd9a554ba2767bcd3eb4bbb1ab38c0c"
+    }
+  ],
+  "local_added_files": [
+    {
+      "path": "FATHOMRY.md",
+      "sha256": "b17f18b5aaaefa5f719efac499d527272674569c05aea583abfae1abcd8e8489",
+      "baseline_sha256": "8307201ef9065a3ca487f3cd0e8644ce4b8e27a6f07b6fb4dfac5ca34eba619e"
+    },
+    {
+      "path": "UPSTREAM.json",
+      "sha256": "94fe0999bb98fb7e2fbe966953f1ba74435d8063c27a6b85386765d22cd3ec60",
+      "baseline_sha256": "94fe0999bb98fb7e2fbe966953f1ba74435d8063c27a6b85386765d22cd3ec60"
+    },
+    {
+      "path": "client/fathomry_decoders.go",
+      "sha256": "0d4fc4475a7ce4ed0a018cf39f95fc73fa82c38014868a82f65eb007a44f4501",
+      "baseline_sha256": "fc1f88c1827d2174343b3e5c56a65d2b6f9c9f0825442447ff41b3aa74fd44cd"
+    },
+    {
+      "path": "client/fathomry_descriptions.go",
+      "sha256": "41b5d6b8c9275ba8f0da398cbca75c6eb2e1f4acf0c6b3b215da6444b9da3f0d",
+      "baseline_sha256": "41b5d6b8c9275ba8f0da398cbca75c6eb2e1f4acf0c6b3b215da6444b9da3f0d"
+    },
+    {
+      "path": "client/fathomry_update_handle.go",
+      "sha256": "799655e56a021c93c875f02bb54db098f6c8d21421d4cfe99c9cb582fa6ba917",
+      "baseline_sha256": "799655e56a021c93c875f02bb54db098f6c8d21421d4cfe99c9cb582fa6ba917"
+    },
+    {
+      "path": "internal/fathomry_decoders.go",
+      "sha256": "ac55eb7f9bc4ef50a52eba12f25f8c43e044e460408c55899184474fd6be5753",
+      "baseline_sha256": "d62e46e4cb7cad4933d153be73a60c221a43d8611219052a2fbb9cac1d8e0087"
+    },
+    {
+      "path": "internal/fathomry_decoders_test.go",
+      "sha256": "9b91f12b395ded936364930de670ee448facb95958abcf12caf49e1473fdd77a",
+      "baseline_sha256": "9b91f12b395ded936364930de670ee448facb95958abcf12caf49e1473fdd77a"
+    },
+    {
+      "path": "internal/fathomry_descriptions.go",
+      "sha256": "a8a04d94b07e53991a67cd81291b6d8ec72eb71606f73f755d3f5c41ea259c56",
+      "baseline_sha256": "a8a04d94b07e53991a67cd81291b6d8ec72eb71606f73f755d3f5c41ea259c56"
+    },
+    {
+      "path": "internal/fathomry_eager.go",
+      "sha256": "41bea14c1ebd99389503cef3d99199037436526534e2406b40151e6467c56881",
+      "baseline_sha256": "41bea14c1ebd99389503cef3d99199037436526534e2406b40151e6467c56881"
+    },
+    {
+      "path": "internal/fathomry_eager_test.go",
+      "sha256": "7f5aa326545f0a1049d1dfb75fb3b589da5ff1a88c9d02d06d9547d7a4eba7c4",
+      "baseline_sha256": "7f5aa326545f0a1049d1dfb75fb3b589da5ff1a88c9d02d06d9547d7a4eba7c4"
+    },
+    {
+      "path": "internal/fathomry_encoded_value.go",
+      "sha256": "43bc09a53d3acf93887de2a7c99dd8d2517afa4e95b6e227b1a80a586e04da94",
+      "baseline_sha256": null
+    },
+    {
+      "path": "internal/fathomry_encoded_value_test.go",
+      "sha256": "615dbfc65bcc106ecdb17baaea97bf5ff480fc7b17fc127f1aeb2b1bde7bc623",
+      "baseline_sha256": null
+    },
+    {
+      "path": "internal/fathomry_finalization.go",
+      "sha256": "c042f7aed06a23a90eedb44882a795da2a843dbb85370cc50d7b1b9458ac7f34",
+      "baseline_sha256": null
+    },
+    {
+      "path": "internal/fathomry_finalization_test.go",
+      "sha256": "66047545e77b5b2dd64a69f291596feec6d9ef2d7beeaefbde9fcdf979c6fbe2",
+      "baseline_sha256": null
+    },
+    {
+      "path": "internal/fathomry_lifecycle.go",
+      "sha256": "8fe9e1ab9692a66c97e24e26d0ff0f9925276f208bc92bc6acb068c9c12b0489",
+      "baseline_sha256": "5cc7f1fd85e717d1c068440877652e33bbbdee93e115927f760a2c620f1960eb"
+    },
+    {
+      "path": "internal/fathomry_lifecycle_test.go",
+      "sha256": "d8a4a61e8072f9fc64fce498d9d032b76638df038533742dea3ca9c63df345cd",
+      "baseline_sha256": "d8a4a61e8072f9fc64fce498d9d032b76638df038533742dea3ca9c63df345cd"
+    },
+    {
+      "path": "internal/fathomry_maintenance_test.go",
+      "sha256": "a62cc51d56e528c6b66056871f20ce790c25c36037eaa10f3d1afd4ff0fa13fd",
+      "baseline_sha256": null
+    },
+    {
+      "path": "internal/fathomry_update_handle.go",
+      "sha256": "c2f11719782bdd9a37011254f378370ac357678c317d3c47dfb4c04bcea11e4f",
+      "baseline_sha256": "c2f11719782bdd9a37011254f378370ac357678c317d3c47dfb4c04bcea11e4f"
+    },
+    {
+      "path": "internal/fathomry_update_handle_test.go",
+      "sha256": "7c558893fe941fc43abeae685051ceb4540748f423f77e6b6e4a2e70f5e48dd4",
+      "baseline_sha256": "7c558893fe941fc43abeae685051ceb4540748f423f77e6b6e4a2e70f5e48dd4"
+    },
+    {
+      "path": "worker/fathomry_eager.go",
+      "sha256": "bcdb70a787eb3cb2a18d4a53c360523cec6ddab3c6dcedd54c209059766eef8f",
+      "baseline_sha256": "bcdb70a787eb3cb2a18d4a53c360523cec6ddab3c6dcedd54c209059766eef8f"
+    },
+    {
+      "path": "worker/fathomry_lifecycle.go",
+      "sha256": "639a731f501c125febe3e79ecde99860e49bcdf3d98d67f74d30f3260c31d8b5",
+      "baseline_sha256": "639a731f501c125febe3e79ecde99860e49bcdf3d98d67f74d30f3260c31d8b5"
+    },
+    {
+      "path": "worker/fathomry_lifecycle_test.go",
+      "sha256": "922e7e54d4d827d989a3bdb7d5637f50642f097aa4cd767fb3dcec8ec3c20f53",
+      "baseline_sha256": "922e7e54d4d827d989a3bdb7d5637f50642f097aa4cd767fb3dcec8ec3c20f53"
+    },
+    {
+      "path": "worker/fathomry_namespace_test.go",
+      "sha256": "a972060ae0feed11bb595b0678041bd2f810934311dce6fc8901da57e9e305ba",
+      "baseline_sha256": "a972060ae0feed11bb595b0678041bd2f810934311dce6fc8901da57e9e305ba"
+    }
+  ],
+  "limits": [
+    "Not an upstream release or all-main adoption.",
+    "Original UPSTREAM.json hashes are unchanged; this file is excluded from its own inventory.",
+    "Raw synchronous Stop from startup tuner remains unsupported; managed explicit Stop follows Start return.",
+    "No deployed-service, contrib, complete upstream suite or universal replay qualification."
+  ],
+  "finalization_contract": "Isolated same-shape task-group decoder promotion during native conversion only; original/foreign scopes retained; custom scope mapping explicit.",
+  "encoded_result_contract": "Opt-in native consumption retains the acquiring decoder hook across cached Update/Activity/Nexus results; current admitted context and exact originating use/task govern cooperative child copies."
+}

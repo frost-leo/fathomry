@@ -19,7 +19,24 @@
 
 package client
 
-import "go.temporal.io/sdk/internal"
+import (
+	"context"
+
+	failurepb "go.temporal.io/api/failure/v1"
+	"go.temporal.io/sdk/internal"
+)
+
+// FathomryEncodedValueDecoderV1 retains the source of a native encoded result.
+// Cached results keep their acquiring hook; subsequent Get contexts do not
+// replace it. Hooks must preserve native decoding and join actual work.
+type FathomryEncodedValueDecoderV1 = internal.FathomryEncodedValueDecoderV1
+
+// FathomryWithEncodedValueDecoderV1 opts this call into scoped native Update,
+// Activity and Nexus result consumption. A nil hook keeps ordinary native Get.
+// The hook is runtime authority, not durable data or permission to own a Client.
+func FathomryWithEncodedValueDecoderV1(ctx context.Context, decode FathomryEncodedValueDecoderV1) context.Context {
+	return internal.FathomryWithEncodedValueDecoderV1(ctx, decode)
+}
 
 // FathomryScopeOwnerV1 is an opaque local owner capability, not durable data.
 type FathomryScopeOwnerV1 = internal.FathomryScopeOwnerV1
@@ -35,4 +52,36 @@ func NewFathomryScopeOwnerV1() *FathomryScopeOwnerV1 { return internal.NewFathom
 // error. Independently retained original aliases cannot be revoked by this copy.
 func FathomryScopeErrorV1(cause error, owner *FathomryScopeOwnerV1, guard func(func() error) error) error {
 	return internal.FathomryScopeErrorV1(cause, owner, guard)
+}
+
+// FathomryDecoderScopeV1 is an opaque, immutable decoder guard chain. Custom
+// errors can implement FathomryMapDecoderScopeV1(func(*FathomryDecoderScopeV1)
+// *FathomryDecoderScopeV1) error by copying themselves and mapping only their
+// scope token. Decode must guard their entire synchronous borrowed retrieval.
+// The hook must preserve native error shape, foreign restrictions and aliases,
+// return the original error when mapping returns the same token, and never
+// retain the mapper. This cooperative hook is preferred over the legacy guard-
+// only FathomryScopeDecodersV1 hook when native finalization needs lazy details.
+type FathomryDecoderScopeV1 = internal.FathomryDecoderScopeV1
+
+// NewFathomryChildScopeOwnerV1 associates a private operation decoder owner with
+// one callback lifetime group. Neither identity grants source or RPC authority.
+func NewFathomryChildScopeOwnerV1(parent *FathomryScopeOwnerV1) *FathomryScopeOwnerV1 {
+	return internal.NewFathomryChildScopeOwnerV1(parent)
+}
+
+// FathomryPrepareErrorFinalizationV1 marks this group's known decoder scopes in
+// an isolated native-shaped copy handed to native task finalization, never back
+// to application code. Unknown wrappers/joins and unscoped user errors stay intact.
+// Legacy guard-only custom errors do not support this ownership transfer.
+func FathomryPrepareErrorFinalizationV1(cause error, group *FathomryScopeOwnerV1) error {
+	return internal.FathomryPrepareErrorFinalizationV1(cause, group)
+}
+
+// FathomryConvertErrorV1 invokes native conversion with a temporary marked-scope
+// copy. It seals and joins entered decodes before returning, even on panic/Goexit.
+// The Worker must already own the entire conversion pipeline. No fresh admission
+// is performed and retained converter arguments refuse later scoped decoding.
+func FathomryConvertErrorV1(cause error, convert func(error) *failurepb.Failure) *failurepb.Failure {
+	return internal.FathomryConvertErrorV1(cause, convert)
 }

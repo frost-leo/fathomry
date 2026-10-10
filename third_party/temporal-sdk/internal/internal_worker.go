@@ -207,6 +207,7 @@ type (
 		// WorkerFatalErrorCallback is a callback for fatal errors that should stop
 		// the worker.
 		WorkerFatalErrorCallback func(error)
+		noRepoll                 *atomic.Bool
 
 		// SessionResourceID is a unique identifier of the resource the session will consume
 		SessionResourceID string
@@ -388,6 +389,7 @@ func newWorkflowTaskWorkerInternal(
 		logger:                       params.Logger,
 		stopTimeout:                  params.WorkerStopTimeout,
 		fatalErrCb:                   params.WorkerFatalErrorCallback,
+		noRepoll:                     params.noRepoll,
 		metricsHandler:               params.MetricsHandler,
 		workerPollCompleteOnShutdown: params.workerPollCompleteOnShutdown,
 		slotReservationData: slotReservationData{
@@ -620,11 +622,6 @@ func (sw *sessionWorker) getActivityWorkerTaskQueue() string {
 	return sw.activityWorker.executionParameters.TaskQueue
 }
 
-func (sw *sessionWorker) stopPolling() {
-	sw.creationWorker.worker.stopPolling()
-	sw.activityWorker.worker.stopPolling()
-}
-
 func newActivityWorker(
 	client *WorkflowClient,
 	params workerExecutionParameters,
@@ -667,6 +664,7 @@ func newActivityWorker(
 		logger:                       params.Logger,
 		stopTimeout:                  params.WorkerStopTimeout,
 		fatalErrCb:                   params.WorkerFatalErrorCallback,
+		noRepoll:                     params.noRepoll,
 		backgroundContextCancel:      params.BackgroundContextCancel,
 		metricsHandler:               params.MetricsHandler,
 		sessionTokenBucket:           sessionTokenBucket,
@@ -1327,6 +1325,9 @@ type AggregatedWorker struct {
 	// to mark the aggregated worker stopped, unblock Run(), and prevent restart.
 	// Child worker stop channels are closed later by their own Stop methods.
 	stopC        chan struct{}
+	stopOnce     sync.Once
+	stopDone     chan struct{}
+	startDone    chan struct{}
 	fatalErr     error
 	fatalErrLock sync.Mutex
 	capabilities *workflowservice.GetSystemInfoResponse_Capabilities
@@ -1655,30 +1656,30 @@ func (aw *AggregatedWorker) Run(interruptCh <-chan any) error {
 	select {
 	case s := <-interruptCh:
 		aw.logger.Info("Worker has been stopped.", "Signal", s)
-		aw.Stop()
 	case <-aw.stopC:
-		aw.fatalErrLock.Lock()
-		defer aw.fatalErrLock.Unlock()
-		// This may be nil if this wasn't stopped due to fatal error
-		return aw.fatalErr
 	}
-	return nil
+	aw.Stop()
+	aw.fatalErrLock.Lock()
+	defer aw.fatalErrLock.Unlock()
+	return aw.fatalErr
 }
 
-// Stop the worker.
+// Stop prevents remote polling and joins the one native cleanup operation.
 func (aw *AggregatedWorker) Stop() {
+	ownsStop := false
+	aw.stopOnce.Do(func() { ownsStop = true })
+	if ownsStop {
+		defer close(aw.stopDone)
+		aw.stop()
+		return
+	}
+	<-aw.stopDone
+}
+
+func (aw *AggregatedWorker) stop() {
 	if lifetime := aw.executionParams.fathomryLifetime; lifetime != nil {
-		if !lifetime.stopStarted.CompareAndSwap(false, true) {
-			return
-		}
 		defer close(lifetime.stopReturned)
 		lifetime.closeExternal()
-	}
-	// Only attempt stop if we haven't attempted before
-	select {
-	case <-aw.stopC:
-		return
-	default:
 	}
 
 	// Prevent pollers from re-polling before closing stopC. There is a race
@@ -1686,18 +1687,7 @@ func (aw *AggregatedWorker) Stop() {
 	// complete naturally (e.g. long-poll timeout) right after stopC fires
 	// but before ShutdownWorker is sent, causing the poller to loop and
 	// re-poll.
-	if !util.IsInterfaceNil(aw.activityWorker) {
-		aw.activityWorker.worker.stopPolling()
-	}
-	if !util.IsInterfaceNil(aw.workflowWorker) {
-		aw.workflowWorker.worker.stopPolling()
-	}
-	if !util.IsInterfaceNil(aw.nexusWorker) {
-		aw.nexusWorker.worker.stopPolling()
-	}
-	if !util.IsInterfaceNil(aw.sessionWorker) {
-		aw.sessionWorker.stopPolling()
-	}
+	aw.executionParams.noRepoll.Store(true)
 
 	close(aw.stopC)
 
@@ -1733,8 +1723,22 @@ func (aw *AggregatedWorker) Stop() {
 	})
 
 	aw.unregisterHeartbeatWorker()
+	if aw.executionParams.fathomryLifetime == nil {
+		aw.executionParams.cache.close(&sharedWorkerCacheLock)
+	}
 
 	aw.logger.Info("Stopped Worker")
+}
+
+func (aw *AggregatedWorker) handleFatalError(err error, hook func(error)) {
+	defer aw.executionParams.fathomryLifetime.end()
+	if hook != nil {
+		hook(err)
+	}
+	// Automatic shutdown must not race the publication of startup-owned workers.
+	// Managed callers also serialize explicit Stop after their startup result.
+	<-aw.startDone
+	aw.Stop()
 }
 
 func (aw *AggregatedWorker) registerHeartbeatWorker() error {
@@ -2179,7 +2183,9 @@ func (aw *WorkflowReplayer) replayWorkflowHistoryRoot(
 		},
 		inboundVisitor: aw.inboundPayloadVisitor,
 	}
-	cache := newWorkerCache(&sharedWorkerCache{}, &sync.Mutex{}, 0)
+	cacheLock := &sync.Mutex{}
+	cache := newWorkerCache(&sharedWorkerCache{}, cacheLock, 0)
+	defer cache.close(cacheLock)
 	params := workerExecutionParameters{
 		Namespace:             namespace,
 		TaskQueue:             taskQueue,
@@ -2397,26 +2403,20 @@ func NewAggregatedWorker(client *WorkflowClient, taskQueue string, options Worke
 
 	// Need reference to result for fatal error handler
 	var aw *AggregatedWorker
+	noRepoll := &atomic.Bool{}
 	fatalErrorCallback := func(err error) {
 		// Set the fatal error if not already set
 		aw.fatalErrLock.Lock()
 		alreadySet := aw.fatalErr != nil
 		if !alreadySet {
 			aw.fatalErr = err
+			noRepoll.Store(true)
 		}
 		aw.fatalErrLock.Unlock()
 		// Only do the rest if not already set
 		if !alreadySet {
-			// Invoke the callback if present
-			if options.OnFatalError != nil {
-				options.OnFatalError(err)
-			}
-			// Stop the worker if not already stopped
-			select {
-			case <-aw.stopC:
-			default:
-				aw.Stop()
-			}
+			aw.executionParams.fathomryLifetime.add()
+			go aw.handleFatalError(err, options.OnFatalError)
 		}
 	}
 	// Because of lazy clients we need to wait till the worker runs to fetch the capabilities.
@@ -2465,15 +2465,15 @@ func NewAggregatedWorker(client *WorkflowClient, taskQueue string, options Worke
 	payloadLimitVisitor, setErrorLimits := newPayloadLimitsVisitor(client.payloadWarningLimits, logger)
 
 	cache := NewWorkerCache()
+	defer func() {
+		if aw == nil {
+			backgroundActivityContextCancel(ErrWorkerShutdown)
+			cache.close(&sharedWorkerCacheLock)
+		}
+	}()
 	if options.FathomryLifecycleV1 {
 		cache.fathomryLifetime = newFathomryWorkerLifetime()
 		cache.fathomryEntries = make(map[*workflowExecutionContextImpl]string)
-		defer func() {
-			if aw == nil {
-				backgroundActivityContextCancel(ErrWorkerShutdown)
-				cache.close(&sharedWorkerCacheLock)
-			}
-		}()
 	}
 	workerPollCompleteOnShutdown := &atomic.Bool{}
 	workerParams := workerExecutionParameters{
@@ -2499,6 +2499,7 @@ func NewAggregatedWorker(client *WorkflowClient, taskQueue string, options Worke
 		FailureConverter:                 client.failureConverter,
 		WorkerStopTimeout:                options.WorkerStopTimeout,
 		WorkerFatalErrorCallback:         fatalErrorCallback,
+		noRepoll:                         noRepoll,
 		ContextPropagators:               client.contextPropagators,
 		DeadlockDetectionTimeout:         options.DeadlockDetectionTimeout,
 		DefaultHeartbeatThrottleInterval: options.DefaultHeartbeatThrottleInterval,
@@ -2734,6 +2735,8 @@ func NewAggregatedWorker(client *WorkflowClient, taskQueue string, options Worke
 		logger:                       workerParams.Logger,
 		registry:                     registry,
 		stopC:                        make(chan struct{}),
+		stopDone:                     make(chan struct{}),
+		startDone:                    make(chan struct{}),
 		capabilities:                 &capabilities,
 		executionParams:              workerParams,
 		workerInstanceKey:            workerInstanceKey,
@@ -2749,6 +2752,7 @@ func NewAggregatedWorker(client *WorkflowClient, taskQueue string, options Worke
 
 	// Set memoized start as a once-value that invokes plugins first
 	aw.memoizedStart = sync.OnceValue(func() error {
+		defer close(aw.startDone)
 		start := func(context.Context, WorkerPluginStartWorkerOptions) error { return aw.start() }
 		for i := len(plugins) - 1; i >= 0; i-- {
 			plugin := plugins[i]

@@ -67,6 +67,7 @@ func newNexusWorker(opts nexusWorkerOptions) (*nexusWorker, error) {
 		logger:                       params.Logger,
 		stopTimeout:                  params.WorkerStopTimeout,
 		fatalErrCb:                   params.WorkerFatalErrorCallback,
+		noRepoll:                     params.noRepoll,
 		metricsHandler:               params.MetricsHandler,
 		workerPollCompleteOnShutdown: params.workerPollCompleteOnShutdown,
 		slotReservationData: slotReservationData{

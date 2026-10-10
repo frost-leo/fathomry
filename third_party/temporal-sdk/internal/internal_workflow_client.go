@@ -1111,8 +1111,9 @@ type baseUpdateHandle struct {
 // of the update is already known and the Get call can return immediately.
 type completedUpdateHandle struct {
 	baseUpdateHandle
-	value converter.EncodedValue
-	err   error
+	value           converter.EncodedValue
+	err             error
+	fathomryDecoder FathomryEncodedValueDecoderV1
 }
 
 // lazyUpdateHandle represents and update that is not known to have completed
@@ -3128,6 +3129,7 @@ func (w *workflowClientInterceptor) updateHandleFromResponse(
 			return &completedUpdateHandle{
 				value:            pollResp.Result,
 				baseUpdateHandle: baseUpdateHandle{ref: resp.GetUpdateRef()},
+				fathomryDecoder:  fathomryEncodedValueDecoder(ctx),
 			}, nil
 		}
 	}
@@ -3154,6 +3156,7 @@ func (w *workflowClientInterceptor) updateHandleFromResponse(
 		return &completedUpdateHandle{
 			value:            newEncodedValue(v.Success, dc),
 			baseUpdateHandle: baseUpdateHandle{ref: resp.GetUpdateRef()},
+			fathomryDecoder:  fathomryEncodedValueDecoder(ctx),
 		}, nil
 	}
 	return nil, fmt.Errorf("unsupported outcome type %T", resp.GetOutcome().GetValue())
@@ -3175,7 +3178,7 @@ func (ch *completedUpdateHandle) Get(ctx context.Context, valuePtr any) error {
 	if ch.err != nil || valuePtr == nil {
 		return ch.err
 	}
-	if err := ch.value.Get(valuePtr); err != nil {
+	if err := fathomryDecodeEncodedValue(ctx, ch.value, valuePtr, ch.fathomryDecoder); err != nil {
 		return err
 	}
 	return nil
@@ -3189,7 +3192,7 @@ func (luh *lazyUpdateHandle) Get(ctx context.Context, valuePtr any) error {
 	if resp.Error != nil || valuePtr == nil {
 		return resp.Error
 	}
-	return resp.Result.Get(valuePtr)
+	return fathomryDecodeEncodedValue(ctx, resp.Result, valuePtr, fathomryEncodedValueDecoder(ctx))
 }
 
 func (q *QueryRejectedError) QueryRejected() *querypb.QueryRejected {

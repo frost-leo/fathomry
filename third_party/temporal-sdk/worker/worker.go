@@ -37,7 +37,8 @@ type (
 		// Pass nil to stop the worker with external Stop() call.
 		// Pass any other `<-chan interface{}` and Run will wait for signal from that channel.
 		// Returns error if the worker fails to start or there is a fatal error
-		// during execution.
+		// during execution, including when interruption races with that error.
+		// After successful startup, Run joins native stop cleanup before returning.
 		//
 		// Users are encouraged to use Start() instead of this call if they plan to
 		// manually Stop(). Otherwise a race can occur if shutdown occurs before the
@@ -45,9 +46,11 @@ type (
 		// via the interrupt channel.
 		Run(interruptCh <-chan any) error
 
-		// Stop the worker.
+		// Stop the worker and wait for the one native cleanup operation.
 		//
-		// This may panic if called a second time.
+		// Concurrent calls join the same cleanup. Stop does not wait for
+		// Options.OnFatalError; FathomryWaitStoppedV1 also joins that callback
+		// when the managed lifecycle extension is enabled.
 		Stop()
 	}
 
