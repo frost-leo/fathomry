@@ -176,13 +176,20 @@ Cold module caches must work; a developer's previously downloaded dependency-tes
 versions are not fixture inputs.
 
 The versioned CLI fixture starts with an empty module cache. Its dependency-closure
-acquisition, subsequent readonly offline CLI compilation, and first-build HTTP
-consumer race compilation each have a three-minute test guard; other consumer
-commands retain their 90-second guard. These separate
+acquisition and first-build HTTP consumer race compilation have three-minute
+test guards. Readonly offline CLI race compilation has a five-minute guard for
+the complete Arrow/AWS/Iceberg graph; other consumer commands retain their 90-second
+guard. These separate
 budgets cover network acquisition and relocated cold compilation, not a product
 startup SLA. Phase timings and context causes remain in test diagnostics. No
 checksum, replacement-graph, generated-project or public-consumer assertion is
 skipped when acquisition is slow.
+The Iceberg consumer also has a separate three-minute initial acquisition guard
+for its native SDK's dependency-test closure, which CLI runtime dependency
+loading does not fetch. Its later tidy-diff, readonly race build and execution
+use the isolated cache offline. CLI and consumers use the same race build mode,
+so that one isolated graph is not compiled in both ordinary and race modes.
+The package-wide ten-minute guard is unchanged.
 
 ## Engineering expectations
 

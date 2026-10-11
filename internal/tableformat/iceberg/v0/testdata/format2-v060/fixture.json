@@ -1,0 +1,7 @@
+{
+  "arrow": "v18.6.0",
+  "format-version": 2,
+  "metadata-location": "s3://fixture/owned/historical/metadata/4f91fc05-97c5-436d-86c9-be744abbd967.metadata.json",
+  "rows": 65,
+  "writer": "github.com/apache/iceberg-go v0.6.0"
+}

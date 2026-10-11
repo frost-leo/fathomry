@@ -37,6 +37,7 @@ import (
 	"github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
+	"github.com/frost-leo/fathomry/adapters/tableformat/iceberg/v1"
 	"github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
@@ -73,6 +74,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "logging_zap", BaseLocale: "en", Resources: zap.Resources(), Directory: "resources", Definitions: zap.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "logging_zerolog", BaseLocale: "en", Resources: zerolog.Resources(), Directory: "resources", Definitions: zerolog.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "temporal", BaseLocale: "en", Resources: temporal.Resources(), Directory: "resources", Definitions: temporal.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "tableformat_iceberg", BaseLocale: "en", Resources: iceberg.Resources(), Directory: "resources", Definitions: iceberg.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {

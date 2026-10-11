@@ -43,6 +43,8 @@ automatically own or construct the packages below it.
 | `v1` | mechanism | [Operation Runtime, admission, actual-work references and independent evidence](../docs/reference/adapters/v1/interface.md) |
 | `database/v1` | capability | [SQL budgets, attribution and profile vocabulary; no pool/client](../docs/reference/adapters/database/v1/interface.md) |
 | `sqlengine/v1` | capability | [SQL-engine source/work/evidence budgets and observation vocabulary; no native authority](../docs/reference/adapters/sqlengine/v1/interface.md) |
+| `tableformat/v1` | capability | [Table-format source/work/evidence budgets and distinct staging, file, commit and reload facts](../docs/reference/adapters/tableformat/v1/interface.md) |
+| `tableformat/iceberg/v1` | data-provider | [Scoped REST/S3 Catalog, table, scan, mutation and maintenance with explicit file authority](../docs/reference/adapters/tableformat/iceberg/v1/interface.md) |
 | `broker/v1` | capability | [Broker budgets and attribution; no native client](../docs/reference/adapters/broker/v1/interface.md) |
 | `cache/v1` | capability | [Cache/messaging composition budgets and attribution](../docs/reference/adapters/cache/v1/interface.md) |
 | `objectstore/v1` | capability | [Object effects, budgets, generation scaling and attribution](../docs/reference/adapters/objectstore/v1/interface.md) |

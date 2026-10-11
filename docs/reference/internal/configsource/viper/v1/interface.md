@@ -250,7 +250,7 @@ ValueCopy; a successful native empty YAML document is distinct from prepared dat
 | SDK major | `internal/configsource/viper/v1`; a capability/SDK-major import boundary, not an independently released Go module or blanket support for all Viper 1.x |
 | Logical implementation | `configsource.viper.v1` in diagnostics and error kinds, aligned with the capability/SDK/SDK-major layout; not a resource name or an exact module version |
 | Bootstrap settings | `OptionsV1` in `options.go`; independently versioned Go contract, with no reader handle, serialized format, unknown-version coercion or automatic migration |
-| Actual SDK/build | Required Viper v1.21.0, YAML v3.0.5, TOML v2.3.1 and gotenv v1.6.0; consumer builds may select different versions/replacements, so requirements and go.sum are not an exact lock |
+| Actual SDK/build | Required Viper v1.21.0, YAML v3.0.5, TOML v2.4.1 and gotenv v1.6.0; consumer builds may select different versions/replacements, so requirements and go.sum are not an exact lock |
 | Document encoding | YAML/JSON/TOML/dotenv, not a business schema version |
 | Preparation format/revision | Existing Schema.Format/Input.Format and the opaque Prepared revision; never inferred from SDK or bootstrap versions |
 

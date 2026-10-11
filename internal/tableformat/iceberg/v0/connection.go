@@ -203,6 +203,10 @@ func (owner *connection) close(ctx context.Context) resource.ReleaseResult {
 		sockets = append(sockets, s)
 	}
 	owner.mu.Unlock()
+	var catalogErr error
+	if owner.catalog != nil {
+		catalogErr = owner.catalog.Close()
+	}
 	if owner.transport != nil {
 		owner.transport.CloseIdleConnections()
 	}
@@ -211,7 +215,7 @@ func (owner *connection) close(ctx context.Context) resource.ReleaseResult {
 	}
 	owner.dials.Wait()
 	owner.mu.Lock()
-	err := errors.Join(owner.closeErrors...)
+	err := errors.Join(catalogErr, errors.Join(owner.closeErrors...))
 	owner.mu.Unlock()
 	return resource.ReleaseResult{Quiescent: true, Released: true, Err: err}
 }

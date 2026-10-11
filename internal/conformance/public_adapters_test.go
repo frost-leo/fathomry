@@ -57,6 +57,8 @@ import (
 	duckdb "github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
 	trino "github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
 	sqlengine "github.com/frost-leo/fathomry/adapters/sqlengine/v1"
+	iceberg "github.com/frost-leo/fathomry/adapters/tableformat/iceberg/v1"
+	"github.com/frost-leo/fathomry/adapters/tableformat/v1"
 	otel "github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/internal/conformance"
@@ -222,6 +224,16 @@ func TestPublicAdapterContracts(t *testing.T) {
 				return doris.Dependencies{Runtime: runtime, Evidence: inbox}
 			}, doris.Open, canary)
 	})
+}
+
+func TestPublicAdapterIceberg(t *testing.T) {
+	const canary = "iceberg-private-contract"
+	value := iceberg.Settings{Name: "contract", CatalogURI: "http://127.0.0.1:1/catalog", CatalogPrefix: "warehouse", Warehouse: "fixture", Namespace: []string{"isolated"}, Location: "s3://fixture/owned/", Plaintext: true, StorageEndpoint: "http://127.0.0.1:1", StorageRegion: "us-east-1", StorageAccessKey: "fixture", StorageSecretKey: canary}
+	checkPublicAdapter(t, value, iceberg.Validate, iceberg.Recommend,
+		func(value tableformat.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+		func(runtime *adapters.Runtime, inbox *adapters.Inbox[iceberg.Result]) iceberg.Dependencies {
+			return iceberg.Dependencies{Runtime: runtime, Evidence: inbox}
+		}, iceberg.Open, canary)
 }
 
 func TestPublicAdapterTemporal(t *testing.T) {

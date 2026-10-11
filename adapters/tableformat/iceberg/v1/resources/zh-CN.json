@@ -1,0 +1,90 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "tableformat_iceberg",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.tableformat_iceberg.invalid_input",
+      "source": "29308e35cca0634edd773d1e04428f7ae6c7c4198bfb7cfe7615c26257f1d485",
+      "forms": {
+        "other": "Iceberg 输入或设置无效。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.unsupported_profile",
+      "source": "3c86257426c432bbaca71de366ac40893e13033ca7f1c40a140264adb2ed2e42",
+      "forms": {
+        "other": "所选原生能力不可用。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.authority_refused",
+      "source": "7de33323de74d11eac6af9fe595c164dc54fa49c6e2012cc591d55aecb80295a",
+      "forms": {
+        "other": "请求的操作超出源权限。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.limit_exceeded",
+      "source": "576be2861ead7d9c8e49b17ad92a62761c054aff91e0fb5b097b47e47daa7f26",
+      "forms": {
+        "other": "超出 Iceberg 容量或数据限额。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.protocol_failed",
+      "source": "d2091af48a3996dd5b98f55b92722fdea40976ffecd174247e6655a9b92bcce6",
+      "forms": {
+        "other": "Iceberg 响应未通过验证。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.operation_failed",
+      "source": "89500c8645e917ed6d8f2cbc5345540d9acec2c166fb7054d32d334d0b7a4499",
+      "forms": {
+        "other": "Iceberg 操作失败；请检查操作效果证据。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.invalid_state",
+      "source": "9301e9e6419ba6385adba083d69298659231f2a21695d645c677e186edc3e1c4",
+      "forms": {
+        "other": "Iceberg 句柄当前不能执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.cleanup_failed",
+      "source": "cf5744a1f1dc8e070c4b411980258b231267993d3bb9502d94f21f4a42b316a8",
+      "forms": {
+        "other": "Iceberg 清理失败；实际释放状态需要单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.tableformat_iceberg.runtime_serialization",
+      "source": "e6aa4abea02d07556ad3ed16848f4a4d616df9d9ab89659f431ce166d524550d",
+      "forms": {
+        "other": "不支持序列化 Iceberg 运行时值。"
+      }
+    }
+  ]
+}

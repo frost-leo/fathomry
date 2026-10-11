@@ -17,9 +17,18 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package iceberg integrates the Apache Iceberg Go SDK major 0 with bounded
-// single-table batch operations. The v0 path denotes the SDK major, not the
-// admitted table format (2) or OptionsV1 configuration format.
+// Package iceberg integrates the maintained Apache Iceberg Go SDK major 0 with
+// native-semantic REST/S3 scopes and the compatible legacy bounded batch API.
+// The v0 path denotes SDK major, not table format or configuration version.
+//
+// PrepareManaged freezes native-semantic settings and borrowed dependencies.
+// ManagedPreparation.Select and BindManaged reuse resource/invocation admission.
+// ManagedClient.Use admits one serial callback family containing controlled
+// Catalog, Table, Transaction, Scan and file scopes. It supports native V1/V2/V3
+// metadata, type/evolution, streaming, writes, maintenance and optional explicit
+// credential vending. All managed handles expire and actual work joins before
+// release. The public Adapter owns consumer error/locale and generation mapping.
+// The following paragraphs describe the retained legacy Select/Bind path only.
 //
 // Select freezes explicit Catalog, namespace, S3-subtree and static-credential
 // settings. Assemble owns REST/S3 clients and their transport;

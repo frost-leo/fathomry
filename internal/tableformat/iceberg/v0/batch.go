@@ -452,7 +452,8 @@ func (client *Client) Read(ctx context.Context, id fault.Correlation, name strin
 	})
 }
 func collectRecords(ctx context.Context, data *resultData, schema *arrow.Schema, records iter.Seq2[arrow.RecordBatch, error], limit, maximum int) error {
-	buffer := &limitedBuffer{maximum: maximum - 8}
+	const endOfStream = "\xff\xff\xff\xff\x00\x00\x00\x00"
+	buffer := &limitedBuffer{maximum: maximum - len(endOfStream)}
 	writer := ipc.NewWriter(buffer, ipc.WithSchema(schema))
 	var primary error
 	goodBytes := 0
@@ -497,12 +498,14 @@ func collectRecords(ctx context.Context, data *resultData, schema *arrow.Schema,
 			break
 		}
 	}
-	// Flat scalar output has no dictionary deltas. On a failed record write,
-	// the pinned stream writer can close a rolled-back complete-record prefix;
-	// no further record writes are allowed. Reserve its eight-byte EOS upfront.
+	// Close can repeat an earlier Write failure while successfully terminating
+	// the accepted record prefix. Check the exact EOS after that checkpoint;
+	// retaining partial data does not suppress any independent cleanup error.
 	buffer.maximum = maximum
 	closeErr := writer.Close()
-	if closeErr == nil && (!writeFailed || goodBytes > 0) {
+	terminatedPrefix := writeFailed && goodBytes > 0 && buffer.Len() == goodBytes+len(endOfStream) &&
+		bytes.Equal(buffer.Bytes()[goodBytes:], []byte(endOfStream))
+	if closeErr == nil && !writeFailed || terminatedPrefix {
 		data.ipc = buffer.Bytes()
 	}
 	if closeErr != nil {

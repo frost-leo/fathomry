@@ -33,10 +33,14 @@ import (
 // decodeObject prevents different SDK/map decoders from interpreting duplicate
 // keys differently. UseNumber preserves 64-bit snapshot/field identifiers.
 func decodeObject(raw []byte) (map[string]any, error) {
+	return decodeObjectBounded(raw, 2048)
+}
+
+func decodeObjectBounded(raw []byte, maxEntries int) (map[string]any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
-	var read func(int) (any, error)
-	read = func(depth int) (any, error) {
+	var read func(int, bool, bool) (any, error)
+	read = func(depth int, freeKeys, dataKeys bool) (any, error) {
 		if depth > 64 {
 			return nil, failure(ErrLimit, "json-depth")
 		}
@@ -62,11 +66,17 @@ func decodeObject(raw []byte) (map[string]any, error) {
 					return nil, failure(ErrProtocol, "json-key")
 				}
 				folded := strings.ToUpper(key)
-				if seen[folded] || len(seen) >= 2048 {
+				if freeKeys || dataKeys {
+					folded = key
+				}
+				if seen[folded] {
 					return nil, failure(ErrProtocol, "duplicate-json-key")
 				}
+				if len(seen) >= maxEntries {
+					return nil, failure(ErrLimit, "json-object-entries")
+				}
 				seen[folded] = true
-				value, err := read(depth + 1)
+				value, err := read(depth+1, key == "properties" || key == "summary" || key == "refs" || key == "config" || key == "defaults" || key == "overrides", dataKeys || key == "initial-default" || key == "write-default")
 				if err != nil {
 					return nil, err
 				}
@@ -79,10 +89,10 @@ func decodeObject(raw []byte) (map[string]any, error) {
 		case '[':
 			values := []any{}
 			for decoder.More() {
-				if len(values) >= 2048 {
+				if len(values) >= maxEntries {
 					return nil, failure(ErrLimit, "json-array")
 				}
-				value, err := read(depth + 1)
+				value, err := read(depth+1, false, dataKeys)
 				if err != nil {
 					return nil, err
 				}
@@ -96,7 +106,7 @@ func decodeObject(raw []byte) (map[string]any, error) {
 			return nil, failure(ErrProtocol, "json-delimiter")
 		}
 	}
-	value, err := read(0)
+	value, err := read(0, false, false)
 	if err != nil {
 		return nil, failure(ErrProtocol, "json", err)
 	}
@@ -132,6 +142,9 @@ func metadataNames(value any, freeKeys bool) error {
 						return failure(ErrProtocol, "metadata-field-case")
 					}
 				}
+			}
+			if key == "initial-default" || key == "write-default" {
+				continue
 			}
 			if err := metadataNames(child, key == "properties" || key == "summary" || key == "refs"); err != nil {
 				return err
@@ -195,36 +208,20 @@ func parseMetadata(s settings, raw []byte) (metadata table.Metadata, err error) 
 	return metadata, nil
 }
 func equalMetadata(left, right table.Metadata) (bool, error) {
+	return equalMetadataWithin(left, right, 2048)
+}
+
+func equalMetadataWithin(left, right table.Metadata, maxEntries int) (bool, error) {
 	encode := func(value table.Metadata) (map[string]any, error) {
 		raw, err := json.Marshal(value)
 		if err != nil {
 			return nil, err
 		}
-		object, err := decodeObject(raw)
+		object, err := decodeObjectBounded(raw, maxEntries)
 		if err != nil {
 			return nil, err
 		}
-		// These are ID-addressed collections, unlike the ordered snapshot and
-		// metadata logs or the ordered fields within a schema/partition spec.
-		for _, field := range []struct{ name, id string }{{"snapshots", "snapshot-id"}, {"schemas", "schema-id"}, {"partition-specs", "spec-id"}, {"sort-orders", "order-id"}} {
-			values, _ := object[field.name].([]any)
-			identifier := func(value any) int64 {
-				entry, _ := value.(map[string]any)
-				number, _ := entry[field.id].(json.Number)
-				id, _ := strconv.ParseInt(string(number), 10, 64)
-				return id
-			}
-			slices.SortFunc(values, func(left, right any) int {
-				a, b := identifier(left), identifier(right)
-				if a < b {
-					return -1
-				}
-				if a > b {
-					return 1
-				}
-				return 0
-			})
-		}
+		normalizeMetadataCollections(object)
 		return object, nil
 	}
 	a, err := encode(left)
@@ -244,4 +241,28 @@ func equalMetadata(left, right table.Metadata) (bool, error) {
 		return false, err
 	}
 	return bytes.Equal(leftJSON, rightJSON), nil
+}
+
+// Metadata collection order is not identity. Logs and schema field order are
+// ordered, so only the spec's ID-addressed collections are normalized here.
+func normalizeMetadataCollections(object map[string]any) {
+	for _, field := range []struct{ name, id string }{{"snapshots", "snapshot-id"}, {"schemas", "schema-id"}, {"partition-specs", "spec-id"}, {"sort-orders", "order-id"}} {
+		values, _ := object[field.name].([]any)
+		identifier := func(value any) int64 {
+			entry, _ := value.(map[string]any)
+			number, _ := entry[field.id].(json.Number)
+			id, _ := strconv.ParseInt(string(number), 10, 64)
+			return id
+		}
+		slices.SortFunc(values, func(left, right any) int {
+			a, b := identifier(left), identifier(right)
+			if a < b {
+				return -1
+			}
+			if a > b {
+				return 1
+			}
+			return 0
+		})
+	}
 }
