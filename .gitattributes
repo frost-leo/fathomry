@@ -25,3 +25,18 @@
 /.agents/skills/** linguist-vendored whitespace=-blank-at-eol,-blank-at-eof
 /.agents/skills/fathomry-development/** -linguist-vendored !whitespace
 /LICENSE whitespace=-blank-at-eof
+/third_party/iceberg-go/** linguist-vendored whitespace=-blank-at-eol,-blank-at-eof
+/third_party/iceberg-go/name_mapping_test.go whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+/third_party/iceberg-go/FATHOMRY.md -linguist-vendored !whitespace
+/third_party/iceberg-go/catalog/rest/file_io_factory.go -linguist-vendored !whitespace
+/third_party/iceberg-go/catalog/rest/file_io_factory_test.go -linguist-vendored !whitespace
+/third_party/iceberg-go/catalog/rest/identifier_path_test.go -linguist-vendored !whitespace
+/third_party/iceberg-go/catalog/rest/planning_context.go -linguist-vendored !whitespace
+/third_party/iceberg-go/catalog/rest/planning_context_test.go -linguist-vendored !whitespace
+/third_party/iceberg-go/internal/execution_limits.go -linguist-vendored !whitespace
+/third_party/iceberg-go/internal/operation_logger.go -linguist-vendored !whitespace
+/third_party/iceberg-go/table/execution_limits.go -linguist-vendored !whitespace
+/third_party/iceberg-go/table/execution_limits_test.go -linguist-vendored !whitespace
+/third_party/iceberg-go/table/orphan_partial_result_test.go -linguist-vendored !whitespace
+/third_party/iceberg-go/table/schema_default_comparison_test.go -linguist-vendored !whitespace
+/third_party/iceberg-go/table/transaction_nullable_rewrite_test.go -linguist-vendored !whitespace
