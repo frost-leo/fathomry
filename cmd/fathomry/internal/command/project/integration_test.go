@@ -205,7 +205,7 @@ func TestVersionedProjects(t *testing.T) {
 	cli := filepath.Join(job, "fathomry")
 	runConsumerBudget(t, 3*time.Minute, toolDirectory, environment, goTool(), "list", "-mod=mod", "-deps", frameworkModule+"/cmd/fathomry")
 	offline := append(append([]string(nil), environment...), "GOPROXY=off", "GONOPROXY=none", "GOSUMDB=off")
-	runConsumerBudget(t, 5*time.Minute, toolDirectory, offline, goTool(), "build", "-mod=readonly", "-o", cli, frameworkModule+"/cmd/fathomry")
+	runConsumerBudget(t, 5*time.Minute, toolDirectory, offline, goTool(), "build", "-mod=readonly", "-race", "-o", cli, frameworkModule+"/cmd/fathomry")
 	verifyHTTPReplacement(t, toolDirectory, offline)
 	verifyTelemetryReplacement(t, toolDirectory, offline)
 	verifyTemporalReplacement(t, toolDirectory, offline)
