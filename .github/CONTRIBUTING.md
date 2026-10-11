@@ -183,6 +183,10 @@ budgets cover network acquisition and relocated cold compilation, not a product
 startup SLA. Phase timings and context causes remain in test diagnostics. No
 checksum, replacement-graph, generated-project or public-consumer assertion is
 skipped when acquisition is slow.
+The Iceberg consumer also has a separate three-minute initial acquisition guard
+for its native SDK's dependency-test closure, which CLI runtime dependency
+loading does not fetch. Its later tidy-diff, readonly race build and execution
+use the isolated cache offline. The package-wide ten-minute guard is unchanged.
 
 ## Engineering expectations
 

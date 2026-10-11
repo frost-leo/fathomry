@@ -120,6 +120,8 @@ const (
 	FacilityZerolog Facility = 0x283
 	// FacilityTemporal owns the public Temporal orchestration capability.
 	FacilityTemporal Facility = 0x1C0
+	// FacilityIceberg owns the public Iceberg table-format capability.
+	FacilityIceberg Facility = 0x320
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -164,6 +166,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityTrino, Module: "fathomry", Component: "database_trino"},
 		{Facility: FacilityDoris, Module: "fathomry", Component: "database_doris"},
 		{Facility: FacilityMinIO, Module: "fathomry", Component: "objectstore_minio"},
+		{Facility: FacilityIceberg, Module: "fathomry", Component: "tableformat_iceberg"},
 		{Facility: FacilityKafka, Module: "fathomry", Component: "broker_kafka"},
 		{Facility: FacilityRedisCache, Module: "fathomry", Component: "cache_redis"},
 		{Facility: FacilityRedisMessaging, Module: "fathomry", Component: "messaging_redis"},

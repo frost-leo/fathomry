@@ -19,6 +19,15 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # Iceberg batch table interface
 
+The original Select/Bind batch profile below remains available for compatibility.
+The package now also contains the native-semantic PrepareManaged/BindManaged path
+used by the [public REST/S3 Adapter](../../../../adapters/tableformat/iceberg/v1/interface.md).
+That path uses maintained SDK v0.7.0 and does not inherit this legacy profile's
+format-2, flat-scalar, whole-snapshot or maintenance restrictions. Its source,
+family, Arrow output and callback ownership are separate contracts. Its selected
+qualification profiles are documented with the public Adapter, not implied by
+these historical batch guarantees.
+
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** framework composition and integration maintainers.

@@ -201,6 +201,11 @@ separates local protocol/race qualification from the owner-authorized, isolated
 HTTP/unversioned service profile. It does not implement Run freezing, archives
 or publication protocols.
 
+The [public Iceberg REST/S3 Adapter](reference/adapters/tableformat/iceberg/v1/interface.md)
+adds callback-scoped native Catalog, table, scan, mutation and maintenance use,
+with a useful [table-format category contract](reference/adapters/tableformat/v1/interface.md).
+Its full qualification and versioned maintained-SDK distribution remain in progress.
+
 The [Iceberg integration](reference/internal/tableformat/iceberg/v0/interface.md)
 adds bounded format-2 batch reads/writes, schema/partition evolution, snapshot
 operations and restricted rewrites. It owns an independent S3 FileIO and does not

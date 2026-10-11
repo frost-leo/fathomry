@@ -209,6 +209,7 @@ func TestVersionedProjects(t *testing.T) {
 	verifyHTTPReplacement(t, toolDirectory, offline)
 	verifyTelemetryReplacement(t, toolDirectory, offline)
 	verifyTemporalReplacement(t, toolDirectory, offline)
+	verifyIcebergReplacement(t, toolDirectory, offline)
 	for _, mode := range []string{"local", "remote"} {
 		for _, encoding := range []string{"yaml", "toml"} {
 			t.Run(mode+"/"+encoding, func(t *testing.T) {
@@ -355,6 +356,27 @@ func TestVersionedProjects(t *testing.T) {
 						runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "build", "-mod=readonly", "-race", "-o", binary, "./cmd/"+name)
 						executePublicConsumer(t, destination, environment, binary, "temporal "+variant+" consumer passed\n")
 					}
+					icebergDirectory := filepath.Join(destination, "cmd", "iceberg-consumer")
+					if err := os.MkdirAll(icebergDirectory, 0700); err != nil {
+						t.Fatal(err)
+					}
+					icebergFixture, err := os.ReadFile(filepath.Join(repository(t), "adapters/tableformat/iceberg/v1/testdata/consumer/main.go"))
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err = os.WriteFile(filepath.Join(icebergDirectory, "main.go"), icebergFixture, 0600); err != nil {
+						t.Fatal(err)
+					}
+					if err = os.CopyFS(filepath.Join(icebergDirectory, "data"), os.DirFS(filepath.Join(repository(t), "internal/tableformat/iceberg/v0/testdata/format2-v060"))); err != nil {
+						t.Fatal(err)
+					}
+					// Native dependency tests are not part of the CLI's runtime
+					// closure. Acquire them before the offline consumer checks.
+					runConsumerBudget(t, 3*time.Minute, destination, environment, goTool(), "mod", "tidy")
+					runConsumer(t, destination, offline, goTool(), "mod", "tidy", "-diff")
+					icebergBinary := filepath.Join(job, "iceberg-consumer")
+					runConsumerBudget(t, 3*time.Minute, destination, offline, goTool(), "build", "-mod=readonly", "-race", "-o", icebergBinary, "./cmd/iceberg-consumer")
+					executePublicConsumer(t, destination, offline, icebergBinary, "iceberg independent direct and Fixed/Follow passed\n")
 					selected := runConsumer(t, destination, environment, goTool(), "list", "-m", "-json", frameworkModule)
 					if bytes.Contains(selected, []byte("\"Replace\"")) {
 						t.Fatal("public consumer acquired checkout replacement")
@@ -362,6 +384,7 @@ func TestVersionedProjects(t *testing.T) {
 					verifyHTTPReplacement(t, destination, environment)
 					verifyTelemetryReplacement(t, destination, environment)
 					verifyTemporalReplacement(t, destination, environment)
+					verifyIcebergReplacement(t, destination, environment)
 					verifyZapSelection(t, destination, environment)
 					verifyZerologSelection(t, destination, environment)
 				}
@@ -371,6 +394,25 @@ func TestVersionedProjects(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repository(t), "scripts", "install-cli.sh")); err == nil {
 		t.Fatal("unrequested installer appeared")
 	}
+}
+
+func verifyIcebergReplacement(t testing.TB, directory string, environment []string) {
+	t.Helper()
+	for _, pin := range sdkPins() {
+		if pin.original != "github.com/apache/iceberg-go" {
+			continue
+		}
+		raw := runConsumer(t, directory, environment, goTool(), "list", "-mod=readonly", "-m", "-json", pin.original)
+		var selected struct {
+			Version string
+			Replace *struct{ Path, Version, Sum string }
+		}
+		if json.Unmarshal(raw, &selected) != nil || selected.Version != "v0.7.0" || selected.Replace == nil || selected.Replace.Path != frameworkModule+"/"+pin.directory || selected.Replace.Version != pin.version || selected.Replace.Sum != pin.sum {
+			t.Fatalf("actual downloaded Iceberg replacement differs from qualified immutable bytes: version=%q replacement=%+v", selected.Version, selected.Replace)
+		}
+		return
+	}
+	t.Fatal("Iceberg SDK replacement policy missing")
 }
 
 func verifyTemporalReplacement(t testing.TB, directory string, environment []string) {

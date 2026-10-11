@@ -150,6 +150,8 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 			"github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1",
 			"github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1",
 			"github.com/frost-leo/fathomry/adapters/sqlengine/v1",
+			"github.com/frost-leo/fathomry/adapters/tableformat/v1",
+			"github.com/frost-leo/fathomry/adapters/tableformat/iceberg/v1",
 			"github.com/frost-leo/fathomry/adapters/objectstore/v1",
 			"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1":
 			continue

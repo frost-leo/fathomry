@@ -43,6 +43,8 @@ var adapterPackageProfiles = map[string]adapterPackageProfile{
 	"v1":                        {"mechanism", true, []string{"options.go", "runtime.go", "call.go", "evidence.go"}},
 	"database/v1":               {"capability", false, []string{"policy.go", "metadata.go"}},
 	"sqlengine/v1":              {"capability", false, []string{"policy.go", "metadata.go"}},
+	"tableformat/v1":            {"capability", false, []string{"policy.go", "metadata.go"}},
+	"tableformat/iceberg/v1":    {"data-provider", true, nil},
 	"broker/v1":                 {"capability", false, []string{"policy.go", "metadata.go"}},
 	"cache/v1":                  {"capability", false, []string{"policy.go", "metadata.go"}},
 	"objectstore/v1":            {"capability", false, []string{"policy.go", "metadata.go"}},
