@@ -160,12 +160,16 @@ func DragAndDropXY(fromX, fromY, toX, toY float64, steps ...int) Action[Void] {
 		n = max(steps[0], 1)
 	}
 	return Func(func(ctx context.Context, t *Target) (err error) {
-		if _, err := cdp.Call(ctx, t, input.SetInterceptDrags, input.SetInterceptDragsParams{Enabled: true}); err != nil {
+		var interceptQueued bool
+		defer func() {
+			if interceptQueued {
+				err = errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, input.SetInterceptDrags, input.SetInterceptDragsParams{Enabled: false})))
+			}
+		}()
+		work := withQueued(ctx, func(string) { interceptQueued = true })
+		if _, err := cdp.Call(work, t, input.SetInterceptDrags, input.SetInterceptDragsParams{Enabled: true}); err != nil {
 			return err
 		}
-		defer func() {
-			err = errors.Join(err, helperCleanup(ctx, t, input.SetInterceptDrags, input.SetInterceptDragsParams{Enabled: false}))
-		}()
 
 		// The subscription holds each event from now on.
 		intercepted, cancel := t.Subscribe(input.DragIntercepted.Method)
@@ -180,18 +184,10 @@ func DragAndDropXY(fromX, fromY, toX, toY float64, steps ...int) Action[Void] {
 				return
 			}
 			p := input.DispatchMouseEventParams{Type: MouseReleased, X: lastX, Y: lastY, Button: input.MouseButtonLeft, ClickCount: 1}
-			err = errors.Join(err, helperCleanup(ctx, t, input.DispatchMouseEvent, p))
+			err = errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, input.DispatchMouseEvent, p)))
 		}()
 
 		mouse := func(typ input.DispatchMouseEventType, x, y float64) error {
-			switch typ {
-			case MousePressed:
-				pressed = true
-			case MouseReleased:
-				// Do not send a second release, also when this one fails.
-				pressed = false
-			}
-			lastX, lastY = x, y
 			p := input.DispatchMouseEventParams{Type: typ, X: x, Y: y, Button: input.MouseButtonLeft}
 			switch typ {
 			case MousePressed:
@@ -201,7 +197,18 @@ func DragAndDropXY(fromX, fromY, toX, toY float64, steps ...int) Action[Void] {
 			case MouseReleased:
 				p.ClickCount = 1
 			}
-			_, err := cdp.Call(ctx, t, input.DispatchMouseEvent, p)
+			if typ == MouseReleased && pressed {
+				err := helperReleaseInput(ctx, t, input.DispatchMouseEvent, p)
+				pressed = false
+				return err
+			}
+			work := withQueued(ctx, func(string) {
+				lastX, lastY = x, y
+				if typ == MousePressed {
+					pressed = true
+				}
+			})
+			_, err := cdp.Call(work, t, input.DispatchMouseEvent, p)
 			return err
 		}
 

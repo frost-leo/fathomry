@@ -21,7 +21,9 @@ package chromedp
 
 import (
 	"context"
+	_ "embed"
 	"errors"
+	goruntime "runtime"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -200,9 +202,117 @@ func TestManagedNodeCleanupNeedsObservedContextDestruction(t *testing.T) {
 				return &cdproto.Message{Result: jsonv2.Value(`{}`)}
 			})
 			target.origins.contexts = map[runtime.ExecutionContextID]string{1: "original-context"}
-			value, err := callFunctionOnNode[string](context.Background(), target, &Node{Node: &cdp.Node{NodeID: 1}}, "function(){return 'submitted'}")
-			if value != "submitted" || (err != nil) != test.wantFailure {
+			var observed *HelperCleanupError
+			ctx := WithCallLimits(context.Background(), CallLimits{Cleanup: func(err *HelperCleanupError) { observed = err }})
+			value, err := callFunctionOnNode[string](ctx, target, &Node{Node: &cdp.Node{NodeID: 1}}, "function(){return 'submitted'}")
+			if value != "submitted" || (err != nil) != test.wantFailure || (observed != nil) != test.wantFailure {
 				t.Fatal("context absence and generic cleanup errors were conflated", err)
+			}
+		})
+	}
+}
+
+type managedCleanupExitValue struct{}
+
+//go:embed js/managedNodeProperties.js
+var managedNodePropertiesJS string
+
+func TestManagedNodeGroupOwnsResultsAndExceptions(t *testing.T) {
+	ctx, cancel := testAllocate(t, "")
+	defer cancel()
+	if err := Do(ctx, Navigate("data:text/html,<h1>node group</h1>")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(ctx, Evaluate[bool](managedNodePropertiesJS)); err != nil {
+		t.Fatal(err)
+	}
+	for _, property := range []string{"fixture", "throwing"} {
+		name := "managed-node-" + property
+		var queued, replies atomic.Int64
+		work := WithNodeObjectGroup(WithCallLimits(ctx, CallLimits{
+			Queued: func(string) { queued.Add(1) },
+			Result: func(string, int64) error { replies.Add(1); return nil },
+		}), name)
+		value, err := Run(work, JavascriptAttribute[*runtime.RemoteObject](CSS("h1"), property))
+		if property == "throwing" {
+			var exception *ExceptionError
+			if !errors.As(err, &exception) || exception.ExceptionDetails == nil {
+				t.Fatal("native property exception missing", err)
+			}
+			value = exception.ExceptionDetails.Exception
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if value == nil || value.ObjectID == "" || queued.Load() < 2 || queued.Load() != replies.Load() {
+			t.Fatal("native property result or queue accounting missing", queued.Load(), replies.Load())
+		}
+		if _, err := Call(ctx, runtime.GetProperties, runtime.GetPropertiesParams{ObjectID: value.ObjectID}); err != nil {
+			t.Fatal("receiver cleanup also released its returned reference", err)
+		}
+		if _, err := Call(ctx, runtime.ReleaseObjectGroup, runtime.ReleaseObjectGroupParams{ObjectGroup: name}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Call(ctx, runtime.GetProperties, runtime.GetPropertiesParams{ObjectID: value.ObjectID}); err == nil {
+			t.Fatal("node property reference escaped its native group")
+		}
+	}
+}
+
+func TestManagedPopulateWaitHonorsCancellation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		selector := &Selector{}
+		Populate(1, false, PopulateWait(time.Hour))(selector)
+		start := time.Now()
+		err := selector.after[0](ctx, nil, nil)
+		if !errors.Is(err, context.Canceled) || time.Since(start) != 0 {
+			t.Fatal("populate wait ignored cancellation", time.Since(start), err)
+		}
+	})
+}
+
+func (*managedCleanupExitValue) UnmarshalJSON(data []byte) error {
+	if string(data) == `"goexit"` {
+		goruntime.Goexit()
+	}
+	panic("decoder fixture")
+}
+
+func TestManagedNodeCleanupObservationSurvivesDecoderExit(t *testing.T) {
+	for _, mode := range []string{"panic", "goexit"} {
+		t.Run(mode, func(t *testing.T) {
+			cause := &cdproto.Error{Code: -32002, Message: "cleanup fixture"}
+			var calls atomic.Int64
+			target := managedReplyTarget(t, func(message *cdproto.Message) *cdproto.Message {
+				switch string(message.Method) {
+				case dom.ResolveNode.Method:
+					return &cdproto.Message{Result: jsonv2.Value(`{"object":{"type":"object","objectId":"original"}}`)}
+				case runtime.CallFunctionOn.Method:
+					return &cdproto.Message{Result: jsonv2.Value(`{"result":{"type":"string","value":"` + mode + `"}}`)}
+				case runtime.ReleaseObject.Method:
+					calls.Add(1)
+					return &cdproto.Message{Error: cause}
+				}
+				t.Error("unexpected node helper command", message.Method)
+				return &cdproto.Message{Result: jsonv2.Value(`{}`)}
+			})
+			var observed *HelperCleanupError
+			ctx := WithCallLimits(context.Background(), CallLimits{Cleanup: func(err *HelperCleanupError) { observed = err }})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				defer func() { _ = recover() }()
+				_, _ = callFunctionOnNode[managedCleanupExitValue](ctx, target, &Node{Node: &cdp.Node{NodeID: 1}}, attributeJS, "value")
+				t.Error("decoder returned normally")
+			}()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("decoder cleanup did not finish")
+			}
+			if calls.Load() != 1 || observed == nil || !errors.Is(observed, cause) {
+				t.Fatal("abnormal decoder exit discarded cleanup evidence", observed)
 			}
 		})
 	}

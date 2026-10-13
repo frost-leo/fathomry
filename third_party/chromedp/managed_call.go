@@ -32,12 +32,18 @@ var ErrCommandLimit = errors.New("command byte limit exceeded")
 
 // CallLimits applies to calls made with one context, including native helpers.
 // Before runs before encoding. Result runs before decoding. Both must be bounded.
+// Queued observes entry to the browser queue, not remote execution.
+// Queued and Result must support concurrent helper calls and return normally.
+// Cleanup observes helper cleanup failures, including during panic or Goexit.
+// It must be bounded, safe for concurrent calls, and must return without panic.
 // A limit of zero preserves the native limit. These are not wire or heap limits.
 type CallLimits struct {
 	MaxInputBytes  int64
 	MaxOutputBytes int64
 	Before         func(string) error
+	Queued         func(string)
 	Result         func(string, int64) error
+	Cleanup        func(*HelperCleanupError)
 }
 type callLimitsKey struct{}
 type queuedKey struct{}
@@ -65,17 +71,21 @@ func withQueued(ctx context.Context, queued func(string)) context.Context {
 }
 
 func commandQueued(ctx context.Context, method string) {
+	limits, _ := ctx.Value(callLimitsKey{}).(CallLimits)
+	if limits.Queued != nil {
+		limits.Queued(method)
+	}
 	if queued, _ := ctx.Value(queuedKey{}).(func(string)); queued != nil {
 		queued(method)
 	}
 }
 
-func withReply(ctx context.Context, reply func(string)) context.Context {
-	previous, _ := ctx.Value(replyKey{}).(func(string))
-	return context.WithValue(ctx, replyKey{}, func(method string) {
-		reply(method)
+func withReply(ctx context.Context, reply func(string, bool)) context.Context {
+	previous, _ := ctx.Value(replyKey{}).(func(string, bool))
+	return context.WithValue(ctx, replyKey{}, func(method string, acknowledged bool) {
+		reply(method, acknowledged)
 		if previous != nil {
-			previous(method)
+			previous(method, acknowledged)
 		}
 	})
 }
@@ -120,8 +130,8 @@ func encodeCall(ctx context.Context, method string, params any) ([]byte, error) 
 func decodeCall(ctx context.Context, method string, msg *cdproto.Message, result any) error {
 	limits, _ := ctx.Value(callLimitsKey{}).(CallLimits)
 	if msg != nil {
-		if reply, _ := ctx.Value(replyKey{}).(func(string)); reply != nil {
-			reply(method)
+		if reply, _ := ctx.Value(replyKey{}).(func(string, bool)); reply != nil {
+			reply(method, msg.Error == nil)
 		}
 		if limits.MaxOutputBytes > 0 && int64(len(msg.Result)) > limits.MaxOutputBytes {
 			return ErrCommandLimit

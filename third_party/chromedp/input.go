@@ -2,6 +2,7 @@ package chromedp
 
 import (
 	"context"
+	"errors"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/dom"
@@ -34,12 +35,16 @@ const (
 // type at coordinates x, y.
 func MouseEvent(typ input.DispatchMouseEventType, x, y float64, opts ...MouseOption) Action[Void] {
 	return Func(func(ctx context.Context, t *Target) error {
+		work, err := admitCall(ctx, input.DispatchMouseEvent.Method)
+		if err != nil {
+			return err
+		}
 		p := &input.DispatchMouseEventParams{Type: typ, X: x, Y: y}
 		// apply opts
 		for _, o := range opts {
 			o(p)
 		}
-		_, err := cdp.Call(ctx, t, input.DispatchMouseEvent, *p)
+		_, err = cdp.Call(work, t, input.DispatchMouseEvent, *p)
 		return err
 	})
 }
@@ -47,7 +52,11 @@ func MouseEvent(typ input.DispatchMouseEventType, x, y float64, opts ...MouseOpt
 // MouseClickXY is an action that sends a left mouse button click (that is, a
 // mousePressed and a mouseReleased event) to the X, Y location.
 func MouseClickXY(x, y float64, opts ...MouseOption) Action[Void] {
-	return Func(func(ctx context.Context, t *Target) error {
+	return Func(func(ctx context.Context, t *Target) (err error) {
+		work, err := admitCall(ctx, input.DispatchMouseEvent.Method)
+		if err != nil {
+			return err
+		}
 		p := &input.DispatchMouseEventParams{
 			Type:       MousePressed,
 			X:          x,
@@ -61,12 +70,25 @@ func MouseClickXY(x, y float64, opts ...MouseOption) Action[Void] {
 			o(p)
 		}
 
-		if _, err := cdp.Call(ctx, t, input.DispatchMouseEvent, *p); err != nil {
+		pressed := false
+		defer func() {
+			if pressed {
+				p.Type = MouseReleased
+				err = errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, input.DispatchMouseEvent, *p)))
+			}
+		}()
+		work = withQueued(work, func(string) { pressed = p.Type == MousePressed })
+		if _, err := cdp.Call(work, t, input.DispatchMouseEvent, *p); err != nil {
 			return err
 		}
 
 		p.Type = MouseReleased
-		_, err := cdp.Call(ctx, t, input.DispatchMouseEvent, *p)
+		if pressed {
+			err = helperReleaseInput(ctx, t, input.DispatchMouseEvent, *p)
+			pressed = false
+		} else {
+			_, err = cdp.Call(ctx, t, input.DispatchMouseEvent, *p)
+		}
 		return err
 	})
 }
@@ -91,7 +113,10 @@ func MouseClickNode(n *Node, opts ...MouseOption) Action[Void] {
 // nodeCenter scrolls the node into view and returns the center of its first
 // content quad.
 func nodeCenter(ctx context.Context, t *Target, n *Node) (x, y float64, err error) {
-	if _, err := cdp.Call(ctx, t, dom.ScrollIntoViewIfNeeded, dom.ScrollIntoViewIfNeededParams{NodeID: n.NodeID}); err != nil {
+	n.RLock()
+	id := n.NodeID
+	n.RUnlock()
+	if _, err := cdp.Call(ctx, t, dom.ScrollIntoViewIfNeeded, dom.ScrollIntoViewIfNeededParams{NodeID: id}); err != nil {
 		return 0, 0, err
 	}
 	return quadCenter(ctx, t, n)
@@ -100,7 +125,10 @@ func nodeCenter(ctx context.Context, t *Target, n *Node) (x, y float64, err erro
 // quadCenter returns the center of the node in the viewport, as it is now. It
 // does not scroll.
 func quadCenter(ctx context.Context, t *Target, n *Node) (x, y float64, err error) {
-	res, err := cdp.Call(ctx, t, dom.GetContentQuads, dom.GetContentQuadsParams{NodeID: n.NodeID})
+	n.RLock()
+	id := n.NodeID
+	n.RUnlock()
+	res, err := cdp.Call(ctx, t, dom.GetContentQuads, dom.GetContentQuadsParams{NodeID: id})
 	if err != nil {
 		return 0, 0, err
 	}
@@ -128,7 +156,7 @@ func quadCenter(ctx context.Context, t *Target, n *Node) (x, y float64, err erro
 // turns the touch into a click event, if the page runs with touch emulation.
 // See [EmulateTouch].
 func TapXY(x, y float64) Action[Void] {
-	return Func(func(ctx context.Context, t *Target) error {
+	return Func(func(ctx context.Context, t *Target) (err error) {
 		p := input.DispatchTouchEventParams{
 			Type: input.DispatchTouchEventTypeTouchStart,
 			TouchPoints: []*input.TouchPoint{{
@@ -140,14 +168,24 @@ func TapXY(x, y float64) Action[Void] {
 				ID:      ptr(0.0),
 			}},
 		}
-		if _, err := cdp.Call(ctx, t, input.DispatchTouchEvent, p); err != nil {
+		pressed := false
+		defer func() {
+			if pressed {
+				p.Type = input.DispatchTouchEventTypeTouchCancel
+				p.TouchPoints = []*input.TouchPoint{}
+				err = errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, input.DispatchTouchEvent, p)))
+			}
+		}()
+		work := withQueued(ctx, func(string) { pressed = true })
+		if _, err := cdp.Call(work, t, input.DispatchTouchEvent, p); err != nil {
 			return err
 		}
 
 		// A touchEnd event has no touch points.
 		p.Type = input.DispatchTouchEventTypeTouchEnd
 		p.TouchPoints = []*input.TouchPoint{}
-		_, err := cdp.Call(ctx, t, input.DispatchTouchEvent, p)
+		err = helperReleaseInput(ctx, t, input.DispatchTouchEvent, p)
+		pressed = false
 		return err
 	})
 }
@@ -222,21 +260,52 @@ func ClickCount(n int) MouseOption {
 // See the [kb] package for implementation details and a list of well-known
 // keys.
 func KeyEvent(keys string, opts ...KeyOption) Action[Void] {
-	return Func(func(ctx context.Context, t *Target) error {
+	return Func(func(ctx context.Context, t *Target) (err error) {
+		var held *input.DispatchKeyEventParams
+		completed := false
+		var prepared context.Context
+		defer func() {
+			if held != nil && !completed {
+				held.Type = input.DispatchKeyEventTypeKeyUp
+				held.Text, held.UnmodifiedText = "", ""
+				err = errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, input.DispatchKeyEvent, *held)))
+			}
+		}()
 		for _, r := range keys {
 			for _, k := range kb.Encode(r) {
+				if prepared == nil {
+					prepared, err = admitCall(ctx, input.DispatchKeyEvent.Method)
+					if err != nil {
+						return err
+					}
+				}
 				for _, o := range opts {
 					o(k)
 				}
 				if k.Type == kb.KeyChar && k.Modifiers&^int64(ModifierShift) != 0 {
 					continue
 				}
-				if _, err := cdp.Call(ctx, t, input.DispatchKeyEvent, *k); err != nil {
+				work := prepared
+				if k.Type == input.DispatchKeyEventTypeKeyUp && held != nil {
+					err = helperReleaseInput(work, t, input.DispatchKeyEvent, *k)
+					held = nil
+				} else {
+					work = withQueued(work, func(string) {
+						if k.Type == input.DispatchKeyEventTypeKeyDown || k.Type == input.DispatchKeyEventTypeRawKeyDown {
+							copied := *k
+							held = &copied
+						}
+					})
+					_, err = cdp.Call(work, t, input.DispatchKeyEvent, *k)
+				}
+				prepared = nil
+				if err != nil {
 					return err
 				}
 			}
 		}
 
+		completed = true
 		return nil
 	})
 }
@@ -244,7 +313,10 @@ func KeyEvent(keys string, opts ...KeyOption) Action[Void] {
 // KeyEventNode is a key action that dispatches a key event on an element node.
 func KeyEventNode(n *Node, keys string, opts ...KeyOption) Action[Void] {
 	return Func(func(ctx context.Context, t *Target) error {
-		if _, err := cdp.Call(ctx, t, dom.Focus, dom.FocusParams{NodeID: n.NodeID}); err != nil {
+		n.RLock()
+		id := n.NodeID
+		n.RUnlock()
+		if _, err := cdp.Call(ctx, t, dom.Focus, dom.FocusParams{NodeID: id}); err != nil {
 			return err
 		}
 

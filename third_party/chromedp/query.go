@@ -499,7 +499,7 @@ func search(query string) lookupFunc {
 		}
 
 		defer func() {
-			err = errors.Join(err, helperCleanup(ctx, t, dom.DiscardSearchResults, dom.DiscardSearchResultsParams{SearchID: found.SearchID}))
+			err = errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, dom.DiscardSearchResults, dom.DiscardSearchResultsParams{SearchID: found.SearchID})))
 		}()
 
 		if found.ResultCount < 1 {
@@ -528,14 +528,14 @@ func evaluatePath(expression string) lookupFunc {
 		group := "chromedp-jspath-" + rand.Text()
 		var queued, replied bool
 		work := withQueued(ctx, func(string) { queued = true })
-		work = withReply(work, func(string) { replied = true })
+		work = withReply(work, func(string, bool) { replied = true })
 		defer func() {
 			if !queued {
 				return
 			}
-			err = errors.Join(err, helperCleanup(ctx, t, runtime.ReleaseObjectGroup, runtime.ReleaseObjectGroupParams{ObjectGroup: group}))
+			err = errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, runtime.ReleaseObjectGroup, runtime.ReleaseObjectGroupParams{ObjectGroup: group})))
 			if !replied {
-				err = errors.Join(err, &HelperCleanupError{Operation: runtime.ReleaseObjectGroup.Method, Err: errors.New("evaluation result is still unknown")})
+				err = errors.Join(err, reportHelperCleanup(ctx, &HelperCleanupError{Operation: runtime.ReleaseObjectGroup.Method, Err: errors.New("evaluation result is still unknown")}))
 			}
 		}()
 		v, err := cdp.Call(work, t, runtime.Evaluate, runtime.EvaluateParams{
@@ -651,9 +651,13 @@ func NodeReady(s *Selector) {
 
 // callFunctionOnNode calls the function with the node as its "this" value, and
 // returns the decoded result.
-func callFunctionOnNode[T any](ctx context.Context, t *Target, node *Node, function string, args ...any) (T, error) {
+func callFunctionOnNode[T any](ctx context.Context, t *Target, node *Node, function string, args ...any) (res T, err error) {
 	var zero T
-	r, err := cdp.Call(ctx, t, dom.ResolveNode, dom.ResolveNodeParams{NodeID: node.NodeID})
+	node.RLock()
+	id := node.NodeID
+	node.RUnlock()
+	group, _ := ctx.Value(nodeObjectGroupKey{}).(string)
+	r, err := cdp.Call(ctx, t, dom.ResolveNode, dom.ResolveNodeParams{NodeID: id, ObjectGroup: group})
 	if err != nil {
 		return zero, err
 	}
@@ -661,19 +665,22 @@ func callFunctionOnNode[T any](ctx context.Context, t *Target, node *Node, funct
 		return zero, fmt.Errorf("resolving node without a remote object")
 	}
 	generation, observed := t.executionGeneration()
-	res, _, err := callFunctionOn[T](ctx, t, function,
+	defer func() {
+		cleanup := helperCleanup(ctx, t, runtime.ReleaseObject, runtime.ReleaseObjectParams{ObjectID: r.Object.ObjectID})
+		var missing *cdproto.Error
+		if observed && t.executionGenerationCleared(generation) && errors.As(cleanup, &missing) && missing.Code == -32000 && missing.Message == "Cannot find context with specified id" {
+			cleanup = nil
+		}
+		err = errors.Join(err, reportHelperCleanup(ctx, cleanup))
+	}()
+	res, _, err = callFunctionOn[T](ctx, t, function,
 		func(p *runtime.CallFunctionOnParams) {
 			p.ObjectID = r.Object.ObjectID
 		},
 		args...,
 	)
 
-	cleanup := helperCleanup(ctx, t, runtime.ReleaseObject, runtime.ReleaseObjectParams{ObjectID: r.Object.ObjectID})
-	var missing *cdproto.Error
-	if observed && t.executionGenerationCleared(generation) && errors.As(cleanup, &missing) && missing.Code == -32000 && missing.Message == "Cannot find context with specified id" {
-		cleanup = nil
-	}
-	return res, errors.Join(err, cleanup)
+	return res, err
 }
 
 // NodeVisible is an element query option that waits until the browser has sent
@@ -818,8 +825,11 @@ func Populate(depth int64, pierce bool, opts ...PopulateOption) QueryOption {
 			o(&d)
 		}
 		for _, n := range nodes {
+			n.RLock()
+			id := n.NodeID
+			n.RUnlock()
 			_, err := cdp.Call(ctx, t, dom.RequestChildNodes, dom.RequestChildNodesParams{
-				NodeID: n.NodeID,
+				NodeID: id,
 				Depth:  &depth,
 				Pierce: &pierce,
 			})
@@ -828,7 +838,7 @@ func Populate(depth int64, pierce bool, opts ...PopulateOption) QueryOption {
 			}
 		}
 		if d != 0 {
-			<-time.After(d)
+			return sleepContext(ctx, d)
 		}
 		return nil
 	})
@@ -1199,7 +1209,7 @@ func JavascriptAttribute[T any, S Selectable](sel S, name string, opts ...QueryO
 		}
 
 		res, err := callFunctionOnNode[T](ctx, t, n, attributeJS, name)
-		if errors.Is(err, ErrJSNull) {
+		if errors.Is(err, ErrJSNull) && !isHelperCleanup(err) {
 			return zero, nil
 		}
 		if err != nil {

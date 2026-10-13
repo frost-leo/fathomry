@@ -35,6 +35,11 @@ WaitEvent uses a lifetime-bound subscription. A failed trigger now cancels it.
 Raw cdp.Events still requires its consumer to own cancellation at construction.
 
 CallLimits admits work before encoding and checks results before caller decoding.
+Its Cleanup observer retains classified helper cleanup failures during panic or Goexit.
+The observer receives data only. It must return normally and support concurrent calls.
+Queued observes actual command-queue admission. It does not certify a remote effect.
+WithNodeObjectGroup assigns helper receivers to a caller-owned native object group.
+Native function results inherit that group. The caller owns late-result and exception cleanup.
 Poll and function helpers admit argument preparation once, before argument codecs.
 Their argument buffers share the selected input limit.
 Function-call argument encoding preserves explicit empty JSON values and null.
@@ -104,6 +109,11 @@ It retains default-value cleanup and does not add input or change events.
 The property correction adds three CDP calls per selected node.
 
 HelperCleanupError preserves node, search and drag cleanup failures alongside primary errors.
+Null property normalization does not hide a cleanup failure.
+Composite mouse, key, touch and drag helpers release their input after partial failure.
+They use reserved cleanup when the ordinary release never entered the command queue.
+A queued release with a lost reply stays uncertain. The helper does not replay it.
+An acknowledged release remains acknowledged when later output accounting fails.
 Helper cleanup uses the target cleanup timeout, or five seconds by default.
 It uses separate bounded call data and does not require ordinary command admission.
 Selectors stop on these cleanup errors instead of retrying them as readiness failures.
@@ -111,6 +121,7 @@ Concurrent readiness checks retain cleanup failure even when another node fails 
 Cancellation after a check returns does not discard its actual cleanup result.
 Readiness uses at most eight workers, even when the selector returns many nodes.
 All started checks finish before the helper returns. Cancellation does not certify forced termination of caller code.
+PopulateWait ends on context cancellation instead of keeping the operation asleep.
 
 JSPath uses a fresh private object group for each lookup and releases that group after its dispatched work.
 This also releases references returned by GetProperties. The shared console group remains unchanged.

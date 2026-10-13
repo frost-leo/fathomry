@@ -21,6 +21,7 @@ package chromedp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -40,6 +41,16 @@ func (e *HelperCleanupError) Error() string {
 }
 
 func (e *HelperCleanupError) Unwrap() error { return e.Err }
+
+type nodeObjectGroupKey struct{}
+
+// WithNodeObjectGroup assigns resolved node objects to an explicit native group.
+// Native function results inherit the receiver group. The caller owns the group
+// and its cleanup, including exception references and results that arrive late.
+// An empty name preserves the native ungrouped behavior.
+func WithNodeObjectGroup(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, nodeObjectGroupKey{}, name)
+}
 
 func isHelperCleanup(err error) bool {
 	remaining := 128
@@ -83,4 +94,28 @@ func helperCleanup[P, R any](ctx context.Context, t *Target, command cdp.Command
 		return &HelperCleanupError{Operation: command.Method, Err: err}
 	}
 	return nil
+}
+
+func reportHelperCleanup(ctx context.Context, err error) error {
+	if cleanup, ok := err.(*HelperCleanupError); ok && cleanup != nil {
+		limits, _ := ctx.Value(callLimitsKey{}).(CallLimits)
+		if limits.Cleanup != nil {
+			limits.Cleanup(cleanup)
+		}
+	}
+	return err
+}
+
+func helperReleaseInput[P, R any](ctx context.Context, t *Target, command cdp.Command[P, R], params P) error {
+	var queued, acknowledged bool
+	work := withQueued(ctx, func(string) { queued = true })
+	work = withReply(work, func(_ string, success bool) { acknowledged = success })
+	_, err := cdp.Call(work, t, command, params)
+	if err == nil || acknowledged {
+		return err
+	}
+	if queued {
+		return errors.Join(err, reportHelperCleanup(ctx, &HelperCleanupError{Operation: command.Method, Err: err}))
+	}
+	return errors.Join(err, reportHelperCleanup(ctx, helperCleanup(ctx, t, command, params)))
 }
