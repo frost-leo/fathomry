@@ -34,6 +34,14 @@ Bounded queues stop on target termination instead of waiting for an absent reade
 WaitEvent uses a lifetime-bound subscription. A failed trigger now cancels it.
 Raw cdp.Events still requires its consumer to own cancellation at construction.
 
+RunResponse ignores unrelated events and child-frame fragment navigation.
+Positive root back/forward cache restoration completes the wait without an HTTP response.
+It does not wait for load events that this native cache path does not send.
+EventBuffer bounds its retained pre-navigation events by count and encoded bytes.
+Overflow cancels the trigger and keeps both the overflow and any trigger error.
+Every exit joins and removes its ordered listener before reading the result.
+It does not wait for another browser event to release that listener.
+
 CallLimits admits work before encoding and checks results before caller decoding.
 Its Cleanup observer retains classified helper cleanup failures during panic or Goexit.
 The observer receives data only. It must return normally and support concurrent calls.
@@ -108,6 +116,17 @@ They no longer panic in the native formatter.
 Clear now clears dirty live input and textarea values, including an empty textarea.
 It retains default-value cleanup and does not add input or change events.
 The property correction adds three CDP calls per selected node.
+
+SendKeys reads the node name, ID and attributes under the node read lock.
+Concurrent attribute updates no longer race with input-type detection.
+Mouse-wheel encoding keeps both delta fields, including zero values.
+This applies to DispatchMouseEvent and EmulateTouchFromMouseEvent without changing their native sign conventions.
+Other event types and caller-owned parameters remain unchanged.
+TouchSwipeXY sends one touch contact through 20 paced moves, then releases it.
+It validates finite coordinates and positive duration before pressing.
+It uses the same reserved release/cancel cleanup as the other input helpers.
+Page handlers and browser inertia determine its scroll effect and settling time.
+It does not retry an acknowledged gesture or promise an exact scroll distance.
 
 HelperCleanupError preserves node, search and drag cleanup failures alongside primary errors.
 Null property normalization does not hide a cleanup failure.

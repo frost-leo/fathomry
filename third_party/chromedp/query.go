@@ -1349,8 +1349,9 @@ func SendKeys[S Selectable](sel S, v string, opts ...QueryOption) Action[Void] {
 		}
 
 		// grab type attribute from node
-		typ, attrs := "", n.Attributes
 		n.RLock()
+		typ, attrs := "", n.Attributes
+		name, id := n.NodeName, n.NodeID
 		for i := 0; i < len(attrs); i += 2 {
 			if attrs[i] == "type" {
 				typ = attrs[i+1]
@@ -1359,8 +1360,8 @@ func SendKeys[S Selectable](sel S, v string, opts ...QueryOption) Action[Void] {
 		n.RUnlock()
 
 		// when working with input[type="file"], call dom.SetFileInputFiles
-		if n.NodeName == "INPUT" && typ == "file" {
-			_, err := cdp.Call(ctx, t, dom.SetFileInputFiles, dom.SetFileInputFilesParams{Files: []string{v}, NodeID: n.NodeID})
+		if name == "INPUT" && typ == "file" {
+			_, err := cdp.Call(ctx, t, dom.SetFileInputFiles, dom.SetFileInputFilesParams{Files: []string{v}, NodeID: id})
 			return err
 		}
 
