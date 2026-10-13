@@ -21,7 +21,10 @@ package chromedp
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
+	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/chromedp/cdproto"
@@ -34,6 +37,41 @@ type executionOrigins struct {
 	contexts  map[runtime.ExecutionContextID]string
 	bytes     int64
 	uncertain error
+}
+
+// ExecutionOrigin identifies a context that this target observed.
+// ID can be reused. UniqueID names one context across process changes.
+type ExecutionOrigin struct {
+	ID       runtime.ExecutionContextID `json:"id"`
+	UniqueID string                     `json:"uniqueId"`
+}
+
+// ExecutionOrigins returns a copy of the current identities, sorted by ID.
+// It refuses an uncertain table or a count above maximum before it copies.
+// A snapshot does not keep a context alive. It sends no browser command.
+func (t *Target) ExecutionOrigins(maximum int) ([]ExecutionOrigin, error) {
+	if t == nil {
+		return nil, fmt.Errorf("reading execution origins: %w", ErrInvalidContext)
+	}
+	select {
+	case <-t.stopped:
+		return nil, fmt.Errorf("reading execution origins: %w", ErrInvalidContext)
+	default:
+	}
+	t.origins.mu.RLock()
+	defer t.origins.mu.RUnlock()
+	if t.origins.uncertain != nil {
+		return nil, fmt.Errorf("reading execution origins: %w", t.origins.uncertain)
+	}
+	if maximum < 0 || len(t.origins.contexts) > maximum {
+		return nil, fmt.Errorf("reading execution origins: %w", ErrEventOverflow)
+	}
+	origins := make([]ExecutionOrigin, 0, len(t.origins.contexts))
+	for id, unique := range t.origins.contexts {
+		origins = append(origins, ExecutionOrigin{ID: id, UniqueID: unique})
+	}
+	slices.SortFunc(origins, func(left, right ExecutionOrigin) int { return cmp.Compare(left.ID, right.ID) })
+	return origins, nil
 }
 
 // trackExecutionOrigin runs in wire order before event publication. The frame

@@ -48,8 +48,8 @@ func runPoll[T any](ctx context.Context, t *Target, p *pollTask) (T, error) {
 	}
 
 	if p.frame != nil {
-		t.frameMu.RLock()
 		frameID := t.enclosingFrame(p.frame)
+		t.frameMu.RLock()
 		execCtx = t.execContexts[frameID]
 		t.frameMu.RUnlock()
 	}

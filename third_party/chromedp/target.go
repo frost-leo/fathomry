@@ -308,7 +308,8 @@ func (t *Target) runtimeEvent(ev any) {
 	switch ev := ev.(type) {
 	case *runtime.EventExecutionContextCreated:
 		var aux struct {
-			FrameID cdp.FrameID
+			FrameID   cdp.FrameID
+			IsDefault *bool
 		}
 		if len(ev.Context.AuxData) == 0 {
 			break
@@ -317,7 +318,7 @@ func (t *Target) runtimeEvent(ev any) {
 			t.errf("could not decode executionContextCreated auxData %q: %v", ev.Context.AuxData, err)
 			break
 		}
-		if aux.FrameID != "" {
+		if aux.FrameID != "" && (aux.IsDefault == nil || *aux.IsDefault) {
 			t.frameMu.Lock()
 			t.execContexts[aux.FrameID] = ev.Context.ID
 			t.execUniqueIDs[aux.FrameID] = ev.Context.UniqueID

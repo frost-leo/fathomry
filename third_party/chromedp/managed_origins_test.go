@@ -25,6 +25,7 @@ import (
 	"testing/synctest"
 
 	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/cdp"
 	jsonv2 "github.com/chromedp/cdproto/cdp/jsonv2"
 	"github.com/chromedp/cdproto/runtime"
 )
@@ -114,5 +115,77 @@ func TestManagedOriginCompletenessNeedsAConfirmedReset(t *testing.T) {
 	}
 	if err := created("final"); err != nil || errors.Is(target.executionOriginError(), ErrEventOverflow) {
 		t.Fatal("new complete origin set was refused", err)
+	}
+}
+
+func TestManagedExecutionOriginSnapshotIsBoundedCopiedAndCurrent(t *testing.T) {
+	target := &Target{events: subscribers{limits: EventBuffer{MaxBytes: 4096}}}
+	change := func(method, params string) {
+		t.Helper()
+		if err := target.trackExecutionOrigin(&cdproto.Message{Method: cdproto.MethodType(method), Params: jsonv2.Value(params)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	change(runtime.ExecutionContextCreated.Method, `{"context":{"id":9,"uniqueId":"first"}}`)
+	change(runtime.ExecutionContextCreated.Method, `{"context":{"id":3,"uniqueId":"second"}}`)
+	for _, limit := range []int{-1, 0, 1} {
+		if values, err := target.ExecutionOrigins(limit); !errors.Is(err, ErrEventOverflow) || values != nil {
+			t.Fatal("count refusal returned a snapshot", err)
+		}
+	}
+	values, err := target.ExecutionOrigins(2)
+	if err != nil || len(values) != 2 || values[0].ID != 3 || values[1].ID != 9 {
+		t.Fatal("snapshot order or identity changed", err)
+	}
+	values[0].UniqueID = "caller-change"
+	current, err := target.ExecutionOrigins(2)
+	if err != nil || current[0].UniqueID != "second" {
+		t.Fatal("snapshot remained aliased", err)
+	}
+	change(runtime.ExecutionContextDestroyed.Method, `{"executionContextUniqueId":"first"}`)
+	change(runtime.ExecutionContextCreated.Method, `{"context":{"id":9,"uniqueId":"replacement"}}`)
+	current, err = target.ExecutionOrigins(2)
+	if err != nil || current[1].UniqueID != "replacement" || values[1].UniqueID != "first" {
+		t.Fatal("numeric reuse changed an old snapshot", err)
+	}
+	if err := target.trackExecutionOrigin(&cdproto.Message{Method: cdproto.MethodType(runtime.ExecutionContextDestroyed.Method), Params: jsonv2.Value(`{}`)}); err == nil {
+		t.Fatal("malformed destruction accepted")
+	}
+	if values, err := target.ExecutionOrigins(100); err == nil || values != nil {
+		t.Fatal("uncertain origin table was published")
+	}
+	change(runtime.ExecutionContextsCleared.Method, `{}`)
+	empty, err := target.ExecutionOrigins(0)
+	if err != nil || empty == nil || len(empty) != 0 {
+		t.Fatal("empty snapshot lost its meaning", err)
+	}
+	var absent *Target
+	if _, err := absent.ExecutionOrigins(1); !errors.Is(err, ErrInvalidContext) {
+		t.Fatal(err)
+	}
+	target.stopped = make(chan struct{})
+	close(target.stopped)
+	if _, err := target.ExecutionOrigins(1); !errors.Is(err, ErrInvalidContext) {
+		t.Fatal("stopped target returned identities", err)
+	}
+}
+
+func TestManagedIsolatedWorldDoesNotReplaceDefaultFrameExecution(t *testing.T) {
+	frameID := cdp.FrameID("frame")
+	target := &Target{execContexts: make(map[cdp.FrameID]runtime.ExecutionContextID), execUniqueIDs: make(map[cdp.FrameID]string)}
+	target.runtimeEvent(&runtime.EventExecutionContextCreated{Context: &runtime.ExecutionContextDescription{ID: 7, UniqueID: "default", AuxData: jsonv2.Value(`{"frameId":"frame","isDefault":true}`)}})
+	target.runtimeEvent(&runtime.EventExecutionContextCreated{Context: &runtime.ExecutionContextDescription{ID: 9, UniqueID: "isolated", AuxData: jsonv2.Value(`{"frameId":"frame","isDefault":false}`)}})
+	target.frameMu.RLock()
+	id, unique := target.execContexts[frameID], target.execUniqueIDs[frameID]
+	target.frameMu.RUnlock()
+	if id != 7 || unique != "default" {
+		t.Fatal("isolated world replaced the native default-frame execution")
+	}
+	target.runtimeEvent(&runtime.EventExecutionContextDestroyed{ExecutionContextUniqueID: "isolated"})
+	target.frameMu.RLock()
+	id = target.execContexts[frameID]
+	target.frameMu.RUnlock()
+	if id != 7 {
+		t.Fatal("isolated-world destruction revoked the default frame")
 	}
 }

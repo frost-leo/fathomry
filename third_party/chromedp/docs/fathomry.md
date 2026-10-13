@@ -81,6 +81,15 @@ Both tagged and ordinary subscriptions pass the actual method to Observe.
 Private binding routing checks bounded bytes before it consumes queue capacity.
 Execution context unique IDs are recorded before native event publication.
 Queued work can capture the event-time origin instead of a reused numeric ID.
+ExecutionOrigins copies the current identity table within a caller-selected count.
+It rejects an uncertain table before copying. It sends no browser command.
+This also covers contexts created before a caller subscribes to events.
+The copy has numeric and unique IDs, not context names or frame metadata.
+An isolated world no longer replaces the default context in the frame cache.
+Native Poll and selector helpers keep the default world after isolated-world creation.
+The identity table still tracks both worlds.
+Frame polling takes the frame lock after its enclosing-frame lookup.
+The lookup already takes that lock. This avoids a nested read lock.
 
 DecodeConsole provides Console's data conversion without target access.
 Malformed console entries, exceptions and nested pointer lists return errors.
