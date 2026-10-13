@@ -21,6 +21,7 @@ package chromedp
 
 import (
 	jsonv2 "github.com/chromedp/cdproto/cdp/jsonv2"
+	"github.com/chromedp/cdproto/debugger"
 	"github.com/chromedp/cdproto/runtime"
 )
 
@@ -35,8 +36,44 @@ type callFunctionValues struct {
 	Arguments []*callArgumentValue `json:"arguments,omitempty,omitzero"`
 }
 
+type variableArgumentValue struct {
+	*debugger.SetVariableValueParams
+	NewValue *callArgumentValue `json:"newValue"`
+}
+
+type returnArgumentValue struct {
+	*debugger.SetReturnValueParams
+	NewValue *callArgumentValue `json:"newValue"`
+}
+
 // Empty JSON values are arguments, not an omitted JavaScript undefined value.
 func preserveCallArguments(method string, params any, limit int64) (any, error) {
+	if method == debugger.CommandSetVariableValue {
+		var native *debugger.SetVariableValueParams
+		switch value := params.(type) {
+		case debugger.SetVariableValueParams:
+			native = &value
+		case *debugger.SetVariableValueParams:
+			native = value
+		}
+		if native != nil {
+			value, err := preserveArgumentValue(native.NewValue, limit)
+			return variableArgumentValue{SetVariableValueParams: native, NewValue: value}, err
+		}
+	}
+	if method == debugger.CommandSetReturnValue {
+		var native *debugger.SetReturnValueParams
+		switch value := params.(type) {
+		case debugger.SetReturnValueParams:
+			native = &value
+		case *debugger.SetReturnValueParams:
+			native = value
+		}
+		if native != nil {
+			value, err := preserveArgumentValue(native.NewValue, limit)
+			return returnArgumentValue{SetReturnValueParams: native, NewValue: value}, err
+		}
+	}
 	if method != runtime.CommandCallFunctionOn {
 		return params, nil
 	}
@@ -68,4 +105,15 @@ func preserveCallArguments(method string, params any, limit int64) (any, error) 
 		}
 	}
 	return callFunctionValues{CallFunctionOnParams: native, Arguments: values}, nil
+}
+
+func preserveArgumentValue(argument *runtime.CallArgument, limit int64) (*callArgumentValue, error) {
+	if argument == nil {
+		return nil, nil
+	}
+	size := int64(len(argument.Value)) + int64(len(argument.UnserializableValue)) + int64(len(argument.ObjectID))
+	if limit > 0 && size > limit {
+		return nil, ErrCommandLimit
+	}
+	return &callArgumentValue{Value: argument.Value, UnserializableValue: argument.UnserializableValue, ObjectID: argument.ObjectID}, nil
 }

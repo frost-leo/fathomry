@@ -42,8 +42,9 @@ WithNodeObjectGroup assigns helper receivers to a caller-owned native object gro
 Native function results inherit that group. The caller owns late-result and exception cleanup.
 Poll and function helpers admit argument preparation once, before argument codecs.
 Their argument buffers share the selected input limit.
-Function-call argument encoding preserves explicit empty JSON values and null.
-This correction is local to Runtime.callFunctionOn parameters, not global JSON behavior.
+Argument encoding preserves explicit empty JSON values and null.
+The correction covers Runtime.callFunctionOn, Debugger.setVariableValue and Debugger.setReturnValue.
+It does not change global JSON behavior or turn an absent value into null.
 It does not bound native transport allocation or browser memory.
 Target cleanup can use a caller-selected timeout instead of the five-second default.
 Managed target dispatch can outlive an operation's cancellation for IO cleanup.
