@@ -2,6 +2,7 @@ package chromedp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	jsonv2 "github.com/chromedp/cdproto/cdp/jsonv2"
 	"time"
@@ -147,9 +148,9 @@ func draggableAt(ctx context.Context, t *Target, x, y float64) bool {
 //
 // The action turns the interception off when it returns. When an error ends the
 // drag after the mouse button went down, for example when the context ends, the
-// action still releases the button at the last point of the mouse. It uses a new
-// context with a limit of 5 seconds for the release, and ignores an error of the
-// release. A drag that a page
+// action still releases the button at the last point of the mouse. Cleanup uses
+// the target cleanup timeout, or five seconds by default. Cleanup errors remain
+// inspectable alongside the primary error. A drag that a page
 // starts with a distance that is shorter than the drag threshold of the
 // browser, a few pixels, does not start. Use points that are at least 10
 // pixels apart.
@@ -163,12 +164,7 @@ func DragAndDropXY(fromX, fromY, toX, toY float64, steps ...int) Action[Void] {
 			return err
 		}
 		defer func() {
-			// Turn the interception off, also when the context ended.
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
-			if _, off := cdp.Call(ctx, t, input.SetInterceptDrags, input.SetInterceptDragsParams{Enabled: false}); off != nil && err == nil {
-				err = off
-			}
+			err = errors.Join(err, helperCleanup(ctx, t, input.SetInterceptDrags, input.SetInterceptDragsParams{Enabled: false}))
 		}()
 
 		// The subscription holds each event from now on.
@@ -183,10 +179,8 @@ func DragAndDropXY(fromX, fromY, toX, toY float64, steps ...int) Action[Void] {
 			if !pressed {
 				return
 			}
-			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-			defer cancel()
 			p := input.DispatchMouseEventParams{Type: MouseReleased, X: lastX, Y: lastY, Button: input.MouseButtonLeft, ClickCount: 1}
-			_, _ = cdp.Call(ctx, t, input.DispatchMouseEvent, p)
+			err = errors.Join(err, helperCleanup(ctx, t, input.DispatchMouseEvent, p))
 		}()
 
 		mouse := func(typ input.DispatchMouseEventType, x, y float64) error {

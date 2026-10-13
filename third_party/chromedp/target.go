@@ -30,6 +30,7 @@ type Target struct {
 	// events holds the subscriptions made with Subscribe.
 	events  subscribers
 	stopped chan struct{}
+	stopErr error
 
 	// exposedMu protects the registrations that ExposeFunc and BindFunc own.
 	exposedMu sync.Mutex
@@ -114,10 +115,8 @@ func (t *Target) run(ctx context.Context) {
 		method cdproto.MethodType
 		value  any
 	}
-	// syncEventQueue is used to handle events synchronously within Target.
-	// TODO: If this queue gets full, the goroutine below can get stuck on a
-	// send. Then the response callbacks never run, and this causes a deadlock.
-	// Can we fix this without potentially using lots of memory?
+	// State handlers can wait for replies through the reader. A full queue
+	// must stop the target, not block that reader or discard cache updates.
 	syncEventQueue := make(chan eventValue, 4096)
 
 	// This goroutine receives events from the browser, calls listeners, and
@@ -169,6 +168,12 @@ func (t *Target) run(ctx context.Context) {
 					case <-ctx.Done():
 						return
 					case syncEventQueue <- eventValue{msg.Method, ev}:
+					default:
+						t.stopErr = ErrEventOverflow
+						if report := t.events.limits.OnOverflow; report != nil {
+							report(t.stopErr)
+						}
+						return
 					}
 				}
 			}
@@ -276,9 +281,9 @@ func (t *Target) Call(ctx context.Context, method string, params, res any) error
 func (t *Target) stoppedError(ctx context.Context) error {
 	select {
 	case <-t.browser.LostConnection:
-		return t.browser.lostError(ctx)
+		return errors.Join(t.stopErr, t.browser.lostError(ctx))
 	default:
-		return context.Canceled
+		return errors.Join(t.stopErr, context.Canceled)
 	}
 }
 

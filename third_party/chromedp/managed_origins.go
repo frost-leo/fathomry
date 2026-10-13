@@ -33,10 +33,11 @@ import (
 )
 
 type executionOrigins struct {
-	mu        sync.RWMutex
-	contexts  map[runtime.ExecutionContextID]string
-	bytes     int64
-	uncertain error
+	mu         sync.RWMutex
+	contexts   map[runtime.ExecutionContextID]string
+	bytes      int64
+	uncertain  error
+	generation uint64
 }
 
 // ExecutionOrigin identifies a context that this target observed.
@@ -150,8 +151,21 @@ func (t *Target) trackExecutionOrigin(msg *cdproto.Message) (err error) {
 		clear(t.origins.contexts)
 		t.origins.bytes = 0
 		t.origins.uncertain = nil
+		t.origins.generation++
 	}
 	return nil
+}
+
+func (t *Target) executionGeneration() (uint64, bool) {
+	t.origins.mu.RLock()
+	defer t.origins.mu.RUnlock()
+	return t.origins.generation, t.origins.uncertain == nil && len(t.origins.contexts) != 0
+}
+
+func (t *Target) executionGenerationCleared(generation uint64) bool {
+	t.origins.mu.RLock()
+	defer t.origins.mu.RUnlock()
+	return t.origins.uncertain == nil && t.origins.generation != generation
 }
 
 func (t *Target) executionOriginError() error {

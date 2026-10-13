@@ -454,6 +454,7 @@ func (b *Browser) run(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				return
+			case <-page.stopped:
 			case page.messageQueue <- m:
 			}
 

@@ -45,6 +45,10 @@ Managed target dispatch can outlive an operation's cancellation for IO cleanup.
 Browser cancellation closes blocked transports through a separate path.
 WaitStopped joins the native dispatch and reader loops. Subscription cancellation joins its pump.
 Pending target calls also end when their target stops, without closing the browser peer.
+The browser dispatcher skips late events for a stopped target instead of waiting for its abandoned queue.
+The native state queue holds at most 4,096 events. Overflow stops the target with ErrEventOverflow.
+The reader never waits for queue space while a state handler waits for a reply through that same reader.
+The overflow callback and later target calls retain that cause. Independent browser and peer commands can continue.
 
 BindingLimits bounds name routing before it admits payload decoding and handler creation.
 Unrelated binding events do not compete for another handler's active slot.
@@ -98,6 +102,31 @@ They no longer panic in the native formatter.
 Clear now clears dirty live input and textarea values, including an empty textarea.
 It retains default-value cleanup and does not add input or change events.
 The property correction adds three CDP calls per selected node.
+
+HelperCleanupError preserves node, search and drag cleanup failures alongside primary errors.
+Helper cleanup uses the target cleanup timeout, or five seconds by default.
+It uses separate bounded call data and does not require ordinary command admission.
+Selectors stop on these cleanup errors instead of retrying them as readiness failures.
+Concurrent readiness checks retain cleanup failure even when another node fails first.
+Cancellation after a check returns does not discard its actual cleanup result.
+Readiness uses at most eight workers, even when the selector returns many nodes.
+All started checks finish before the helper returns. Cancellation does not certify forced termination of caller code.
+
+JSPath uses a fresh private object group for each lookup and releases that group after its dispatched work.
+This also releases references returned by GetProperties. The shared console group remains unchanged.
+Cleanup adds one CDP command per dispatched lookup and needs no ordinary command admission.
+A refused lookup sends no cleanup command. An oversized observed reply is distinct from a missing reply.
+An awaited promise can produce objects after an early group release. Missing reply evidence therefore retains HelperCleanupError.
+Target teardown remains responsible for that unknown producer. A release acknowledgment alone does not prove that it ended.
+
+A node reference can disappear when form submission destroys its execution context.
+The missing-context reply alone does not confirm that destruction.
+The target must also observe a valid all-contexts-cleared event after the node was resolved.
+Only that combined evidence settles the node helper's missing-context cleanup.
+Other reply codes, unrelated errors and absent event evidence remain failures.
+The existing native identity table records this generation without another event producer.
+The Fathomry packet retains the original Submit regression and the corrected controls.
+This correction does not certify every native helper's reference lifetime or performance.
 
 The remote package accepts an explicit TLS configuration.
 It affects only the CDP connection, not the browser's HTTP traffic.

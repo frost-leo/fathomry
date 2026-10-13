@@ -2,6 +2,7 @@ package chromedp
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -289,6 +290,9 @@ func (s *Selector) run(ctx context.Context, t *Target, last func(context.Context
 
 		ids, err := s.by(ctx, t, fromNode)
 		if err != nil {
+			if isHelperCleanup(err) {
+				return true, err
+			}
 			var e *cdproto.Error
 			// When the selector is invalid (for example, "#a:b" or "#3"), the
 			// browser always fails with "DOM Error while querying". It makes no
@@ -309,6 +313,9 @@ func (s *Selector) run(ctx context.Context, t *Target, last func(context.Context
 			return false, nil
 		}
 		nodes, err := s.wait(ctx, t, frame, execCtx, ids...)
+		if isHelperCleanup(err) {
+			return true, err
+		}
 		// if nodes==nil, we are not yet ready
 		if nodes == nil || err != nil {
 			return false, nil
@@ -343,26 +350,44 @@ func (s *Selector) waitReady(check func(context.Context, *Target, runtime.Execut
 		cur.RUnlock()
 
 		if check != nil {
-			errc := make(chan error, 1)
-			for _, n := range nodes {
-				go func(n *Node) {
-					select {
-					case <-ctx.Done():
-						errc <- ctx.Err()
-					case errc <- check(ctx, t, execCtx, n):
+			workers := min(len(nodes), 8)
+			errc := make(chan error, workers)
+			for worker := range workers {
+				go func() {
+					var first, cleanup error
+					for index := worker; index < len(nodes); index += workers {
+						err := ctx.Err()
+						if err == nil {
+							err = check(ctx, t, execCtx, nodes[index])
+						}
+						if first == nil {
+							first = err
+						}
+						if cleanup == nil && isHelperCleanup(err) {
+							cleanup = err
+						}
+						if err := ctx.Err(); err != nil {
+							first = errors.Join(first, err)
+							break
+						}
 					}
-				}(n)
+					errc <- errors.Join(first, cleanup)
+				}()
 			}
 
-			var first error
-			for range nodes {
-				if err := <-errc; first == nil {
+			var first, cleanup error
+			for range workers {
+				err := <-errc
+				if first == nil {
 					first = err
+				}
+				if cleanup == nil && isHelperCleanup(err) {
+					cleanup = err
 				}
 			}
 			close(errc)
 			if first != nil {
-				return nil, first
+				return nil, errors.Join(first, cleanup)
 			}
 		}
 		return nodes, nil
@@ -467,14 +492,14 @@ func queryAll(selector string) lookupFunc {
 // search selects elements by the DOM.performSearch command. It matches nodes by
 // plain text, CSS selector or XPath query.
 func search(query string) lookupFunc {
-	return func(ctx context.Context, t *Target, n *Node) ([]cdp.NodeID, error) {
+	return func(ctx context.Context, t *Target, n *Node) (ids []cdp.NodeID, err error) {
 		found, err := cdp.Call(ctx, t, dom.PerformSearch, dom.PerformSearchParams{Query: query})
 		if err != nil {
 			return nil, err
 		}
 
 		defer func() {
-			_, _ = cdp.Call(ctx, t, dom.DiscardSearchResults, dom.DiscardSearchResultsParams{SearchID: found.SearchID})
+			err = errors.Join(err, helperCleanup(ctx, t, dom.DiscardSearchResults, dom.DiscardSearchResultsParams{SearchID: found.SearchID}))
 		}()
 
 		if found.ResultCount < 1 {
@@ -499,11 +524,24 @@ func search(query string) lookupFunc {
 // no element, so that [NodeNotPresent] succeeds and the other conditions wait.
 // Any other value is an error that [Selector.run] does not retry.
 func evaluatePath(expression string) lookupFunc {
-	return func(ctx context.Context, t *Target, n *Node) ([]cdp.NodeID, error) {
-		v, err := cdp.Call(ctx, t, runtime.Evaluate, runtime.EvaluateParams{
+	return func(ctx context.Context, t *Target, n *Node) (ids []cdp.NodeID, err error) {
+		group := "chromedp-jspath-" + rand.Text()
+		var queued, replied bool
+		work := withQueued(ctx, func(string) { queued = true })
+		work = withReply(work, func(string) { replied = true })
+		defer func() {
+			if !queued {
+				return
+			}
+			err = errors.Join(err, helperCleanup(ctx, t, runtime.ReleaseObjectGroup, runtime.ReleaseObjectGroupParams{ObjectGroup: group}))
+			if !replied {
+				err = errors.Join(err, &HelperCleanupError{Operation: runtime.ReleaseObjectGroup.Method, Err: errors.New("evaluation result is still unknown")})
+			}
+		}()
+		v, err := cdp.Call(work, t, runtime.Evaluate, runtime.EvaluateParams{
 			Expression:            expression,
 			AwaitPromise:          ptr(true),
-			ObjectGroup:           "console",
+			ObjectGroup:           group,
 			IncludeCommandLineAPI: ptr(true),
 		})
 		if err != nil {
@@ -514,6 +552,9 @@ func evaluatePath(expression string) lookupFunc {
 		}
 
 		obj := v.Result
+		if obj == nil {
+			return nil, fmt.Errorf("evaluating JSPath without a remote result")
+		}
 		switch {
 		case obj.Type == runtime.RemoteObjectTypeUndefined, obj.Subtype == runtime.RemoteObjectSubtypeNull:
 			return []cdp.NodeID{}, nil
@@ -531,8 +572,14 @@ func evaluatePath(expression string) lookupFunc {
 		if err != nil {
 			return nil, err
 		}
-		ids := []cdp.NodeID{}
+		if props.ExceptionDetails != nil {
+			return nil, &ExceptionError{props.ExceptionDetails}
+		}
+		ids = []cdp.NodeID{}
 		for _, p := range props.Result {
+			if p == nil {
+				return nil, fmt.Errorf("evaluating JSPath with a missing property")
+			}
 			if _, err := strconv.ParseUint(p.Name, 10, 32); err != nil || p.Value == nil {
 				continue
 			}
@@ -610,6 +657,10 @@ func callFunctionOnNode[T any](ctx context.Context, t *Target, node *Node, funct
 	if err != nil {
 		return zero, err
 	}
+	if r.Object == nil || r.Object.ObjectID == "" {
+		return zero, fmt.Errorf("resolving node without a remote object")
+	}
+	generation, observed := t.executionGeneration()
 	res, _, err := callFunctionOn[T](ctx, t, function,
 		func(p *runtime.CallFunctionOnParams) {
 			p.ObjectID = r.Object.ObjectID
@@ -617,15 +668,12 @@ func callFunctionOnNode[T any](ctx context.Context, t *Target, node *Node, funct
 		args...,
 	)
 
-	// Try to release the remote object, also when the call failed.
-	// It fails if the page navigated or closed,
-	// and we can ignore the error in this case.
-	_, _ = cdp.Call(ctx, t, runtime.ReleaseObject, runtime.ReleaseObjectParams{ObjectID: r.Object.ObjectID})
-
-	if err != nil {
-		return zero, err
+	cleanup := helperCleanup(ctx, t, runtime.ReleaseObject, runtime.ReleaseObjectParams{ObjectID: r.Object.ObjectID})
+	var missing *cdproto.Error
+	if observed && t.executionGenerationCleared(generation) && errors.As(cleanup, &missing) && missing.Code == -32000 && missing.Message == "Cannot find context with specified id" {
+		cleanup = nil
 	}
-	return res, nil
+	return res, errors.Join(err, cleanup)
 }
 
 // NodeVisible is an element query option that waits until the browser has sent

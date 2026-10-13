@@ -24,10 +24,15 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/cdp"
+	jsonv2 "github.com/chromedp/cdproto/cdp/jsonv2"
+	"github.com/chromedp/cdproto/dom"
 )
 
 type managedBlockedTransport struct {
@@ -137,6 +142,178 @@ func TestManagedTargetStopPreservesConnectionCause(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("stopped target call did not return")
 			}
+		})
+	}
+}
+
+type managedReplyTransport struct {
+	incoming chan *cdproto.Message
+	closed   chan struct{}
+	once     sync.Once
+	writes   atomic.Int64
+}
+
+func (t *managedReplyTransport) Read(ctx context.Context, result *cdproto.Message) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.closed:
+		return io.EOF
+	case message := <-t.incoming:
+		*result = *message
+		return nil
+	}
+}
+
+func (t *managedReplyTransport) Write(ctx context.Context, message *cdproto.Message) error {
+	t.writes.Add(1)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.closed:
+		return io.EOF
+	case t.incoming <- &cdproto.Message{ID: message.ID, SessionID: message.SessionID, Result: jsonv2.Value(`{}`)}:
+		return nil
+	}
+}
+
+func (t *managedReplyTransport) Close() error {
+	t.once.Do(func() { close(t.closed) })
+	return nil
+}
+
+func TestManagedStoppedTargetCannotBlockBrowserOrPeer(t *testing.T) {
+	for _, state := range []string{"active", "stopped"} {
+		t.Run(state, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				life, stopBrowser := context.WithCancel(context.Background())
+				transport := &managedReplyTransport{incoming: make(chan *cdproto.Message, 2048), closed: make(chan struct{})}
+				browser, err := NewBrowserTransport(life, transport, WithBrowserLogf(func(string, ...any) {}), WithEventBuffer(EventBuffer{MaxEvents: 1, MaxBytes: 128}))
+				if err != nil {
+					stopBrowser()
+					t.Fatal(err)
+				}
+				defer func() {
+					stopBrowser()
+					if err := browser.WaitStopped(context.Background()); err != nil {
+						t.Error(err)
+					}
+				}()
+				page, err := browser.newTarget(life, "page", "page-session")
+				if err != nil {
+					t.Fatal(err)
+				}
+				pageLife, stopPage := context.WithCancel(life)
+				defer stopPage()
+				go page.run(pageLife)
+				peer, err := browser.newTarget(life, "peer", "peer-session")
+				if err != nil {
+					t.Fatal(err)
+				}
+				go peer.run(life)
+				if state == "stopped" {
+					stopPage()
+					if err := page.WaitStopped(context.Background()); err != nil {
+						t.Fatal(err)
+					}
+				}
+				for range cap(page.messageQueue) + 4 {
+					transport.incoming <- &cdproto.Message{SessionID: page.SessionID, Method: "Network.loadingFinished", Params: jsonv2.Value(`{"requestId":"request","timestamp":1,"encodedDataLength":0}`)}
+				}
+				synctest.Wait()
+				for name, call := range map[string]func(context.Context) error{
+					"browser": func(ctx context.Context) error { return browser.Call(ctx, "Browser.getVersion", nil, nil) },
+					"peer":    func(ctx context.Context) error { return peer.Call(ctx, "Runtime.evaluate", nil, nil) },
+				} {
+					ctx, cancel := context.WithTimeout(life, time.Second)
+					err := call(ctx)
+					cancel()
+					if err != nil {
+						t.Errorf("%s call after %s target events: %v", name, state, err)
+					}
+				}
+				if writes := transport.writes.Load(); writes != 2 {
+					t.Errorf("command writes = %d, want 2", writes)
+				}
+			})
+		})
+	}
+}
+
+type managedBurstTransport struct {
+	*managedReplyTransport
+	burst int
+	sent  atomic.Bool
+}
+
+func (t *managedBurstTransport) Write(ctx context.Context, message *cdproto.Message) error {
+	if string(message.Method) != dom.GetDocument.Method || !t.sent.CompareAndSwap(false, true) {
+		return t.managedReplyTransport.Write(ctx, message)
+	}
+	t.writes.Add(1)
+	for range t.burst {
+		t.incoming <- &cdproto.Message{SessionID: message.SessionID, Method: "Runtime.consoleAPICalled", Params: jsonv2.Value(`{"type":"log","args":[],"executionContextId":1,"timestamp":1}`)}
+	}
+	t.incoming <- &cdproto.Message{ID: message.ID, SessionID: message.SessionID, Result: jsonv2.Value(`{"root":{"nodeId":1,"nodeType":9,"nodeName":"#document","localName":"","nodeValue":""}}`)}
+	return nil
+}
+
+func TestManagedStateQueueOverflowStopsOnlyItsTarget(t *testing.T) {
+	for _, fixture := range []struct {
+		name  string
+		burst int
+	}{
+		{"within-capacity", 16},
+		{"overflow", 6000},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				life, stopBrowser := context.WithCancel(context.Background())
+				transport := &managedBurstTransport{managedReplyTransport: &managedReplyTransport{incoming: make(chan *cdproto.Message, fixture.burst+4), closed: make(chan struct{})}, burst: fixture.burst}
+				var overflows atomic.Int64
+				browser, err := NewBrowserTransport(life, transport, WithBrowserLogf(func(string, ...any) {}), WithEventBuffer(EventBuffer{MaxEvents: 256, MaxBytes: 2 << 20, OnOverflow: func(error) { overflows.Add(1) }}))
+				if err != nil {
+					stopBrowser()
+					t.Fatal(err)
+				}
+				defer func() {
+					stopBrowser()
+					if err := browser.WaitStopped(context.Background()); err != nil {
+						t.Error(err)
+					}
+				}()
+				page, err := browser.newTarget(life, "page", "page-session")
+				if err != nil {
+					t.Fatal(err)
+				}
+				page.frames[page.cur] = &Frame{Frame: &cdp.Frame{ID: page.cur}, Nodes: make(map[cdp.NodeID]*Node)}
+				go page.run(life)
+				peer, err := browser.newTarget(life, "peer", "peer-session")
+				if err != nil {
+					t.Fatal(err)
+				}
+				go peer.run(life)
+				transport.incoming <- &cdproto.Message{SessionID: page.SessionID, Method: "DOM.documentUpdated", Params: jsonv2.Value(`{}`)}
+				synctest.Wait()
+				ctx, cancel := context.WithTimeout(life, time.Second)
+				defer cancel()
+				if err := browser.Call(ctx, "Browser.getVersion", nil, nil); err != nil {
+					t.Error("state queue blocked browser commands", err)
+				}
+				if err := peer.Call(ctx, "Runtime.evaluate", nil, nil); err != nil {
+					t.Error("state queue blocked the independent peer", err)
+				}
+				if fixture.burst > 4096 {
+					if overflows.Load() != 1 {
+						t.Error("state queue did not report its overflow")
+					}
+					if err := page.Call(ctx, "Runtime.evaluate", nil, nil); !errors.Is(err, ErrEventOverflow) {
+						t.Error("target stop lost the overflow cause", err)
+					}
+				} else if overflows.Load() != 0 {
+					t.Error("state queue rejected the positive control")
+				}
+			})
 		})
 	}
 }

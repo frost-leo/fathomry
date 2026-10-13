@@ -41,6 +41,7 @@ type CallLimits struct {
 }
 type callLimitsKey struct{}
 type queuedKey struct{}
+type replyKey struct{}
 
 // WithTargetCleanupTimeout bounds detach and close commands after cancellation.
 // A nonpositive value preserves the upstream five-second default.
@@ -67,6 +68,16 @@ func commandQueued(ctx context.Context, method string) {
 	if queued, _ := ctx.Value(queuedKey{}).(func(string)); queued != nil {
 		queued(method)
 	}
+}
+
+func withReply(ctx context.Context, reply func(string)) context.Context {
+	previous, _ := ctx.Value(replyKey{}).(func(string))
+	return context.WithValue(ctx, replyKey{}, func(method string) {
+		reply(method)
+		if previous != nil {
+			previous(method)
+		}
+	})
 }
 func admitCall(ctx context.Context, method string) (context.Context, error) {
 	if err := ctx.Err(); err != nil {
@@ -109,6 +120,9 @@ func encodeCall(ctx context.Context, method string, params any) ([]byte, error) 
 func decodeCall(ctx context.Context, method string, msg *cdproto.Message, result any) error {
 	limits, _ := ctx.Value(callLimitsKey{}).(CallLimits)
 	if msg != nil {
+		if reply, _ := ctx.Value(replyKey{}).(func(string)); reply != nil {
+			reply(method)
+		}
 		if limits.MaxOutputBytes > 0 && int64(len(msg.Result)) > limits.MaxOutputBytes {
 			return ErrCommandLimit
 		}
