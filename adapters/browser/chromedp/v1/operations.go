@@ -20,6 +20,8 @@
 package chromedp
 
 import (
+	"time"
+
 	"github.com/chromedp/cdproto/css"
 	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/input"
@@ -121,6 +123,13 @@ func MouseEvent(kind input.DispatchMouseEventType, x, y float64, options ...sdk.
 }
 func TapXY(x, y float64) Action[sdk.Void] {
 	return Action[sdk.Void]{native: native.TapXY(x, y), name: "tap"}
+}
+
+// TouchSwipeXY moves a touch contact between viewport coordinates in CSS pixels.
+// It releases or cancels its contact on exit. Page handlers and native inertia
+// determine scrolling; the requested movement is not an exact scroll distance.
+func TouchSwipeXY(fromX, fromY, toX, toY float64, duration time.Duration) Action[sdk.Void] {
+	return Action[sdk.Void]{native: native.TouchSwipeXY(fromX, fromY, toX, toY, duration), name: "touch_swipe"}
 }
 func DragAndDrop[S, T TextSelector](from S, to T, options ...QueryOption) Action[sdk.Void] {
 	return Action[sdk.Void]{native: native.DragAndDrop(from, to, nativeQuery(options)...), name: "drag_drop"}

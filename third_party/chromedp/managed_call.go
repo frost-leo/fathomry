@@ -113,6 +113,7 @@ func encodeCall(ctx context.Context, method string, params any) ([]byte, error) 
 	if params == nil {
 		return nil, nil
 	}
+	params = preserveWheelDeltas(method, params)
 	params, err = preserveCallArguments(method, params, limits.MaxInputBytes)
 	if err != nil {
 		return nil, err

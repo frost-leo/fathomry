@@ -23,6 +23,8 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"math"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,6 +40,40 @@ var managedInputEventsJS string
 //go:embed js/managedInputState.js
 var managedInputStateJS string
 
+func TestManagedTouchSwipeRejectsInvalidInputBeforePress(t *testing.T) {
+	ctx, cancel := testAllocate(t, "")
+	defer cancel()
+	if err := Do(ctx); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	work := WithCallLimits(ctx, CallLimits{Before: func(string) error { calls++; return nil }})
+	for _, action := range []Action[Void]{
+		TouchSwipeXY(0, 0, 0, 10, 0), TouchSwipeXY(0, 0, 0, 10, -time.Second),
+		TouchSwipeXY(math.NaN(), 0, 0, 10, time.Second), TouchSwipeXY(0, 0, math.Inf(1), 10, time.Second),
+	} {
+		if err := Do(work, action); err == nil || calls != 0 {
+			t.Fatal("invalid swipe dispatched native input", err, calls)
+		}
+	}
+}
+
+func TestManagedSendKeysWhileAttributesChange(t *testing.T) {
+	ctx, cancel := testAllocate(t, "managed_dynamic_input.html")
+	defer cancel()
+	ctx, cancel = context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	for range 200 {
+		if err := Do(ctx, SendKeys(CSS("#field"), "x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	value, err := Run(ctx, Value(CSS("#field")))
+	if err != nil || value != strings.Repeat("x", 200) {
+		t.Fatal("typing changed while node attributes were updated", len(value), err)
+	}
+}
+
 func TestManagedInputHelpersReleaseAfterAdmissionFailure(t *testing.T) {
 	for _, fixture := range []struct {
 		name, method, field string
@@ -46,6 +82,7 @@ func TestManagedInputHelpersReleaseAfterAdmissionFailure(t *testing.T) {
 	}{
 		{"mouse-click", input.DispatchMouseEvent.Method, "mouse", 1, MouseClickXY(20, 20)},
 		{"tap", input.DispatchTouchEvent.Method, "touch", 1, TapXY(20, 20)},
+		{"touch-swipe", input.DispatchTouchEvent.Method, "touch", 1, TouchSwipeXY(20, 20, 40, 40, 100*time.Millisecond)},
 		{"key", input.DispatchKeyEvent.Method, "key", 1, KeyEvent("a")},
 		{"drag-release", input.DispatchMouseEvent.Method, "mouse", 2, DragAndDropXY(20, 20, 40, 40, 1)},
 	} {

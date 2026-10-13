@@ -66,11 +66,43 @@ user-agent overrides use the [typed command route](page-commands.md#page-request
 cookies use the retained context. The caller decides when to fall back from an
 HTTP client and whether a business operation may be retried.
 
+Use `RunResponse(ctx, page, Click(...))` or `RunResponse(ctx, page, Submit(...))`
+when an interaction starts navigation. The SDK begins observation before the
+first action. The bridge accepts one to 64 closed void actions and stops at the
+first step failure. The returned receipt covers the response wait. Each attempted
+step retains its own normal receipt and remote-value cleanup. Reserve evidence
+capacity for the outer operation and the steps, and drain all released records.
+No-navigation waits require a caller deadline. A timeout does not undo a click.
+Redirects return the final response of the first main-frame navigation, including
+non-2xx status. A child iframe fragment does not complete a main-frame wait.
+Same-document navigation and back/forward cache restoration return a nil response.
+No new HTTP response is invented for these browser-local transitions.
+Reserved Control replies can still unblock that navigation under saturation.
+
+`ScrollIntoView` reveals a selected element. `MouseEvent` with the native wheel
+parameters scrolls the page or the element under its viewport coordinates.
+Both wheel axes remain present on the wire, including a zero axis. Native
+`EmulateTouchFromMouseEvent` retains its different delta sign convention.
+`TouchSwipeXY` sends one touch contact through 20 paced moves and releases it.
+Coordinates are viewport CSS pixels and duration must be positive. Page handlers
+and native inertia determine the scroll distance. Partial failures cancel the
+contact through reserved cleanup. This does not retry a previously acknowledged
+gesture or stop browser inertia. Use page-state assertions when scroll completion
+matters, rather than treating command acknowledgement as a settled viewport.
+
+Advanced use keeps the native command parameters and result types through the
+existing typed bridge. Operations that produce streams, objects or other handles
+still use their managed owners. There is no duplicate CDP SDK or raw-owner escape
+route. The delivery boundary is common page automation, not every CDP command.
+
 The local synthetic flow in
 [`page_automation_test.go`](../../../../../../adapters/browser/chromedp/v1/page_automation_test.go)
 exercises rendered asynchronous data, input, extraction, scrolling, iframe work,
 canceled waits, error recovery and owned/borrowed cleanup. It does not qualify
 external sites or supply a crawler workflow.
+The common collection, scroll and response tests cover hover, double-click,
+HTML5 drag, form reset/submit, mutation polling, full-page capture, isolated
+proxy routing, dynamic input attributes, wheel effects and touch cancellation.
 
 The [finite page-command route](page-commands.md) accepts native typed CDP data
 without exposing a Target or granting authority from raw result IDs. It complements
@@ -630,7 +662,7 @@ adds producer bounds, failed-trigger cancellation, call limits, binding joins,
 TLS configuration, a configurable target cleanup timeout and managed target
 dispatch lifetime. Work cancellation does not destroy the IO cleanup route.
 The maintained SDK is published as
-`github.com/frost-leo/fathomry/third_party/chromedp v0.0.0-20261013094802-1825b9d94794`.
+`github.com/frost-leo/fathomry/third_party/chromedp v0.0.0-20261013175902-b928a75059b9`.
 Independent consumers must explicitly replace `github.com/chromedp/chromedp` with
 that module; the Framework root's development replacement is not inherited.
 The project dependency policy pins its verified checksum. This SDK publication

@@ -31,6 +31,7 @@ import (
 	"github.com/chromedp/cdproto/debugger"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/fetch"
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	cdpruntime "github.com/chromedp/cdproto/runtime"
@@ -63,7 +64,7 @@ func run() error {
 		if module.Path == "github.com/chromedp/chromedp" {
 			core = module.Version == "v0.21.0" && module.ReplacementKind == expectedKind
 			if expectedKind == "module" {
-				core = core && module.ReplacementPath == "github.com/frost-leo/fathomry/third_party/chromedp" && module.ReplacementVersion == "v0.0.0-20261013094802-1825b9d94794" && module.ReplacementSum == "h1:717+zeAcxuc9pm5U1XGQHZCsJRVaMOil9wzYHfwvQkI="
+				core = core && module.ReplacementPath == "github.com/frost-leo/fathomry/third_party/chromedp" && module.ReplacementVersion == "v0.0.0-20261013175902-b928a75059b9" && module.ReplacementSum == "h1:ZDOiaPN5NKu6WkluMA9CouyL90r0ShfMS6/icP8qNrk="
 			} else if expectedKind != "local" {
 				core = false
 			}
@@ -288,6 +289,14 @@ func responseConsumer(ctx context.Context, page *browser.Page) error {
 			http.Error(w, "page request settings missing", http.StatusBadRequest)
 			return
 		}
+		if r.URL.Path == "/start" {
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte(`<style>body{height:3000px}</style><a id="next" href="/clicked">next</a>`))
+			return
+		}
+		if r.URL.Path == "/clicked" {
+			w.WriteHeader(http.StatusTeapot)
+		}
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte(body))
 	}))
@@ -297,6 +306,25 @@ func responseConsumer(ctx context.Context, page *browser.Page) error {
 	}
 	if _, _, err := browser.RunAction(ctx, page, browser.Command(emulation.SetUserAgentOverride, emulation.SetUserAgentOverrideParams{UserAgent: "IndependentFixture/1"})); err != nil {
 		return err
+	}
+	if _, err := page.Navigate(ctx, server.URL+"/start"); err != nil {
+		return err
+	}
+	if _, _, err := browser.RunAction(ctx, page, browser.Command(input.DispatchMouseEvent, input.DispatchMouseEventParams{Type: input.DispatchMouseEventTypeMouseWheel, X: 300, Y: 300, DeltaY: 200})); err != nil {
+		return err
+	}
+	if _, _, err := browser.RunAction(ctx, page, browser.Poll[bool]("scrollY > 0", browser.WithPollingTimeout(time.Second))); err != nil {
+		return err
+	}
+	if _, _, err := browser.RunAction(ctx, page, browser.Command(emulation.SetTouchEmulationEnabled, emulation.SetTouchEmulationEnabledParams{Enabled: true, MaxTouchPoints: 1})); err != nil {
+		return err
+	}
+	if _, _, err := browser.RunAction(ctx, page, browser.TouchSwipeXY(300, 400, 300, 200, 320*time.Millisecond)); err != nil {
+		return err
+	}
+	response, _, err := browser.RunResponse(ctx, page, browser.Click(sdk.CSS("#next")))
+	if err != nil || response == nil || response.Status != http.StatusTeapot {
+		return fmt.Errorf("interaction response was not observed: %w", err)
 	}
 	if _, err := page.Navigate(ctx, server.URL); err != nil {
 		return err

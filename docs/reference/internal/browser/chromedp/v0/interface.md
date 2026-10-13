@@ -22,7 +22,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Internal package reference
 
 **Audience:** Internal composition and Browser capability maintainers.
-**Status:** migrated managed foundation; full #139 capability acceptance remains incomplete.
+**Status:** managed page automation with finite advanced routes. Not a complete CDP surface.
 **Package:** `github.com/frost-leo/fathomry/internal/browser/chromedp/v0`.
 
 ## Preparation and ownership
@@ -65,6 +65,14 @@ Poll, navigation, capture and emulation helpers. RunAction returns native data
 without giving caller code a Target. Query options are closed; raw QueryAfter,
 ByFunc, After and owning native contexts are not public extension points.
 Native data-only keyboard/mouse/emulation option callbacks remain cooperative.
+
+RunResponse delegates native ordered navigation correlation while reserving the
+navigation lane. Its callback receives cancellation and a private response lease,
+not a native context. ResponseStep allows a closed navigation action to use the
+ordinary lane only during that lease. Stale contexts, copied steps after expiry,
+and foreign sessions do not grant navigation reentry. The public bridge runs each
+step through normal public admission and remote-value custody. Control replies
+keep their separate reserved lane.
 
 Evaluate/Poll remote-object actions reserve one object slot before native setup
 or argument encoding. Session.NewObjectGroup reserves bounded custody; the action

@@ -808,7 +808,9 @@ func WithBrowserOption(opts ...BrowserOption) ContextOption {
 //
 // If the actions trigger several navigations, RunResponse uses only the first.
 // If the actions trigger no navigation, RunResponse blocks until the context
-// is canceled.
+// is canceled. WithEventBuffer bounds events retained before navigation starts.
+// Same-document navigation and back/forward cache restoration return no HTTP
+// response, because the browser does not receive a new document response.
 func RunResponse(ctx context.Context, steps ...Action[Void]) (*network.Response, error) {
 	return Run(ctx, responseAction(steps...))
 }
@@ -840,8 +842,9 @@ func responseAction(steps ...Action[Void]) Action[*network.Response] {
 		// The events of several methods must arrive in order, so this uses the
 		// internal listener and not one subscription for each method.
 
-		lctx, lcancel := context.WithCancel(ctx)
-		defer lcancel()
+		work, cancelWork := context.WithCancelCause(ctx)
+		defer cancelWork(nil)
+		lctx, lcancel := context.WithCancel(work)
 		handleEvent := func(ev any) {
 			switch ev := ev.(type) {
 			case *network.EventRequestWillBeSent:
@@ -883,6 +886,16 @@ func responseAction(steps ...Action[Void]) Action[*network.Response] {
 		// earlyEvents buffers the events that arrive before we know which loaderID
 		// to look for.
 		var earlyEvents []any
+		var earlyBytes int64
+		limits := t.events.limits
+		stop := sync.OnceFunc(func() {
+			lcancel()
+			t.listenersMu.Lock()
+			defer t.listenersMu.Unlock()
+			t.listeners = slices.DeleteFunc(t.listeners, func(listener cancelableListener) bool { return listener.ctx == lctx })
+			earlyEvents = nil
+		})
+		defer stop()
 
 		// Obtain frameID from the target.
 		t.frameMu.RLock()
@@ -894,14 +907,21 @@ func responseAction(steps ...Action[Void]) Action[*network.Response] {
 				handleEvent(ev)
 				return
 			}
-			earlyEvents = append(earlyEvents, ev)
 			switch ev := ev.(type) {
 			case *page.EventFrameNavigated:
 				// Make sure we keep frameID up to date.
 				if ev.Frame.ParentID == "" {
 					frameID = ev.Frame.ID
+					if ev.Type == page.NavigationTypeBackForwardCacheRestore {
+						finished = true
+						lcancel()
+					}
 				}
+				return
 			case *network.EventRequestWillBeSent:
+				if ev.FrameID != frameID || ev.Type != network.ResourceTypeDocument {
+					return
+				}
 				// In some cases, such as ERR_TOO_MANY_REDIRECTS, we never see the
 				// "init" lifecycle event that we want. Such "lone" requests also
 				// tend to have a loaderID that matches their requestID, for an
@@ -911,45 +931,85 @@ func responseAction(steps ...Action[Void]) Action[*network.Response] {
 					loaderID = ev.LoaderID
 				}
 			case *page.EventLifecycleEvent:
-				if ev.FrameID == frameID && ev.Name == "init" {
-					loaderID = ev.LoaderID
+				if ev.FrameID != frameID || ev.Name != "init" {
+					return
 				}
+				loaderID = ev.LoaderID
 			case *page.EventNavigatedWithinDocument:
 				// A fragment navigation does not need extra steps.
-				finished = true
-				lcancel()
+				if ev.FrameID == frameID {
+					finished = true
+					lcancel()
+				}
+				return
+			case *network.EventResponseReceived:
+				if ev.FrameID != frameID || ev.Type != network.ResourceTypeDocument {
+					return
+				}
+			case *network.EventLoadingFailed:
+				if ev.Type != network.ResourceTypeDocument {
+					return
+				}
+			case *page.EventFrameStoppedLoading:
+				if ev.FrameID != frameID {
+					return
+				}
+			case *page.EventLoadEventFired:
+			default:
+				return
 			}
 			if loaderID != "" {
 				for _, ev := range earlyEvents {
 					handleEvent(ev)
 				}
 				earlyEvents = nil
+				handleEvent(ev)
+				return
 			}
+			var bufferErr error
+			if limits.MaxEvents > 0 && len(earlyEvents) >= limits.MaxEvents {
+				bufferErr = ErrEventOverflow
+			} else if limits.MaxBytes > 0 {
+				buffer := bindingBuffer{limit: limits.MaxBytes - earlyBytes}
+				if err := marshalBinding(&buffer, ev); err != nil {
+					bufferErr = errors.Join(ErrEventOverflow, err)
+				} else {
+					earlyBytes += int64(len(buffer.data))
+				}
+			}
+			if bufferErr != nil {
+				loadErr = fmt.Errorf("buffering navigation events: %w", bufferErr)
+				cancelWork(loadErr)
+				if limits.OnOverflow != nil {
+					limits.OnOverflow(loadErr)
+				}
+				return
+			}
+			earlyEvents = append(earlyEvents, ev)
 		})
 
 		// Second, run the actions.
-		if _, err := Steps(steps...)(ctx, t); err != nil {
-			return nil, err
+		_, stepErr := Steps(steps...)(work, t)
+		if stepErr == nil {
+			// Third, block until loading or cancellation ends the wait.
+			<-lctx.Done()
 		}
-
-		// Third, block until we have finished loading.
-		select {
-		case <-lctx.Done():
-			if loadErr != nil {
-				return nil, loadErr
+		// Join the synchronous listener before reading its result, even when
+		// the caller or a step canceled work during event delivery.
+		stop()
+		if stepErr != nil {
+			if errors.Is(loadErr, ErrEventOverflow) && !errors.Is(stepErr, ErrEventOverflow) {
+				return nil, errors.Join(stepErr, loadErr)
 			}
-
-			// If the caller canceled ctx (or a timeout ended it), the select
-			// races between lctx.Done and ctx.Done, because lctx is a
-			// sub-context of ctx. So we cannot return nil here. Otherwise the
-			// race drops 50% of the cancellation errors of the parent context.
-			if !finished {
-				return nil, ctx.Err()
-			}
-			return resp, nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, stepErr
 		}
+		if loadErr != nil {
+			return nil, loadErr
+		}
+		if !finished {
+			return nil, errors.Join(work.Err(), context.Cause(work))
+		}
+		return resp, nil
 	}
 }
 

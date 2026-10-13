@@ -74,10 +74,10 @@ func independentConsumer(t *testing.T, fixturePath, expectedOutput string, publi
 	directory := consumerJob(t)
 	replacementPath := filepath.Join(root, "third_party/chromedp")
 	replacementVersion := ""
-	const publishedSum = "h1:717+zeAcxuc9pm5U1XGQHZCsJRVaMOil9wzYHfwvQkI="
+	const publishedSum = "h1:ZDOiaPN5NKu6WkluMA9CouyL90r0ShfMS6/icP8qNrk="
 	if published {
 		replacementPath = "github.com/frost-leo/fathomry/third_party/chromedp"
-		replacementVersion = "v0.0.0-20261013094802-1825b9d94794"
+		replacementVersion = "v0.0.0-20261013175902-b928a75059b9"
 	}
 	module := fmt.Sprintf("module example.org/browser-consumer\n\ngo 1.27.0\nrequire github.com/frost-leo/fathomry v0.0.0\nreplace github.com/frost-leo/fathomry => %q\nreplace github.com/chromedp/chromedp => %q %s\n", root, replacementPath, replacementVersion)
 	sums, err := os.ReadFile(filepath.Join(root, "go.sum"))

@@ -25,6 +25,7 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	jsonv2 "github.com/chromedp/cdproto/cdp/jsonv2"
 	"github.com/chromedp/cdproto/css"
@@ -216,6 +217,11 @@ func MouseEvent(kind input.DispatchMouseEventType, x, y float64, options ...sdk.
 }
 func TapXY(x, y float64) Action[sdk.Void] {
 	return deferred(0, func() sdk.Action[sdk.Void] { return sdk.TapXY(x, y) })
+}
+
+// TouchSwipeXY delegates a paced native touch sequence with release cleanup.
+func TouchSwipeXY(fromX, fromY, toX, toY float64, duration time.Duration) Action[sdk.Void] {
+	return deferred(0, func() sdk.Action[sdk.Void] { return sdk.TouchSwipeXY(fromX, fromY, toX, toY, duration) })
 }
 func DragAndDrop[S, T TextSelector](from S, to T, options ...QueryOption) Action[sdk.Void] {
 	options = cloneQueryOptions(options)

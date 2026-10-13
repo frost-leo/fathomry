@@ -49,7 +49,7 @@ func sdkPins() []modulePin {
 	return []modulePin{
 		{"github.com/apache/iceberg-go", "third_party/iceberg-go", "v0.0.0-20261011114113-4b4b6612c1f2", "h1:2Zo37iCWYvqPouYNkcc4aBU8R+k1R2uCt2UMxuwm9fE="},
 		{"github.com/bogdanfinn/tls-client", "third_party/tls-client", "v0.0.0-20261007150852-1c04f9c3b198", "h1:g/j5H3E2ktrVj4TT7sZ2ANJfH24HocDIYgpxQqn77e8="},
-		{"github.com/chromedp/chromedp", "third_party/chromedp", "v0.0.0-20261013094802-1825b9d94794", "h1:717+zeAcxuc9pm5U1XGQHZCsJRVaMOil9wzYHfwvQkI="},
+		{"github.com/chromedp/chromedp", "third_party/chromedp", "v0.0.0-20261013175902-b928a75059b9", "h1:ZDOiaPN5NKu6WkluMA9CouyL90r0ShfMS6/icP8qNrk="},
 		{"github.com/enetx/http2", "third_party/surf-http2", "v0.0.0-20261007235212-fb099a79451b", "h1:urNe80Cqo+4XSzwiwuwcgBZcNXD08TVYvwZPOKDZQAk="},
 		{"github.com/enetx/http3", "third_party/surf-http3", "v0.0.0-20261008050723-5042804d264a", "h1:gxFmtorz6loOfireHCmBT7glXwQpT/7r9bY9gUNyDhg="},
 		{"github.com/enetx/surf", "third_party/surf", "v0.0.0-20261008013857-a2ab5bb59121", "h1:VzdaOF0y3GZLUfeCO33ns92Xv2K3b//ifAlm2r3fafg="},
