@@ -39,8 +39,8 @@ require (
 	// delivery and preserving LICENSE do not establish distribution permission.
 	github.com/bogdanfinn/tls-client v1.16.0
 	github.com/bogdanfinn/utls v1.7.8-barnius
-	github.com/chromedp/cdproto v0.0.0-20260714215040-dc233986426f
-	github.com/chromedp/chromedp v0.16.0
+	github.com/chromedp/cdproto v0.157.9
+	github.com/chromedp/chromedp v0.21.0
 	github.com/duckdb/duckdb-go-bindings v0.10505.0
 	github.com/duckdb/duckdb-go/v2 v2.10505.0
 	github.com/dunglas/httpsfv v1.1.0
@@ -52,7 +52,6 @@ require (
 	// Keep the local trust, copying, replay, framing, callback and release controls
 	// until an upstream candidate passes their rejecting and independent tests.
 	github.com/enetx/surf v1.0.206
-	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/google/uuid v1.6.0
 	// TODO(gh-64): Requalify a tagged release containing the crypto/rand mask-key fix.
@@ -169,7 +168,6 @@ require (
 	github.com/bogdanfinn/websocket v1.5.6-barnius // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/chromedp/sysutil v1.1.0 // indirect
 	github.com/cloudflare/circl v1.6.2 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/creasty/defaults v1.8.0 // indirect
@@ -182,12 +180,10 @@ require (
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/geoarrow/geoarrow-go v0.0.0-20260403143023-f54751c3e3a1 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/gobwas/httphead v0.1.0 // indirect
-	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/gobwas/ws v1.4.0 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -301,3 +297,7 @@ replace go.opentelemetry.io/otel/exporters/otlp/otlptrace => ./third_party/otel-
 // under the consuming dependency graph. Stop remains a bounded native request,
 // not a dependency-release certificate.
 replace go.temporal.io/sdk => ./third_party/temporal-sdk
+
+// TODO(gh-139): Requalify native producer bounds and retained handler cleanup
+// before retiring these controls. Independent distribution is not yet published.
+replace github.com/chromedp/chromedp => ./third_party/chromedp

@@ -37,7 +37,6 @@ import (
 func TestActualConsumerDependenciesAndIndependentImports(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	binary := filepath.Join(t.TempDir(), "consumer")
 	goBinary := filepath.Join(runtime.GOROOT(), "bin", "go")
 	run := func(args ...string) []byte {
 		t.Helper()
@@ -49,6 +48,24 @@ func TestActualConsumerDependenciesAndIndependentImports(t *testing.T) {
 		}
 		return output
 	}
+	base := strings.TrimSpace(string(run("env", "GOTMPDIR")))
+	if base == "" {
+		base = filepath.Join(os.TempDir(), "fathomry")
+	}
+	jobs := filepath.Join(filepath.Dir(base), "jobs")
+	if err := os.MkdirAll(jobs, 0700); err != nil {
+		t.Fatal(err)
+	}
+	directory, err := os.MkdirTemp(jobs, "build.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(directory); err != nil {
+			t.Error(err)
+		}
+	})
+	binary := filepath.Join(directory, "consumer")
 	run("build", "-o", binary, "./testdata/consumer")
 	output, err := exec.CommandContext(ctx, binary).Output()
 	if err != nil {
@@ -61,7 +78,7 @@ func TestActualConsumerDependenciesAndIndependentImports(t *testing.T) {
 	if err := json.Unmarshal(output, &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Go != runtime.Version() || result.Provider != ProviderID || result.Framework != compatibility.FrameworkModule || len(result.SDKs) != 3 || result.SDKs["github.com/chromedp/chromedp"] != "v0.16.0" || result.SDKs["github.com/chromedp/cdproto"] != "v0.0.0-20260714215040-dc233986426f" || result.SDKs["github.com/go-json-experiment/json"] != "v0.0.0-20260623181947-01eb4420fa68" {
+	if result.Go != runtime.Version() || result.Provider != ProviderID || result.Framework != compatibility.FrameworkModule || len(result.SDKs) != 2 || result.SDKs["github.com/chromedp/chromedp"] != "v0.21.0" || result.SDKs["github.com/chromedp/cdproto"] != "v0.157.9" {
 		t.Fatal("consuming dependency facts differ")
 	}
 	graph := string(run("list", "-deps", "./testdata/consumer"))
@@ -81,11 +98,48 @@ func TestMethodOnlyFacades(t *testing.T) {
 		t.Helper()
 		conformance.Facade(t, value, append(append([]string(nil), diagnostic...), methods...)...)
 	}
-	check(Source{})
-	check(f.client, "EvidenceBytes", "Run", "Profile", "LaunchArgumentsCopy")
-	check(unitSession(t), "Context", "Actions", "Navigate", "Save", "NextEvent")
-	check(Result{}, "CallbackCompleted", "ContextReleased", "Commands", "Navigations", "RequestEvents", "EventOverflow", "DataCopy")
+	check(Source{}, "Profile")
+	check(f.client, "EvidenceBytes", "Run", "Retain", "Profile", "LaunchArgumentsCopy")
+	check(unitSession(t), "Context", "Actions", "Protocol", "Navigate", "Save", "NextEvent", "PDFStream", "LoadResource", "Control", "NewObjectGroup", "Object", "Storage", "StoragePartition", "PageClosed", "ExecutionContexts", "Frames", "CreateWorld")
+	check(&StorageScope{}, "Cache", "StorageKey", "Bucket")
+	check(&StorageCache{})
+	check(&Node{}, "DataCopy")
+	check(&ExecutionContext{}, "DataCopy")
+	check(&Frame{}, "DataCopy")
+	check(&Trace{}, "Stop", "Read", "Close", "Closed", "Stopping", "Err", "Completion")
+	check(&KeptBrowser{}, "Endpoint", "ProfileDirectory", "ProcessExited", "Close", "Closed")
+	check(&Context{}, "Context", "Page", "NewPage", "Targets", "Attach", "Receipt", "Close", "ClosePage", "Cookies", "SetCookies", "ClearCookies", "SetPermission", "ResetPermissions")
+	check(&TargetRef{}, "DataCopy")
+	check(&Stream{}, "Read", "ReadAt", "Close", "Closed", "Bytes")
+	check(&Subscription{}, "Close", "Closed", "Done", "Err")
+	check(&Binding{}, "Cancel", "Close", "Closed", "Stopping", "Err")
+	check(&ObjectGroup{}, "Cancel", "Close", "Closed", "Stopping", "Err", "Settled", "EvaluateIn", "EvaluateFrame", "ReadIndexedDB")
+	check(&Object{}, "Call", "Properties", "Close", "Closed", "DataCopy", "NativeValue", "Group")
+	check(&Control{}, "Next", "Close", "Closed", "Stopping", "Err", "EvidenceCopy", "StopRecording", "ReadRecording", "ReadRecordingAt", "SetBlackboxContexts")
+	check(Pending{}, "Method", "DataCopy", "Reply", "Download", "ResponseBody", "ResponseBodyStream", "Request", "ServiceWorker", "Script", "CallFrame")
+	check(Script{}, "DataCopy")
+	check(CallFrame{}, "DataCopy", "SetVariable", "SetReturnValue")
+	check(Request{})
+	check(ServiceWorker{}, "DataCopy")
+	check(&Window{}, "DataCopy")
+	check(Download{}, "Progress", "Read")
+	check(Reply{})
+	check(Chunk{}, "DataCopy", "EOF")
+	check(Result{}, "CallbackCompleted", "ContextReleased", "ContextDetached", "Commands", "Navigations", "PagesClosed", "PagesDetached", "RequestEvents", "EventOverflow", "DataCopy")
 	check(Event{}, "Type", "DataCopy")
-	check(&executorGrant{}, "Execute")
+	check(&executorGrant{}, "Call", "Subscribe")
 	conformance.Facade(t, bareContext{context.Background()}, "Deadline", "Done", "Err", "Value")
+}
+
+func TestProfileRejectsMalformedObservedVersion(t *testing.T) {
+	for _, value := range []string{"", ".", ".1", "1.", "1..3", "1a.3", "private-version"} {
+		if numericVersion(value) {
+			t.Fatal("malformed version certified", value)
+		}
+	}
+	for _, value := range []string{"0", "1.3", "150.0.7871.114"} {
+		if !numericVersion(value) {
+			t.Fatal("valid observed version rejected", value)
+		}
+	}
 }

@@ -25,8 +25,13 @@
 // admission with an independently owned evidence inbox. Run owns one isolated
 // BrowserContext until disposal or explicit transfer to assembly cleanup.
 //
-// Native executor-only Actions and typed CDP commands retain their target-scoped
-// expressiveness, without exposing chromedp contexts, allocators or browser handles.
+// Retain owns an explicit BrowserContext and multiple pages. Closed generic
+// Actions delegate native helpers without exposing a Target. Protocol provides a
+// revocable typed CDP session, while retaining the existing restricted command set.
+// SubscribeEvent and SubscribeConsole own independent bounded native queues.
+// Control leases reserve Fetch/auth/dialog reply work before enabling producers.
+// Response-body IO and finite reads keep the original pause and cleanup custody.
+// Observed request grants revoke on ID reuse, without disabling native networking.
 // BrowserContext concurrency and retained output limits are not HTTP rate limits,
 // complete network counts, a browser RSS limit, or an untrusted-code sandbox.
 // These operations belong in process-local callers, never Temporal Workflow code.

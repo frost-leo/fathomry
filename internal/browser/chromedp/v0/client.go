@@ -22,6 +22,7 @@ package chromedp
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/target"
@@ -52,35 +53,11 @@ type Client struct {
 // scopes; canceling it may terminate the owned process and this CDP connection,
 // never an externally borrowed browser. Close the assembly even after cancellation.
 func Select(lifetime context.Context, options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	if lifetime == nil || lifetime.Done() == nil {
-		return resource.Selection[Source]{}, failure(ErrInput, "lifetime")
-	}
-	if err := lifetime.Err(); err != nil {
-		return resource.Selection[Source]{}, failure(ErrState, "lifetime", err, context.Cause(lifetime))
-	}
-	version := options.Version
-	if version == 0 {
-		version = 1
-	}
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: validate}, resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
-		if err := ctx.Err(); err != nil {
-			return resource.Resource[Source]{}, failure(ErrState, "construct", err, context.Cause(ctx))
-		}
-		if err := lifetime.Err(); err != nil {
-			return resource.Resource[Source]{}, failure(ErrState, "lifetime", err, context.Cause(lifetime))
-		}
-		life, cancel := context.WithCancel(lifetime)
-		own := &owner{settings: value, life: life, cancel: cancel, gate: make(chan struct{}, 1), sessions: make(map[*browserContext]struct{})}
-		result := resource.Resource[Source]{Acquired: true, Capability: Source{owner: own}, Release: own.release}
-		if value.CheckReady {
-			result.Check = own.start
-		}
-		return result, nil
-	}), nil
+	return prepared.Select(lifetime)
 }
 
 // Bind joins the authoritative resource record to a separately owned Inbox.
@@ -120,76 +97,35 @@ func (client *Client) EvidenceBytes() int64 {
 // Unconfirmed native context cleanup is transferred to the same source owner and
 // remains charged against MaxSessions until explicit assembly cleanup confirms it.
 // Receipt release then describes this producer, not disposal of that context.
-func (client *Client) Run(ctx, cleanupCtx context.Context, id fault.Correlation, run func(*Session) error, options ...SessionOptionsV1) (*invocation.Receipt[Result], error) {
-	if client == nil || client.owner == nil || client.access == nil || ctx == nil || cleanupCtx == nil || run == nil {
+func (client *Client) Run(ctx, cleanupCtx context.Context, id fault.Correlation, run func(*Session) error, options ...SessionOptionsV1) (receipt *invocation.Receipt[Result], err error) {
+	if cleanupCtx == nil || run == nil {
 		return nil, failure(ErrInput, "run")
 	}
-	value := client.owner.settings
-	input, err := sessionOptions(options, value.MaxCommandBytes)
-	if err != nil {
+	retained, err := client.Retain(ctx, id, options...)
+	if retained == nil {
 		return nil, err
 	}
-	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: "session", Correlation: id, Shape: invocation.Session, Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.AdmissionTimeout}}, client.inbox, client.observer)
-	if err != nil {
-		return nil, err
-	}
-	session := &Session{sessionState: &sessionState{browserContext: &browserContext{}, owner: client.owner, data: resultData{output: make(map[string][]byte)}, events: make(chan Event, value.MaxEvents)}}
-	work, cancel, err := (invocation.Budget{Limit: value.SessionTimeout}).Context(ctx, invocation.Lifetime)
-	if err != nil {
-		call.Complete(invocation.Outcome[Result]{Primary: err})
-		return call.Receipt(), err
-	}
-	session.work, session.cancel = context.WithCancelCause(work)
-	defer cancel()
-	stopLifetime := context.AfterFunc(client.owner.life, func() { session.cancel(context.Cause(client.owner.life)) })
-	defer stopLifetime()
-	primary := client.owner.start(session.work)
-	if primary == nil {
-		stopConnection := context.AfterFunc(client.owner.root, func() {
-			if client.owner.life.Err() != nil {
-				session.cancel(context.Cause(client.owner.life))
-			} else {
-				session.cancel(failure(ErrDisconnected, "connection", client.owner.root.Err(), context.Cause(client.owner.root)))
-			}
-		})
-		defer stopConnection()
-		primary = client.open(session, input)
-	}
-	if primary == nil {
-		primary = invoke(func() error { return run(session) })
+	session := retained.Page()
+	returned := false
+	defer func() {
+		if !returned {
+			session.remember(failure(ErrPanic, "callback-did-not-return"))
+			_ = retained.Close(context.Background())
+		}
+	}()
+	if err == nil {
+		err = invoke(func() error { return run(session) })
 		session.mu.Lock()
-		session.data.callbackCompleted = primary == nil && session.work.Err() == nil
+		session.data.callbackCompleted = err == nil && session.work.Err() == nil
 		session.mu.Unlock()
 	}
-	primary = errors.Join(primary, session.work.Err(), context.Cause(session.work))
-	session.stopAndJoin()
-	var cleanupErr error
-	if session.native != nil {
-		cleanupErr = sdk.Cancel(session.native)
-	}
-	cleanup, done, err := (invocation.Budget{Limit: value.CleanupTimeout}).Context(cleanupCtx, invocation.Cleanup)
 	if err != nil {
-		cleanupErr = errors.Join(cleanupErr, err)
-	} else {
-		defer done()
-		if session.reserved {
-			released, err := client.owner.dispose(cleanup, session.browserContext)
-			session.data.contextReleased = released
-			cleanupErr = errors.Join(cleanupErr, err)
-		}
+		err = failure(ErrNative, "run", err)
 	}
-	session.mu.Lock()
-	primary = errors.Join(primary, session.primary)
-	data := session.data
-	session.mu.Unlock()
-	if primary != nil {
-		primary = failure(ErrNative, "session", primary)
-	}
-	if cleanupErr != nil {
-		cleanupErr = failure(ErrCleanup, "session", cleanupErr)
-	}
-	call.Complete(invocation.Outcome[Result]{Value: Result{data: &data}, Present: true, Primary: primary, Cleanup: cleanupErr})
-	return call.Receipt(), errors.Join(primary, cleanupErr)
+	session.remember(errors.Join(err, session.work.Err(), context.Cause(session.work), client.owner.life.Err(), context.Cause(client.owner.life)))
+	cleanup := retained.close(context.Background(), cleanupCtx)
+	returned = true
+	return retained.Receipt(), errors.Join(err, cleanup)
 }
 func (client *Client) open(session *Session, input SessionOptionsV1) error {
 	if err := session.work.Err(); err != nil {
@@ -200,25 +136,87 @@ func (client *Client) open(session *Session, input SessionOptionsV1) error {
 	}
 	session.reserved = true
 	own := client.owner
-	executor := cdp.WithExecutor(session.work, sdk.FromContext(own.root).Browser)
-	session.creationAttempted = true
-	id, err := target.CreateBrowserContext().WithDisposeOnDetach(true).WithProxyServer(input.ProxyServer).WithProxyBypassList(input.ProxyBypassList).Do(executor)
-	session.browserID = id
-	if err != nil {
-		return err
+	executor := sdk.FromContext(own.root).Browser
+	if input.Borrow {
+		session.borrowed = true
+		session.sharedStorage = input.SharedStorage
+		session.sharedPermissions = input.SharedPermissions
+		session.sharedDownloads = input.SharedDownloads
+		session.defaultContext = input.DefaultContext
+		if !input.DefaultContext {
+			contexts, err := cdp.Call(session.work, executor, target.GetBrowserContexts, cdp.Empty{})
+			if err != nil {
+				return err
+			}
+			if !slices.Contains(contexts.BrowserContextIDs, input.ContextID) {
+				return failure(ErrInput, "context-membership")
+			}
+		}
+		session.browserID = input.ContextID
+		session.observedID = input.ContextID
+		if input.DefaultContext && input.TargetID != "" {
+			if err := own.identifyDefaultContext(session.work, session.browserContext, executor); err != nil {
+				return err
+			}
+		}
+	} else {
+		session.creationAttempted = true
+		created, err := cdp.Call(session.work, executor, target.CreateBrowserContext, target.CreateBrowserContextParams{DisposeOnDetach: new(true), ProxyServer: input.ProxyServer, ProxyBypassList: input.ProxyBypassList})
+		session.browserID = created.BrowserContextID
+		session.observedID = created.BrowserContextID
+		if err != nil {
+			return err
+		}
+		if session.browserID == "" {
+			return failure(ErrNative, "missing-context-identity")
+		}
 	}
-	tabID, err := target.CreateTarget("about:blank").WithBrowserContextID(id).WithNewWindow(own.settings.NewWindow).Do(executor)
-	if err != nil {
-		return err
+	tabID := input.TargetID
+	if tabID != "" {
+		info, err := cdp.Call(session.work, executor, target.GetTargetInfo, target.GetTargetInfoParams{TargetID: tabID})
+		if err != nil {
+			return err
+		}
+		if info.TargetInfo == nil || info.TargetInfo.TargetID != tabID || info.TargetInfo.BrowserContextID != session.observedID {
+			return failure(ErrInput, "target-membership")
+		}
+	} else {
+		own.targetAttempt(session.browserContext)
+		newWindow := own.settings.NewWindow || !input.Borrow
+		tab, err := cdp.Call(session.work, executor, target.CreateTarget, target.CreateTargetParams{URL: "about:blank", BrowserContextID: session.browserID, NewWindow: new(newWindow)})
+		own.targetCreated(session.browserContext, tab.TargetID)
+		if err != nil {
+			return err
+		}
+		tabID = tab.TargetID
+		if tabID == "" {
+			return failure(ErrNative, "missing-target-identity")
+		}
+		if input.DefaultContext {
+			info, err := cdp.Call(session.work, executor, target.GetTargetInfo, target.GetTargetInfoParams{TargetID: tabID})
+			if err != nil {
+				return err
+			}
+			if info.TargetInfo == nil || info.TargetInfo.TargetID != tabID {
+				return failure(ErrNative, "target-identity")
+			}
+			session.observedID = info.TargetInfo.BrowserContextID
+			session.defaultIdentityObserved = true
+		}
 	}
 	// Initialization mutates native Context fields. Do not race its cancellation
 	// handler against attachment; the operation budget still governs SDK commands.
-	session.native, session.closeTab = sdk.NewContext(context.WithoutCancel(own.root), sdk.WithTargetID(tabID))
-	if err := sdk.Run(nativeContext{Context: session.work, native: session.native}); err != nil {
+	nativeOptions := []sdk.ContextOption{sdk.WithTargetID(tabID), sdk.WithTargetCleanupTimeout(own.settings.CleanupTimeout), sdk.WithManagedTargetLifetime()}
+	session.targetID = tabID
+	if input.TargetID != "" {
+		session.borrowedTarget = true
+		nativeOptions = append(nativeOptions, sdk.WithDetachOnCancel())
+	}
+	session.native, _ = sdk.NewContext(context.WithoutCancel(own.root), nativeOptions...)
+	if err := sdk.Do(nativeContext{Context: session.work, native: session.native}); err != nil {
 		return err
 	}
-	session.stopTab = context.AfterFunc(session.work, func() { session.closeTab() })
-	sdk.ListenTarget(session.native, session.observe)
+	session.startEvents()
 	return nil
 }
 

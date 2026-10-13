@@ -29,7 +29,12 @@ import (
 // Build inspects the actual consuming executable, not the test runner. SDK and
 // generated bindings remain independent module/replacement facts.
 func Build() (compatibility.Build, error) {
-	return compatibility.Inspect(compatibility.BuildRequest{SDKModules: []string{"github.com/chromedp/chromedp", "github.com/chromedp/cdproto", "github.com/go-json-experiment/json"}})
+	return compatibility.Inspect(compatibility.BuildRequest{SDKModules: []string{"github.com/chromedp/chromedp", "github.com/chromedp/cdproto"}, DisclosePaths: []string{"github.com/frost-leo/fathomry/third_party/chromedp"}})
+}
+
+// Profile reads source metadata without native dispatch or starting the browser.
+func (source Source) Profile() compatibility.Profile {
+	return (&Client{owner: source.owner}).Profile()
 }
 
 // Profile reports non-secret settings and observed CDP browser facts. It does not
@@ -58,6 +63,7 @@ func (client *Client) Profile() compatibility.Profile {
 		profile.ServiceMode.Kind = compatibility.Observed
 	}
 	profile.Options = []compatibility.Option{
+		{Name: "control-transport", Value: "websocket"},
 		{Name: "new-window", Value: strconv.FormatBool(value.NewWindow)},
 		{Name: "assembly-readiness", Value: strconv.FormatBool(value.CheckReady)},
 		{Name: "launch-configuration", Value: "private-unattested"},
@@ -68,7 +74,9 @@ func (client *Client) Profile() compatibility.Profile {
 		name  string
 		value int64
 	}{
-		{"max-sessions", int64(value.MaxSessions)}, {"queued-calls", int64(value.QueuedCalls)}, {"max-commands", int64(value.MaxCommands)},
+		{"max-bindings", int64(value.MaxBindings)}, {"max-binding-calls", int64(value.MaxBindingCalls)},
+		{"max-object-groups", int64(value.MaxObjectGroups)}, {"max-objects", int64(value.MaxObjects)},
+		{"max-sessions", int64(value.MaxSessions)}, {"max-pages", int64(value.MaxPages)}, {"max-streams", int64(value.MaxStreams)}, {"max-stream-bytes", value.MaxStreamBytes}, {"max-subscriptions", int64(value.MaxSubscriptions)}, {"queued-calls", int64(value.QueuedCalls)}, {"max-commands", int64(value.MaxCommands)},
 		{"max-command-bytes", value.MaxCommandBytes}, {"max-result-bytes", value.MaxResultBytes}, {"max-event-bytes", value.MaxEventBytes},
 		{"max-events", int64(value.MaxEvents)}, {"admission-timeout-ns", int64(value.AdmissionTimeout)},
 		{"startup-timeout-ns", int64(value.StartupTimeout)}, {"session-timeout-ns", int64(value.SessionTimeout)}, {"cleanup-timeout-ns", int64(value.CleanupTimeout)},
@@ -82,12 +90,20 @@ func numericVersion(value string) bool {
 	if value == "" || len(value) > 64 {
 		return false
 	}
+	digit := false
 	for _, char := range value {
-		if char != '.' && (char < '0' || char > '9') {
+		if char == '.' {
+			if !digit {
+				return false
+			}
+			digit = false
+		} else if char >= '0' && char <= '9' {
+			digit = true
+		} else {
 			return false
 		}
 	}
-	return true
+	return digit
 }
 
 // LaunchArgumentsCopy deliberately exposes potentially sensitive arguments

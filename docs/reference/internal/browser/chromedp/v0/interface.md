@@ -21,197 +21,283 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 [Documentation](../../../../../README.md) / Internal package reference
 
-**Audience:** internal composition and browser capability maintainers.
-**Status:** implemented internal Provider; not a public API, production-site
-qualification, hard browser-memory limit or complete HTTP quota implementation.
+**Audience:** Internal composition and Browser capability maintainers.
+**Status:** migrated managed foundation; full #139 capability acceptance remains incomplete.
 **Package:** `github.com/frost-leo/fathomry/internal/browser/chromedp/v0`.
 
-## Configuration and call sequence
+## Preparation and ownership
 
-One externally configured entry creates one named Provider. There is no executable
-discovery, business profile, URL allowlist, credential refresh, application retry,
-rotation, Redis coordination or shared HTTP client facade.
+PrepareV1 freezes exact effective data and native TLS containers offline. Budget
+and Limits describe that same preparation. Select requires an explicit cancellable
+source lifetime. Assemble owns the source; Bind attaches an independent Inbox.
+Go zero limits default; explicit layer zeros are validated as supplied.
 
-1. Supply an explicit cancellable resource lifetime and `OptionsV1`. Choose either
-   an absolute executable path or an exact borrowed browser WebSocket URL.
-2. `Select` snapshots settings without I/O. Optional `resource.Layer` inputs are
-   plain configuration. Go zero values use documented technical defaults; explicit
-   layer zeros are validated without reapplying defaults.
-3. Apply `resource.WithLimits`, assemble, create an independently owned bounded
-   `invocation.Inbox[Result]`, and `Bind`. `LimitsV1` describes unoverridden Go
-   options; layered settings need matching composition limits.
-4. `Run` reserves evidence and authoritative source admission before starting the
-   browser or creating a BrowserContext. Supply separate work and cleanup contexts.
-   Each callback gets a fresh, isolated BrowserContext and one initial page target.
-   `SessionOptionsV1` retains runtime proxy/bypass inputs without mutating the source.
-5. Receive every Inbox delivery even when the direct caller handles its error.
-   Inspect primary failure, cleanup failure, output and release independently.
-   Close borrowing assemblies before the owning assembly.
+An absolute ExecPath starts an owned process and a loopback WebSocket connection.
+RemoteURL names an exact borrowed browser endpoint. The source never signals that
+peer or sends Browser.close. Headers and TLS apply to CDP control, not browser HTTP.
+The source uses the selected core module's remote package, not the obsolete
+standalone remote module.
 
-`CheckReady` explicitly enables an assembly readiness check. Otherwise construction
-is lazy. Readiness proves a browser/CDP round trip, not a page load, business access,
-or readiness of an independently borrowed browser's other resources. Failed startup
-is retained, not automatically retried or replaced by another executable.
+Fresh profiles are removed only after owned process exit. ProfileDir instead names
+caller property. An exclusive `.fathomry-browser.lock` protects concurrent
+Fathomry ownership; Chrome retains its own native lock. Cleanup checks the lock's
+file identity before removal and never recursively deletes a persistent directory.
+Environment inheritance requires InheritEnvironment. Flags cannot disable the sandbox.
 
-The ordinary Go code belongs in Activities or other process-local callers, not
-Temporal Workflow logic. No durable DTO or Workflow command changes are supplied.
+Startup remains lazy unless CheckReady is explicit. Readiness observes a CDP
+round trip, not HTTP success or page isolation. Failed startup is retained and is
+not automatically retried.
 
-## Who owns the browser and state?
+## Contexts, pages and calls
 
-| Resource | Local executable mode | Borrowed browser mode |
-| --- | --- | --- |
-| Process | Provider launches, signals and joins exactly its own process | External owner; never signaled or sent Browser.close |
-| User-data directory | Fresh private temporary directory; removed after process join | External profile is never selected, copied or removed |
-| Allocator / CDP Browser connection | Provider-owned RemoteAllocator and connection to the new process | Provider-owned connection to the explicit URL; external process is borrowed |
-| BrowserContext | Provider creates one per Run, with dispose-on-debugger-detach | Same; only Provider-created contexts are disposed |
-| Initial Target/tab | Provider-created, attached and canceled independently | Same; no existing target is reused |
-| Popup/worker/subresource work | Belongs to the BrowserContext lifetime, not an extra source allowance | Same; unrelated BrowserContexts are not owned |
+Retain admits one BrowserContext before native setup. Context.Page returns its
+initial page and NewPage creates another page in the same context. Copies share
+the same context/page/command/output accounting. Run uses Retain for its fresh
+callback convenience and preserves the separate cleanup context.
 
-A remote allocator is intentionally used even for local processes: explicit
-process ownership avoids coupling an SDK allocation timeout to process reaping.
-The allocator owns a CDP connection, not the locally launched OS process.
+SessionOptionsV1 can explicitly borrow an existing context or page. Native context
+membership and target membership are checked before attach. A borrowed page is
+detached, not closed. Separately created pages are owned and closed. Explicit
+default-context borrowing does not promise exclusive cookies or storage.
 
-Different Go contexts and different tabs do not imply Cookie/storage isolation.
-Run creates a genuinely distinct BrowserContext; technical Cookie and storage
-operations remain native capabilities inside it. BrowserContexts still share an
-OS process, browser services and deployment limits. Their proxy settings do not
-certify completely separate sockets, DNS state, caches or network-service processes.
+Closed generic Actions delegate to native selector/readiness, input, JavaScript,
+Poll, navigation, capture and emulation helpers. RunAction returns native data
+without giving caller code a Target. Query options are closed; raw QueryAfter,
+ByFunc, After and owning native contexts are not public extension points.
+Native data-only keyboard/mouse/emulation option callbacks remain cooperative.
 
-A source alias created with `resource.Borrow` shares the original source metadata,
-admission and native context ceiling. It cannot restart a process or manufacture a
-new allowance. Independent Provider entries borrowing the same externally owned
-browser do not collectively establish a process-wide quota; composition owns that
-external sharing and its containment.
+Evaluate/Poll remote-object actions reserve one object slot before native setup
+or argument encoding. Session.NewObjectGroup reserves bounded custody; the action
+route creates an implicit group when no explicit group is supplied. Session.Object
+accepts only the exact original pointer returned on that page, with its unmodified
+native identity. Copies of metadata and IDs from another page/source are not grants.
+Object.Call delegates once with a frozen receiver ID and JSON-value arguments.
+DataCopy retains immutable native metadata. Known main-document changes revoke
+receivers; the epoch is rechecked after waiting for the group's serialized work.
+Output snapshots preserve explicit RemoteObject JSON values, including empty
+array/object/string and null. WriteNativeResult applies that correction recursively
+inside bounded retained output, not in parameter codecs or global JSON settings.
+Properties and IndexedDB references share the same immutable snapshot boundary.
 
-Native tab cancellation is joined independently of BrowserContext disposal;
-native detach/close errors are preserved even when disposal succeeds. Connection
-loss cancels session contexts and rejects new work on the dead connection.
-Disposal failure transfers the unresolved context to the same source owner; its
-native slot remains occupied. Explicit assembly cleanup reconciles known context
-IDs and can continue after an incomplete result. If a borrowed connection is lost,
-explicit cleanup can open one bounded cleanup-only connection to reconcile those
-known IDs, without creating targets or closing the external browser. A creation
-command that failed without returning an ID can leave an unknown context. Local process termination
-settles that owner's native resources; a borrowed browser's unknown context cannot
-be identified by guessing or deleting contexts created by other sessions. Its
-unresolved cleanup remains explicit and may require external-owner reconciliation.
-Retained cleanup records contain only IDs and creation uncertainty, not completed
-sessions' output/event buffers. Copies of Session share one state and allowance.
+Evaluate uses a private native group. Poll keeps the native algorithm and releases
+its successful result by ID. Unobserved/canceled producers retain unknown custody:
+an early releaseObjectGroup reply does not prove a later result cannot be retained.
+The group remains incomplete until positive session detach or owned resource
+destruction. Borrowed-page detach ends only this session's object custody, not the
+peer target. Object/group Close bypasses fresh ordinary admission, uses the cleanup
+budget, and keeps prior native cleanup failure separately from positive closure.
+Context shutdown joins admitted object work before cleanup and retries after
+detaching its native sessions. No SDK producer runtime was added for this route.
+Object-valued arguments and native property descriptors preserve opaque references,
+including accessor/private/Symbol values. Ordinary Evaluate/Poll values also
+retain exception/late-result custody. Only joined work on an owned resource can
+transfer unresolved native custody into the existing source record. Actual source
+cleanup settles those objects after positive resource destruction, so held object
+evidence cannot prevent termination of an owned process behind blocked transport.
+Explicit execution-context grants use the same custody, as described below.
 
-Owned-process termination does not wait behind CDP socket shutdown. Native
-chromedp socket writes ignore context cancellation: a permanently unresponsive
-borrowed browser can still leave its owned connection's release unconfirmed.
-Cleanup reports pending rather than killing an externally owned browser; the
-external owner must restore or terminate that peer. No bounded shutdown of an
-arbitrarily blocked borrowed transport is promised.
+StorageScope binds an explicit origin to the verified context and selected page.
+Finite native DOMStorage/cache/database metadata routes copy parameters and enforce
+the existing SharedStorage grant. Cache capabilities derive from exact returned
+pointers, never a caller's string ID. Native data deletion is explicit, not Close.
+StoragePartition obtains a native key through a checked frame/target query;
+Bucket narrows that acquired partition without creating or owning stored data.
+Native nil-frame rejection remains visible instead of silently guessing a root.
+ObjectGroup.ReadIndexedDB reserves three remote slots per requested row and
+retains the exact returned key/primary-key/value objects. Group cleanup releases
+individual objects, not Chromium's shared indexeddb group. Unknown producers
+remain charged until positive session/resource teardown.
 
-Cancellation of a callback, tab, connection or process never proves remote HTTP
-handlers stopped, effects were reversed or data was complete. Noncooperative Go
-callbacks/serializers cannot be forcibly timed out. Do not call assembly shutdown
-reentrantly, retain owning capabilities in errors, or leave caller goroutines running.
+ServiceWorkers is an explicit Control option with context-wide SharedStorage
+requirements on borrowed resources. Its native-order bounded lineage observer
+creates registration/version grants; raw IDs never grant stop/push/sync authority.
+First-party ScopeURL and partition-wide native controls use the separately named
+context-command route. Native Disable clears force-update state and stops the
+observer, not persistent registrations. Native acknowledgements do not prove
+asynchronous effects or user-handler execution. Browser-native schemes are valid
+observations, while credentials and malformed scopes remain refused.
 
-## Native browser capabilities and restrictions
+Trace owns one browser-global producer and browser-origin IO, separate from a
+target-origin PDF stream. Both reuse bounded incremental reads and actual cleanup
+joins. Stop/Close use pre-reserved cleanup controls. Borrowed browsers cannot start
+global tracing. File-chooser input replies reuse the bounded Control ledger and
+wire-order document revocation; no raw backend-node identity is authorized.
 
-`Navigate` uses the native page-load navigation action. Redirects and subresources
-are browser behavior; a returned load event does not wait for all background work.
-`Actions` supports executor-only native Actions, including Evaluate and typed CDP
-commands for DOM, input, emulation, technical cookies, response-body retrieval,
-debugging and request interception. Caller-owned output pointers remain runtime
-values; `Save` makes a separate, bounded copy for required evidence.
+KeepOpen transfers only a quiescent positively owned local process. KeptBrowser
+then owns process exit and profile cleanup, while the old source releases only its
+connection. A mutex arbitrates transfer versus source-lifetime process termination.
+Context reservation uses that same transfer decision, so a concurrent Retain cannot
+create resources after the process changes owners.
+Temporary profiles remain with the new owner until actual exit. Persistent caller
+directories are preserved and their lock remains held until then.
 
-One navigation and one Actions group may overlap, with event reception, so an
-intercepted request can be continued while navigation waits. Same-kind overlap is
-rejected. All paths retain the session deadline and source reservation. No user
-callback runs on a synchronous CDP event reader: `NextEvent` consumes a bounded
-queue of immutable native event encodings. Overflow cancels the session and remains
-a technical failure even when the caller ignores the returned error.
+AcquireWindow binds a native window to an exact target of the same owned process.
+RunWindowCommand copies native bounds/content-size data, then rechecks the target's
+window before dispatch. The extra membership query consumes an owner command and
+does not provide atomicity against another controller moving the target.
 
-Actions receive no chromedp owning Context. `chromedp.Run`, `ListenTarget`,
-high-level selector and navigation helpers that require `FromContext` are not
-supported through Actions. Use `Navigate`, native CDP DOM commands and `NextEvent`.
-Callback panics become a technical error; error-valued panic causes remain inspectable.
-This restriction preserves useful native execution without exposing an allocator,
-browser, Target, unrestricted executor, cancel authority or mutable owning handle.
+Profiler and Performance Control options own their target-session domains.
+RunDiagnosticCommand uses ordinary admission; Close uses pre-reserved cleanup
+to disable ignored CPU/console profiles, coverage and metrics. Another native
+CDP session's profiler remains independent. Native profiling memory and the
+cost of disabling optimization are outside logical output/queue guarantees.
 
-The technical command boundary permits the domains listed by `Actions`.
-Browser/Target/global Storage authority, native IO streams, downloads and selected
-lifecycle/global mutations are refused. Unknown domains are not silently granted.
-This includes process-global headless screen inventory/mutations, Network stream
-creation and stream-mode PDF output. Inline PDF and target-local emulation remain
-available through the same controlled executor.
-These are resource-capability restrictions, not business profiles or site allowlists.
-A captured executor is revoked when its Actions group returns; replacing or
-detaching the Go context does not renew its authority. Extensions are trusted Go
-code, not sandboxed plugins or a guarantee against arbitrary filesystem/network I/O
-performed directly by caller code or by scripts running in the browser.
+Recording Control reserves both stream custody and bounded lifecycle evidence
+before native setup. Stop waits for the single owned native flush call; canceled
+waits do not replay it. Reads/seeks require confirmed producer completion. Close
+starts stop before unrelated cleanup and joins/closes the same private stream.
+The Chrome 150 peer reports recording unavailable (-32601); protocol-surrogate
+tests are not video-encoding qualification.
 
-## Bounds and output meanings
+Debugger Control requires shared-isolate consent. Its reserved pause replies
+and bounded finite/script commands can progress while Session's ordinary action
+is paused. Script and pause authority follows wire-order observations, not raw
+IDs or script execution-context metadata. Cleanup queues one resume, disables
+Debugger, then releases `backtrace`; uncertain resume retains custody without
+blocking independent domain/group cleanup. This is the implemented lifecycle and
+script/frame slice, not complete Debugger/HeapProfiler coverage. Frame evaluation
+reuses a pre-created private ObjectGroup with nonblocking gate admission. Its
+page-owned execution-retirement fence is captured before dispatch and inherited
+by derived references; retirement revokes use without refunding native custody.
+Private-group release remains required and is independent of Debugger.Close.
+Control's native observer reserves shared event count/bytes, including setup and
+queued events, before identity decoding; the pump consumes that same reservation.
 
-Defaults are four live BrowserContexts, no queued calls, 256 extension commands
-per session, 1 MiB per encoded command, 2 MiB cumulative delivered command/event
-output, 2 MiB retained evidence and 2 MiB / 256 events in the queue. Admission,
-startup, session and cleanup defaults are 1, 15, 30 and 5 seconds. Durations and
-layered `*_ns` fields are nanoseconds. Refer to `OptionsV1` for validated ranges.
+Native helper cleanup failures are separately retained in operation/context
+evidence. The SDK uses a bounded independent cleanup context for node/search/JSPath/drag
+cleanup and does not retry those failures as selector readiness. Ordinary native
+error inspection remains available. A missing-context release response is treated
+as completed node cleanup only with a subsequently observed all-contexts-cleared
+generation, not from cancellation or error text alone.
+JSPath releases its own per-lookup group, including property references, without
+releasing the shared console group. A queued evaluation with no observed reply
+retains unknown cleanup even after group release. Readiness uses at most eight
+workers and joins started checks; cancellation cannot certify unchecked nodes.
+Native state-queue overflow stops the target visibly rather than blocking response
+dispatch. Late events for stopped targets do not block browser or sibling calls.
 
-Working reservations, independent evidence bytes and native context slots are
-different bounds. Context slots cover active and pending-cleanup contexts across
-aliases, including their workers/popups/background activity until disposal.
-They do **not** bound the number of those dependent targets, native renderer/network
-processes, physical HTTP requests, redirects, WebSockets, connections or RSS.
-Native CDP WebSocket decoding occurs before the extension response-size check;
-Chrome and chromedp allocations are not bounded by the retained-output reservation.
-Deployments requiring hard native-memory/process/network limits must provide real
-external containment; this Provider must not be presented as satisfying those
-limits by Go admission alone. It does not configure cgroups or system security.
+Protocol provides a synchronous, revocable cdp.Session for the same finite page
+commands as PageCommand, plus inline-only PDF. Raw subscriptions remain refused.
+Command uses that same boundary. Neither route grants authority from raw IDs or
+admits object/stream producers, storage mutation, interception or domain lifecycle.
+Use the existing scoped Object, Control, Request, Storage and Context operations
+for those capabilities. Arbitrary native Action[T] is not accepted.
+The static 627-command vocabulary and parameter types are pinned to cdproto
+v0.157.9; catalogue membership is not execution authority.
+PDFStream is a separate owned, target-scoped IO route. General IO,
+complete origin-grant, owner-control and remaining-domain
+routes are unfinished #139 work, not claims of native absence.
 
-`Result.CallbackCompleted` means the callback returned nil before its deadline.
-It does not mean all actions succeeded, the output is complete or no effects occurred.
-The first observed action/native/limit error is retained even when the callback
-catches it. Canceling only a NextEvent wait returns a separate waiting error;
-it does not cancel browser execution or turn missing events into empty success.
-`ContextReleased` records positive disposal evidence independently of
-`Receipt.Released`, which describes this producer's local use/ownership transfer.
+One navigation may overlap one other action and event reception. This allows
+Fetch replies while navigation waits. Same-kind overlap is refused. Context copies
+and detached Go contexts cannot renew a closed grant. The current event bridge
+owns one bounded native queue and one bounded observation queue per page.
+The bridge includes all native target event methods. Unknown protocol methods are
+ignored for version compatibility; malformed known events still fail the session.
 
-`Save` requires unique non-secret names; returned bytes are copies. Explicit empty
-output differs from missing output. A saved DOM value is not original response
-bytes or a business result certificate. The original response and rendered DOM
-can be inspected separately through native commands; no HTML persistence is implied.
+The Control response-body route retains response-stage Fetch identities. Finite
+reads use pre-reserved ledger capacity and retain copied bytes. Incremental reads
+reuse Stream ownership and cannot authorize an original-request continuation.
+Unknown canceled producers remain incomplete until positive resource teardown.
+Native stream cleanup and public receipt completion are separate responsibilities.
+Source-owned cleanupControls retain unfinished body/download controllers after
+context work exits. Preparation reserves their per-page ledgers; multiple controls
+from one retired context consume one context slot, not independent aliases.
+Positive process/resource teardown closes ignored streams without waiting for a
+responsive protocol writer. KeepOpen refuses this unfinished custody.
+ControlOptions.Network records bounded request origins in native event order.
+Request grants cannot follow a redirect's reused ID or another target/source.
+RunRequestCommand delegates finite body/post-data/search and explicit XHR replay
+with copied, typed parameters. Its work joins independently of the control-reply
+lane. Closing observation preserves the SDK's Network domain and already-sent HTTP
+effects. See the [public contract](../../../../adapters/browser/chromedp/v1/interface.md).
 
-`Commands` counts explicit extension commands, not initialization/cleanup or every
-native command issued by a high-level navigation. `Navigations` counts completed
-navigation helpers. `RequestEvents` counts observed target
-Network.requestWillBeSent events only. None is an exact physical HTTP request
-count; invocation attempts deliberately remain inexact with zero observed attempts.
+## Shutdown and independent evidence
 
-Errors use internal `fault.Kind` and preserve native `errors.Is/As` causes.
-Primary and cleanup evidence are separate. Ordinary formatting, logging and JSON
-do not expose runtime configuration, browser payloads or native error text.
-Deliberate copies and native cause inspection can expose sensitive data.
+Close seals page work, cancels it, and waits for actual execution and binding exit.
+The retained context lifetime and context-command lane are separate from its
+initial page. ClosePage and Context.Close share per-session native cancellation
+and actual-join state. Individual cleanup filters that page's children, validates
+positive owned-target disappearance or borrowed detach, then refunds its page
+slot. Borrowed child targets detach before whole-context cleanup closes their
+owned parent pages. Public metadata/serializer joins remain independent.
+Page creation records ownership before native I/O and is joined without holding
+the context state mutex. Stream cleanup uses the separate cleanup budget, and
+context release joins in-flight stream work before returning its reservation.
+A canceled wait on a retained Context keeps its cleanup handle and accounting.
+Run's synchronous callback cannot be forcibly terminated. Goexit and panic retain
+failure evidence instead of silently releasing successful work.
 
-## Version axes and verification
+Native target cleanup uses the configured cleanup budget. Owned process termination
+does not depend on a responsive CDP writer. The blocked-write regression still
+requires the owned process to be killed and joined. A borrowed peer is never killed.
 
-The import major v0, OptionsV1, SessionOptionsV1, selected chromedp v0.16.0,
-cdproto `v0.0.0-20260714215040-dc233986426f`, actual consuming Go/module graph,
-actual Chrome/Chromium version, CDP version and launch arguments are separate axes.
-`Build` reads the consuming executable. `Profile` reports a genuinely observed
-browser product/version and CDP version after startup, not the browser's HTTP
-protocol or arbitrary tuple qualification. `LaunchArgumentsCopy` deliberately
-returns supplied local arguments; it is not attestation of effective browser flags.
-Borrowed-process launch arguments remain unknown. `Profile.Native` intentionally
-remains unknown: the observed product/version and private argument marker cannot
-certify a deployed native binary/launch configuration through `compatibility.Assess`.
-No blanket compatibility catalog
-is installed.
+Known failed context disposal is transferred to the same source owner and remains
+charged against its native context ceiling. Source cleanup can open a cleanup-only
+connection to reconcile its known IDs. A lost create response with no ID remains
+unknown; cleanup never guesses from a before/after context list.
 
-The native Chrome 150 target-creation counterexample is retained as an opt-in test:
-explicit `NewWindow` is a separate CDP construction choice, not a business profile
-or inferred feature of a synthetic browser label. Changing the browser/bindings
-tuple requires requalifying that control, not silently skipping it.
+Result retains primary and cleanup facts separately. ContextReleased means
+positive owned-context disposal. ContextDetached describes released borrowed use,
+not disposal. CallbackCompleted only means the callback returned nil before its
+deadline. A handled operation error still remains in the required result.
+Stream cleanup retains its first native failure across successful retries.
+Closed and ContextDetached can be true while the independent Cleanup reports history.
+Save copies explicit named evidence; empty and absent data differ.
+Receipt redelivery never executes the original operation again.
 
-From the repository root, after dependency acquisition:
+Commands counts admitted CDP attempts through the controlled action/command route,
+not physical HTTP traffic. Initialization, cleanup and the legacy Navigate method
+are outside that counter. The closed Navigate action and the public Page.Navigate
+route do use it. RequestEvents counts observed requestWillBeSent events,
+not exact requests, redirects, cache activity or connections.
+
+## Limits and validation
+
+Defaults are four contexts, four pages per context, no queued calls, 256 command
+attempts, 1 MiB command bytes, 2 MiB result bytes, 2 MiB retained evidence and
+2 MiB / 256 events per queue. Admission/startup/context/cleanup defaults are
+1/15/30/5 seconds. Durations use nanoseconds.
+Object groups default to 8 and retained object results to 128 per BrowserContext,
+shared across its pages. Their logical metadata and origin-queue reservations are
+included in the exact prepared Budget; these do not bound the remote JavaScript heap.
+
+Native queues include pump-held batches in count and byte charges. Overflow is
+observable and cancels the owning source rather than silently dropping progress.
+Binding limits byte-bound name routing, then admit payload decoding and handler creation.
+Its join observes actual handler exit. These SDK controls alone do not complete
+the public binding/subscription contract.
+
+Logical reservations do not bound Chrome RSS, native DOM caches, socket traffic,
+or every transport allocation. BrowserContext isolation is not a process sandbox.
+Callbacks and serializers are cooperative Go code, not untrusted plugins.
+
+ExecutionContexts reads the bounded native identity snapshot without a new
+observer or Runtime toggle. ExecutionContext grants fill system-unique IDs in
+ObjectGroup.EvaluateIn. Derived references preserve the same execution origin.
+Frames and CreateWorld reuse the node/document generation observer. Native
+WithPollingInFrame uses managed node provenance and joins its invalidation watcher.
+MaxEvents also limits cumulative isolated-world creation attempts per page.
+
+ControlOptions.Downloads adds target-scoped Browser download observations to the
+existing control lease. Its context-wide policy requires a separate SharedDownloads
+grant for borrowed contexts. GUID naming, explicit browser-host versus local
+destinations, bounded local reads and caller-file preservation follow the
+[public download contract](../../../../adapters/browser/chromedp/v1/interface.md).
+Identity is captured in the bounded native observer before asynchronous delivery.
+The source separately owns pending download cleanup and its logical reservation,
+so a blocked transport cannot strand a local directory handle after process exit.
+Pending source custody still consumes context capacity and prevents KeepOpen.
+
+The selected tuple is chromedp v0.21.0 / cdproto v0.157.9 with Go 1.27.
+The JSON bridge uses standard-library JSON types. Build reports the actual two
+native modules and their replacements; unrelated consumers retain their own JSON
+dependency. Profile keeps browser version, CDP version and declared ownership
+separate. LaunchArgumentsCopy deliberately exposes supplied local arguments.
+
+Run the focused package checks first:
 
 ```sh
-go mod tidy -diff
 go vet ./internal/browser/chromedp/v0
 go test -race -count=1 ./internal/browser/chromedp/v0
 FATHOMRY_CHROMEDP_INTEGRATION=1 \
@@ -219,24 +305,13 @@ FATHOMRY_CHROME_EXECUTABLE=/absolute/path/to/test-owned-chrome \
 go test -race -count=1 -timeout=3m ./internal/browser/chromedp/v0
 ```
 
-Missing opt-in is a skip, not browser acceptance. With opt-in, missing/unusable
-Chrome is a failure. Tests use their own fresh profiles, dynamic ports and local
-synthetic pages/proxies, preserve the sandbox and compare HTML only in memory.
-Use a short test TMPDIR because Chrome's Unix singleton socket has a path limit.
-Do not point tests at an existing debugging port or real browser profile.
+Absent opt-in is a skip, not browser acceptance. Fixtures use synthetic pages,
+owned profiles and exact cleanup. Chrome150 qualification does not establish
+Chromium157-only or hardware capabilities. The first page of a fresh context gets
+a window, matching native v0.21. Later pages honor NewWindow. Partial target-creation
+failure retains a separate protocol-peer regression requiring exact context cleanup.
 
-[Tests](../../../../../../internal/browser/chromedp/v0/) cover source/evidence
-admission, aliases, copies, scope revocation, startup and partial creation, native
-interception, original bytes versus rendered DOM, Cookie/storage isolation,
-cancellation versus remote effects, runtime proxies and independent consumer builds.
-Private experiments, browser profiles and agent reviews are not published.
-Unselected SDKs are not imported. No public-site, anti-bot, distributed quota,
-hard memory, persistent-profile, production TLS or full browser protocol certificate
-is claimed.
-
-The [SDK architecture](../../../../../architecture/sdk-integration.md),
-[integration standards](../../../../../architecture/internal-sdk-integration.md)
-and [issue #52](https://github.com/frost-leo/fathomry/issues/52) govern this boundary.
-Pinned upstream [context/cancellation](https://github.com/chromedp/chromedp/blob/7963c203ed5458147d27dc39a5c06d2b12e81664/chromedp.go)
-and [allocator](https://github.com/chromedp/chromedp/blob/7963c203ed5458147d27dc39a5c06d2b12e81664/allocate.go)
-contracts explain why browser ownership is not ordinary HTTP transport ownership.
+See [public contracts](../../../../adapters/browser/chromedp/v1/interface.md),
+[SDK integration](../../../../../architecture/sdk-integration.md), and
+[issue #139](https://github.com/frost-leo/fathomry/issues/139).
+Historical #52 evidence applies to its old tuple and is not rewritten.

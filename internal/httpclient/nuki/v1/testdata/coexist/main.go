@@ -31,7 +31,6 @@ import (
 
 	fhttp "github.com/bogdanfinn/fhttp"
 	bprofiles "github.com/bogdanfinn/tls-client/profiles"
-	chrome "github.com/chromedp/chromedp"
 	shttp "github.com/enetx/http"
 	browser "github.com/frost-leo/fathomry/internal/browser/chromedp/v0"
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -52,7 +51,7 @@ func main() {
 	flag.Parse()
 	browserBuild, err := browser.Build()
 	must(err)
-	if len(browserBuild.SDKs) != 3 {
+	if len(browserBuild.SDKs) != 2 {
 		panic("browser consuming dependencies missing")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -182,7 +181,7 @@ func verifyBrowser(ctx context.Context, assembly *resource.Assembly, selected re
 			return err
 		}
 		var text string
-		if err := session.Actions(session.Context(), chrome.Evaluate("document.body.textContent", &text)); err != nil {
+		if err := session.Actions(session.Context(), browser.Into(browser.Evaluate[string]("document.body.textContent"), &text)); err != nil {
 			return err
 		}
 		if text != "coexist" {

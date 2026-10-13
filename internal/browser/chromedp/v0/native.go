@@ -1,4 +1,4 @@
-/**
+/*
  * fathomry
  * Copyright (C) 2026  Frost Leo
  * SPDX-License-Identifier: GPL-3.0-or-later
@@ -23,64 +23,204 @@ import (
 	"context"
 	"errors"
 	"reflect"
-	"strings"
 	"sync"
 
 	"github.com/chromedp/cdproto/cdp"
+	jsonv2 "github.com/chromedp/cdproto/cdp/jsonv2"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	sdk "github.com/chromedp/chromedp"
-	jsonv2 "github.com/go-json-experiment/json"
-	"github.com/go-json-experiment/json/jsontext"
 )
 
-// Actions runs executor-only chromedp Actions (Evaluate, input and typed CDP).
-// Native Run/ListenTarget/selector/navigation helpers needing FromContext are
-// unsupported; use Navigate, CDP DOM and NextEvent instead. No owning SDK context
-// is passed. Outputs belong to caller pointers; Save separately copies evidence.
-//
-// Technical restrictions permit target-scoped Runtime, DOM, CSS, Input,
-// Accessibility, Animation, Performance, Profiler, Debugger, DOMSnapshot,
-// DOMStorage, Emulation, Page, Network and Fetch commands. Browser/Target/Storage,
-// global mutation, downloads, IO streams and lifecycle escape commands are refused.
-// This is capability restriction, not a business URL/profile allowlist.
-//
-// Actions/custom serializers must be synchronous, bounded, and return immutable
-// errors without owning capabilities. This is not an untrusted-Go sandbox.
-func (session *Session) Actions(ctx context.Context, actions ...sdk.Action) error {
+// Action is a closed native delegation. Its zero value is invalid.
+type Action[T any] struct {
+	private
+	native        sdk.Action[T]
+	local         func(context.Context, *Session) (T, error)
+	bytes         int64
+	navigation    bool
+	object        func(string, []sdk.QueryOption) sdk.Action[*runtime.RemoteObject]
+	objectGrouped bool
+	managed       func(string, []sdk.QueryOption) sdk.Action[T]
+	query         []QueryOption
+}
+
+// NeedsCustody reports whether a value-returning native operation can still
+// retain remote exception objects or produce an unknown result after cancellation.
+func (action Action[T]) NeedsCustody() bool { return action.managed != nil }
+
+// RunAction admits one native high-level operation without exposing its Target.
+func RunAction[T any](ctx context.Context, session *Session, action Action[T]) (value T, err error) {
+	if action.managed != nil {
+		return runManagedValue(ctx, session, action)
+	}
+	if action.object != nil {
+		object, err := RunObjectAction(ctx, session, nil, action)
+		if object != nil && object.NativeValue() != nil {
+			value = any(object.NativeValue()).(T)
+		}
+		return value, err
+	}
+	work, leave, err := session.enter(ctx, action.navigation)
+	if err != nil {
+		session.remember(err)
+		return value, err
+	}
+	defer leave()
+	returned := false
+	defer func() {
+		if !returned {
+			session.remember(failure(ErrPanic, "action-did-not-return"))
+		}
+	}()
+	if action.native == nil && action.local == nil {
+		returned = true
+		err = failure(ErrInput, "action")
+		session.remember(err)
+		return value, err
+	}
+	if action.bytes > session.owner.settings.MaxCommandBytes {
+		returned = true
+		err = failure(ErrLimit, "action-input")
+		session.remember(err)
+		return value, err
+	}
+	err = invoke(func() error {
+		var callErr error
+		value, callErr = action.run(work, session)
+		if callErr == nil && action.navigation {
+			record := session.accounting()
+			record.mu.Lock()
+			record.data.navigations++
+			record.mu.Unlock()
+		}
+		return callErr
+	})
+	err = errors.Join(err, ctx.Err(), context.Cause(ctx), work.Err(), context.Cause(work))
+	if err != nil {
+		if errors.Is(err, sdk.ErrCommandLimit) {
+			err = failure(ErrLimit, "action-bytes", err)
+		}
+		err = failure(ErrNative, "action", err)
+	}
+	session.remember(err)
+	returned = true
+	return value, err
+}
+
+// Actions runs closed void actions in order. No raw native Target enters a callback.
+func (session *Session) Actions(ctx context.Context, actions ...Operation) error {
+	if len(actions) == 0 {
+		err := failure(ErrInput, "actions")
+		session.remember(err)
+		return err
+	}
+	if session != nil && session.sessionState != nil && session.owner != nil && len(actions) > session.owner.settings.MaxCommands {
+		err := failure(ErrInput, "action-count")
+		session.remember(err)
+		return err
+	}
+	for _, action := range actions {
+		if action == nil || nilLike(action) {
+			err := failure(ErrInput, "nil-action")
+			session.remember(err)
+			return err
+		}
+		if err := action.apply(ctx, session); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Operation is implemented only by closed actions in this package.
+type Operation interface {
+	apply(context.Context, *Session) error
+}
+
+func (action Action[T]) apply(ctx context.Context, session *Session) error {
+	_, err := RunAction(ctx, session, action)
+	return err
+}
+
+// Into stores the returned value during admitted execution.
+// The output pointer must not be used concurrently.
+func Into[T any](action Action[T], output *T) Action[sdk.Void] {
+	if output == nil || action.native == nil && action.local == nil && action.object == nil && action.managed == nil {
+		return Action[sdk.Void]{}
+	}
+	return Action[sdk.Void]{bytes: action.bytes, navigation: action.navigation, local: func(ctx context.Context, session *Session) (sdk.Void, error) {
+		value, err := action.run(ctx, session)
+		if err == nil {
+			*output = value
+		}
+		return sdk.Void{}, err
+	}}
+}
+
+// Step runs cooperative caller code with cancellation only, never a native context.
+func Step(run func(context.Context) error) Action[sdk.Void] {
+	if run == nil {
+		return Action[sdk.Void]{}
+	}
+	return Action[sdk.Void]{local: func(ctx context.Context, _ *Session) (sdk.Void, error) { return sdk.Void{}, run(bareContext{ctx}) }}
+}
+
+func (action Action[T]) run(ctx context.Context, session *Session) (T, error) {
+	if action.managed != nil {
+		return runManagedValueAdmitted(ctx, session, action)
+	}
+	if action.object != nil {
+		var value T
+		object, err := runObjectAction(ctx, session, nil, action)
+		if object != nil && object.NativeValue() != nil {
+			value = any(object.NativeValue()).(T)
+		}
+		return value, err
+	}
+	if action.local != nil {
+		return action.local(ctx, session)
+	}
+	return sdk.Run(session.nativeWork(ctx), action.native)
+}
+
+// Command delegates a finite page-local CDP command through a revocable session.
+// Parameters remain borrowed until execution finishes.
+// Identity-bearing commands and resource producers need their scoped APIs.
+func Command[P, R any](command cdp.Command[P, R], params P) Action[R] {
+	return Action[R]{local: func(ctx context.Context, session *Session) (R, error) {
+		grant := &executorGrant{session: session, work: ctx}
+		defer grant.closeAndJoin()
+		return cdp.Call(bareContext{ctx}, grant, command, params)
+	}}
+}
+
+// Protocol grants synchronous access to finite page-local CDP commands.
+// It does not grant authority from native IDs or the wider protocol catalogue.
+func (session *Session) Protocol(ctx context.Context, run func(context.Context, cdp.Session) error) error {
 	work, leave, err := session.enter(ctx, false)
 	if err != nil {
 		session.remember(err)
 		return err
 	}
 	defer leave()
-	if len(actions) == 0 || len(actions) > session.owner.settings.MaxCommands {
-		err = failure(ErrInput, "actions")
+	if run == nil {
+		err := failure(ErrInput, "protocol")
 		session.remember(err)
 		return err
 	}
 	grant := &executorGrant{session: session, work: work}
-	actionContext := cdp.WithExecutor(bareContext{work}, grant)
-	err = invoke(func() error {
-		for _, action := range actions {
-			if action == nil || nilLike(action) {
-				return failure(ErrInput, "nil-action")
-			}
-			if err := work.Err(); err != nil {
-				return errors.Join(err, context.Cause(work))
-			}
-			if err := action.Do(actionContext); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	defer grant.closeAndJoin()
+	err = invoke(func() error { return run(bareContext{work}, grant) })
 	grant.closeAndJoin()
 	err = errors.Join(err, ctx.Err(), context.Cause(ctx), work.Err(), context.Cause(work))
 	if err != nil {
-		err = failure(ErrNative, "actions", err, work.Err(), context.Cause(work))
+		err = failure(ErrNative, "protocol", err)
 	}
 	session.remember(err)
 	return err
 }
+
 func nilLike(value any) bool {
 	reflected := reflect.ValueOf(value)
 	switch reflected.Kind() {
@@ -108,11 +248,11 @@ func (grant *executorGrant) closeAndJoin() {
 		<-idle
 	}
 }
-func (grant *executorGrant) Execute(ctx context.Context, method string, params, result any) (err error) {
+func (grant *executorGrant) Call(ctx context.Context, method string, params, result any) (err error) {
 	grant.mu.Lock()
 	if grant.closed || grant.active || ctx == nil {
 		grant.mu.Unlock()
-		return failure(ErrState, "executor")
+		return failure(ErrState, "protocol")
 	}
 	grant.active = true
 	grant.idle = make(chan struct{})
@@ -126,84 +266,122 @@ func (grant *executorGrant) Execute(ctx context.Context, method string, params, 
 		grant.mu.Unlock()
 	}()
 	if err := grant.work.Err(); err != nil {
-		return failure(ErrState, "executor", err, context.Cause(grant.work))
+		return failure(ErrState, "protocol", err, context.Cause(grant.work))
 	}
 	if err := ctx.Err(); err != nil {
-		return failure(ErrState, "executor", err, context.Cause(ctx))
+		return failure(ErrState, "protocol", err, context.Cause(ctx))
 	}
 	if !permitted(method) {
 		return failure(ErrUnsupported, "command")
 	}
-	value := grant.session.owner.settings
-	encoded := boundedBuffer{limit: value.MaxCommandBytes}
+	if params == nil && protocolCommands[method].params != "cdp.Empty" {
+		return failure(ErrInput, "missing-params")
+	}
 	if params != nil {
-		if err := jsonv2.MarshalWrite(&encoded, params, sdk.DefaultMarshalOptions); err != nil {
-			return err
+		typ := reflect.TypeOf(params)
+		if typ.Kind() == reflect.Pointer {
+			if nilLike(params) {
+				return failure(ErrInput, "nil-params")
+			}
+			typ = typ.Elem()
+		}
+		want := protocolCommands[method].params
+		if typ.PkgPath()+"."+typ.Name() != "github.com/chromedp/cdproto/"+want {
+			return failure(ErrInput, "command-params")
 		}
 	}
-	if method == "Page.printToPDF" && len(encoded.data) != 0 {
-		var options struct {
-			TransferMode string `json:"transferMode"`
+	if method == "Page.printToPDF" {
+		var mode page.PrintToPDFTransferMode
+		switch value := params.(type) {
+		case page.PrintToPDFParams:
+			mode = value.TransferMode
+		case *page.PrintToPDFParams:
+			copied := *value
+			params = copied
+			mode = copied.TransferMode
 		}
-		if err := jsonv2.Unmarshal(encoded.data, &options); err != nil {
-			return failure(ErrInput, "pdf-options", err)
-		}
-		if options.TransferMode != "" && options.TransferMode != "ReturnAsBase64" {
+		if mode != "" && mode != page.PrintToPDFTransferModeReturnAsBase64 {
 			return failure(ErrUnsupported, "native-stream")
 		}
 	}
-	session := grant.session
-	session.mu.Lock()
-	if session.closed || session.data.commands >= uint64(value.MaxCommands) {
-		session.mu.Unlock()
-		return failure(ErrLimit, "commands")
+	if err := grant.session.reserveCommand(); err != nil {
+		return err
 	}
-	session.data.commands++
-	session.mu.Unlock()
 	work, cancel := context.WithCancelCause(grant.work)
 	stop := context.AfterFunc(ctx, func() { cancel(context.Cause(ctx)) })
 	defer stop()
 	defer cancel(context.Canceled)
-	var raw jsontext.Value
-	var input any
-	if params != nil {
-		input = jsontext.Value(encoded.data)
-	}
-	// The SDK has already read the WebSocket message. This checks output before
-	// caller decoding, not native wire-reader allocation or total process memory.
-	err = sdk.FromContext(session.native).Target.Execute(work, method, input, &raw)
+	var raw jsonv2.Value
+	err = sdk.FromContext(grant.session.native).Target.Call(grant.session.commandWork(work, false), method, params, &raw)
 	if err != nil {
-		return failure(ErrNative, "command", err, work.Err(), context.Cause(work))
+		if errors.Is(err, sdk.ErrCommandLimit) {
+			err = failure(ErrLimit, "command-bytes", err)
+		}
+		return failure(ErrNative, "command", err)
 	}
-	session.mu.Lock()
-	if int64(len(raw)) > value.MaxResultBytes-session.delivered {
-		session.mu.Unlock()
-		err = failure(ErrLimit, "command-output")
-		session.cancel(err)
-		return err
-	}
-	session.delivered += int64(len(raw))
-	session.mu.Unlock()
 	if result != nil {
 		return jsonv2.Unmarshal(raw, result, sdk.DefaultUnmarshalOptions)
 	}
 	return nil
 }
+func (grant *executorGrant) Subscribe(string) (<-chan jsonv2.Value, func()) {
+	events := make(chan jsonv2.Value)
+	close(events)
+	grant.session.remember(failure(ErrUnsupported, "protocol-subscription"))
+	return events, func() {}
+}
+
+func (session *Session) nativeWork(ctx context.Context) context.Context {
+	return session.commandWork(ctx, true)
+}
+
+func (session *Session) reserveCommand() error {
+	record := session.accounting()
+	record.mu.Lock()
+	defer record.mu.Unlock()
+	if record.contextClosed {
+		return failure(ErrState, "command")
+	}
+	if record.data.commands >= uint64(session.owner.settings.MaxCommands) {
+		return failure(ErrLimit, "commands")
+	}
+	record.data.commands++
+	return nil
+}
+
+func (session *Session) commandWork(ctx context.Context, admit bool, checks ...func() error) context.Context {
+	value := session.owner.settings
+	record := session.accounting()
+	return sdk.WithCallLimits(nativeContext{Context: ctx, native: session.native}, sdk.CallLimits{
+		MaxInputBytes: value.MaxCommandBytes, MaxOutputBytes: value.MaxResultBytes,
+		Cleanup: session.cleanupObserver(ctx),
+		Before: func(string) error {
+			for _, check := range checks {
+				if err := check(); err != nil {
+					return err
+				}
+			}
+			if admit {
+				return session.reserveCommand()
+			}
+			return nil
+		},
+		Result: func(_ string, size int64) error {
+			record.mu.Lock()
+			defer record.mu.Unlock()
+			if size > value.MaxResultBytes-record.delivered {
+				return failure(ErrLimit, "command-output")
+			}
+			record.delivered += size
+			return nil
+		}})
+}
+func marshalBounded(buffer *boundedBuffer, value any) error {
+	var encoder jsonv2.Encoder
+	encoder.Reset(buffer, sdk.DefaultMarshalOptions)
+	return jsonv2.MarshalEncode(&encoder, value, sdk.DefaultMarshalOptions)
+}
 
 func permitted(method string) bool {
-	domain, command, ok := strings.Cut(method, ".")
-	if !ok || command == "" || len(method) > 128 {
-		return false
-	}
-	switch method {
-	case "Page.close", "Page.crash", "Page.setDownloadBehavior", "Network.clearBrowserCookies", "Network.clearBrowserCache", "Fetch.takeResponseBodyAsStream",
-		"Network.takeResponseBodyForInterceptionAsStream", "Network.loadNetworkResource",
-		"Emulation.getScreenInfos", "Emulation.addScreen", "Emulation.updateScreen", "Emulation.removeScreen", "Emulation.setPrimaryScreen":
-		return false
-	}
-	switch domain {
-	case "Runtime", "DOM", "CSS", "Input", "Accessibility", "Animation", "Performance", "Profiler", "Debugger", "DOMSnapshot", "DOMStorage", "Emulation", "Page", "Network", "Fetch":
-		return true
-	}
-	return false
+	return finitePageCommands[method] || method == page.PrintToPDF.Method
 }

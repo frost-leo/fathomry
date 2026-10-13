@@ -41,6 +41,8 @@ automatically own or construct the packages below it.
 | Package | Role | Responsibility and calling contract |
 | --- | --- | --- |
 | `v1` | mechanism | [Operation Runtime, admission, actual-work references and independent evidence](../docs/reference/adapters/v1/interface.md) |
+| `browser/v1` | capability | [Browser budgets and separate operation, effect and ownership observations](../docs/reference/adapters/browser/v1/interface.md) |
+| `browser/chromedp/v1` | data-provider | [Closed native operations and retained contexts; #139 qualification remains incomplete](../docs/reference/adapters/browser/chromedp/v1/interface.md) |
 | `database/v1` | capability | [SQL budgets, attribution and profile vocabulary; no pool/client](../docs/reference/adapters/database/v1/interface.md) |
 | `sqlengine/v1` | capability | [SQL-engine source/work/evidence budgets and observation vocabulary; no native authority](../docs/reference/adapters/sqlengine/v1/interface.md) |
 | `tableformat/v1` | capability | [Table-format source/work/evidence budgets and distinct staging, file, commit and reload facts](../docs/reference/adapters/tableformat/v1/interface.md) |

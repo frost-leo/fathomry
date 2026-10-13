@@ -32,11 +32,9 @@ import (
 
 	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
-	sdk "github.com/chromedp/chromedp"
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/resource"
-	jsonv2 "github.com/go-json-experiment/json"
 )
 
 func TestBrowserNativeInterceptionAndOriginalVersusDOM(t *testing.T) {
@@ -47,49 +45,53 @@ func TestBrowserNativeInterceptionAndOriginalVersusDOM(t *testing.T) {
 	defer server.Close()
 	f := bindFixture(t, browserOptions(t), 1)
 	receipt, err := f.client.Run(deadline(t), deadline(t), fault.Correlation{Call: "interception"}, func(session *Session) error {
-		if err := session.Actions(session.Context(), fetch.Enable().WithPatterns([]*fetch.RequestPattern{{URLPattern: server.URL + "/*", ResourceType: network.ResourceTypeDocument}})); err != nil {
+		control, err := session.Control(session.Context(), ControlOptions{Network: true, Fetch: &fetch.EnableParams{Patterns: []*fetch.RequestPattern{{URLPattern: server.URL + "/*", ResourceType: network.ResourceTypeDocument}}}})
+		if err != nil {
 			return err
 		}
+		defer control.Close(context.Background())
 		navigation, cancel := context.WithCancel(session.Context())
 		done := make(chan struct{})
 		var navigationErr error
 		go func() { navigationErr = session.Navigate(navigation, server.URL); close(done) }()
 		defer func() { cancel(); <-done }()
-		var requestID network.RequestID
-		for requestID == "" {
-			event, err := session.NextEvent(session.Context())
+		var request Request
+		for request.state == nil {
+			event, err := control.Next(session.Context())
 			if err != nil {
 				return err
 			}
-			if event.Type() != "*fetch.EventRequestPaused" {
-				continue
-			}
-			var paused fetch.EventRequestPaused
-			if err := jsonv2.Unmarshal(event.DataCopy(), &paused, sdk.DefaultUnmarshalOptions); err != nil {
-				return err
-			}
-			requestID = paused.NetworkID
-			if err := session.Actions(session.Context(), fetch.ContinueRequest(paused.RequestID)); err != nil {
-				return err
+			switch event.Method() {
+			case fetch.RequestPaused.Method:
+				if err := event.Reply(session.Context(), ContinueRequest(fetch.ContinueRequestParams{})); err != nil {
+					return err
+				}
+			case network.LoadingFinished.Method:
+				observed, err := event.Request()
+				if err != nil {
+					return err
+				}
+				if observed.state.kind == network.ResourceTypeDocument {
+					request = observed
+				}
 			}
 		}
 		<-done
 		if navigationErr != nil {
 			return navigationErr
 		}
-		var original []byte
-		var rendered string
-		if err := session.Actions(session.Context(), sdk.ActionFunc(func(ctx context.Context) error {
-			var err error
-			original, err = network.GetResponseBody(requestID).Do(ctx)
-			return err
-		}), sdk.Evaluate("document.getElementById('value').textContent", &rendered)); err != nil {
+		original, err := RunRequestCommand(session.Context(), request, network.GetResponseBody, network.GetResponseBodyParams{})
+		if err != nil {
 			return err
 		}
-		if !strings.Contains(string(original), ">original<") || rendered != "rendered" {
+		var rendered string
+		if err := session.Actions(session.Context(), Into(Evaluate[string]("document.getElementById('value').textContent"), &rendered)); err != nil {
+			return err
+		}
+		if !strings.Contains(string(original.Body), ">original<") || rendered != "rendered" {
 			return errors.New("original bytes and rendered DOM were conflated")
 		}
-		original = nil
+		original = network.GetResponseBodyResult{}
 		return session.Save("dom", []byte(rendered))
 	})
 	if err != nil {
@@ -245,7 +247,7 @@ func TestBrowserNativeBoundsAndIgnoredFailureEvidence(t *testing.T) {
 				if kind == "output" {
 					expression = "'x'.repeat(1024)"
 				}
-				actionErr := session.Actions(session.Context(), sdk.Evaluate(expression, &output))
+				actionErr := session.Actions(session.Context(), Into(Evaluate[string](expression), &output))
 				if !errors.Is(actionErr, ErrLimit) {
 					return errors.New("native limit was not enforced")
 				}
@@ -291,7 +293,7 @@ func TestBrowserRuntimeProxyDoesNotMutateNamedSource(t *testing.T) {
 			return err
 		}
 		var body string
-		if err := session.Actions(session.Context(), sdk.Evaluate("document.body.innerText", &body)); err != nil {
+		if err := session.Actions(session.Context(), Into(Evaluate[string]("document.body.innerText"), &body)); err != nil {
 			return err
 		}
 		if body != "proxy-owned-fixture" {
