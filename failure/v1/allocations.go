@@ -122,6 +122,8 @@ const (
 	FacilityTemporal Facility = 0x1C0
 	// FacilityIceberg owns the public Iceberg table-format capability.
 	FacilityIceberg Facility = 0x320
+	// FacilityChromedp owns the managed Browser capability.
+	FacilityChromedp Facility = 0x300
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -167,6 +169,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityDoris, Module: "fathomry", Component: "database_doris"},
 		{Facility: FacilityMinIO, Module: "fathomry", Component: "objectstore_minio"},
 		{Facility: FacilityIceberg, Module: "fathomry", Component: "tableformat_iceberg"},
+		{Facility: FacilityChromedp, Module: "fathomry", Component: "browser_chromedp"},
 		{Facility: FacilityKafka, Module: "fathomry", Component: "broker_kafka"},
 		{Facility: FacilityRedisCache, Module: "fathomry", Component: "cache_redis"},
 		{Facility: FacilityRedisMessaging, Module: "fathomry", Component: "messaging_redis"},

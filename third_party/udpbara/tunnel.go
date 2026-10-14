@@ -42,6 +42,7 @@ type Tunnel struct {
 	running  atomic.Bool
 	closing  atomic.Bool // set by Close(); prevents ConnectContext from opening after Close()
 	closeCh  chan struct{}
+	closeMu  sync.Mutex
 	closeErr error
 
 	// Logger (nil = no logging)
@@ -239,19 +240,19 @@ func (t *Tunnel) doConnect(ctx context.Context) (ctrl net.Conn, relayAddr *net.U
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("tcp connect: %w", err)
 	}
-	stop, trackErr := t.fathomryConnecting(ctx, ctrl)
-	if trackErr != nil {
-		return nil, nil, nil, trackErr
-	}
-	defer stop()
-	defer func() { err = fathomryContextError(ctx, err) }()
-
 	if t.config.TCPKeepAlive {
 		if tc, ok := ctrl.(*net.TCPConn); ok {
 			tc.SetKeepAlive(true)
 			tc.SetKeepAlivePeriod(time.Duration(t.config.TCPKeepAlivePeriod) * time.Second)
 		}
 	}
+	ctrl = &controlConn{Conn: ctrl, tunnel: t}
+	stop, trackErr := t.fathomryConnecting(ctx, ctrl)
+	if trackErr != nil {
+		return nil, nil, nil, trackErr
+	}
+	defer stop()
+	defer func() { err = fathomryContextError(ctx, err) }()
 
 	if err = socks5Handshake(ctrl, t.proxyUser, t.proxyPass); err != nil {
 		ctrl.Close()
@@ -401,12 +402,11 @@ func (t *Tunnel) Close() error {
 	t.closing.Store(true)
 	t.mu.Lock()
 	for conn := range t.connecting {
-		t.closeErr = errors.Join(t.closeErr, conn.Close())
+		_ = conn.Close()
 	}
-	prior := t.closeErr
 	t.mu.Unlock()
 	if !t.running.CompareAndSwap(true, false) {
-		return prior
+		return t.cleanupError()
 	}
 
 	close(t.closeCh)
@@ -435,13 +435,12 @@ func (t *Tunnel) Close() error {
 		closeErr = errors.Join(closeErr, t.closeUDP(udp))
 	}
 	if t.controlTCP != nil {
-		closeErr = errors.Join(closeErr, t.controlTCP.Close())
+		_ = t.controlTCP.Close()
 	}
-	t.closeErr = errors.Join(t.closeErr, closeErr)
-	closeErr = t.closeErr
+	t.rememberClose(closeErr)
 	t.mu.Unlock()
 
-	return closeErr
+	return t.cleanupError()
 }
 
 // readLoop continuously reads from the SOCKS5 relay and dispatches to connections.

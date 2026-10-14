@@ -29,7 +29,9 @@ type Result struct {
 }
 type resultData struct {
 	callbackCompleted, contextReleased bool
+	contextDetached                    bool
 	commands, navigations              uint64
+	pagesClosed, pagesDetached         uint64
 	requestEvents                      uint64
 	eventOverflow                      bool
 	output                             map[string][]byte
@@ -39,6 +41,24 @@ func (result Result) CallbackCompleted() bool {
 	return result.data != nil && result.data.callbackCompleted
 }
 func (result Result) ContextReleased() bool { return result.data != nil && result.data.contextReleased }
+
+// ContextDetached reports release of borrowed context use, not context disposal.
+func (result Result) ContextDetached() bool { return result.data != nil && result.data.contextDetached }
+
+// PagesClosed and PagesDetached count positively completed individual page
+// releases, not targets destroyed implicitly with the whole BrowserContext.
+func (result Result) PagesClosed() uint64 {
+	if result.data == nil {
+		return 0
+	}
+	return result.data.pagesClosed
+}
+func (result Result) PagesDetached() uint64 {
+	if result.data == nil {
+		return 0
+	}
+	return result.data.pagesDetached
+}
 func (result Result) Commands() uint64 {
 	if result.data == nil {
 		return 0

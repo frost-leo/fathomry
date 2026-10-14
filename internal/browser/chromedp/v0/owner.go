@@ -35,8 +35,11 @@ import (
 
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/cdproto/systeminfo"
 	"github.com/chromedp/cdproto/target"
 	sdk "github.com/chromedp/chromedp"
+	"github.com/chromedp/chromedp/remote"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/resource"
 )
@@ -50,12 +53,18 @@ func (ctx bareContext) Done() <-chan struct{}       { return ctx.parent.Done() }
 func (ctx bareContext) Err() error                  { return ctx.parent.Err() }
 
 type owner struct {
+	native                            NativeOptionsV1
+	abort                             context.CancelCauseFunc
 	settings                          settings
 	life                              context.Context
 	cancel                            context.CancelFunc
 	gate                              chan struct{}
 	mu                                sync.Mutex
 	sessions                          map[*browserContext]struct{}
+	pendingObjects                    map[*objectGroupState]struct{}
+	cleanupControls                   map[*controlState]struct{}
+	trace                             *traceState
+	transferred                       bool
 	started, closed, connectionClosed bool
 	startErr                          error
 	root                              context.Context
@@ -65,12 +74,32 @@ type owner struct {
 	processDone                       chan struct{}
 	processErr                        error
 	profileDir                        string
+	profileLock                       *os.File
 	launchArguments                   []string
 	version                           browserVersion
+	commands                          uint64
+	resultBytes                       int64
 }
 type browserContext struct {
-	browserID         cdp.BrowserContextID
-	creationAttempted bool
+	browserID               cdp.BrowserContextID
+	observedID              cdp.BrowserContextID
+	defaultContext          bool
+	defaultIdentityObserved bool
+	creationAttempted       bool
+	borrowed                bool
+	sharedStorage           bool
+	sharedPermissions       bool
+	sharedDownloads         bool
+	unknownTargets          int
+	ownedTargets            map[target.ID]struct{}
+	detachUncertain         bool
+	streams                 map[*streamState]struct{}
+	subscriptions           map[*subscriptionState]struct{}
+	bindings                map[*managedBinding]struct{}
+	bindingCalls            int
+	objectGroups            map[*objectGroupState]struct{}
+	objectRefs              map[*runtime.RemoteObject]*objectState
+	objectCount             int
 }
 
 type browserVersion struct{ protocol, product, revision, js string }
@@ -126,7 +155,12 @@ func (own *owner) initialize(ctx context.Context) error {
 	address := own.settings.RemoteURL
 	if address == "" {
 		var err error
-		own.profileDir, err = os.MkdirTemp(own.settings.TempDir, "fathomry-cdp-")
+		if own.settings.ProfileDir != "" {
+			own.profileDir = own.settings.ProfileDir
+			own.profileLock, err = os.OpenFile(filepath.Join(own.profileDir, ".fathomry-browser.lock"), os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+		} else {
+			own.profileDir, err = os.MkdirTemp(own.settings.TempDir, "fathomry-cdp-")
+		}
 		if err != nil {
 			return err
 		}
@@ -134,14 +168,26 @@ func (own *owner) initialize(ctx context.Context) error {
 		own.mu.Lock()
 		own.launchArguments = append([]string(nil), args...)
 		own.mu.Unlock()
-		own.process = exec.CommandContext(own.life, own.settings.ExecPath, args...)
+		own.process = exec.Command(own.settings.ExecPath, args...)
+		own.process.Env = append([]string{}, own.settings.Environment...)
+		if own.settings.InheritEnvironment {
+			own.process.Env = append(os.Environ(), own.process.Env...)
+		}
 		own.process.Stdout, own.process.Stderr = io.Discard, io.Discard
 		if err := own.process.Start(); err != nil {
 			return err
 		}
 		own.processDone = make(chan struct{})
+		stopProcess := context.AfterFunc(own.life, func() {
+			own.mu.Lock()
+			defer own.mu.Unlock()
+			if !own.transferred {
+				_ = own.process.Process.Kill()
+			}
+		})
 		go func() {
 			own.processErr = own.process.Wait()
+			stopProcess()
 			own.cancel()
 			close(own.processDone)
 		}()
@@ -150,28 +196,37 @@ func (own *owner) initialize(ctx context.Context) error {
 			return err
 		}
 	}
-	allocator, closeAllocator := sdk.NewRemoteAllocator(own.life, address, sdk.NoModifyURL)
+	allocator, closeAllocator := remote.NewAllocator(own.life, address, remote.NoModifyURL, remote.WithDialTimeout(own.settings.StartupTimeout), remote.WithDialHTTPHeader(own.settings.Headers), remote.WithDialTLSConfig(own.native.TLS))
 	own.closeAllocator = closeAllocator
 	own.allocator = sdk.FromContext(allocator).Allocator
-	own.root, own.closeRoot = sdk.NewContext(allocator)
+	own.root, own.closeRoot = sdk.NewContext(allocator, sdk.WithBrowserOption(sdk.WithBrowserLogf(func(string, ...any) {}), sdk.WithBrowserErrorf(func(string, ...any) {}), sdk.WithEventBuffer(sdk.EventBuffer{MaxEvents: own.settings.MaxEvents, MaxBytes: own.settings.MaxEventBytes, OnOverflow: func(err error) { own.abort(failure(ErrLimit, "native-events", err)) }})))
 	// Cancel only this owned connection on failed startup, never the borrowed process.
 	abort := context.AfterFunc(ctx, func() { closeAllocator() })
 	defer abort()
-	native, err := own.allocator.Allocate(own.root, sdk.WithBrowserLogf(func(string, ...any) {}), sdk.WithBrowserErrorf(func(string, ...any) {}), sdk.WithDialTimeout(own.settings.StartupTimeout))
-	if err != nil {
-		return err
-	}
-	sdk.FromContext(own.root).Browser = native
+	version, err := sdk.CallBrowser(own.root, browser.GetVersion, cdp.Empty{})
 	if err := ctx.Err(); err != nil {
 		return errors.Join(err, context.Cause(ctx))
 	}
-	executor := cdp.WithExecutor(ctx, sdk.FromContext(own.root).Browser)
-	protocol, product, revision, _, js, err := browser.GetVersion().Do(executor)
 	if err != nil {
 		return err
 	}
+	if own.process != nil {
+		processes, err := sdk.CallBrowser(own.root, systeminfo.GetProcessInfo, cdp.Empty{})
+		if err != nil {
+			return err
+		}
+		matched := false
+		for _, process := range processes.ProcessInfo {
+			if process.Type == "browser" && process.ID == int64(own.process.Process.Pid) {
+				matched = true
+			}
+		}
+		if !matched {
+			return failure(ErrState, "process-identity")
+		}
+	}
 	own.mu.Lock()
-	own.version = browserVersion{protocol: protocol, product: product, revision: revision, js: js}
+	own.version = browserVersion{protocol: version.ProtocolVersion, product: version.Product, revision: version.Revision, js: version.JsVersion}
 	own.mu.Unlock()
 	return nil
 }
@@ -229,7 +284,16 @@ func (own *owner) debugURL(ctx context.Context) (string, error) {
 func (own *owner) reserve(session *Session, maximum int) error {
 	own.mu.Lock()
 	defer own.mu.Unlock()
-	if len(own.sessions) >= min(own.settings.MaxSessions, maximum) {
+	if own.transferred {
+		return failure(ErrState, "source-transferred")
+	}
+	pendingContexts := make(map[*browserContext]struct{})
+	for control := range own.cleanupControls {
+		if _, retained := own.sessions[control.session.browserContext]; !retained {
+			pendingContexts[control.session.browserContext] = struct{}{}
+		}
+	}
+	if len(own.sessions)+len(pendingContexts) >= min(own.settings.MaxSessions, maximum) {
 		return failure(ErrLimit, "browser-contexts", resource.ErrCapacity)
 	}
 	own.sessions[session.browserContext] = struct{}{}
@@ -248,6 +312,17 @@ func (own *owner) dispose(ctx context.Context, session *browserContext) (bool, e
 }
 
 func (own *owner) disposeWith(ctx context.Context, session *browserContext, native *sdk.Browser) (bool, error) {
+	if own.processDone != nil {
+		select {
+		case <-own.processDone:
+			own.forget(session)
+			return true, nil
+		default:
+		}
+	}
+	if session.borrowed {
+		return own.disposeBorrowed(ctx, session, native)
+	}
 	if !session.creationAttempted {
 		own.forget(session)
 		return true, nil
@@ -255,16 +330,15 @@ func (own *owner) disposeWith(ctx context.Context, session *browserContext, nati
 	if session.browserID == "" {
 		return false, failure(ErrCleanup, "unknown-context")
 	}
-	executor := cdp.WithExecutor(ctx, native)
-	ids, _, err := target.GetBrowserContexts().Do(executor)
+	contexts, err := cdp.Call(ctx, native, target.GetBrowserContexts, cdp.Empty{})
 	if err != nil {
 		return false, err
 	}
-	if !slices.Contains(ids, session.browserID) {
+	if !slices.Contains(contexts.BrowserContextIDs, session.browserID) {
 		own.forget(session)
 		return true, nil
 	}
-	if err := target.DisposeBrowserContext(session.browserID).Do(executor); err != nil {
+	if _, err := cdp.Call(ctx, native, target.DisposeBrowserContext, target.DisposeBrowserContextParams{BrowserContextID: session.browserID}); err != nil {
 		return false, err
 	}
 	// The protocol response acknowledges disposal, not reversal of HTTP effects.
@@ -307,6 +381,17 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 	if own.root != nil {
 		native = sdk.FromContext(own.root).Browser
 	}
+	for _, record := range pending {
+		if record.detachUncertain && own.root != nil && !own.connectionClosed {
+			own.closeRoot()
+			own.closeAllocator()
+			own.allocator.Wait()
+			if err := native.WaitStopped(ctx); err != nil {
+				return resource.ReleaseResult{Err: err, Continue: own.release}
+			}
+			own.connectionClosed = true
+		}
+	}
 	if len(pending) != 0 && native != nil && own.settings.RemoteURL != "" {
 		select {
 		case <-native.LostConnection:
@@ -330,7 +415,15 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 		}
 	}
 	// Process termination must not wait behind a blocked CDP socket writer.
-	if own.processDone != nil {
+	own.mu.Lock()
+	trace := own.trace
+	own.mu.Unlock()
+	if trace != nil {
+		if err := (&Trace{state: trace}).Close(ctx); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	if own.processDone != nil && !own.transferred {
 		select {
 		case <-own.processDone:
 		default:
@@ -358,13 +451,55 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 				case <-ctx.Done():
 					return resource.ReleaseResult{Err: errors.Join(append(failures, ctx.Err(), context.Cause(ctx))...), Continue: own.release}
 				}
+				if err := native.Browser.WaitStopped(ctx); err != nil {
+					return resource.ReleaseResult{Err: errors.Join(append(failures, err)...), Continue: own.release}
+				}
 			}
 		}
 		own.connectionClosed = true
 	}
 	own.cancel()
-	if own.profileDir != "" {
-		if err := os.RemoveAll(own.profileDir); err != nil {
+	own.mu.Lock()
+	controls := make([]*controlState, 0, len(own.cleanupControls))
+	for control := range own.cleanupControls {
+		controls = append(controls, control)
+	}
+	own.mu.Unlock()
+	for _, state := range controls {
+		control := &Control{state: state}
+		cleanup := control.Close(ctx)
+		if !control.Closed() {
+			return resource.ReleaseResult{Err: errors.Join(append(failures, cleanup)...), Continue: own.release}
+		}
+		failures = append(failures, cleanup)
+	}
+	if trace != nil {
+		value := &Trace{state: trace}
+		cleanup := value.Close(ctx)
+		if !value.Closed() {
+			return resource.ReleaseResult{Err: errors.Join(append(failures, cleanup)...), Continue: own.release}
+		}
+		failures = append(failures, cleanup)
+	}
+	own.mu.Lock()
+	objects := make([]*objectGroupState, 0, len(own.pendingObjects))
+	for group := range own.pendingObjects {
+		objects = append(objects, group)
+	}
+	own.mu.Unlock()
+	for _, state := range objects {
+		group := &ObjectGroup{state: state}
+		cleanup := group.Close(ctx)
+		if !group.Closed() {
+			return resource.ReleaseResult{Err: errors.Join(append(failures, cleanup)...), Continue: own.release}
+		}
+		failures = append(failures, cleanup)
+		own.mu.Lock()
+		delete(own.pendingObjects, state)
+		own.mu.Unlock()
+	}
+	if !own.transferred {
+		if err := own.cleanProfile(); err != nil {
 			return resource.ReleaseResult{Quiescent: true, Err: errors.Join(append(failures, err)...), Continue: own.release}
 		}
 	}
@@ -374,23 +509,49 @@ func (own *owner) release(ctx context.Context) resource.ReleaseResult {
 	return resource.ReleaseResult{Quiescent: true, Released: true, Err: errors.Join(failures...)}
 }
 
+// Caller holds the source/process gate and has observed actual process exit.
+func (own *owner) cleanProfile() error {
+	if own.profileLock != nil {
+		info, statErr := own.profileLock.Stat()
+		path := filepath.Join(own.profileDir, ".fathomry-browser.lock")
+		current, pathErr := os.Lstat(path)
+		if statErr != nil || pathErr != nil || !os.SameFile(info, current) {
+			return failure(ErrCleanup, "profile-lock", statErr, pathErr)
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+		if err := own.profileLock.Close(); err != nil {
+			own.profileLock = nil
+			return err
+		}
+		own.profileLock = nil
+	}
+	if own.profileDir != "" && own.settings.ProfileDir == "" {
+		if err := os.RemoveAll(own.profileDir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // A fresh cleanup-only connection can reconcile our known IDs after a borrowed
 // connection is lost. It creates no targets/contexts and never closes the browser.
 func (own *owner) reconcileConnection(ctx context.Context) (*sdk.Browser, func(), error) {
-	allocatorContext, closeAllocator := sdk.NewRemoteAllocator(bareContext{ctx}, own.settings.RemoteURL, sdk.NoModifyURL)
-	root, closeRoot := sdk.NewContext(allocatorContext)
+	allocatorContext, closeAllocator := remote.NewAllocator(bareContext{ctx}, own.settings.RemoteURL, remote.NoModifyURL, remote.WithDialTimeout(own.settings.CleanupTimeout), remote.WithDialHTTPHeader(own.settings.Headers), remote.WithDialTLSConfig(own.native.TLS))
+	root, closeRoot := sdk.NewContext(allocatorContext, sdk.WithBrowserOption(sdk.WithBrowserLogf(func(string, ...any) {}), sdk.WithBrowserErrorf(func(string, ...any) {})))
 	allocator := sdk.FromContext(allocatorContext).Allocator
 	finish := func() {
 		closeRoot()
 		closeAllocator()
 		allocator.Wait()
 	}
-	native, err := allocator.Allocate(root, sdk.WithBrowserLogf(func(string, ...any) {}), sdk.WithBrowserErrorf(func(string, ...any) {}), sdk.WithDialTimeout(own.settings.CleanupTimeout))
+	_, err := sdk.CallBrowser(root, browser.GetVersion, cdp.Empty{})
 	if err != nil {
 		finish()
 		return nil, nil, err
 	}
-	sdk.FromContext(root).Browser = native
+	native := sdk.FromContext(root).Browser
 	return native, func() { finish(); <-native.LostConnection }, nil
 }
 

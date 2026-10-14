@@ -211,33 +211,35 @@ func TestStartupFailureKeepsCauseAndRemovesOwnedProfile(t *testing.T) {
 func TestScopedActionsRejectOwningContextAndRetainedExecutors(t *testing.T) {
 	session := unitSession(t)
 	var held context.Context
-	if err := session.Actions(deadline(t), sdk.ActionFunc(func(ctx context.Context) error {
+	var protocol cdp.Session
+	if err := session.Protocol(deadline(t), func(ctx context.Context, grant cdp.Session) error {
 		held = ctx
+		protocol = grant
 		if sdk.FromContext(ctx) != nil {
 			t.Fatal("native owner escaped")
 		}
 		return nil
-	})); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := cdp.Execute(context.WithoutCancel(held), "Runtime.evaluate", nil, nil); !errors.Is(err, ErrState) {
+	if err := protocol.Call(context.WithoutCancel(held), "Runtime.evaluate", nil, nil); !errors.Is(err, ErrState) {
 		t.Fatal("retained executor stayed live")
 	}
 	for _, method := range []string{"Browser.close", "Target.createTarget", "Target.exposeDevToolsProtocol", "Storage.clearDataForOrigin", "Page.setDownloadBehavior", "Network.clearBrowserCookies", "Fetch.takeResponseBodyAsStream"} {
 		if permitted(method) {
 			t.Errorf("authority escape allowed: %s", method)
 		}
-		err := session.Actions(deadline(t), sdk.ActionFunc(func(ctx context.Context) error { return cdp.Execute(ctx, method, nil, nil) }))
+		err := session.Protocol(deadline(t), func(ctx context.Context, grant cdp.Session) error { return grant.Call(ctx, method, nil, nil) })
 		if !errors.Is(err, ErrUnsupported) {
 			t.Fatal("native denied command not rejected", err)
 		}
 	}
-	var nilAction *network.EnableParams
+	var nilAction Action[sdk.Void]
 	if err := session.Actions(deadline(t), nilAction); !errors.Is(err, ErrInput) {
 		t.Fatal("typed nil action accepted")
 	}
 	cause := errors.New("private-error-canary")
-	err := session.Actions(deadline(t), sdk.ActionFunc(func(context.Context) error { panic(cause) }))
+	err := session.Actions(deadline(t), Step(func(context.Context) error { panic(cause) }))
 	if !errors.Is(err, cause) || !errors.Is(err, ErrPanic) {
 		t.Fatal("panic cause lost")
 	}
@@ -298,7 +300,7 @@ func TestActionDeadlineCannotBeSwallowed(t *testing.T) {
 	session := unitSession(t)
 	ctx, cancel := context.WithCancelCause(context.Background())
 	cause := errors.New("action-cancellation-cause")
-	err := session.Actions(ctx, sdk.ActionFunc(func(context.Context) error {
+	err := session.Actions(ctx, Step(func(context.Context) error {
 		cancel(cause)
 		<-ctx.Done()
 		return nil

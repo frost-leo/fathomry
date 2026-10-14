@@ -30,7 +30,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -241,11 +240,14 @@ func peerHeaders(t *testing.T, stream *official.Stream, block []byte) {
 
 func awaitQPACK(t *testing.T, ctx context.Context, ready func() bool) {
 	t.Helper()
+	poll := time.NewTicker(time.Millisecond)
+	defer poll.Stop()
 	for !ready() {
-		if ctx.Err() != nil {
+		select {
+		case <-ctx.Done():
 			t.Fatal("native state did not reach expected boundary", context.Cause(ctx))
+		case <-poll.C:
 		}
-		runtime.Gosched()
 	}
 }
 

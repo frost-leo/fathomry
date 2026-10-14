@@ -33,29 +33,45 @@ import (
 // No executable, remote browser, headless mode, proxy or business profile is chosen
 // implicitly. Exactly one of ExecPath (absolute) and RemoteURL is required.
 //
-// Local mode always creates a fresh private profile below TempDir (empty uses the
-// OS temporary directory), with an ephemeral loopback debugging port. Flags are
+// Local mode creates a fresh private profile below TempDir (empty uses the OS
+// temporary directory), unless ProfileDir explicitly selects caller property.
+// Persistent directories use an exclusive lock file and are never deleted.
+// Environment inheritance is opt-in. The debugging port is loopback and ephemeral. Flags are
 // copied. Empty flag values mean bare switches; others mean --name=value.
 // Lifecycle/debugging/profile switches are reserved. No sandbox-disabling switch
 // is accepted. Other flags are trusted construction inputs, not a security policy.
 // RemoteURL must be an exact ws(s) browser URL; the browser/process/profile and its
-// launch flags remain borrowed. No endpoint discovery or existing tab reuse occurs.
+// launch flags remain borrowed. Existing context/page use needs an explicit
+// SessionOptionsV1 borrow grant and a native membership check.
 type OptionsV1 struct {
 	private
-	Name      string
-	Version   uint32
-	ExecPath  string
-	RemoteURL string
-	TempDir   string
-	Flags     map[string]string
+	Native             NativeOptionsV1
+	Name               string
+	Version            uint32
+	ExecPath           string
+	RemoteURL          string
+	TempDir            string
+	ProfileDir         string
+	Environment        []string
+	InheritEnvironment bool
+	Flags              map[string]string
+	Headers            map[string][]string
 	// NewWindow controls CDP target creation, independently of launch/headless flags.
 	NewWindow bool
 	// CheckReady enables an assembly readiness check; otherwise startup is lazy.
 	CheckReady bool
 	// MaxSessions defaults to 4 and includes contexts pending failed cleanup.
 	// QueuedCalls defaults to zero. These are not HTTP request/connection limits.
-	MaxSessions int
-	QueuedCalls int
+	MaxSessions      int
+	MaxPages         int
+	MaxStreams       int
+	MaxSubscriptions int
+	MaxBindings      int
+	MaxBindingCalls  int
+	MaxObjectGroups  int
+	MaxObjects       int
+	MaxStreamBytes   int64
+	QueuedCalls      int
 	// MaxCommands defaults to 256 per session; it counts extension CDP commands,
 	// not SDK initialization commands, navigation requests, or browser HTTP traffic.
 	MaxCommands int
@@ -75,29 +91,72 @@ type OptionsV1 struct {
 }
 
 type settings struct {
-	ExecPath         string            `json:"exec_path"`
-	RemoteURL        string            `json:"remote_url"`
-	TempDir          string            `json:"temp_dir"`
-	Flags            map[string]string `json:"flags"`
-	NewWindow        bool              `json:"new_window"`
-	CheckReady       bool              `json:"check_ready"`
-	MaxSessions      int               `json:"max_sessions"`
-	QueuedCalls      int               `json:"queued_calls"`
-	MaxCommands      int               `json:"max_commands"`
-	MaxCommandBytes  int64             `json:"max_command_bytes"`
-	MaxResultBytes   int64             `json:"max_result_bytes"`
-	MaxEventBytes    int64             `json:"max_event_bytes"`
-	MaxEvents        int               `json:"max_events"`
-	AdmissionTimeout time.Duration     `json:"admission_timeout_ns"`
-	StartupTimeout   time.Duration     `json:"startup_timeout_ns"`
-	SessionTimeout   time.Duration     `json:"session_timeout_ns"`
-	CleanupTimeout   time.Duration     `json:"cleanup_timeout_ns"`
+	ExecPath           string              `json:"exec_path"`
+	RemoteURL          string              `json:"remote_url"`
+	TempDir            string              `json:"temp_dir"`
+	ProfileDir         string              `json:"profile_dir"`
+	Environment        []string            `json:"environment"`
+	InheritEnvironment bool                `json:"inherit_environment"`
+	Flags              map[string]string   `json:"flags"`
+	Headers            map[string][]string `json:"headers"`
+	NewWindow          bool                `json:"new_window"`
+	CheckReady         bool                `json:"check_ready"`
+	MaxSessions        int                 `json:"max_sessions"`
+	MaxPages           int                 `json:"max_pages"`
+	MaxStreams         int                 `json:"max_streams"`
+	MaxSubscriptions   int                 `json:"max_subscriptions"`
+	MaxBindings        int                 `json:"max_bindings"`
+	MaxBindingCalls    int                 `json:"max_binding_calls"`
+	MaxObjectGroups    int                 `json:"max_object_groups"`
+	MaxObjects         int                 `json:"max_objects"`
+	MaxStreamBytes     int64               `json:"max_stream_bytes"`
+	QueuedCalls        int                 `json:"queued_calls"`
+	MaxCommands        int                 `json:"max_commands"`
+	MaxCommandBytes    int64               `json:"max_command_bytes"`
+	MaxResultBytes     int64               `json:"max_result_bytes"`
+	MaxEventBytes      int64               `json:"max_event_bytes"`
+	MaxEvents          int                 `json:"max_events"`
+	AdmissionTimeout   time.Duration       `json:"admission_timeout_ns"`
+	StartupTimeout     time.Duration       `json:"startup_timeout_ns"`
+	SessionTimeout     time.Duration       `json:"session_timeout_ns"`
+	CleanupTimeout     time.Duration       `json:"cleanup_timeout_ns"`
 }
 
 func defaults(options OptionsV1) settings {
 	value := settings{ExecPath: options.ExecPath, RemoteURL: options.RemoteURL, TempDir: options.TempDir, Flags: options.Flags, NewWindow: options.NewWindow, CheckReady: options.CheckReady, MaxSessions: options.MaxSessions, QueuedCalls: options.QueuedCalls, MaxCommands: options.MaxCommands, MaxCommandBytes: options.MaxCommandBytes, MaxResultBytes: options.MaxResultBytes, MaxEventBytes: options.MaxEventBytes, MaxEvents: options.MaxEvents, AdmissionTimeout: options.AdmissionTimeout, StartupTimeout: options.StartupTimeout, SessionTimeout: options.SessionTimeout, CleanupTimeout: options.CleanupTimeout}
 	if value.MaxSessions == 0 {
 		value.MaxSessions = 4
+	}
+	value.ProfileDir, value.Environment, value.InheritEnvironment = options.ProfileDir, options.Environment, options.InheritEnvironment
+	value.Headers = options.Headers
+	value.MaxPages = options.MaxPages
+	value.MaxSubscriptions = options.MaxSubscriptions
+	value.MaxBindings, value.MaxBindingCalls = options.MaxBindings, options.MaxBindingCalls
+	value.MaxObjectGroups, value.MaxObjects = options.MaxObjectGroups, options.MaxObjects
+	if value.MaxObjectGroups == 0 {
+		value.MaxObjectGroups = 8
+	}
+	if value.MaxObjects == 0 {
+		value.MaxObjects = 128
+	}
+	if value.MaxBindings == 0 {
+		value.MaxBindings = 8
+	}
+	if value.MaxBindingCalls == 0 {
+		value.MaxBindingCalls = 8
+	}
+	if value.MaxSubscriptions == 0 {
+		value.MaxSubscriptions = 8
+	}
+	value.MaxStreams, value.MaxStreamBytes = options.MaxStreams, options.MaxStreamBytes
+	if value.MaxStreams == 0 {
+		value.MaxStreams = 4
+	}
+	if value.MaxStreamBytes == 0 {
+		value.MaxStreamBytes = 64 << 20
+	}
+	if value.MaxPages == 0 {
+		value.MaxPages = 4
 	}
 	if value.MaxCommands == 0 {
 		value.MaxCommands = 256
@@ -129,6 +188,33 @@ func defaults(options OptionsV1) settings {
 	return value
 }
 func validate(value settings) error {
+	if value.MaxObjectGroups < 1 || value.MaxObjectGroups > 128 || value.MaxObjects < 1 || value.MaxObjects > 4096 {
+		return failure(ErrInput, "objects")
+	}
+	if value.MaxBindings < 1 || value.MaxBindings > 128 || value.MaxBindingCalls < 1 || value.MaxBindingCalls > 128 {
+		return failure(ErrInput, "bindings")
+	}
+	if value.MaxSubscriptions < 1 || value.MaxSubscriptions > 128 {
+		return failure(ErrInput, "subscriptions")
+	}
+	if value.MaxStreams < 1 || value.MaxStreams > 128 || value.MaxStreamBytes < 1 || value.MaxStreamBytes > 4<<30 {
+		return failure(ErrInput, "streams")
+	}
+	if value.ProfileDir != "" && (!filepath.IsAbs(value.ProfileDir) || value.TempDir != "" || value.RemoteURL != "") {
+		return failure(ErrInput, "profile-directory")
+	}
+	if len(value.Environment) > 256 || value.RemoteURL != "" && (len(value.Environment) != 0 || value.InheritEnvironment) {
+		return failure(ErrInput, "environment")
+	}
+	for _, entry := range value.Environment {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok || name == "" || len(entry) > 8192 || strings.ContainsRune(entry, '\x00') {
+			return failure(ErrInput, "environment")
+		}
+	}
+	if value.MaxPages < 1 || value.MaxPages > 128 {
+		return failure(ErrInput, "pages")
+	}
 	if (value.ExecPath == "") == (value.RemoteURL == "") || value.ExecPath != "" && !filepath.IsAbs(value.ExecPath) || value.TempDir != "" && !filepath.IsAbs(value.TempDir) {
 		return failure(ErrInput, "browser")
 	}
@@ -171,7 +257,7 @@ func validate(value settings) error {
 	return nil
 }
 func (value settings) reservation() int64 {
-	return 2*value.MaxCommandBytes + 2*value.MaxResultBytes + value.MaxEventBytes + int64(value.MaxEvents)*128 + 65536
+	return 2*value.MaxCommandBytes + 2*value.MaxResultBytes + int64(value.MaxEvents)*512 + 65536 + int64(value.MaxPages)*(3*value.MaxEventBytes+2*value.MaxResultBytes+value.MaxCommandBytes+int64(value.MaxEvents)*384+65536) + int64(value.MaxStreams)*(128<<10) + int64(value.MaxSubscriptions)*(2*value.MaxEventBytes+int64(value.MaxEvents)*128+65536) + int64(value.MaxBindings)*(value.MaxEventBytes+int64(value.MaxEvents)*128+65536) + int64(value.MaxBindingCalls)*(2*value.MaxCommandBytes+8*value.MaxResultBytes+65536) + int64(value.MaxObjects)*1024 + int64(value.MaxObjectGroups)*(value.MaxResultBytes+4096)
 }
 func (value settings) evidenceBytes() int64 { return value.MaxResultBytes + 65536 }
 func (value settings) limits() resource.Limits {

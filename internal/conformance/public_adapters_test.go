@@ -36,6 +36,8 @@ import (
 
 	kafka "github.com/frost-leo/fathomry/adapters/broker/kafka/v1"
 	broker "github.com/frost-leo/fathomry/adapters/broker/v1"
+	chromedp "github.com/frost-leo/fathomry/adapters/browser/chromedp/v1"
+	browser "github.com/frost-leo/fathomry/adapters/browser/v1"
 	redis "github.com/frost-leo/fathomry/adapters/cache/redis/v1"
 	cache "github.com/frost-leo/fathomry/adapters/cache/v1"
 	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
@@ -234,6 +236,16 @@ func TestPublicAdapterIceberg(t *testing.T) {
 		func(runtime *adapters.Runtime, inbox *adapters.Inbox[iceberg.Result]) iceberg.Dependencies {
 			return iceberg.Dependencies{Runtime: runtime, Evidence: inbox}
 		}, iceberg.Open, canary)
+}
+
+func TestPublicAdapterBrowser(t *testing.T) {
+	const canary = "browser-private-contract"
+	value := chromedp.Settings{Name: "contract", ExecPath: "/no-browser", Flags: map[string]string{"user-agent": canary}, NewWindow: true}
+	checkPublicAdapter(t, value, chromedp.Validate, chromedp.Recommend,
+		func(value browser.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+		func(runtime *adapters.Runtime, inbox *adapters.Inbox[chromedp.Result]) chromedp.Dependencies {
+			return chromedp.Dependencies{Runtime: runtime, Evidence: inbox}
+		}, chromedp.Open, canary)
 }
 
 func TestPublicAdapterTemporal(t *testing.T) {

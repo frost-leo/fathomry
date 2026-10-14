@@ -27,12 +27,12 @@ import (
 	"sync"
 
 	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/cdproto/target"
 	sdk "github.com/chromedp/chromedp"
 	"github.com/frost-leo/fathomry/internal/fault"
-	jsonv2 "github.com/go-json-experiment/json"
 )
 
-// Session is a callback-scoped, non-owning capability. One Actions group may run
+// Session is a context-owned, non-owning page capability. One action may run
 // alongside one Navigate and event reception, so paused requests can be continued.
 // Same-kind overlap is refused; callers must join their goroutines before return.
 // Copies share the same state and allowances. No native owning handles are exposed.
@@ -42,6 +42,7 @@ type Session struct {
 }
 
 type sessionState struct {
+	account *sessionState
 	*browserContext
 	navigating                   bool
 	navigationIdle               chan struct{}
@@ -49,20 +50,34 @@ type sessionState struct {
 	work                         context.Context
 	cancel                       context.CancelCauseFunc
 	native                       context.Context
-	closeTab                     context.CancelFunc
-	stopTab                      func() bool
+	targetID                     target.ID
 	reserved                     bool
+	borrowedTarget               bool
+	managedEvents                bool
 	mu                           sync.Mutex
 	closed, busy                 bool
+	contextClosed                bool
 	idle                         chan struct{}
 	primary                      error
+	cleanup                      error
+	setupDone                    chan struct{}
 	data                         resultData
 	delivered, saved, eventBytes int64
 	events                       chan Event
+	eventsDone                   chan struct{}
+	control                      *controlState
+	objectOrigin                 *objectOrigin
+	objectSessionDetached        bool
+	nativeCloseDone              chan struct{}
+	nativeCloseErr               error
+	targetGone                   bool
+	pageComplete                 bool
+	pageCleanup                  error
+	worldAttempts                int
 }
 
 // Context carries cancellation/deadline only, without caller/native values.
-// It is valid only within Run; its cancellation is not a completion receipt.
+// It is valid until its retained Context closes; cancellation is not a completion receipt.
 func (session *Session) Context() context.Context {
 	if session == nil || session.sessionState == nil || session.work == nil {
 		return nil
@@ -100,6 +115,9 @@ func (session *Session) enter(ctx context.Context, navigation bool) (context.Con
 		work, deadlineCancel = context.WithDeadline(work, deadline)
 	}
 	stop := context.AfterFunc(ctx, func() { cancel(context.Cause(ctx)) })
+	if observer, _ := ctx.Value(helperCleanupObserverKey{}).(func(error)); observer != nil {
+		work = WithHelperCleanupObserver(work, observer)
+	}
 	return work, func() {
 		stop()
 		deadlineCancel()
@@ -119,27 +137,87 @@ func (session *Session) remember(err error) {
 	if err == nil || session == nil || session.sessionState == nil {
 		return
 	}
-	session.mu.Lock()
-	if session.primary == nil {
-		session.primary = err
+	record := session.accounting()
+	cleanup := HelperCleanup(err)
+	record.mu.Lock()
+	if record.primary == nil {
+		record.primary = err
 	}
-	session.mu.Unlock()
+	if cleanup != nil && record.cleanup == nil {
+		record.cleanup = cleanup
+	}
+	record.mu.Unlock()
 }
-func (session *Session) stopAndJoin() {
-	session.mu.Lock()
-	session.closed = true
-	idle, busy := session.idle, session.busy
-	navigationIdle, navigating := session.navigationIdle, session.navigating
-	session.mu.Unlock()
-	session.cancel(context.Canceled)
-	if busy {
-		<-idle
+
+// HelperCleanup extracts native helper cleanup evidence without discarding the
+// ordinary operation error. Deliberate native cause inspection remains possible.
+func HelperCleanup(err error) error {
+	remaining := 128
+	var visit func(error) *sdk.HelperCleanupError
+	visit = func(err error) *sdk.HelperCleanupError {
+		if err == nil || remaining == 0 {
+			return nil
+		}
+		remaining--
+		if cleanup, ok := err.(*sdk.HelperCleanupError); ok {
+			return cleanup
+		}
+		switch value := err.(type) {
+		case interface{ Unwrap() []error }:
+			for _, cause := range value.Unwrap() {
+				if remaining == 0 {
+					break
+				}
+				if cleanup := visit(cause); cleanup != nil {
+					return cleanup
+				}
+			}
+		case interface{ Unwrap() error }:
+			return visit(value.Unwrap())
+		}
+		return nil
 	}
-	if navigating {
-		<-navigationIdle
+	if cleanup := visit(err); cleanup != nil {
+		return failure(ErrCleanup, "native-helper", cleanup)
 	}
-	if session.stopTab != nil {
-		session.stopTab()
+	return nil
+}
+
+type helperCleanupObserverKey struct{}
+
+// WithHelperCleanupObserver retains data-only helper cleanup evidence even when
+// an action exits through panic or Goexit. The observer must return normally,
+// remain bounded, and support concurrent calls. It receives no native authority.
+func WithHelperCleanupObserver(ctx context.Context, observer func(error)) context.Context {
+	if ctx == nil || observer == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, helperCleanupObserverKey{}, observer)
+}
+
+func (session *Session) cleanupObserver(ctx context.Context) func(*sdk.HelperCleanupError) {
+	observer, _ := ctx.Value(helperCleanupObserverKey{}).(func(error))
+	return func(cause *sdk.HelperCleanupError) {
+		if cause == nil {
+			return
+		}
+		err := failure(ErrCleanup, "native-helper", cause)
+		session.rememberCleanup(err)
+		if observer != nil {
+			observer(err)
+		}
+	}
+}
+
+func (session *Session) rememberCleanup(err error) {
+	if err == nil {
+		return
+	}
+	record := session.accounting()
+	record.mu.Lock()
+	defer record.mu.Unlock()
+	if record.cleanup == nil {
+		record.cleanup = err
 	}
 }
 
@@ -157,11 +235,12 @@ func (session *Session) Navigate(ctx context.Context, address string) error {
 		err = failure(ErrInput, "navigation")
 	} else {
 		native := nativeContext{Context: work, native: session.native}
-		err = sdk.Run(native, sdk.Navigate(address))
+		err = sdk.Do(native, sdk.Navigate(address))
 		if err == nil {
-			session.mu.Lock()
-			session.data.navigations++
-			session.mu.Unlock()
+			record := session.accounting()
+			record.mu.Lock()
+			record.data.navigations++
+			record.mu.Unlock()
 		}
 	}
 	err = errors.Join(err, ctx.Err(), context.Cause(ctx), work.Err(), context.Cause(work))
@@ -187,27 +266,31 @@ func (session *Session) Save(name string, data []byte) error {
 		return failure(ErrInput, "save")
 	}
 	session.mu.Lock()
-	defer session.mu.Unlock()
+	closed := session.closed
+	session.mu.Unlock()
+	record := session.accounting()
+	record.mu.Lock()
+	defer record.mu.Unlock()
 	var err error
 	switch {
-	case session.closed || session.work == nil:
+	case closed || record.closed || session.work == nil:
 		err = failure(ErrState, "save")
 	case session.work.Err() != nil:
 		err = failure(ErrState, "save", session.work.Err(), context.Cause(session.work))
 	case name == "" || !(fault.Context{Operation: name}).Valid():
 		err = failure(ErrInput, "output-name")
-	case len(session.data.output) >= 128 || int64(len(name)+len(data)) > session.owner.settings.MaxResultBytes-session.saved:
+	case len(record.data.output) >= 128 || int64(len(name)+len(data)) > session.owner.settings.MaxResultBytes-record.saved:
 		err = failure(ErrLimit, "saved-output")
 	default:
-		if _, exists := session.data.output[name]; exists {
+		if _, exists := record.data.output[name]; exists {
 			err = failure(ErrInput, "duplicate-output")
 		} else {
-			session.data.output[name] = append([]byte{}, data...)
-			session.saved += int64(len(name) + len(data))
+			record.data.output[name] = append([]byte{}, data...)
+			record.saved += int64(len(name) + len(data))
 		}
 	}
-	if err != nil && session.primary == nil {
-		session.primary = err
+	if err != nil && record.primary == nil {
+		record.primary = err
 	}
 	return err
 }
@@ -218,6 +301,9 @@ func (session *Session) Save(name string, data []byte) error {
 func (session *Session) NextEvent(ctx context.Context) (Event, error) {
 	if session == nil || session.sessionState == nil || session.owner == nil || session.work == nil || ctx == nil {
 		return Event{}, failure(ErrInput, "event")
+	}
+	if session.managedEvents {
+		return Event{}, failure(ErrState, "explicit-subscription-required")
 	}
 	session.mu.Lock()
 	closed := session.closed
@@ -236,17 +322,20 @@ func (session *Session) NextEvent(ctx context.Context) (Event, error) {
 	case event := <-session.events:
 		session.mu.Lock()
 		session.eventBytes -= int64(len(event.data))
-		if int64(len(event.data)) > session.owner.settings.MaxResultBytes-session.delivered {
+		session.mu.Unlock()
+		record := session.accounting()
+		record.mu.Lock()
+		if int64(len(event.data)) > session.owner.settings.MaxResultBytes-record.delivered {
 			err := failure(ErrLimit, "event-output")
-			if session.primary == nil {
-				session.primary = err
+			if record.primary == nil {
+				record.primary = err
 			}
-			session.mu.Unlock()
+			record.mu.Unlock()
 			session.cancel(err)
 			return Event{}, err
 		}
-		session.delivered += int64(len(event.data))
-		session.mu.Unlock()
+		record.delivered += int64(len(event.data))
+		record.mu.Unlock()
 		return event, nil
 	}
 }
@@ -261,11 +350,16 @@ func (session *Session) observe(value any) {
 	if session.closed {
 		return
 	}
+	record := session.accounting()
+	if record != session.sessionState {
+		record.mu.Lock()
+		defer record.mu.Unlock()
+	}
 	if _, ok := value.(*network.EventRequestWillBeSent); ok {
-		session.data.requestEvents++
+		record.data.requestEvents++
 	}
 	buffer := boundedBuffer{limit: session.owner.settings.MaxEventBytes - session.eventBytes}
-	err := jsonv2.MarshalWrite(&buffer, value, sdk.DefaultMarshalOptions)
+	err := marshalBounded(&buffer, value)
 	if err == nil {
 		event := Event{name: kind.String(), data: buffer.data}
 		select {
@@ -275,10 +369,10 @@ func (session *Session) observe(value any) {
 		default:
 		}
 	}
-	session.data.eventOverflow = true
+	record.data.eventOverflow = true
 	cause := failure(ErrLimit, "event-queue", err)
-	if session.primary == nil {
-		session.primary = cause
+	if record.primary == nil {
+		record.primary = cause
 	}
 	session.cancel(cause)
 }

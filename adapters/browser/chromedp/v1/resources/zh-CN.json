@@ -1,0 +1,76 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "browser_chromedp",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.browser_chromedp.invalid_input",
+      "source": "93cf0e399d77b1e7e70a744725d0a0687e3079a6c61a5d481d6699cb4820a77a",
+      "forms": {
+        "other": "浏览器输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.browser_chromedp.invalid_state",
+      "source": "992293c81e949686b3dfe7ac8580b331dcc0314c5a176ec52e8a44c52de67e43",
+      "forms": {
+        "other": "浏览器句柄无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.browser_chromedp.limit_exceeded",
+      "source": "15888a45a2451f39862db4ef7477af6e50d9a4a793e4b0ffb50fc8a0e818dea6",
+      "forms": {
+        "other": "已超出浏览器容量或数据限制。"
+      }
+    },
+    {
+      "id": "fathomry.browser_chromedp.operation_failed",
+      "source": "758d13f7d555e152d70fa065b30910dc1ce971e50855c9c134536cbcea2beaf9",
+      "forms": {
+        "other": "浏览器操作失败；请检查其影响证据。"
+      }
+    },
+    {
+      "id": "fathomry.browser_chromedp.cleanup_failed",
+      "source": "2115bb39bbac02e741d416b00c8025d881ea4d3724c795519a54fedd0dcbf9ba",
+      "forms": {
+        "other": "浏览器清理失败；实际释放状态需单独检查。"
+      }
+    },
+    {
+      "id": "fathomry.browser_chromedp.unsupported_capability",
+      "source": "077da563c1b0b5667f8f7a0355357b52e877cd177e242c7a587d2259a3e0daa9",
+      "forms": {
+        "other": "所选浏览器能力不可用。"
+      }
+    },
+    {
+      "id": "fathomry.browser_chromedp.runtime_serialization",
+      "source": "542f1c6a365325d509f28f76ffa1f0f76e557ba5a61eb68228a20a76033a6aa6",
+      "forms": {
+        "other": "不支持序列化浏览器运行时值。"
+      }
+    }
+  ]
+}

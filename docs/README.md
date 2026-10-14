@@ -29,6 +29,12 @@ contracts; development guides explain tasks. Choose a reading path below.
 
 ## What is implemented
 
+The [managed Browser packages](reference/adapters/browser/chromedp/v1/interface.md)
+provide closed native operations, retained contexts, scoped request/response-body
+access and managed streams. The reviewed SDK cleanup, input, helper-custody, dispatch and readiness
+corrections have signed, versioned module distribution. Complete #139
+capability and performance qualification remains in progress, not certified.
+
 Configuration preparation, resource ownership/admission, controlled calls and
 evidence handoff, technical errors, build/compatibility assessment and maintainer
 testing support are implemented as internal foundations. A bounded Viper v1

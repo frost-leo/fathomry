@@ -54,6 +54,24 @@ func TestSessionCopiesCannotMultiplyOutputAllowance(t *testing.T) {
 		t.Fatal("copy manufactured another output allowance")
 	}
 }
+
+func TestLegacyProtocolDoesNotInheritCatalogueAuthority(t *testing.T) {
+	for _, method := range []string{
+		"DOMStorage.clear", "Network.setCookie", "Network.setCookies", "Network.deleteCookies",
+		"Runtime.evaluate", "Runtime.callFunctionOn", "Runtime.releaseObject", "Runtime.releaseObjectGroup",
+		"Fetch.enable", "Fetch.continueRequest", "Page.startScreencast", "Page.startScreenRecording",
+		"IndexedDB.requestData", "Debugger.resume", "DOM.resolveNode", "Animation.resolveAnimation",
+	} {
+		if permitted(method) {
+			t.Errorf("catalogue entry %s became an unscoped grant", method)
+		}
+	}
+	for method := range finitePageCommands {
+		if !permitted(method) {
+			t.Errorf("finite page operation %s disappeared", method)
+		}
+	}
+}
 func TestEventWaitCancellationIsNotExecutionCancellation(t *testing.T) {
 	// Waiting has its own cancellation fact; it is not a native command failure.
 	session := unitSession(t)
@@ -94,23 +112,15 @@ func TestBrowserInlinePDFAndTargetEmulationRemainUsable(t *testing.T) {
 	f := bindFixture(t, browserOptions(t), 1)
 	id := fault.Correlation{Call: "native-positive"}
 	receipt, err := f.client.Run(deadline(t), deadline(t), id, func(session *Session) error {
-		var pdf []byte
+		var pdf page.PrintToPDFResult
 		var width int
-		if err := session.Actions(session.Context(), sdk.ActionFunc(func(ctx context.Context) error {
-			var stream cdpio.StreamHandle
-			var err error
-			pdf, stream, err = page.PrintToPDF().Do(ctx)
-			if stream != "" {
-				return errors.New("inline PDF returned an owning stream")
-			}
-			return err
-		}), emulation.SetDeviceMetricsOverride(320, 240, 1, false), sdk.Evaluate("window.innerWidth", &width)); err != nil {
+		if err := session.Actions(session.Context(), Into(Command(page.PrintToPDF, page.PrintToPDFParams{}), &pdf), Command(emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{Width: 320, Height: 240, DeviceScaleFactor: 1, Mobile: false}), Into(Evaluate[int]("window.innerWidth"), &width)); err != nil {
 			return err
 		}
-		if !strings.HasPrefix(string(pdf), "%PDF-") || width != 320 {
+		if !strings.HasPrefix(string(pdf.Data), "%PDF-") || pdf.Stream != "" || width != 320 {
 			return errors.New("native positive control failed")
 		}
-		pdf = nil
+		pdf = page.PrintToPDFResult{}
 		return nil
 	})
 	if err != nil {
@@ -147,25 +157,25 @@ func TestBrowserRefusesGlobalScreensAndNativeStreams(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f := bindFixture(t, browserOptions(t), 1)
 			receipt, err := f.client.Run(deadline(t), deadline(t), fault.Correlation{Call: mode}, func(session *Session) error {
-				native := cdp.WithExecutor(session.Context(), sdk.FromContext(session.native).Target)
-				return session.Actions(session.Context(), sdk.ActionFunc(func(ctx context.Context) error {
+				native := sdk.FromContext(session.native).Target
+				return session.Protocol(session.Context(), func(ctx context.Context, grant cdp.Session) error {
 					if mode == "screen" {
-						screen, err := emulation.AddScreen(800, 0, 320, 240).WithLabel("synthetic-gh52").Do(ctx)
-						if screen != nil {
-							if cleanup := emulation.RemoveScreen(screen.ID).Do(native); cleanup != nil {
+						screen, err := cdp.Call(ctx, grant, emulation.AddScreen, emulation.AddScreenParams{Left: 800, Top: 0, Width: 320, Height: 240, Label: "synthetic-gh139"})
+						if screen.ScreenInfo != nil {
+							if _, cleanup := cdp.Call(ctx, native, emulation.RemoveScreen, emulation.RemoveScreenParams{ScreenID: screen.ScreenInfo.ID}); cleanup != nil {
 								t.Error("test-created screen cleanup failed", cleanup)
 							}
 						}
 						return err
 					}
-					_, stream, err := page.PrintToPDF().WithTransferMode(page.PrintToPDFTransferModeReturnAsStream).Do(ctx)
-					if stream != "" {
-						if cleanup := cdpio.Close(stream).Do(native); cleanup != nil {
+					pdf, err := cdp.Call(ctx, grant, page.PrintToPDF, page.PrintToPDFParams{TransferMode: page.PrintToPDFTransferModeReturnAsStream})
+					if pdf.Stream != "" {
+						if _, cleanup := cdp.Call(ctx, native, cdpio.Close, cdpio.CloseParams{Handle: pdf.Stream}); cleanup != nil {
 							t.Error("test-created stream cleanup failed", cleanup)
 						}
 					}
 					return err
-				}))
+				})
 			})
 			if !errors.Is(err, ErrUnsupported) {
 				t.Error("global/resource-producing command was accepted", err)
@@ -195,7 +205,8 @@ func TestBrowserRefusesGlobalScreensAndNativeStreams(t *testing.T) {
 func TestBrowserNativeTabCleanupFailureIsNotErased(t *testing.T) {
 	f := bindFixture(t, browserOptions(t), 1)
 	receipt, err := f.client.Run(deadline(t), deadline(t), fault.Correlation{Call: "tab-close"}, func(session *Session) error {
-		return target.CloseTarget(sdk.FromContext(session.native).Target.TargetID).Do(browserExecutor(t, f))
+		_, err := cdp.Call(session.Context(), browserExecutor(t, f), target.CloseTarget, target.CloseTargetParams{TargetID: sdk.FromContext(session.native).Target.TargetID})
+		return err
 	})
 	var native *cdproto.Error
 	if !errors.Is(err, ErrCleanup) || !errors.As(err, &native) {

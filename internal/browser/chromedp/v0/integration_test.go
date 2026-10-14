@@ -34,7 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chromedp/cdproto"
 	"github.com/chromedp/cdproto/browser"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
@@ -62,20 +61,20 @@ func browserOptions(t *testing.T) OptionsV1 {
 		"disable-background-networking": "", "disable-component-update": "", "disable-sync": "", "disable-extensions": "",
 	}, TempDir: t.TempDir()}
 }
-func browserExecutor(t *testing.T, f *fixture) context.Context {
+func browserExecutor(t *testing.T, f *fixture) cdp.Session {
 	t.Helper()
 	if f.client.owner.root == nil || sdk.FromContext(f.client.owner.root).Browser == nil {
 		t.Fatal("missing genuinely started browser")
 	}
-	return cdp.WithExecutor(deadline(t), sdk.FromContext(f.client.owner.root).Browser)
+	return sdk.FromContext(f.client.owner.root).Browser
 }
 func browserContexts(t *testing.T, f *fixture) []cdp.BrowserContextID {
 	t.Helper()
-	ids, _, err := target.GetBrowserContexts().Do(browserExecutor(t, f))
+	result, err := cdp.Call(deadline(t), browserExecutor(t, f), target.GetBrowserContexts, cdp.Empty{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return ids
+	return result.BrowserContextIDs
 }
 
 func TestBrowserRenderedDataRedirectsAndNativeExtensions(t *testing.T) {
@@ -105,7 +104,7 @@ func TestBrowserRenderedDataRedirectsAndNativeExtensions(t *testing.T) {
 			return err
 		}
 		var value string
-		if err := session.Actions(session.Context(), sdk.Evaluate("document.getElementById('value').textContent", &value), sdk.ActionFunc(func(ctx context.Context) error {
+		if err := session.Actions(session.Context(), Into(Evaluate[string]("document.getElementById('value').textContent"), &value), Step(func(ctx context.Context) error {
 			if sdk.FromContext(ctx) != nil {
 				return errors.New("owning native context escaped")
 			}
@@ -167,12 +166,24 @@ func TestBrowserCookieAndStorageIsolation(t *testing.T) {
 	receipts := make(chan *invocation.Receipt[Result], 2)
 	for _, identity := range []string{"alpha", "beta"} {
 		group.Go(func() {
-			receipt, err := f.client.Run(deadline(t), deadline(t), fault.Correlation{Call: identity}, func(session *Session) error {
+			retained, err := f.client.Retain(deadline(t), fault.Correlation{Call: identity})
+			if err != nil {
+				if retained != nil {
+					_ = retained.Close(deadline(t))
+				}
+				errorsFound <- err
+				return
+			}
+			err = func() error {
+				session := retained.Page()
 				if err := session.Navigate(session.Context(), server.URL); err != nil {
 					return err
 				}
 				var cookie string
-				if err := session.Actions(session.Context(), network.SetCookie("technical", identity).WithURL(server.URL), sdk.Evaluate("localStorage.setItem('technical', '"+identity+"')", nil)); err != nil {
+				if err := retained.SetCookies(session.Context(), []*network.CookieParam{{Name: "technical", Value: identity, URL: server.URL}}); err != nil {
+					return err
+				}
+				if err := session.Actions(session.Context(), Evaluate[sdk.Void]("localStorage.setItem('technical', '"+identity+"')")); err != nil {
 					return err
 				}
 				ready <- struct{}{}
@@ -181,16 +192,16 @@ func TestBrowserCookieAndStorageIsolation(t *testing.T) {
 				case <-session.Context().Done():
 					return session.Context().Err()
 				}
-				if err := session.Actions(session.Context(), sdk.Evaluate("document.cookie + ':' + localStorage.getItem('technical')", &cookie)); err != nil {
+				if err := session.Actions(session.Context(), Into(Evaluate[string]("document.cookie + ':' + localStorage.getItem('technical')"), &cookie)); err != nil {
 					return err
 				}
 				if cookie != "technical="+identity+":"+identity {
 					return errors.New("browser-context state mixed")
 				}
 				return session.Save("state", []byte(cookie))
-			})
-			receipts <- receipt
-			errorsFound <- err
+			}()
+			errorsFound <- errors.Join(err, retained.Close(deadline(t)))
+			receipts <- retained.Receipt()
 		})
 	}
 	for range 2 {
@@ -240,26 +251,25 @@ func TestBrowserCookieAndStorageIsolation(t *testing.T) {
 	}
 }
 
-func TestBrowserTargetCreationFailureDisposesContext(t *testing.T) {
+func TestBrowserFirstContextWindowMatchesNativeSemantics(t *testing.T) {
 	options := browserOptions(t)
 	options.NewWindow = false
 	f := bindFixture(t, options, 1)
-	receipt, err := f.client.Run(deadline(t), deadline(t), fault.Correlation{Call: "target-negative"}, func(*Session) error { t.Error("callback after failed target creation"); return nil })
-	if err == nil {
-		t.Fatal("tuple no longer reproduces target-creation counterexample; requalify default")
+	retained, err := f.client.Retain(deadline(t), fault.Correlation{Call: "first-window"})
+	if err != nil {
+		t.Fatal("fresh context needs its first window even in shared-window mode", err)
 	}
-	var native *cdproto.Error
-	if !errors.As(err, &native) || native.Code != -32000 {
-		t.Fatal("original native CDP failure lost", err)
+	if _, err := retained.NewPage(deadline(t)); err != nil {
+		t.Fatal("later shared-window page", err)
 	}
-	settle(t, f, fault.Correlation{Call: "target-negative"}, receipt, ErrNative, nil, func(t testing.TB, value Result) {
-		if value.CallbackCompleted() || !value.ContextReleased() {
-			t.Error("failed target creation leaked or invented completion")
+	if err := retained.Close(deadline(t)); err != nil {
+		t.Fatal(err)
+	}
+	settle(t, f, fault.Correlation{Call: "first-window"}, retained.Receipt(), nil, nil, func(t testing.TB, value Result) {
+		if !value.ContextReleased() {
+			t.Fatal("context not disposed")
 		}
 	})
-	if len(browserContexts(t, f)) != 0 {
-		t.Fatal("partially created BrowserContext leaked")
-	}
 }
 
 func TestBrowserCanceledCleanupRetainsNativeQuota(t *testing.T) {
@@ -299,11 +309,12 @@ func TestBrowserBorrowedCancellationPreservesOtherContexts(t *testing.T) {
 	if err := host.client.owner.start(deadline(t)); err != nil {
 		t.Fatal(err)
 	}
-	externalID, err := target.CreateBrowserContext().WithDisposeOnDetach(true).Do(browserExecutor(t, host))
+	external, err := cdp.Call(deadline(t), browserExecutor(t, host), target.CreateBrowserContext, target.CreateBrowserContextParams{DisposeOnDetach: new(true)})
+	externalID := external.BrowserContextID
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer target.DisposeBrowserContext(externalID).Do(browserExecutor(t, host))
+	defer cdp.Call(deadline(t), browserExecutor(t, host), target.DisposeBrowserContext, target.DisposeBrowserContextParams{BrowserContextID: externalID})
 	address, err := host.client.owner.debugURL(deadline(t))
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +346,7 @@ func TestBrowserBorrowedCancellationPreservesOtherContexts(t *testing.T) {
 				return session.Context().Err()
 			}
 			var actual int
-			if err := session.Actions(session.Context(), sdk.Evaluate("21*2", &actual)); err != nil {
+			if err := session.Actions(session.Context(), Into(Evaluate[int]("21*2"), &actual)); err != nil {
 				return err
 			}
 			if actual != 42 {
@@ -383,7 +394,7 @@ func TestBrowserBorrowedCancellationPreservesOtherContexts(t *testing.T) {
 	if len(ids) != 1 || ids[0] != externalID {
 		t.Fatal("borrowed close affected foreign BrowserContext")
 	}
-	if _, _, _, _, _, err := browser.GetVersion().Do(browserExecutor(t, host)); err != nil {
+	if _, err := cdp.Call(deadline(t), browserExecutor(t, host), browser.GetVersion, cdp.Empty{}); err != nil {
 		t.Fatal("borrowed close killed browser")
 	}
 }

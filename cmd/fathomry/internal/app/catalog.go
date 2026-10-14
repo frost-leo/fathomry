@@ -21,6 +21,7 @@ package app
 
 import (
 	"github.com/frost-leo/fathomry/adapters/broker/kafka/v1"
+	"github.com/frost-leo/fathomry/adapters/browser/chromedp/v1"
 	"github.com/frost-leo/fathomry/adapters/cache/redis/v1"
 	"github.com/frost-leo/fathomry/adapters/database/mysql/v1"
 	"github.com/frost-leo/fathomry/adapters/database/postgres/v1"
@@ -75,6 +76,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "logging_zerolog", BaseLocale: "en", Resources: zerolog.Resources(), Directory: "resources", Definitions: zerolog.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "temporal", BaseLocale: "en", Resources: temporal.Resources(), Directory: "resources", Definitions: temporal.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "tableformat_iceberg", BaseLocale: "en", Resources: iceberg.Resources(), Directory: "resources", Definitions: iceberg.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "browser_chromedp", BaseLocale: "en", Resources: chromedp.Resources(), Directory: "resources", Definitions: chromedp.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {

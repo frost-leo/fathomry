@@ -49,6 +49,7 @@ func sdkPins() []modulePin {
 	return []modulePin{
 		{"github.com/apache/iceberg-go", "third_party/iceberg-go", "v0.0.0-20261011114113-4b4b6612c1f2", "h1:2Zo37iCWYvqPouYNkcc4aBU8R+k1R2uCt2UMxuwm9fE="},
 		{"github.com/bogdanfinn/tls-client", "third_party/tls-client", "v0.0.0-20261007150852-1c04f9c3b198", "h1:g/j5H3E2ktrVj4TT7sZ2ANJfH24HocDIYgpxQqn77e8="},
+		{"github.com/chromedp/chromedp", "third_party/chromedp", "v0.0.0-20261013175902-b928a75059b9", "h1:ZDOiaPN5NKu6WkluMA9CouyL90r0ShfMS6/icP8qNrk="},
 		{"github.com/enetx/http2", "third_party/surf-http2", "v0.0.0-20261007235212-fb099a79451b", "h1:urNe80Cqo+4XSzwiwuwcgBZcNXD08TVYvwZPOKDZQAk="},
 		{"github.com/enetx/http3", "third_party/surf-http3", "v0.0.0-20261008050723-5042804d264a", "h1:gxFmtorz6loOfireHCmBT7glXwQpT/7r9bY9gUNyDhg="},
 		{"github.com/enetx/surf", "third_party/surf", "v0.0.0-20261008013857-a2ab5bb59121", "h1:VzdaOF0y3GZLUfeCO33ns92Xv2K3b//ifAlm2r3fafg="},
@@ -59,8 +60,8 @@ func sdkPins() []modulePin {
 		{"github.com/nukilabs/tlsclient", "third_party/nuki", "v0.0.0-20261008154844-bef11a0743d6", "h1:HxtC65QIvTfdbzfcFwe0XWR8VqrXV8F2C5MjF8JIQ+c="},
 		{"github.com/sardanioss/httpcloak", "third_party/httpcloak", "v0.0.0-20261008143415-2e24df88d7d2", "h1:b7SKwMwzE97clRt8sRRp8oTsl2Gq4Z22/f84U5p9Gx0="},
 		{"github.com/sardanioss/net", "third_party/httpcloak-net", "v0.0.0-20261008143415-2e24df88d7d2", "h1:VJjU8ewLDgxvgIEQU/CHuY8AUBocU9mMkLf7HlJIaAo="},
-		{"github.com/sardanioss/quic-go", "third_party/httpcloak-quic-go", "v0.0.0-20261008143415-2e24df88d7d2", "h1:g8h8TDm/RIxylM4pvp505OjyQG/q+TH3Wq7xyt9DSs8="},
-		{"github.com/sardanioss/udpbara", "third_party/udpbara", "v0.0.0-20261008143415-2e24df88d7d2", "h1:mcqDpvpZrbAWqH1oFIqZdjpapDJAIVSTl72tj2HuDJc="},
+		{"github.com/sardanioss/quic-go", "third_party/httpcloak-quic-go", "v0.0.0-20261013235405-1d2399f93fe1", "h1:tZgQZOBaym2vJr45W06oq69XhzgY/wVagVi8qMESOUA="},
+		{"github.com/sardanioss/udpbara", "third_party/udpbara", "v0.0.0-20261013235405-1d2399f93fe1", "h1:5IPK6U4Fwd0KYqGqVeRgFSVmdKHzSImuBvdPcu7cuoQ="},
 		{"go.opentelemetry.io/otel/exporters/otlp/otlptrace", "third_party/otel-trace", "v0.0.0-20261009025118-8efc1b8e2150", "h1:bVRJycWoOkLqjNrXIoSQ6+QRvRHuAj7dTAaBahTofsA="},
 		{"go.opentelemetry.io/otel/sdk/metric", "third_party/otel-metric", "v0.0.0-20261009025118-8efc1b8e2150", "h1:s6ZXUZMSalzBS6WJDSWExPdjtswsVQQ8fSAC7vpxhBA="},
 		{"go.temporal.io/sdk", "third_party/temporal-sdk", "v0.0.0-20261010112112-6c43c6fc71db", "h1:9ssKehNJERiOHNgIPkF6Hur2Xe7nsTDdFsNGQw22JKA="},

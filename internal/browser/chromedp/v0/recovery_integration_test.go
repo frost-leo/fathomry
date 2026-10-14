@@ -22,6 +22,7 @@ package chromedp
 import (
 	"context"
 	"errors"
+	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/target"
 	sdk "github.com/chromedp/chromedp"
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -34,11 +35,12 @@ func TestBrowserBorrowedLostConnectionReconcilesOnlyKnownContexts(t *testing.T) 
 	if err := host.client.owner.start(deadline(t)); err != nil {
 		t.Fatal(err)
 	}
-	foreign, err := target.CreateBrowserContext().WithDisposeOnDetach(true).Do(browserExecutor(t, host))
+	created, err := cdp.Call(deadline(t), browserExecutor(t, host), target.CreateBrowserContext, target.CreateBrowserContextParams{DisposeOnDetach: new(true)})
+	foreign := created.BrowserContextID
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer target.DisposeBrowserContext(foreign).Do(browserExecutor(t, host))
+	defer cdp.Call(deadline(t), browserExecutor(t, host), target.DisposeBrowserContext, target.DisposeBrowserContextParams{BrowserContextID: foreign})
 	address, err := host.client.owner.debugURL(deadline(t))
 	if err != nil {
 		t.Fatal(err)
