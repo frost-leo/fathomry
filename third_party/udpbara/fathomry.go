@@ -23,9 +23,40 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync"
 )
 
 const FathomryCompatibilityRevision = "udpbara-v2"
+
+type controlConn struct {
+	net.Conn
+	tunnel *Tunnel
+	once   sync.Once
+	err    error
+}
+
+func (conn *controlConn) Close() error {
+	conn.once.Do(func() {
+		conn.err = conn.Conn.Close()
+		conn.tunnel.rememberClose(conn.err)
+	})
+	return conn.err
+}
+
+func (t *Tunnel) rememberClose(err error) {
+	if err == nil {
+		return
+	}
+	t.closeMu.Lock()
+	t.closeErr = errors.Join(t.closeErr, err)
+	t.closeMu.Unlock()
+}
+
+func (t *Tunnel) cleanupError() error {
+	t.closeMu.Lock()
+	defer t.closeMu.Unlock()
+	return t.closeErr
+}
 
 func (t *Tunnel) fathomryConnecting(ctx context.Context, conn net.Conn) (func(), error) {
 	t.mu.Lock()
@@ -59,13 +90,13 @@ func fathomryContextError(ctx context.Context, err error) error {
 // FathomryClose closes pending handshake sockets and joins connection and
 // tunnel workers. It must not be invoked from a tunnel callback.
 func (t *Tunnel) FathomryClose() error {
-	err := t.Close()
+	_ = t.Close()
 	t.connects.Wait()
 	t.workers.Wait()
+	// Preserve the state-locked cleanup boundary before reading its errors.
 	t.mu.Lock()
-	err = errors.Join(err, t.closeErr)
-	t.mu.Unlock()
-	return err
+	defer t.mu.Unlock()
+	return t.cleanupError()
 }
 
 func (t *Tunnel) closeUDP(conn *net.UDPConn) error {

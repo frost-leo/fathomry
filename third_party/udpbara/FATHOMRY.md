@@ -34,6 +34,15 @@ connect/dial operations and relay/control workers, instead of equating a quick
 Close return with completion. Native callback cooperation remains required.
 Existing source notices are preserved and runtime formatting is normalized.
 
+The #139 CI prerequisite correction gives each TCP control socket one shared
+close operation. Cancellation, handshake failure, shutdown and reconnect retain
+the first actual close result instead of closing the socket again. Genuine close
+errors remain in tunnel cleanup history, including errors from cancellation after
+the handshake untracks its socket. An already-closed error from the first actual
+close is not suppressed. Repeated FathomryClose returns the same history after
+joining work, without duplicating that history. Its error lock is separate from
+the tunnel state lock, so cancellation reporting cannot deadlock with shutdown.
+
 Managed construction requires explicit TCP/UDP acquisition, close and resolver
 hooks and disables automatic reconnection. The source owns the SOCKS control
 socket, relay-facing socket and two loopback sockets per native connection.
