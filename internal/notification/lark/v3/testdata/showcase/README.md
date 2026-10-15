@@ -86,7 +86,7 @@ must be regular files; nonblocking opens reject FIFOs without waiting for a writ
 ## Optional real-data repository report
 
 Use the `snapshot.json` produced by the mail Welcome example's
-[read-only repository collector](../../../../mail/v0/testdata/welcome/README.md#optional-repository-report).
+[read-only repository collector](../../../../../../adapters/notification/mail/v1/testdata/welcome/README.md#optional-repository-report).
 The Feishu command does not collect GitHub data during sending or render images:
 it uses the captured values directly in native VChart components. No ECharts or
 browser library is needed by this Go caller. The collector's optional tooling stays

@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	mail "github.com/frost-leo/fathomry/internal/notification/mail/v0"
+	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
 	"golang.org/x/net/html"
 )
 
@@ -100,8 +100,12 @@ func TestPrivateConfigurationAndDisabledSending(t *testing.T) {
 	if err := os.WriteFile(file, raw, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := run(context.Background(), []string{"-send", "-config", file}, &bytes.Buffer{}); err == nil || strings.Contains(err.Error(), "private-test-canary") {
+	attempt := filepath.Join(t.TempDir(), "attempt.jsonl")
+	if err := run(context.Background(), []string{"-send", "-config", file, "-attempt", attempt}, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "sending is disabled") || strings.Contains(err.Error(), "private-test-canary") {
 		t.Fatal("disabled sending or diagnostic privacy failed")
+	}
+	if _, err := os.Stat(attempt); !os.IsNotExist(err) {
+		t.Fatal("disabled send reserved an attempt")
 	}
 	if err := os.Chmod(file, 0644); err != nil {
 		t.Fatal(err)

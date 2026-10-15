@@ -20,6 +20,7 @@
 package mail
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -41,7 +42,7 @@ func TestOptionsRejectUnsafeProfiles(t *testing.T) {
 		"auth-fallback":         func(o *OptionsV1) { o.Auth = "auto" },
 		"missing-auth":          func(o *OptionsV1) { o.Auth = "" },
 		"credentials-with-none": func(o *OptionsV1) { o.Password = "private" },
-		"empty-password":        func(o *OptionsV1) { o.Auth = "plain"; o.Username = "user" },
+		"oversized-password":    func(o *OptionsV1) { o.Auth = "plain"; o.Username = "user"; o.Password = strings.Repeat("x", 4097) },
 		"control-credential":    func(o *OptionsV1) { o.Auth = "xoauth2"; o.Username = "user"; o.Password = "token\x01" },
 		"active":                func(o *OptionsV1) { o.MaxActive = 17 },
 		"queue":                 func(o *OptionsV1) { o.QueuedCalls = 33 },

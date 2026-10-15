@@ -17,15 +17,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package mail supplies bounded outbound SMTP notifications with go-mail v0.
-// Select freezes explicit named configuration, resource.WithLimits attaches shared
-// admission, and Bind exposes a concurrent non-owning Client. Send and SendBatch
+// Package mail supplies bounded MIME preparation and outbound notifications with
+// go-mail v0. PrepareV1 freezes exact named configuration and runtime containers;
+// resource.WithLimits attaches its authoritative Metadata admission policy,
+// and Bind exposes a concurrent non-owning Client. Send and SendBatch
 // reserve independent invocation evidence before MIME allocation or network I/O.
 // Only resource.Assembly owns shutdown; borrowed clients share the same capacity.
 //
 // NewMessage freezes headers, plain/HTML bodies, CID resources and attachments.
 // Presentation, content sanitization and chart rendering belong to callers. Relay
 // acceptance is not inbox placement, client rendering, reading or a durable Run
-// outcome. Unknown effects never trigger automatic resending. Native handles,
-// file paths/readers, callbacks and debug logging are not exposed.
+// outcome. Unknown effects never trigger automatic resending. Admitted preparation
+// adds owned file/FS acquisition, borrowed readers, templates, scoped writers and
+// transforms, EML and immutable signing. Session and explicit Sendmail retain their
+// own protocol/process facts. Native owning handles and raw debug logging do not
+// escape. Arbitrary borrowed callbacks must cooperate until actual return.
 package mail

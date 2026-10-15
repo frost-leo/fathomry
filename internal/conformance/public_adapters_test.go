@@ -52,6 +52,8 @@ import (
 	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
 	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
 	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
+	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
+	notification "github.com/frost-leo/fathomry/adapters/notification/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	objectstore "github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	temporal "github.com/frost-leo/fathomry/adapters/orchestration/temporal/v1"
@@ -246,6 +248,16 @@ func TestPublicAdapterBrowser(t *testing.T) {
 		func(runtime *adapters.Runtime, inbox *adapters.Inbox[chromedp.Result]) chromedp.Dependencies {
 			return chromedp.Dependencies{Runtime: runtime, Evidence: inbox}
 		}, chromedp.Open, canary)
+}
+
+func TestPublicAdapterMail(t *testing.T) {
+	const canary = "mail-private-contract"
+	value := mail.Settings{Name: "contract", Host: "localhost", Port: 465, Hello: "test.invalid", TLSMode: "implicit", Auth: "plain", Username: "fixture", Password: canary}
+	checkPublicAdapter(t, value, mail.Validate, mail.Recommend,
+		func(value notification.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+		func(runtime *adapters.Runtime, inbox *adapters.Inbox[mail.Result]) mail.Dependencies {
+			return mail.Dependencies{Runtime: runtime, Evidence: inbox}
+		}, mail.Open, canary)
 }
 
 func TestPublicAdapterTemporal(t *testing.T) {

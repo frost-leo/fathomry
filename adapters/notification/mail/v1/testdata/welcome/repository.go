@@ -38,7 +38,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	mail "github.com/frost-leo/fathomry/internal/notification/mail/v0"
+	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
 )
 
 type reportDay struct {

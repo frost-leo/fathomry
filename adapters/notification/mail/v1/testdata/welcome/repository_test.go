@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	mail "github.com/frost-leo/fathomry/internal/notification/mail/v0"
+	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
 )
 
 func samplePNG(t testing.TB) []byte {

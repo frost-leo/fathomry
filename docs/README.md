@@ -29,6 +29,16 @@ contracts; development guides explain tasks. Choose a reading path below.
 
 ## What is implemented
 
+The [Mail Adapter](reference/adapters/notification/mail/v1/interface.md) provides
+managed MIME/EML/template/signing preparation, SMTP authentication and explicit
+local-process delivery with independent evidence and Direct/Fixed/Follow ownership.
+The [notification vocabulary](reference/adapters/notification/v1/interface.md)
+contains shared data only, not a notifier or report engine. Isolated-peer tests
+do not establish real delivery or recipient rendering.
+The public-only [welcome consumer](../adapters/notification/mail/v1/testdata/welcome/README.md)
+combines a welcome pack and optional CID report, with offline preview and isolated
+end-to-end checks; real sending requires explicit configuration and an attempt guard.
+
 The [managed Browser packages](reference/adapters/browser/chromedp/v1/interface.md)
 provide closed native operations, retained contexts, scoped request/response-body
 access and managed streams. The reviewed SDK cleanup, input, helper-custody, dispatch and readiness
@@ -365,6 +375,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/sqlengine/trino/v1`](reference/adapters/sqlengine/trino/v1/interface.md) | Exact finite Query, full Execute/physical Insert, bounded provisional pages, independent evidence and retained-generation ownership |
 | [`adapters/sqlengine/doris/v1`](reference/adapters/sqlengine/doris/v1/interface.md) | Finite/incremental SQL, strict Stream Load, label observations and independent source/evidence ownership |
 | [`adapters/httpclient/v1`](reference/adapters/httpclient/v1/interface.md) | HTTP accounting, preparation and attribution vocabulary; no runtime/client |
+| [`adapters/notification/v1`](reference/adapters/notification/v1/interface.md) | Notification accounting, source provenance and distinct observations |
+| [`adapters/notification/mail/v1`](reference/adapters/notification/mail/v1/interface.md) | Managed Mail preparation, SMTP/local delivery and retained source generations |
 | [`adapters/httpclient/nethttp/v1`](reference/adapters/httpclient/nethttp/v1/interface.md) | Standard HTTP finite/stream/direct-connection use with exact preparation and ownership |
 | [`adapters/httpclient/tlsclient/v1`](reference/adapters/httpclient/tlsclient/v1/interface.md) | Explicit native profiles, H3 racing, finite/stream HTTP and protocol-qualified counters |
 | [`adapters/httpclient/surf/v1`](reference/adapters/httpclient/surf/v1/interface.md) | Surf H1/H2/H3/h2c, incremental multipart, finite/stream responses and exact preparation |

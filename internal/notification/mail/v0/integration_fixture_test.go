@@ -34,6 +34,8 @@ import (
 	"math/big"
 	"net"
 	"net/textproto"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -60,6 +62,10 @@ type peerOptions struct {
 	quitReply       string
 	greeting        string
 	stall           string
+	authExchange    func(net.Conn, *textproto.Reader, string) bool
+	extensions      []string
+	noopReply       string
+	unix            bool
 }
 type capturedMail struct {
 	sender     string
@@ -107,7 +113,16 @@ func newPeer(t testing.TB, options peerOptions) *smtpPeer {
 		cert, roots = certificateFor(t, "wrong.fixture.test")
 	}
 	config := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	network, address := "tcp", "127.0.0.1:0"
+	if options.unix {
+		directory, err := os.MkdirTemp(os.TempDir(), "mail.")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(directory) })
+		network, address = "unix", filepath.Join(directory, "smtp.sock")
+	}
+	listener, err := net.Listen(network, address)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,6 +197,9 @@ func newPeer(t testing.TB, options peerOptions) *smtpPeer {
 						if options.auth != "" {
 							capabilities += "250-AUTH " + strings.ToUpper(options.auth) + "\r\n"
 						}
+						for _, extension := range options.extensions {
+							capabilities += "250-" + extension + "\r\n"
+						}
 						if !reply(capabilities + "250 SIZE 33554432") {
 							return
 						}
@@ -196,6 +214,18 @@ func newPeer(t testing.TB, options peerOptions) *smtpPeer {
 						wire = tls.Server(raw, config)
 						reader = textproto.NewReader(bufio.NewReader(wire))
 					case "AUTH":
+						if options.authExchange != nil {
+							if options.authExchange(wire, reader, argument) {
+								if !reply("235 2.7.0 authenticated") {
+									return
+								}
+							} else {
+								if !reply("535 5.7.8 rejected") {
+									return
+								}
+							}
+							continue
+						}
 						mechanism, payload, _ := strings.Cut(argument, " ")
 						valid := false
 						switch mechanism {
@@ -275,6 +305,14 @@ func newPeer(t testing.TB, options peerOptions) *smtpPeer {
 						if !reply(response) {
 							return
 						}
+					case "NOOP", "VRFY":
+						response := "250 fixture"
+						if command == "NOOP" && options.noopReply != "" {
+							response = options.noopReply
+						}
+						if !reply(response) {
+							return
+						}
 					case "QUIT":
 						response := options.quitReply
 						if response == "" {
@@ -282,6 +320,9 @@ func newPeer(t testing.TB, options peerOptions) *smtpPeer {
 						}
 						reply(response)
 						if strings.HasPrefix(response, "221 ") {
+							if options.unix {
+								_, _ = io.Copy(io.Discard, wire)
+							}
 							return
 						}
 					default:

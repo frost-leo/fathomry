@@ -124,6 +124,8 @@ const (
 	FacilityIceberg Facility = 0x320
 	// FacilityChromedp owns the managed Browser capability.
 	FacilityChromedp Facility = 0x300
+	// FacilityMail owns managed mail notification capabilities.
+	FacilityMail Facility = 0x2C0
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -184,6 +186,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityZap, Module: "fathomry", Component: "logging_zap"},
 		{Facility: FacilityZerolog, Module: "fathomry", Component: "logging_zerolog"},
 		{Facility: FacilityTemporal, Module: "fathomry", Component: "temporal"},
+		{Facility: FacilityMail, Module: "fathomry", Component: "notification_mail"},
 	}
 }
 

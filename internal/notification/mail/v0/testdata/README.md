@@ -27,7 +27,6 @@ The Provider's package directory contains only its implementation and core tests
 | Protocol integration | `*_integration_test.go` | Owned loopback SMTP/TLS, effects, cancellation and cleanup |
 | Foundation integration | `integration_test.go`, `integration_fixture_test.go` | Resource/invocation/conformance and the actual consuming executable |
 | Go documentation examples | `example_test.go` (`package mail_test`) | Exported calling contracts; deterministic output; no external sending |
-| Application example | [`welcome/`](welcome/README.md) | Independent caller for welcome copy, repository data, charts, previews and explicitly authorized live sending |
 
 `consumer/main.go` is a minimal consuming-executable fixture. It constructs,
 binds and closes a source without dialing.
@@ -36,16 +35,18 @@ binds and closes a source without dialing.
 counterexample. This metadata and its full license notice apply to those
 non-commentable corpus files.
 
-The welcome example has its own unit and caller-integration tests. It imports
-the Provider and existing foundation packages; it cannot access private functions
-such as `compose` or `defaults`. Go's `./...` pattern skips testdata, so these
-tests are explicitly run separately in CI:
+Welcome copy, repository presentation, chart tooling and live-send CLI ownership
+belong to the [public welcome consumer](../../../../../adapters/notification/mail/v1/testdata/welcome/README.md).
+They no longer import or reside under Internal. The technical consumer, fuzz
+corpus, protocol, resource and error regressions stay here.
+
+Run the technical checks from the product root:
 
 ```sh
 go test -race ./internal/notification/mail/v0
 go test -run '^Example' ./internal/notification/mail/v0
-go test -race ./internal/notification/mail/v0/testdata/welcome
 ```
 
-Neither command sends real email or fetches GitHub data. See the example's README
-for deliberate preview/render/send commands and their authorization requirements.
+Neither command sends real email or fetches GitHub data. The public welcome app
+has its own independent-module and explicit CI checks because Go's ./... pattern
+skips testdata directories.
