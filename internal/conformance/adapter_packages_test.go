@@ -40,6 +40,8 @@ type adapterPackageProfile struct {
 }
 
 var adapterPackageProfiles = map[string]adapterPackageProfile{
+	"notification/v1":           {"capability", false, []string{"policy.go", "metadata.go"}},
+	"notification/mail/v1":      {"data-provider", true, nil},
 	"browser/v1":                {"capability", false, []string{"policy.go", "metadata.go"}},
 	"browser/chromedp/v1":       {"data-provider", true, nil},
 	"v1":                        {"mechanism", true, []string{"options.go", "runtime.go", "call.go", "evidence.go"}},

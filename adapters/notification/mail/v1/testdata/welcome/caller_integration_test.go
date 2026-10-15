@@ -39,7 +39,7 @@ import (
 	"testing"
 	"time"
 
-	mail "github.com/frost-leo/fathomry/internal/notification/mail/v0"
+	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
 )
 
 func TestSubmitThroughPublicFacade(t *testing.T) {
@@ -81,7 +81,7 @@ func TestSubmitThroughPublicFacade(t *testing.T) {
 				return
 			}
 			switch {
-			case strings.HasPrefix(line, "EHLO"), strings.HasPrefix(line, "MAIL"), strings.HasPrefix(line, "RCPT"), line == "RSET":
+			case strings.HasPrefix(line, "EHLO"), strings.HasPrefix(line, "MAIL"), strings.HasPrefix(line, "RCPT"), line == "RSET", line == "NOOP":
 				if protocol.PrintfLine("250 ok") != nil {
 					return
 				}
@@ -116,7 +116,7 @@ func TestSubmitThroughPublicFacade(t *testing.T) {
 	})
 	host, port, _ := net.SplitHostPort(listener.Addr().String())
 	number, _ := strconv.Atoi(port)
-	options := mail.OptionsV1{Name: "caller-fixture", Host: host, Port: number, Hello: "caller.fixture.test", TLSMode: "implicit", Auth: "none",
+	options := mail.Settings{Name: "caller-fixture", Host: host, Port: number, Hello: "caller.fixture.test", TLSMode: "implicit", Auth: "none",
 		RootCAPEM: string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})), MaxActive: 1, MaxMessages: 1, MaxRecipients: 1, Timeout: time.Second}
 	message, err := mail.NewMessage(mail.Content{ID: "caller@fixture.test", From: "from@fixture.test", To: []string{"to@fixture.test"},
 		Subject: "Public facade", Text: "Caller-controlled body."})

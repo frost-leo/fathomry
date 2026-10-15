@@ -101,7 +101,7 @@ func TestComposedSourceAndIndependentEvidence(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	conformance.Receive(t, ctx, bound.inbox, []conformance.Expected[Result]{want})
-	conformance.Facade(t, bound.client, "Send", "SendBatch", "Profile", "String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, bound.client, "Send", "SendBatch", "SendBatchWithOptions", "PrepareMessage", "Import", "Export", "Sendmail", "Session", "Profile", "String", "GoString", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	conformance.Runtime(t, bound.client, new(Client))
 	profile := bound.client.Profile()
 	profile.Options[0].Value = "mutated"

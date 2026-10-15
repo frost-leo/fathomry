@@ -74,6 +74,12 @@ The HTTP capability vocabulary in `adapters/httpclient/v1` shares declared
 accounting and attribution only. The nethttp provider retains native request,
 context, stream and direct-connection semantics; later HTTP providers must not
 depend on its implementation or infer a universal Complete meaning.
+
+The notification vocabulary in `adapters/notification/v1` similarly shares only
+accounting, provenance and distinct observations. Mail owns MIME/SMTP/process
+semantics through its selected Internal integration. Relay acceptance, process
+exit, platform acknowledgement and recipient reading are not one Delivered flag;
+no notification-specific runtime or business report model is introduced.
 Fathomry, not each independent business project, supplies composition. Business
 authors declare configuration, choose permitted capabilities/named sources and
 write workflow/node logic. The generated project Boot declares those choices through Framework scenario

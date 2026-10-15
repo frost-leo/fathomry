@@ -1,0 +1,76 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "notification_mail",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.notification_mail.invalid_input",
+      "source": "96843dbafa0ff3955b4e7a7d76263a1364b43c286d10f99fc83577788e683262",
+      "forms": {
+        "other": "邮件输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.notification_mail.unsupported_profile",
+      "source": "90f495068b15a9e7cb1ba0ea32420d18cc300ec0889b2824a02acf7433f4301d",
+      "forms": {
+        "other": "所选邮件能力无法满足此配置。"
+      }
+    },
+    {
+      "id": "fathomry.notification_mail.operation_failed",
+      "source": "060375db649ceb1bf538d247c56e4fa16b6cb682d9d65b6c67f34920701eb9d0",
+      "forms": {
+        "other": "邮件操作失败；外部效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.notification_mail.limit_exceeded",
+      "source": "b0a25284e65b1693748033284c9388db5f2a86276c560172f691e6301b45e7cc",
+      "forms": {
+        "other": "邮件能力超出了已声明的限制。"
+      }
+    },
+    {
+      "id": "fathomry.notification_mail.invalid_state",
+      "source": "120961fc6837e756ed897fc2148f37cbe08e7ac012cac5d1f9084d527ad02d1c",
+      "forms": {
+        "other": "邮件句柄当前无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.notification_mail.cleanup_failed",
+      "source": "30aa2124ffcab42b7f3b73408218e5856308e32c0b466de1910ad11d1efffc7b",
+      "forms": {
+        "other": "邮件清理发生错误；资源释放需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.notification_mail.runtime_serialization",
+      "source": "da2f09c84563cd69e851954f9a32969d3473b94fc37f357ba643fb6b72598fcf",
+      "forms": {
+        "other": "不支持序列化邮件运行时值。"
+      }
+    }
+  ]
+}

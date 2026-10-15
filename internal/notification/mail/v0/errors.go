@@ -51,13 +51,38 @@ func phaseFailure(kind fault.Kind, operation string, ctx context.Context, err er
 		return nil
 	}
 	var expired error
-	if errors.Is(err, os.ErrDeadlineExceeded) {
+	if findCause(err, func(cause error) bool { return cause == os.ErrDeadlineExceeded }) != nil {
 		if deadline, bounded := ctx.Deadline(); bounded && !time.Now().Before(deadline) {
 			// Socket deadlines can fire before the context timer is scheduled.
 			expired = context.DeadlineExceeded
 		}
 	}
 	return failure(kind, operation, err, ctx.Err(), context.Cause(ctx), expired)
+}
+
+// Inspection is bounded even when a borrowed callback supplies a cyclic graph.
+// Original causes remain intact for deliberate external errors.Is/As access.
+func findCause(root error, match func(error) bool) error {
+	queue := []error{root}
+	for index := 0; index < len(queue) && index < 128; index++ {
+		err := queue[index]
+		if err == nil {
+			continue
+		}
+		if match(err) {
+			return err
+		}
+		switch value := err.(type) {
+		case interface{ Unwrap() []error }:
+			children := value.Unwrap()
+			queue = append(queue, children[:min(len(children), 128-len(queue))]...)
+		case interface{ Unwrap() error }:
+			if len(queue) < 128 {
+				queue = append(queue, value.Unwrap())
+			}
+		}
+	}
+	return nil
 }
 
 type private struct{}

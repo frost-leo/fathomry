@@ -56,6 +56,21 @@ func TestConnectionTLSAuthReuse(t *testing.T) {
 		}
 	}
 }
+
+func TestUnixSMTPUsesExplicitSocketAndVerifiedTLS(t *testing.T) {
+	peer := newPeer(t, peerOptions{unix: true})
+	options := OptionsV1{Name: "unix", Network: "unix", SocketPath: peer.address, Host: "localhost", Hello: "fixture.test", TLSMode: "implicit", RootCAPEM: peer.roots, Auth: "none", MaxActive: 1}
+	bound := bindTest(t, options, 1)
+	out := sendTest(t, bound.client, "unix", plainMessage(t, "unix"))
+	if out.Err() != nil || out.Outcome.Value.SessionInfo().Network != "unix" || !out.Outcome.Value.SessionInfo().TLS {
+		t.Fatal("Unix transport evidence", out.Err())
+	}
+	captured, _ := peer.snapshot()
+	if len(captured) != 1 {
+		t.Fatal("Unix message not independently captured")
+	}
+	drain(t, bound.inbox)
+}
 func TestConnectionRefusesUnverifiedOrUnavailablePolicy(t *testing.T) {
 	for _, mode := range []string{"untrusted", "wrong-host", "no-starttls", "no-auth", "auth-rejected"} {
 		t.Run(mode, func(t *testing.T) {

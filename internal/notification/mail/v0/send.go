@@ -20,9 +20,13 @@
 package mail
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"mime"
+	"mime/multipart"
+	stdmail "net/mail"
 	"net/textproto"
 	"strconv"
 	"strings"
@@ -90,6 +94,7 @@ type Delivery struct {
 	stage      Stage
 	code       int
 	enhanced   string
+	response   string
 	err        error
 }
 
@@ -104,12 +109,25 @@ func (delivery Delivery) Code() int            { return delivery.code }
 func (delivery Delivery) EnhancedCode() string { return delivery.enhanced }
 func (delivery Delivery) Err() error           { return delivery.err }
 
+// ServerResponse returns the successful final DATA reply text. It may contain
+// private relay queue identifiers or addresses; it is not a safe log label.
+// Empty is also valid reply text; use Effect/Code to determine acceptance.
+// Cleanup cannot erase a captured reply.
+func (delivery Delivery) ServerResponse() string { return delivery.response }
+
 // Result is an immutable finite batch snapshot. Entries retain input order,
 // including unsent suffixes after fail-fast termination. There is no batch-level
 // atomicity or rollback. Native error causes are inspection-only borrowed values.
 type Result struct {
 	private
-	deliveries []Delivery
+	deliveries  []Delivery
+	message     Message
+	session     SessionInfo
+	process     ProcessInfo
+	written     int64
+	changes     []HeaderChange
+	responses   []error
+	connections []error
 }
 
 func (result Result) Messages() []Delivery { return append([]Delivery(nil), result.deliveries...) }
@@ -125,6 +143,15 @@ func (client *Client) Send(ctx context.Context, id fault.Correlation, message Me
 // at the first failure, never retries/reconnects/resends within a call, and retains
 // every input position. The caller must not mutate the slice during this method.
 func (client *Client) SendBatch(ctx context.Context, id fault.Correlation, messages []Message) (*invocation.Receipt[Result], error) {
+	return client.SendBatchWithOptions(ctx, id, messages, BatchOptions{})
+}
+
+// BatchOptions controls only technical continuation. ContinueOnError attempts
+// later input positions, reconnecting when necessary, never resending a position.
+// Incoming wire and execution budgets cover the whole batch.
+type BatchOptions struct{ ContinueOnError bool }
+
+func (client *Client) SendBatchWithOptions(ctx context.Context, id fault.Correlation, messages []Message, options BatchOptions) (*invocation.Receipt[Result], error) {
 	if client == nil || client.owner == nil || ctx == nil {
 		return nil, failure(ErrInput, "send")
 	}
@@ -155,13 +182,26 @@ func (client *Client) SendBatch(ctx context.Context, id fault.Correlation, messa
 	var conn *connection
 	stop := func() {}
 	var primary, cleanup error
+	var earlier, earlierCleanup error
+	remaining := value.MaxReplyBytes
 	for index, message := range messages {
 		delivery := &result.deliveries[index]
 		delivery.stage = StageCompose
 		encoded, composeErr := compose(work, message, value)
+		if composeErr == nil && client.owner.hooks.AlwaysDKIM != nil {
+			if message.unsigned != nil {
+				encoded = message.unsigned
+			}
+			encoded, composeErr = client.owner.hooks.AlwaysDKIM.sign(work, encoded, value.MaxMIMEBytes)
+		}
 		if composeErr != nil {
 			primary = composeErr
 			delivery.err = phaseFailure(ErrSend, "compose", work, primary)
+			if options.ContinueOnError && work.Err() == nil {
+				earlier = errors.Join(earlier, delivery.err)
+				primary = nil
+				continue
+			}
 			break
 		}
 		if work.Err() != nil {
@@ -171,7 +211,7 @@ func (client *Client) SendBatch(ctx context.Context, id fault.Correlation, messa
 		}
 		if conn == nil {
 			delivery.stage = StageConnect
-			conn, stop, err = client.owner.acquire(work)
+			conn, stop, err = client.owner.acquireBounded(work, remaining)
 			if err != nil {
 				primary = err
 				delivery.err = phaseFailure(ErrSend, "connect", work, err)
@@ -184,14 +224,47 @@ func (client *Client) SendBatch(ctx context.Context, id fault.Correlation, messa
 			delivery.err = phaseFailure(ErrSend, "send", work, primary)
 			break
 		}
+		if primary = message.checkSession(conn, value); primary != nil {
+			delivery.err = primary
+			if options.ContinueOnError && work.Err() == nil {
+				earlier = errors.Join(earlier, primary)
+				primary = nil
+				continue
+			}
+			break
+		}
+		if primary = checkWireEncoding(conn, encoded, value.DisableSMTPUTF8); primary != nil {
+			delivery.err = primary
+			if options.ContinueOnError && work.Err() == nil {
+				earlier = errors.Join(earlier, primary)
+				primary = nil
+				continue
+			}
+			break
+		}
+		result.session = conn.info
 		_, _ = call.Attempt()
-		primary, cleanup = sendMessage(work, conn, encoded, delivery)
+		primary, cleanup = sendMessageWithReset(work, conn, encoded, delivery, !value.SkipReset)
 		if primary != nil || cleanup != nil {
+			if options.ContinueOnError && work.Err() == nil {
+				earlier = errors.Join(earlier, primary)
+				earlierCleanup = errors.Join(earlierCleanup, cleanup)
+				remaining = conn.raw.remaining
+				result.responses = append(result.responses, conn.responses...)
+				result.connections = append(result.connections, conn.connectionErrors...)
+				stop()
+				earlierCleanup = errors.Join(earlierCleanup, conn.raw.Close())
+				conn, stop = nil, func() {}
+				primary, cleanup = nil, nil
+				continue
+			}
 			break
 		}
 	}
 	stop()
 	if conn != nil {
+		result.responses = append(result.responses, conn.responses...)
+		result.connections = append(result.connections, conn.connectionErrors...)
 		if primary == nil && cleanup == nil && work.Err() == nil {
 			client.owner.put(conn)
 		} else if closeErr := conn.raw.Close(); closeErr != nil {
@@ -201,13 +274,84 @@ func (client *Client) SendBatch(ctx context.Context, id fault.Correlation, messa
 	if primary != nil {
 		primary = phaseFailure(ErrSend, "send", work, primary)
 	}
+	primary = errors.Join(earlier, primary)
+	cleanup = errors.Join(earlierCleanup, cleanup)
 	if cleanup != nil {
 		cleanup = phaseFailure(ErrCleanup, "reset", work, cleanup)
 	}
 	call.Complete(invocation.Outcome[Result]{Present: true, Value: result, Primary: primary, Cleanup: cleanup})
 	return call.Receipt(), nil
 }
+
+func checkWireEncoding(conn *connection, wire []byte, disableUTF8 bool) error {
+	high := false
+	for _, value := range wire {
+		if value >= 128 {
+			high = true
+			break
+		}
+	}
+	if !high {
+		return nil
+	}
+	if supported, _ := conn.native.Extension("8BITMIME"); !supported {
+		return failure(ErrUnsupported, "8bitmime")
+	}
+	message, err := stdmail.ReadMessage(bytes.NewReader(wire))
+	if err != nil {
+		return failure(ErrInput, "mime", err)
+	}
+	count := 0
+	var inspect func(textproto.MIMEHeader, io.Reader, int) (bool, error)
+	inspect = func(headers textproto.MIMEHeader, body io.Reader, depth int) (bool, error) {
+		count++
+		if depth > 8 || count > 128 {
+			return false, failure(ErrLimit, "mime-structure")
+		}
+		for _, values := range headers {
+			for _, text := range values {
+				for _, char := range []byte(text) {
+					if char >= 128 {
+						return true, nil
+					}
+				}
+			}
+		}
+		media, params, err := mime.ParseMediaType(headers.Get("Content-Type"))
+		if err != nil || !strings.HasPrefix(media, "multipart/") {
+			return false, err
+		}
+		reader := multipart.NewReader(body, params["boundary"])
+		for {
+			part, err := reader.NextRawPart()
+			if err == io.EOF {
+				return false, nil
+			}
+			if err != nil {
+				return false, err
+			}
+			high, err := inspect(part.Header, part, depth+1)
+			if high || err != nil {
+				return high, err
+			}
+		}
+	}
+	high, err = inspect(textproto.MIMEHeader(message.Header), message.Body, 0)
+	if err != nil {
+		return failure(ErrInput, "mime", err)
+	}
+	if high {
+		supported, _ := conn.native.Extension("SMTPUTF8")
+		if disableUTF8 || !supported {
+			return failure(ErrUnsupported, "smtp-utf8")
+		}
+	}
+	return nil
+}
 func sendMessage(ctx context.Context, conn *connection, data []byte, delivery *Delivery) (primary, cleanup error) {
+	return sendMessageWithReset(ctx, conn, data, delivery, true)
+}
+func sendMessageWithReset(ctx context.Context, conn *connection, data []byte, delivery *Delivery, reset bool) (primary, cleanup error) {
 	defer func() {
 		if primary != nil {
 			delivery.err = phaseFailure(ErrSend, string(delivery.stage), ctx, primary)
@@ -257,9 +401,12 @@ func sendMessage(ctx context.Context, conn *connection, data []byte, delivery *D
 	delivery.effect = Accepted
 	delivery.code = code
 	delivery.enhanced = enhancedCode(response)
+	delivery.response = response
 	// Cleanup failure cannot undo the preceding DATA acknowledgement.
-	if err = conn.native.Reset(); err != nil {
-		return nil, err
+	if reset {
+		if err = conn.native.Reset(); err != nil {
+			return nil, err
+		}
 	}
 	return nil, nil
 }
@@ -277,8 +424,8 @@ func finishData(writer io.WriteCloser, native *smtp.Client) (int, string, error)
 	return native.Text.ReadResponse(250)
 }
 func replyError(err error) (int, string) {
-	var reply *textproto.Error
-	if errors.As(err, &reply) {
+	matched := findCause(err, func(cause error) bool { _, ok := cause.(*textproto.Error); return ok })
+	if reply, ok := matched.(*textproto.Error); ok && reply != nil {
 		return reply.Code, enhancedCode(reply.Msg)
 	}
 	return 0, ""

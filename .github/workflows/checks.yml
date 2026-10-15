@@ -114,8 +114,8 @@ jobs:
       - name: Verify independent mail example
         if: steps.module.outputs.present == 'true'
         run: |
-          go vet ./internal/notification/mail/v0/testdata/welcome
-          go test -race -count=1 -timeout=2m ./internal/notification/mail/v0/testdata/welcome
+          go vet ./adapters/notification/mail/v1/testdata/welcome
+          go test -race -count=1 -timeout=2m ./adapters/notification/mail/v1/testdata/welcome
       - name: Verify independent Lark / Feishu example
         if: steps.module.outputs.present == 'true'
         run: |

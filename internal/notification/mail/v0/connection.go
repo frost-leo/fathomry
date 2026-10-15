@@ -41,35 +41,28 @@ type Source struct {
 }
 type owner struct {
 	settings settings
+	hooks    NativeOptions
 	mu       sync.Mutex
 	idle     []*connection
 	closed   bool
 	closeErr error
 }
 type connection struct {
-	raw    *limitedConn
-	native *smtp.Client
+	raw              *limitedConn
+	native           *smtp.Client
+	info             SessionInfo
+	responses        []error
+	connectionErrors []error
 }
 
 // Select freezes configuration and strict overlays without I/O. Connections are
 // lazily opened only under the call's admission/evidence/timeout authority.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	version := options.Version
-	if version == 0 {
-		version = 1
-	}
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: validate},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
-		if ctx.Err() != nil {
-			return resource.Resource[Source]{}, failure(ErrInput, "construct", ctx.Err(), context.Cause(ctx))
-		}
-		owned := &owner{settings: value}
-		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: owned}, Release: owned.close}, nil
-	}), nil
+	return prepared.Select(), nil
 }
 
 // Client is a concurrent non-owning facade. Copies and resource.Borrow aliases
@@ -105,6 +98,9 @@ func Bind(assembly *resource.Assembly, selected resource.Selection[Source], inbo
 }
 
 func (owned *owner) acquire(ctx context.Context) (*connection, func(), error) {
+	return owned.acquireBounded(ctx, owned.settings.MaxReplyBytes)
+}
+func (owned *owner) acquireBounded(ctx context.Context, remaining int) (*connection, func(), error) {
 	owned.mu.Lock()
 	var conn *connection
 	if len(owned.idle) > 0 {
@@ -117,32 +113,45 @@ func (owned *owner) acquire(ctx context.Context) (*connection, func(), error) {
 		return nil, func() {}, failure(ErrInput, "closed")
 	}
 	if conn != nil {
-		stop, err := conn.arm(ctx, owned.settings.MaxReplyBytes)
+		conn.connectionErrors = nil
+		conn.info.ConnectionAttempts = 0
+		stop, err := conn.arm(ctx, remaining)
+		owned.configureHandlers(ctx, conn)
 		return conn, stop, err
 	}
 	value := owned.settings
-	raw, err := (&net.Dialer{}).DialContext(ctx, "tcp", net.JoinHostPort(value.Host, strconv.Itoa(value.Port)))
-	if err != nil {
-		return nil, func() {}, err
+	config, _ := value.tls()
+	if owned.hooks.TLS != nil {
+		config = owned.hooks.TLS.Clone()
+		if config.ServerName == "" {
+			config.ServerName = value.Host
+		}
 	}
-	conn = &connection{raw: &limitedConn{Conn: raw}}
-	stop, err := conn.arm(ctx, value.MaxReplyBytes)
+	port, attempts := value.Port, 1
+	conn, wire, stop, err := owned.dialTransport(ctx, port, remaining, config)
+	if err != nil && value.FallbackPort != 0 && ctx.Err() == nil {
+		previous := err
+		stop()
+		if conn != nil {
+			remaining = conn.raw.remaining
+			previous = errors.Join(previous, conn.raw.Close())
+		}
+		port, attempts = value.FallbackPort, 2
+		conn, wire, stop, err = owned.dialTransport(ctx, port, remaining, config)
+		if conn != nil {
+			conn.connectionErrors = []error{previous}
+		} else {
+			err = errors.Join(previous, err)
+		}
+	}
 	if err != nil {
 		return conn, stop, err
-	}
-	config, _ := value.tls()
-	var wire net.Conn = conn.raw
-	if value.TLSMode == "implicit" {
-		encrypted := tls.Client(wire, config)
-		if err = encrypted.HandshakeContext(ctx); err != nil {
-			return conn, stop, err
-		}
-		wire = encrypted
 	}
 	conn.native, err = smtp.NewClient(wire, value.Host)
 	if err != nil {
 		return conn, stop, err
 	}
+	owned.configureHandlers(ctx, conn)
 	hello := value.Hello
 	if ip := net.ParseIP(hello); ip != nil {
 		if ip.To4() == nil {
@@ -153,44 +162,102 @@ func (owned *owner) acquire(ctx context.Context) (*connection, func(), error) {
 	if err = conn.native.Hello(hello); err != nil {
 		return conn, stop, err
 	}
-	if value.TLSMode == "starttls" {
-		if supported, _ := conn.native.Extension("STARTTLS"); !supported {
+	if value.TLSMode == "starttls" || value.TLSMode == "opportunistic" {
+		supported, _ := conn.native.Extension("STARTTLS")
+		if !supported && value.TLSMode == "starttls" {
 			return conn, stop, failure(ErrUnsupported, "starttls")
 		}
-		if err = conn.native.StartTLS(config); err != nil {
-			return conn, stop, err
+		if supported {
+			if err = conn.native.StartTLS(config); err != nil {
+				return conn, stop, err
+			}
 		}
 	}
 	state, secure := conn.native.TLSConnectionState()
-	if !secure || !state.HandshakeComplete || len(state.VerifiedChains) == 0 {
+	if (value.TLSMode == "implicit" || value.TLSMode == "starttls" || secure || value.Auth != "none") && (!secure || !state.HandshakeComplete || len(state.VerifiedChains) == 0) {
 		return conn, stop, failure(ErrUnsupported, "tls")
 	}
+	conn.info = SessionInfo{Network: value.Network, TLS: secure, TLSVersion: state.Version, CipherSuite: state.CipherSuite, Authentication: "none", Port: port, ConnectionAttempts: attempts}
+	conn.native.SkipSMTPUTF8(value.DisableSMTPUTF8)
+	conn.native.SetDSNMailReturnOption(value.DSNReturn)
+	conn.native.SetDSNRcptNotifyOption(strings.Join(value.DSNNotify, ","))
 	if value.Auth != "none" {
 		available, mechanisms := conn.native.Extension("AUTH")
-		wanted := strings.ToUpper(value.Auth)
-		found := false
-		for _, mechanism := range strings.Fields(mechanisms) {
-			if mechanism == wanted {
-				found = true
-			}
-		}
-		if !available || !found {
+		if !available {
 			return conn, stop, failure(ErrUnsupported, "auth")
 		}
-		var auth smtp.Auth
-		switch value.Auth {
-		case "plain":
-			auth = smtp.PlainAuth("", value.Username, value.Password, value.Host, false)
-		case "login":
-			auth = smtp.LoginAuth(value.Username, value.Password, value.Host, false)
-		case "xoauth2":
-			auth = smtp.XOAuth2Auth(value.Username, value.Password)
+		auth, selected, authErr := owned.authentication(ctx, state, mechanisms)
+		if authErr != nil {
+			return conn, stop, authErr
 		}
 		if err = conn.native.Auth(auth); err != nil {
 			return conn, stop, err
 		}
+		conn.info.Authentication = selected
+	}
+	if !value.SkipNoop {
+		if err := conn.native.Noop(); err != nil {
+			return conn, stop, err
+		}
 	}
 	return conn, stop, nil
+}
+
+func (owned *owner) dialTransport(ctx context.Context, port, remaining int, config *tls.Config) (*connection, net.Conn, func(), error) {
+	stop := func() {}
+	if remaining <= 0 {
+		return nil, nil, stop, failure(ErrLimit, "reply")
+	}
+	value := owned.settings
+	address := net.JoinHostPort(value.Host, strconv.Itoa(port))
+	if value.Network == "unix" {
+		address = value.SocketPath
+	}
+	dial := owned.hooks.DialContext
+	if dial == nil {
+		dial = (&net.Dialer{}).DialContext
+	}
+	raw, err := dial(ctx, value.Network, address)
+	if nilInterface(raw) {
+		if err == nil {
+			err = failure(ErrInput, "dial")
+		}
+		return nil, nil, stop, err
+	}
+	conn := &connection{raw: &limitedConn{Conn: raw, remaining: remaining}}
+	if err != nil {
+		return conn, nil, stop, err
+	}
+	stop, err = conn.arm(ctx, remaining)
+	if err != nil {
+		return conn, nil, stop, err
+	}
+	var wire net.Conn = conn.raw
+	if value.TLSMode == "implicit" {
+		encrypted := tls.Client(wire, config)
+		if err = encrypted.HandshakeContext(ctx); err != nil {
+			return conn, nil, stop, err
+		}
+		wire = encrypted
+	}
+	return conn, wire, stop, nil
+}
+
+func (owned *owner) configureHandlers(ctx context.Context, conn *connection) {
+	registry := smtp.NewErrorHandlerRegistry()
+	conn.responses = nil
+	record := func(err error) bool {
+		if len(conn.responses) >= 16 {
+			return false
+		}
+		conn.responses = append(conn.responses, err)
+		return true
+	}
+	registry.SetDefaultHandler(responseHandler{ctx: ctx, hook: owned.hooks.DefaultResponseHandler, record: record})
+	for command, hook := range owned.hooks.ResponseHandlers {
+		registry.RegisterHandler(owned.settings.Host, command, responseHandler{ctx: ctx, hook: hook, record: record})
+	}
+	conn.native.ErrorHandlerRegistry = registry
 }
 
 // arm bounds incoming wire bytes including TLS overhead. The cancellation hook
@@ -236,6 +303,7 @@ func (owned *owner) close(ctx context.Context) resource.ReleaseResult {
 		if err == nil && work.Err() == nil {
 			stop, armErr := conn.arm(work, owned.settings.MaxReplyBytes)
 			if armErr == nil {
+				owned.configureHandlers(work, conn)
 				armErr = conn.native.Quit()
 			}
 			stop()
