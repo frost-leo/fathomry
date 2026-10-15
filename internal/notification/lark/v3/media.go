@@ -35,9 +35,11 @@ import (
 // Image upload always uses image_type=message, not avatar administration.
 type Upload struct {
 	private
-	Name, Type string
-	Duration   int
-	Data       []byte
+	Name, Type    string
+	Duration      int
+	Data          []byte
+	ImageType     string
+	DurationValue *int
 }
 
 func (client *Client) upload(ctx context.Context, id fault.Correlation, value Upload, image bool) (*invocation.Receipt[Result], error) {

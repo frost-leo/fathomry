@@ -24,13 +24,14 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -53,6 +54,7 @@ type Callback struct {
 type Event struct {
 	private
 	id, kind, app, tenant, created, data, challenge string
+	schema                                          string
 }
 
 func (value Event) ID() string         { return value.id }
@@ -62,6 +64,7 @@ func (value Event) TenantKey() string  { return value.tenant }
 func (value Event) CreateTime() string { return value.created }
 func (value Event) JSONData() []byte   { return []byte(value.data) }
 func (value Event) Challenge() string  { return value.challenge }
+func (value Event) Schema() string     { return value.schema }
 
 // Event returns a value copy and presence, including authenticated URL challenges.
 func (value Result) Event() (Event, bool) {
@@ -73,10 +76,21 @@ func (value Result) Event() (Event, bool) {
 
 // Receive verifies/decrypts one callback and reserves independently owned event
 // evidence. It starts no HTTP server, WebSocket, dispatcher or application code.
-// Only schema 2.0 IM message events and card.action.trigger are in this profile.
+// Selected IM/chat/member events, card/URL callbacks, adjacent bot/auth events
+// and v1 app tickets are supported; unknown enterprise events are rejected.
 // Signature freshness is enforced, but replay/durable processing is caller-owned.
 // URL verification follows Feishu's separate token-authenticated challenge path.
 func (client *Client) Receive(ctx context.Context, id fault.Correlation, input Callback) (*invocation.Receipt[Result], error) {
+	return client.receiveCallback(ctx, id, input, false)
+}
+
+// ReceiveLegacy authenticates the distinct SHA-1/token card action protocol.
+// The action token is response-update authority, not the verification token.
+func (client *Client) ReceiveLegacy(ctx context.Context, id fault.Correlation, input Callback) (*invocation.Receipt[Result], error) {
+	return client.receiveCallback(ctx, id, input, true)
+}
+
+func (client *Client) receiveCallback(ctx context.Context, id fault.Correlation, input Callback, legacy bool) (*invocation.Receipt[Result], error) {
 	if err := client.ready("receive", false); err != nil {
 		return nil, err
 	}
@@ -97,10 +111,17 @@ func (client *Client) Receive(ctx context.Context, id fault.Correlation, input C
 	if err == nil {
 		defer cancel()
 		var event Event
-		event, err = value.receive(input, time.Now())
-		if err == nil && work.Err() != nil {
-			err = work.Err()
+		var credentials WebhookCredentials
+		credentials, err = client.owner.webhookCredentials(work)
+		if err == nil {
+			value.VerificationToken, value.EncryptKey = credentials.VerificationToken, credentials.EncryptKey
+			if legacy {
+				event, err = value.receiveLegacy(input, time.Now())
+			} else {
+				event, err = value.receive(input, time.Now())
+			}
 		}
+		err = errors.Join(err, work.Err(), context.Cause(work))
 		if err == nil {
 			result.effect = Accepted
 			result.event = &event
@@ -115,6 +136,9 @@ func (client *Client) Receive(ctx context.Context, id fault.Correlation, input C
 func (value settings) receive(input Callback, now time.Time) (event Event, err error) {
 	unsigned := input.Signature == "" && input.Timestamp == "" && input.Nonce == ""
 	if !unsigned {
+		if value.EncryptKey == "" {
+			return Event{}, failure(ErrAuth, "signature-profile")
+		}
 		if err := value.verifySignature(input, now); err != nil {
 			return Event{}, err
 		}
@@ -142,6 +166,9 @@ func (value settings) receive(input Callback, now time.Time) (event Event, err e
 	}
 	plain := input.Body
 	if wrapper.Encrypt != "" {
+		if value.EncryptKey == "" {
+			return Event{}, failure(ErrAuth, "encryption-profile")
+		}
 		var err error
 		plain, err = decryptEvent(wrapper.Encrypt, value.EncryptKey)
 		if err != nil {
@@ -171,21 +198,27 @@ func (value settings) receive(input Callback, now time.Time) (event Event, err e
 		}
 		return Event{kind: "url_verification", challenge: envelope.Challenge}, nil
 	}
-	if unsigned {
+	if unsigned && value.EncryptKey != "" {
 		return Event{}, failure(ErrAuth, "signature")
+	}
+	if envelope.Schema == "" && envelope.Type == "event_callback" {
+		if subtle.ConstantTimeCompare([]byte(envelope.Token), []byte(value.VerificationToken)) != 1 {
+			return Event{}, failure(ErrAuth, "event-token")
+		}
+		return value.appTicket(plain, envelope.Event)
 	}
 	header := envelope.Header
 	if envelope.Schema != "2.0" || header == nil || !identifier(header.EventID) || header.AppID != value.AppID || header.TenantKey != value.TenantKey ||
 		subtle.ConstantTimeCompare([]byte(header.Token), []byte(value.VerificationToken)) != 1 {
 		return Event{}, failure(ErrAuth, "event-identity")
 	}
-	if !strings.HasPrefix(header.EventType, "im.message.") && header.EventType != "card.action.trigger" {
+	if !selectedEvent(header.EventType) {
 		return Event{}, failure(ErrUnsupported, "event-type")
 	}
 	if !shortText(header.EventType, 128) || !shortText(header.CreateTime, 32) || len(envelope.Event) == 0 || envelope.Event[0] != '{' {
 		return Event{}, failure(ErrReceive, "event")
 	}
-	return Event{id: header.EventID, kind: header.EventType, app: header.AppID, tenant: header.TenantKey, created: header.CreateTime, data: string(envelope.Event)}, nil
+	return Event{id: header.EventID, kind: header.EventType, app: header.AppID, tenant: header.TenantKey, created: header.CreateTime, data: string(envelope.Event), schema: "2.0"}, nil
 }
 
 func exactEventFields(data []byte) error {
@@ -237,4 +270,141 @@ func decryptEvent(encoded, key string) ([]byte, error) {
 	// Native EventDecrypt searches for braces and silently discards other plaintext.
 	// Strict PKCS#7 and complete-JSON validation retain the actual envelope boundary.
 	return plain[:len(plain)-padding], nil
+}
+
+func selectedEvent(kind string) bool {
+	switch kind {
+	case "im.chat.disbanded_v1", "im.chat.updated_v1", "im.chat.access_event.bot_p2p_chat_entered_v1",
+		"im.chat.member.bot.added_v1", "im.chat.member.bot.deleted_v1", "im.chat.member.user.added_v1",
+		"im.chat.member.user.deleted_v1", "im.chat.member.user.withdrawn_v1",
+		"im.message.receive_v1", "im.message.message_read_v1", "im.message.recalled_v1",
+		"im.message.reaction.created_v1", "im.message.reaction.deleted_v1",
+		"card.action.trigger", "url.preview.get", "application.bot.menu_v6", "auth.user_access_token.revoked_v4":
+		return true
+	}
+	return false
+}
+
+func (owned *owner) webhookCredentials(ctx context.Context) (value WebhookCredentials, err error) {
+	configured := owned.settings
+	value = WebhookCredentials{AppID: configured.AppID, TenantKey: configured.TenantKey, VerificationToken: configured.VerificationToken, EncryptKey: configured.EncryptKey}
+	if ctx.Err() != nil {
+		return WebhookCredentials{}, failure(ErrAuth, "webhook-credentials", ctx.Err(), context.Cause(ctx))
+	}
+	if owned.hooks.WebhookCredentials != nil {
+		value, err = callBorrowed(ctx, ErrAuth, "webhook-credentials-exit", func() (WebhookCredentials, error) {
+			return owned.hooks.WebhookCredentials(ctx)
+		})
+		if err != nil {
+			return WebhookCredentials{}, failure(ErrAuth, "webhook-credentials", err, ctx.Err(), context.Cause(ctx))
+		}
+	}
+	if ctx.Err() != nil {
+		return WebhookCredentials{}, failure(ErrAuth, "webhook-credentials", ctx.Err(), context.Cause(ctx))
+	}
+	if value.AppID != configured.AppID || value.TenantKey != configured.TenantKey || !secretValid(value.VerificationToken, 4096) ||
+		(value.EncryptKey == "") != (configured.EncryptKey == "") || value.EncryptKey != "" && !secretValid(value.EncryptKey, 4096) {
+		return WebhookCredentials{}, failure(ErrAuth, "webhook-credential-snapshot")
+	}
+	return value, nil
+}
+
+func (value settings) appTicket(plain, data []byte) (Event, error) {
+	if _, err := exactFields(plain, "uuid", "ts"); err != nil {
+		return Event{}, failure(ErrReceive, "app-ticket", err)
+	}
+	if _, err := exactFields(data, "app_id", "type", "app_ticket"); err != nil {
+		return Event{}, failure(ErrReceive, "app-ticket", err)
+	}
+	var base struct {
+		UUID string `json:"uuid"`
+		Ts   string `json:"ts"`
+	}
+	var event struct {
+		AppID  string `json:"app_id"`
+		Type   string `json:"type"`
+		Ticket string `json:"app_ticket"`
+	}
+	if json.Unmarshal(plain, &base) != nil || json.Unmarshal(data, &event) != nil ||
+		event.Type != "app_ticket" || event.AppID != value.AppID || !identifier(base.UUID) ||
+		!shortText(base.Ts, 32) || !secretValid(event.Ticket, 4096) {
+		return Event{}, failure(ErrAuth, "app-ticket-identity")
+	}
+	return Event{id: base.UUID, kind: "app_ticket", app: event.AppID, created: base.Ts, data: string(data), schema: "1.0"}, nil
+}
+
+func (value settings) receiveLegacy(input Callback, now time.Time) (event Event, err error) {
+	unsigned := input.Timestamp == "" && input.Nonce == "" && input.Signature == ""
+	if unsigned {
+		defer func() {
+			if err != nil {
+				event = Event{}
+				err = failure(ErrAuth, "legacy-challenge")
+			}
+		}()
+	}
+	if err := checkJSON(input.Body, value.MaxRequestBytes); err != nil {
+		return Event{}, failure(ErrReceive, "legacy-body", err)
+	}
+	fields, err := exactFields(input.Body, "encrypt", "type", "token", "challenge")
+	if err != nil {
+		return Event{}, failure(ErrReceive, "legacy-body", err)
+	}
+	var encrypted string
+	if raw, ok := fields["encrypt"]; ok && json.Unmarshal(raw, &encrypted) != nil {
+		return Event{}, failure(ErrReceive, "legacy-encrypt")
+	}
+	if !unsigned {
+		stamp, err := strconv.ParseInt(input.Timestamp, 10, 64)
+		if err != nil || stamp <= 0 || !secretValid(input.Nonce, 256) || time.Unix(stamp, 0).Before(now.Add(-value.CallbackMaxAge)) ||
+			time.Unix(stamp, 0).After(now.Add(value.CallbackMaxAge)) {
+			return Event{}, failure(ErrAuth, "legacy-signature")
+		}
+		actual, err := hex.DecodeString(input.Signature)
+		expected := sha1.Sum([]byte(input.Timestamp + input.Nonce + value.VerificationToken + string(input.Body)))
+		if err != nil || subtle.ConstantTimeCompare(actual, expected[:]) != 1 {
+			return Event{}, failure(ErrAuth, "legacy-signature")
+		}
+	}
+	plain := input.Body
+	if encrypted != "" {
+		if value.EncryptKey == "" {
+			return Event{}, failure(ErrAuth, "legacy-encrypt")
+		}
+		plain, err = decryptEvent(encrypted, value.EncryptKey)
+		if err != nil {
+			return Event{}, failure(ErrAuth, "legacy-encrypt")
+		}
+	}
+	if err := checkJSON(plain, value.MaxRequestBytes); err != nil {
+		return Event{}, failure(ErrReceive, "legacy-body", err)
+	}
+	fields, err = exactFields(plain, "type", "token", "challenge", "tenant_key", "open_message_id", "open_id", "action")
+	if err != nil {
+		return Event{}, failure(ErrReceive, "legacy-body", err)
+	}
+	var action struct {
+		Type      string `json:"type"`
+		Token     string `json:"token"`
+		Challenge string `json:"challenge"`
+		Tenant    string `json:"tenant_key"`
+		Message   string `json:"open_message_id"`
+		User      string `json:"open_id"`
+	}
+	if json.Unmarshal(plain, &action) != nil {
+		return Event{}, failure(ErrReceive, "legacy-body")
+	}
+	if action.Type == "url_verification" {
+		if subtle.ConstantTimeCompare([]byte(action.Token), []byte(value.VerificationToken)) != 1 || action.Challenge == "" || !shortText(action.Challenge, 2048) {
+			return Event{}, failure(ErrAuth, "legacy-challenge")
+		}
+		return Event{kind: "url_verification", schema: "legacy", challenge: action.Challenge}, nil
+	}
+	if unsigned || action.Tenant != value.TenantKey || !identifier(action.Message) || !identifier(action.User) {
+		return Event{}, failure(ErrAuth, "legacy-identity")
+	}
+	if _, err = exactFields(fields["action"]); err != nil {
+		return Event{}, failure(ErrReceive, "legacy-action", err)
+	}
+	return Event{kind: "legacy.card.action", app: value.AppID, tenant: action.Tenant, data: string(plain), schema: "legacy"}, nil
 }

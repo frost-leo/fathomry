@@ -27,7 +27,6 @@ import (
 	"errors"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/frost-leo/fathomry/internal/fault"
@@ -191,13 +190,13 @@ func (value settings) socketEvent(payload []byte) (Event, error) {
 	if header.AppID != value.AppID || !identifier(header.EventID) || !identifier(header.TenantKey) || value.TenantKey != "" && header.TenantKey != value.TenantKey {
 		return Event{}, failure(ErrAuth, "websocket-event-identity")
 	}
-	if !strings.HasPrefix(header.EventType, "im.message.") && header.EventType != "card.action.trigger" {
+	if !selectedEvent(header.EventType) {
 		return Event{}, failure(ErrUnsupported, "websocket-event-type")
 	}
 	if !shortText(header.EventType, 128) || !shortText(header.CreateTime, 32) || len(envelope.Event) == 0 || envelope.Event[0] != '{' {
 		return Event{}, failure(ErrProtocol, "websocket-event")
 	}
-	return Event{id: header.EventID, kind: header.EventType, app: header.AppID, tenant: header.TenantKey, created: header.CreateTime, data: string(envelope.Event)}, nil
+	return Event{id: header.EventID, kind: header.EventType, app: header.AppID, tenant: header.TenantKey, created: header.CreateTime, data: string(envelope.Event), schema: "2.0"}, nil
 }
 func (run *socketRun) writeAcknowledgement(conn *websocket.Conn, pending *socketPending, expired bool) (writeErr error) {
 	run.mu.Lock()

@@ -46,8 +46,8 @@ Run/Item business terminal state. Mail never reports recipient reading.
 This package contains no SDK, client, universal Notifier, Report, registry,
 scheduler or retry engine. Concrete adapters reuse [operations](../../v1/interface.md)
 and [resource generations](../../../resource/v1/interface.md). The
-[Mail adapter](../mail/v1/interface.md) is one consumer; choosing it does not
-import Lark.
+[Mail adapter](../mail/v1/interface.md) and [Lark adapter](../lark/v1/interface.md)
+are independent consumers; choosing one does not import the other.
 
 ## Bounds and ownership
 

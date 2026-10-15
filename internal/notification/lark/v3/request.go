@@ -27,6 +27,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"slices"
 	"strconv"
 	"sync"
 
@@ -44,7 +45,8 @@ const (
 	Unknown
 	Rejected
 	Accepted
-	// Partial means a merged message was acknowledged with invalid input IDs.
+	// Partial means an ACK includes explicit failed or pending target scope. It
+	// does not assert that every other target succeeded or that pending means failed.
 	Partial
 )
 
@@ -72,10 +74,18 @@ type Result struct {
 	exchange                                         Exchange
 	authentication                                   Exchange
 	authAttempted                                    bool
+	authStages                                       []AuthenticationStage
+	rawResponse                                      string
+	invalidUserIDs                                   []string
+	invalidTargets                                   map[string][]string
+	scopeDetails                                     map[string]string
+	partialScope                                     bool
 	target, requestUUID, messageID, cardID, assetKey string
 	data                                             string
 	binary                                           []byte
 	contentType                                      string
+	headers                                          http.Header
+	fileName                                         string
 	event                                            *Event
 	resolvedRecipient                                Recipient
 	messages                                         []MessageInfo
@@ -89,14 +99,23 @@ func (value Result) Exchange() Exchange { return value.exchange }
 func (value Result) Authentication() (Exchange, bool) {
 	return value.authentication, value.authAttempted
 }
-func (value Result) Target() string       { return value.target }
-func (value Result) UUID() string         { return value.requestUUID }
-func (value Result) MessageID() string    { return value.messageID }
-func (value Result) CardID() string       { return value.cardID }
-func (value Result) AssetKey() string     { return value.assetKey }
-func (value Result) JSONData() []byte     { return []byte(value.data) }
-func (value Result) Bytes() []byte        { return bytes.Clone(value.binary) }
-func (value Result) ContentType() string  { return value.contentType }
+func (value Result) Target() string    { return value.target }
+func (value Result) UUID() string      { return value.requestUUID }
+func (value Result) MessageID() string { return value.messageID }
+func (value Result) CardID() string    { return value.cardID }
+func (value Result) AssetKey() string  { return value.assetKey }
+func (value Result) JSONData() []byte  { return []byte(value.data) }
+
+// ResponseJSON retains the complete bounded native envelope, including unknown
+// fields. It is deliberately sensitive; ordinary formatting remains redacted.
+func (value Result) ResponseJSON() []byte     { return []byte(value.rawResponse) }
+func (value Result) InvalidUserIDs() []string { return slices.Clone(value.invalidUserIDs) }
+func (value Result) Bytes() []byte            { return bytes.Clone(value.binary) }
+func (value Result) ContentType() string      { return value.contentType }
+
+// Headers and FileName are bounded, untrusted native metadata, not local paths.
+func (value Result) Headers() http.Header { return value.headers.Clone() }
+func (value Result) FileName() string     { return value.fileName }
 func (value Result) RelatedIDs() []string { return append([]string(nil), value.related...) }
 func (value Result) InvalidMessageIDs() []string {
 	return append([]string(nil), value.invalidMessageIDs...)
@@ -114,6 +133,14 @@ type requestSpec struct {
 	webhookContent          Content
 	related                 []string
 	responseLimit           int
+	baseURL                 string
+	requestID               string
+	headers                 http.Header
+	readInput               func(context.Context) (*Upload, error)
+	dataRequired            bool
+	partialKey              string
+	scopeFields             []string
+	botInfo                 bool
 }
 type attemptCounter interface{ Attempt() (uint64, error) }
 type requestKey struct{}
@@ -181,8 +208,13 @@ func (owned *owner) Do(request *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	captured := &larkcore.ApiResp{StatusCode: response.StatusCode, Header: response.Header.Clone()}
+	captured := &larkcore.ApiResp{StatusCode: response.StatusCode}
 	state.response = captured
+	if len(response.Header) > 256 {
+		state.cleanup = response.Body.Close()
+		return nil, failure(ErrLimit, "response-headers")
+	}
+	captured.Header = response.Header.Clone()
 	data, readErr := io.ReadAll(io.LimitReader(response.Body, int64(state.limit)+1))
 	state.cleanup = response.Body.Close()
 	if len(data) > state.limit {
@@ -198,6 +230,9 @@ func (owned *owner) Do(request *http.Request) (*http.Response, error) {
 }
 func (owned *owner) nativeRequest(ctx context.Context, call attemptCounter, spec requestSpec, token string) (*requestState, error) {
 	address := owned.settings.BaseURL + spec.path
+	if spec.baseURL != "" {
+		address = spec.baseURL + spec.path
+	}
 	if spec.webhook {
 		address = owned.settings.WebhookURL
 	}
@@ -223,12 +258,26 @@ func (owned *owner) nativeRequest(ctx context.Context, call attemptCounter, spec
 	var options []larkcore.RequestOptionFunc
 	if token != "" {
 		access = larkcore.AccessTokenTypeTenant
-		options = append(options, larkcore.WithTenantAccessToken(token))
+		if owned.settings.Profile == "user-token" {
+			access = larkcore.AccessTokenTypeUser
+			options = append(options, larkcore.WithUserAccessToken(token))
+		} else {
+			options = append(options, larkcore.WithTenantAccessToken(token))
+		}
+	}
+	if spec.requestID != "" {
+		options = append(options, larkcore.WithRequestId(spec.requestID))
+	}
+	if len(spec.headers) != 0 {
+		options = append(options, larkcore.WithHeaders(spec.headers))
 	}
 	if spec.download {
 		options = append(options, larkcore.WithFileDownload())
 	}
 	path := spec.path
+	if spec.baseURL != "" {
+		path = spec.baseURL + spec.path
+	}
 	if spec.webhook {
 		path = owned.settings.WebhookURL
 	}
@@ -236,11 +285,19 @@ func (owned *owner) nativeRequest(ctx context.Context, call attemptCounter, spec
 		upload := spec.upload
 		form := larkcore.NewFormdata()
 		if spec.operation == "upload-image" {
-			form.AddField("image_type", "message").AddFileWithName("image", upload.Name, bytes.NewReader(upload.Data))
+			purpose := upload.ImageType
+			if purpose == "" {
+				purpose = "message"
+			}
+			form.AddField("image_type", purpose).AddFileWithName("image", upload.Name, bytes.NewReader(upload.Data))
 		} else {
 			form.AddField("file_type", upload.Type).AddField("file_name", upload.Name).AddFileWithName("file", upload.Name, bytes.NewReader(upload.Data))
-			if upload.Duration != 0 {
-				form.AddField("duration", upload.Duration)
+			if upload.DurationValue != nil || upload.Duration != 0 {
+				duration := upload.Duration
+				if upload.DurationValue != nil {
+					duration = *upload.DurationValue
+				}
+				form.AddField("duration", duration)
 			}
 		}
 		spec.body = form
@@ -327,11 +384,14 @@ func (client *Client) execute(ctx context.Context, id fault.Correlation, spec re
 		return nil, failure(ErrInput, spec.operation)
 	}
 	value := client.owner.settings
+	if value.Profile == "user-token" && !spec.webhook && !userRoute(spec.method, spec.path) {
+		return nil, failure(ErrUnsupported, "token-type")
+	}
 	if spec.bodyBytes > value.MaxRequestBytes && (spec.operation != "upload-image" && spec.operation != "upload-file") {
 		return nil, failure(ErrLimit, spec.operation)
 	}
 	call, err := invocation.Begin(ctx, client.access, invocation.Request{Name: spec.operation, Correlation: id, Shape: invocation.Finite,
-		Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.Timeout}, AttemptsKnown: true, MaxAttempts: 2}, client.inbox, client.observer)
+		Bytes: value.reservation(), EvidenceBytes: value.evidenceBytes(), Admission: invocation.Budget{Limit: value.Timeout}, AttemptsKnown: true, MaxAttempts: 3}, client.inbox, client.observer)
 	if err != nil {
 		return nil, err
 	}
@@ -343,10 +403,13 @@ func (client *Client) execute(ctx context.Context, id fault.Correlation, spec re
 	}
 	defer cancel()
 	var primary, cleanup error
+	if spec.readInput != nil {
+		spec.upload, primary = spec.readInput(work)
+	}
 	if spec.webhook {
 		spec.body = client.owner.webhookBody(spec.webhookContent)
 	}
-	if spec.upload == nil && spec.body != nil {
+	if primary == nil && spec.upload == nil && spec.body != nil {
 		encoded, encodeErr := json.Marshal(spec.body)
 		limit := value.MaxRequestBytes
 		if spec.wireLimit > 0 {
@@ -373,27 +436,57 @@ func (client *Client) execute(ctx context.Context, id fault.Correlation, spec re
 			result.effect = Unknown
 		}
 		result.exchange = exchange(state)
+		if state.response != nil {
+			result.headers = state.response.Header.Clone()
+		}
 		cleanup = errors.Join(cleanup, state.cleanup)
 		if spec.download && state.response != nil && state.response.StatusCode == http.StatusOK && requestErr == nil &&
 			downloadResponse(state.response) {
 			result.binary = bytes.Clone(state.response.RawBody)
 			result.contentType = state.response.Header.Get("Content-Type")
+			result.fileName = larkcore.FileNameByHeader(state.response.Header)
 			result.effect = Accepted
 		} else if state.response != nil {
+			result.rawResponse = string(state.response.RawBody)
 			observed, data, decodeErr := decodeResponse(state, spec.webhook)
 			result.exchange = observed
 			primary = errors.Join(requestErr, decodeErr)
 			if primary == nil {
 				result.data = string(data)
+				if spec.botInfo {
+					fields, fieldErr := exactFields(state.response.RawBody, "bot")
+					if fieldErr != nil {
+						primary = fieldErr
+					} else {
+						result.data = string(fields["bot"])
+					}
+				}
+				if primary == nil && spec.dataRequired {
+					_, primary = exactFields([]byte(result.data))
+					if primary != nil {
+						primary = failure(ErrResponse, "missing-data", primary)
+					}
+				}
+				if primary == nil {
+					primary = result.readScopes(spec.scopeFields)
+				}
 				if spec.download {
 					primary = failure(ErrResponse, "download-envelope")
-				} else {
+				} else if primary == nil {
 					primary = result.readIdentity(spec.ackKey)
+				}
+				if primary == nil && spec.partialKey != "" {
+					primary = result.readPartial(spec.partialKey)
 				}
 				if primary == nil {
 					result.effect = Accepted
-					if len(result.invalidMessageIDs) > 0 {
+					if len(result.invalidMessageIDs) > 0 || len(result.invalidUserIDs) > 0 || result.partialScope {
 						result.effect = Partial
+					}
+					for _, ids := range result.invalidTargets {
+						if len(ids) > 0 {
+							result.effect = Partial
+						}
 					}
 				}
 			} else if requestErr == nil && observed.codeKnown && observed.code != 0 && observed.status < 500 {

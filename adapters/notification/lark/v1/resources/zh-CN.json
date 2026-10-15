@@ -1,0 +1,104 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "notification_lark",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.notification_lark.invalid_input",
+      "source": "8fb0503eec003b8cfe55e94e861aad4ec7fa97c20e458e4bebabfaa812592c1c",
+      "forms": {
+        "other": "Lark 通知输入或配置无效。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.unsupported_profile",
+      "source": "996aa49de398f790da044a13b38ceb9a77a4fabe8fe9f7add088b74a978e6805",
+      "forms": {
+        "other": "所选Lark 通知能力无法满足此配置。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.operation_failed",
+      "source": "877b29285ac6f7cd18a95b64660a70c237093f376b544c6a2e24be2f1672fdc0",
+      "forms": {
+        "other": "Lark 通知操作失败；外部效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.limit_exceeded",
+      "source": "31794489fdd06f3247106fabd08e84e069543cbb64306d939d7e0d758938fdfa",
+      "forms": {
+        "other": "Lark 通知能力超出了已声明的限制。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.invalid_state",
+      "source": "7432ff5454eb5e73cf163c172e470ddb4386ca135edff67606eb568cc00879b9",
+      "forms": {
+        "other": "Lark 通知句柄当前无法执行此操作。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.cleanup_failed",
+      "source": "d77f39e0635724c155248b9e4e36afcd83f151faf18501fba84eb890a86a9a5d",
+      "forms": {
+        "other": "Lark 通知清理发生错误；资源释放需单独确认。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.runtime_serialization",
+      "source": "7bb9b8987544d675f164acc7d81ae30ca60e428c055bc86527742ee6b05445d9",
+      "forms": {
+        "other": "不支持序列化Lark 通知运行时值。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.authentication_failed",
+      "source": "e41dc8cad3dcce2ca0d42675bd9e07cca6e8690e0d55722f965adda9815df363",
+      "forms": {
+        "other": "Lark 身份验证失败；不会据此推断更广泛的权限。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.invalid_response",
+      "source": "07ee27c53167a2d84f0690cc6aecf748c666654c44322efc805861c223df70e8",
+      "forms": {
+        "other": "Lark 响应不完整或无效；外部效果可能未知。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.invalid_protocol",
+      "source": "edcf7c839630ff779565c44648f5b4e216cdd821f5cf2f4bed46bbf8beca35c4",
+      "forms": {
+        "other": "Lark 传输协议被拒绝。"
+      }
+    },
+    {
+      "id": "fathomry.notification_lark.acknowledgement_failed",
+      "source": "b360935881b949f9af3242ba7733f80599c2231c74b0c2707c9ec2312eb48223",
+      "forms": {
+        "other": "Lark 确认操作未按请求完成。"
+      }
+    }
+  ]
+}

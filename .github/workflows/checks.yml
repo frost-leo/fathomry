@@ -119,8 +119,8 @@ jobs:
       - name: Verify independent Lark / Feishu example
         if: steps.module.outputs.present == 'true'
         run: |
-          go vet ./internal/notification/lark/v3/testdata/showcase
-          go test -race -count=1 -timeout=2m ./internal/notification/lark/v3/testdata/showcase
+          go vet ./adapters/notification/lark/v1/testdata/showcase ./internal/notification/lark/v3/testdata/nativeprobe
+          go test -race -count=1 -timeout=2m ./adapters/notification/lark/v1/testdata/showcase ./internal/notification/lark/v3/testdata/nativeprobe
       - name: Save Go caches after checks
         if: ${{ !cancelled() && steps.go-cache.outcome == 'success' && steps.go-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

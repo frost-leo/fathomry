@@ -29,12 +29,14 @@ import (
 
 	"github.com/frost-leo/fathomry/internal/compatibility"
 	"github.com/frost-leo/fathomry/internal/resource"
+	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 )
 
-// OptionsV1 is borrowed only by Select. Version zero selects configuration v1,
+// OptionsV1 is frozen by PrepareV1 or Select. Version zero selects configuration v1,
 // independent of SDK v3, HTTP API versions and card schema 2.0. Profile is explicit:
-// application acquires a self-built tenant token; tenant-token freezes a supplied
-// token and expiry; webhook requires a signed custom-bot URL and secret.
+// application acquires a self-built tenant token; marketplace uses an app ticket;
+// tenant-token/user-token use explicit tokens and expiry; client-assertion uses
+// OAuth or WSS assertion exchange; webhook requires a signed bot URL and secret.
 // AppID/TenantKey describe the selected authority, not a claim of verified scope.
 // Optional callback credentials enable HTTP ingress on application profiles.
 //
@@ -43,54 +45,69 @@ import (
 // capped at 20 KiB. Durations are ns; TokenExpiresAt is an absolute UTC time,
 // normalized to Unix seconds in the token_expires_unix_seconds overlay field.
 // BaseURL defaults to Feishu; all endpoints require verified HTTPS, no redirects,
-// environment proxy, plaintext fallback or native extension callbacks.
-// Rotation requires replacing the source. Secrets must never be used as names.
+// environment proxy or plaintext fallback. NativeOptions contains separately
+// borrowed credential providers; source preparation never invokes them.
+// Rotation replaces a source or returns one coherent source-bound tuple per call.
+// Secrets must never be used as names.
 type OptionsV1 struct {
 	private
-	Name              string
-	Version           uint32
-	Profile           string
-	BaseURL           string
-	AppID             string
-	AppSecret         string
-	TenantKey         string
-	TenantToken       string
-	TokenExpiresAt    time.Time
-	WebhookURL        string
-	WebhookSecret     string
-	VerificationToken string
-	EncryptKey        string
-	RootCAPEM         string
-	MaxActive         int
-	QueuedCalls       int
-	MaxRequestBytes   int
-	MaxAssetBytes     int
-	MaxResponseBytes  int
-	Timeout           time.Duration
-	CallbackMaxAge    time.Duration
-	WebSocket         *WebSocketOptions
+	Name                 string
+	Version              uint32
+	Profile              string
+	BaseURL              string
+	AppID                string
+	AppSecret            string
+	TenantKey            string
+	TenantToken          string
+	TokenExpiresAt       time.Time
+	WebhookURL           string
+	WebhookSecret        string
+	VerificationToken    string
+	EncryptKey           string
+	RootCAPEM            string
+	MaxActive            int
+	QueuedCalls          int
+	MaxRequestBytes      int
+	MaxAssetBytes        int
+	MaxResponseBytes     int
+	Timeout              time.Duration
+	CallbackMaxAge       time.Duration
+	WebSocket            *WebSocketOptions
+	AppTicket            string
+	UserToken            string
+	ClientAssertion      string
+	OAuthBaseURL         string
+	AssertionProxyURL    string
+	AssertionProxyPrefix string
+	Native               NativeOptions
 }
 type settings struct {
-	Profile           string         `json:"profile"`
-	BaseURL           string         `json:"base_url"`
-	AppID             string         `json:"app_id"`
-	AppSecret         string         `json:"app_secret"`
-	TenantKey         string         `json:"tenant_key"`
-	TenantToken       string         `json:"tenant_token"`
-	TokenExpiresUnix  int64          `json:"token_expires_unix_seconds"`
-	WebhookURL        string         `json:"webhook_url"`
-	WebhookSecret     string         `json:"webhook_secret"`
-	VerificationToken string         `json:"verification_token"`
-	EncryptKey        string         `json:"encrypt_key"`
-	RootCAPEM         string         `json:"root_ca_pem"`
-	MaxActive         int            `json:"max_active"`
-	QueuedCalls       int            `json:"queued_calls"`
-	MaxRequestBytes   int            `json:"max_request_bytes"`
-	MaxAssetBytes     int            `json:"max_asset_bytes"`
-	MaxResponseBytes  int            `json:"max_response_bytes"`
-	Timeout           time.Duration  `json:"timeout_ns"`
-	CallbackMaxAge    time.Duration  `json:"callback_max_age_ns"`
-	WebSocket         socketSettings `json:"websocket"`
+	Profile              string         `json:"profile"`
+	BaseURL              string         `json:"base_url"`
+	AppID                string         `json:"app_id"`
+	AppSecret            string         `json:"app_secret"`
+	TenantKey            string         `json:"tenant_key"`
+	TenantToken          string         `json:"tenant_token"`
+	TokenExpiresUnix     int64          `json:"token_expires_unix_seconds"`
+	WebhookURL           string         `json:"webhook_url"`
+	WebhookSecret        string         `json:"webhook_secret"`
+	VerificationToken    string         `json:"verification_token"`
+	EncryptKey           string         `json:"encrypt_key"`
+	RootCAPEM            string         `json:"root_ca_pem"`
+	MaxActive            int            `json:"max_active"`
+	QueuedCalls          int            `json:"queued_calls"`
+	MaxRequestBytes      int            `json:"max_request_bytes"`
+	MaxAssetBytes        int            `json:"max_asset_bytes"`
+	MaxResponseBytes     int            `json:"max_response_bytes"`
+	Timeout              time.Duration  `json:"timeout_ns"`
+	CallbackMaxAge       time.Duration  `json:"callback_max_age_ns"`
+	WebSocket            socketSettings `json:"websocket"`
+	AppTicket            string         `json:"app_ticket"`
+	UserToken            string         `json:"user_token"`
+	ClientAssertion      string         `json:"client_assertion"`
+	OAuthBaseURL         string         `json:"oauth_base_url"`
+	AssertionProxyURL    string         `json:"assertion_proxy_url"`
+	AssertionProxyPrefix string         `json:"assertion_proxy_prefix"`
 }
 
 func defaults(input OptionsV1) settings {
@@ -99,12 +116,21 @@ func defaults(input OptionsV1) settings {
 		WebhookURL: input.WebhookURL, WebhookSecret: input.WebhookSecret, VerificationToken: input.VerificationToken, EncryptKey: input.EncryptKey,
 		RootCAPEM: input.RootCAPEM, MaxActive: input.MaxActive, QueuedCalls: input.QueuedCalls,
 		MaxRequestBytes: input.MaxRequestBytes, MaxAssetBytes: input.MaxAssetBytes, MaxResponseBytes: input.MaxResponseBytes,
-		Timeout: input.Timeout, CallbackMaxAge: input.CallbackMaxAge}
+		Timeout: input.Timeout, CallbackMaxAge: input.CallbackMaxAge,
+		AppTicket: input.AppTicket, UserToken: input.UserToken, ClientAssertion: input.ClientAssertion, OAuthBaseURL: input.OAuthBaseURL,
+		AssertionProxyURL: input.AssertionProxyURL, AssertionProxyPrefix: input.AssertionProxyPrefix}
 	if !input.TokenExpiresAt.IsZero() {
 		value.TokenExpiresUnix = input.TokenExpiresAt.Unix()
 	}
 	if value.BaseURL == "" {
 		value.BaseURL = "https://open.feishu.cn"
+	}
+	if value.OAuthBaseURL == "" {
+		if value.Profile == "client-assertion" {
+			value.OAuthBaseURL, _ = larkcore.ResolveOAuthBaseUrl(&larkcore.Config{BaseUrl: value.BaseURL})
+		} else {
+			value.OAuthBaseURL = value.BaseURL
+		}
 	}
 	value.WebSocket = socketDefaults(input.WebSocket, value.BaseURL)
 	if value.MaxActive == 0 {
@@ -151,9 +177,41 @@ func validate(value settings) error {
 		value.Timeout < time.Millisecond || value.Timeout > 5*time.Minute || value.CallbackMaxAge < time.Second || value.CallbackMaxAge > 10*time.Minute {
 		return failure(ErrInput, "options")
 	}
+	if !endpoint(value.OAuthBaseURL, false) {
+		return failure(ErrInput, "oauth-endpoint")
+	}
+	if value.AssertionProxyURL != "" || value.AssertionProxyPrefix != "" {
+		if value.Profile != "client-assertion" || !endpoint(value.AssertionProxyURL, false) || len(value.AssertionProxyPrefix) > 512 {
+			return failure(ErrInput, "assertion-proxy")
+		}
+		if value.AssertionProxyPrefix != "" {
+			if !strings.HasPrefix(value.AssertionProxyPrefix, "/") {
+				return failure(ErrInput, "assertion-prefix")
+			}
+			for _, part := range strings.Split(value.AssertionProxyPrefix[1:], "/") {
+				if !identifier(part) {
+					return failure(ErrInput, "assertion-prefix")
+				}
+			}
+		}
+	}
+	if value.Profile != "marketplace" && value.AppTicket != "" || value.Profile != "user-token" && value.UserToken != "" || value.Profile != "client-assertion" && value.ClientAssertion != "" {
+		return failure(ErrInput, "credential-profile")
+	}
 	switch value.Profile {
-	case "application":
+	case "application", "marketplace":
 		if !identifier(value.AppID) || !secretValid(value.AppSecret, 4096) || value.TenantToken != "" || value.TokenExpiresUnix != 0 {
+			return failure(ErrInput, "credentials")
+		}
+		if value.Profile == "marketplace" && (!identifier(value.TenantKey) || !secretValid(value.AppTicket, 4096)) {
+			return failure(ErrInput, "marketplace-credentials")
+		}
+	case "user-token":
+		if !identifier(value.AppID) || !identifier(value.TenantKey) || !secretValid(value.UserToken, 4096) || value.TokenExpiresUnix <= 0 || value.AppSecret != "" || value.TenantToken != "" {
+			return failure(ErrInput, "credentials")
+		}
+	case "client-assertion":
+		if !identifier(value.AppID) || !secretValid(value.ClientAssertion, 16<<10) || value.AppSecret != "" || value.TenantToken != "" || value.TokenExpiresUnix != 0 {
 			return failure(ErrInput, "credentials")
 		}
 	case "tenant-token":
@@ -175,7 +233,7 @@ func validate(value settings) error {
 		return failure(ErrInput, "tenant")
 	}
 	if value.VerificationToken != "" || value.EncryptKey != "" {
-		if !secretValid(value.VerificationToken, 4096) || !secretValid(value.EncryptKey, 4096) || !identifier(value.TenantKey) {
+		if !secretValid(value.VerificationToken, 4096) || value.EncryptKey != "" && !secretValid(value.EncryptKey, 4096) || !identifier(value.TenantKey) {
 			return failure(ErrInput, "callback-credentials")
 		}
 	}
@@ -196,10 +254,10 @@ func (value settings) tls() (*tls.Config, error) {
 	return config, nil
 }
 func (value settings) evidenceBytes() int64 {
-	return int64(value.MaxResponseBytes)*4 + int64(value.MaxRequestBytes)*8 + 32<<10
+	return int64(value.MaxResponseBytes)*4 + int64(value.MaxRequestBytes)*8 + 288<<10
 }
 func (value settings) reservation() int64 {
-	return int64(value.MaxRequestBytes)*32 + int64(value.MaxAssetBytes)*4 + int64(value.MaxResponseBytes)*32 + value.evidenceBytes() + value.WebSocket.reservation()
+	return int64(value.MaxRequestBytes)*32 + int64(value.MaxAssetBytes)*4 + int64(value.MaxResponseBytes)*32 + value.evidenceBytes() + value.WebSocket.reservation() + callbackWorkBytes
 }
 func (value settings) limits() resource.Limits {
 	return resource.Limits{Active: value.MaxActive, Queued: value.QueuedCalls, Bytes: int64(value.MaxActive) * value.reservation(),
@@ -219,7 +277,7 @@ func (client *Client) Profile() compatibility.Profile {
 		return compatibility.Profile{}
 	}
 	value := client.owner.settings
-	options := []compatibility.Option{{Name: "token-cache", Value: "source-owned"}, {Name: "retry", Value: "disabled"}, {Name: "http", Value: "direct-http1-no-reuse"}, {Name: "extensions", Value: "closed"}, {Name: "http-ingress", Value: strconv.FormatBool(value.EncryptKey != "")}}
+	options := []compatibility.Option{{Name: "token-cache", Value: "source-owned"}, {Name: "retry", Value: "disabled"}, {Name: "http", Value: "direct-http1-no-reuse"}, {Name: "extensions", Value: "closed"}, {Name: "http-ingress", Value: strconv.FormatBool(value.VerificationToken != "")}}
 	for _, pair := range []struct {
 		name  string
 		value int64
@@ -231,7 +289,7 @@ func (client *Client) Profile() compatibility.Profile {
 	}
 	return compatibility.Profile{ImplementationModule: compatibility.FrameworkModule, SDKMode: "lark-" + value.Profile,
 		ServiceMode: compatibility.Fact{Kind: compatibility.Declared, Value: "notification"},
-		Protocol:    compatibility.Fact{Kind: compatibility.Declared, Value: "https-json-card2"},
+		Protocol:    compatibility.Fact{Kind: compatibility.Declared, Value: "https-json-notification"},
 		Native:      compatibility.Fact{Kind: compatibility.NotApplicable},
 		Options:     options}
 }

@@ -116,7 +116,7 @@ func (value socketSettings) validate(profile string) error {
 	if !value.Enabled {
 		return nil
 	}
-	if profile != "application" {
+	if profile != "application" && profile != "client-assertion" {
 		return failure(ErrUnsupported, "websocket-profile")
 	}
 	if len(value.AllowedHosts) == 0 || len(value.AllowedHosts) > 8 || value.MaxFrameBytes < 1024 || value.MaxFrameBytes > 1<<20 ||

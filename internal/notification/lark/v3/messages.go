@@ -62,15 +62,15 @@ func messagePath(id string) (string, error) {
 func contentValid(value Content) bool { return value.kind != "" && value.json.value != "" }
 
 // Send creates one application-bot message. UUID is an explicit caller-owned
-// deduplication identity (1..50 bytes); the platform's window is finite. Reuse it
+// deduplication identity (1..50 bytes when present); empty omits it. The platform's window is finite. Reuse it
 // only for the same intent. Unknown outcomes never trigger automatic resending.
 func (client *Client) Send(ctx context.Context, id fault.Correlation, to Recipient, uuid string, content Content) (*invocation.Receipt[Result], error) {
-	if !to.valid() || !identifier(uuid) || len(uuid) > 50 || !contentValid(content) {
+	if !to.valid() || uuid != "" && !identifier(uuid) || len(uuid) > 50 || !contentValid(content) {
 		return nil, failure(ErrInput, "send")
 	}
 	return client.execute(ctx, id, requestSpec{operation: "send", method: "POST", path: "/open-apis/im/v1/messages",
 		query: larkcore.QueryParams{"receive_id_type": {to.Type}}, target: to.Type + ":" + to.ID, uuid: uuid, ackKey: "message_id",
-		body:      &larkim.CreateMessageReqBody{ReceiveId: pointer(to.ID), MsgType: pointer(content.kind), Content: pointer(content.json.value), Uuid: pointer(uuid)},
+		body:      &larkim.CreateMessageReqBody{ReceiveId: pointer(to.ID), MsgType: pointer(content.kind), Content: pointer(content.json.value), Uuid: optional(uuid)},
 		bodyBytes: len(content.json.value), wireLimit: messageLimit(content)})
 }
 
@@ -80,11 +80,11 @@ func (client *Client) Reply(ctx context.Context, id fault.Correlation, messageID
 	if err != nil {
 		return nil, err
 	}
-	if !identifier(uuid) || len(uuid) > 50 || !contentValid(content) {
+	if uuid != "" && !identifier(uuid) || len(uuid) > 50 || !contentValid(content) {
 		return nil, failure(ErrInput, "reply")
 	}
 	return client.execute(ctx, id, requestSpec{operation: "reply", method: "POST", path: path + "/reply", target: messageID, uuid: uuid, ackKey: "message_id",
-		body:      &larkim.ReplyMessageReqBody{Content: pointer(content.json.value), MsgType: pointer(content.kind), ReplyInThread: pointer(inThread), Uuid: pointer(uuid)},
+		body:      &larkim.ReplyMessageReqBody{Content: pointer(content.json.value), MsgType: pointer(content.kind), ReplyInThread: pointer(inThread), Uuid: optional(uuid)},
 		bodyBytes: len(content.json.value), wireLimit: messageLimit(content)})
 }
 
@@ -181,7 +181,7 @@ func (client *Client) Forward(ctx context.Context, id fault.Correlation, message
 	if err != nil {
 		return nil, err
 	}
-	if !to.valid() || !identifier(uuid) || len(uuid) > 50 {
+	if !to.valid() || uuid != "" && !identifier(uuid) || len(uuid) > 50 {
 		return nil, failure(ErrInput, "forward")
 	}
 	return client.execute(ctx, id, requestSpec{operation: "forward", method: "POST", path: path + "/forward",
@@ -192,7 +192,7 @@ func (client *Client) Forward(ctx context.Context, id fault.Correlation, message
 // retains per-message rejection independently of an acknowledged merged message.
 // The input slice is borrowed during the call; retained related IDs are copied.
 func (client *Client) MergeForward(ctx context.Context, id fault.Correlation, to Recipient, uuid string, messageIDs []string) (*invocation.Receipt[Result], error) {
-	if !to.valid() || !identifier(uuid) || len(uuid) > 50 || len(messageIDs) == 0 || len(messageIDs) > 50 {
+	if !to.valid() || uuid != "" && !identifier(uuid) || len(uuid) > 50 || len(messageIDs) == 0 || len(messageIDs) > 50 {
 		return nil, failure(ErrInput, "merge-forward")
 	}
 	for _, messageID := range messageIDs {

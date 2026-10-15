@@ -155,7 +155,7 @@ func (value Content) Type() string { return value.kind }
 func (value Content) JSON() JSON   { return value.json }
 
 // NewContent accepts notification message types, not arbitrary SDK operations.
-// Interactive content must be a JSON 2.0 card, template or card-instance reference.
+// Interactive content may be native legacy/JSON 2.0, a template or an entity reference.
 func NewContent(kind string, data []byte) (Content, error) {
 	value, err := NewJSON(data)
 	if err != nil {
@@ -165,7 +165,7 @@ func NewContent(kind string, data []byte) (Content, error) {
 		return Content{}, failure(ErrInput, "content")
 	}
 	switch kind {
-	case "text", "post", "image", "file", "audio", "media", "sticker", "share_chat", "share_user":
+	case "text", "post", "image", "file", "audio", "media", "sticker", "share_chat", "share_user", "system":
 	case "interactive":
 		if err := cardContent(value); err != nil {
 			return Content{}, err
@@ -217,7 +217,7 @@ func Text(text string) (Content, error) {
 	return NewContent("text", data)
 }
 func cardContent(value JSON) error {
-	fields, err := exactFields(value.Bytes(), "schema", "type", "data", "body")
+	fields, err := exactFields(value.Bytes(), "schema", "type", "data", "body", "elements", "i18n_elements")
 	if err != nil {
 		return failure(ErrInput, "card", err)
 	}
@@ -251,6 +251,18 @@ func cardContent(value JSON) error {
 			return failure(ErrInput, "card-reference")
 		}
 		return nil
+	}
+	if shape.Schema == "" {
+		var elements []json.RawMessage
+		if raw, ok := fields["elements"]; ok && string(raw) != "null" && json.Unmarshal(raw, &elements) == nil {
+			return nil
+		}
+		if raw, ok := fields["i18n_elements"]; ok && string(raw) != "null" {
+			var localized map[string][]json.RawMessage
+			if json.Unmarshal(raw, &localized) == nil && localized != nil {
+				return nil
+			}
+		}
 	}
 	if shape.Schema != "2.0" || shape.Body == nil || shape.Body.Elements == nil {
 		return failure(ErrUnsupported, "card-schema")

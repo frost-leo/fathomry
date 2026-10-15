@@ -377,6 +377,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/httpclient/v1`](reference/adapters/httpclient/v1/interface.md) | HTTP accounting, preparation and attribution vocabulary; no runtime/client |
 | [`adapters/notification/v1`](reference/adapters/notification/v1/interface.md) | Notification accounting, source provenance and distinct observations |
 | [`adapters/notification/mail/v1`](reference/adapters/notification/mail/v1/interface.md) | Managed Mail preparation, SMTP/local delivery and retained source generations |
+| [`adapters/notification/lark/v1`](reference/adapters/notification/lark/v1/interface.md) | Native notification operations, HTTP callbacks and retained source/connection-bound WSS ACKs |
 | [`adapters/httpclient/nethttp/v1`](reference/adapters/httpclient/nethttp/v1/interface.md) | Standard HTTP finite/stream/direct-connection use with exact preparation and ownership |
 | [`adapters/httpclient/tlsclient/v1`](reference/adapters/httpclient/tlsclient/v1/interface.md) | Explicit native profiles, H3 racing, finite/stream HTTP and protocol-qualified counters |
 | [`adapters/httpclient/surf/v1`](reference/adapters/httpclient/surf/v1/interface.md) | Surf H1/H2/H3/h2c, incremental multipart, finite/stream responses and exact preparation |

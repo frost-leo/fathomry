@@ -126,6 +126,8 @@ const (
 	FacilityChromedp Facility = 0x300
 	// FacilityMail owns managed mail notification capabilities.
 	FacilityMail Facility = 0x2C0
+	// FacilityLark owns managed Lark notification capabilities.
+	FacilityLark Facility = 0x2C1
 )
 
 // Valid checks the numeric field, not assignment or namespace authority.
@@ -187,6 +189,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityZerolog, Module: "fathomry", Component: "logging_zerolog"},
 		{Facility: FacilityTemporal, Module: "fathomry", Component: "temporal"},
 		{Facility: FacilityMail, Module: "fathomry", Component: "notification_mail"},
+		{Facility: FacilityLark, Module: "fathomry", Component: "notification_lark"},
 	}
 }
 

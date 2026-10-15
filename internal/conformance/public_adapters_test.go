@@ -52,6 +52,7 @@ import (
 	httpclient "github.com/frost-leo/fathomry/adapters/httpclient/v1"
 	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
 	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
+	lark "github.com/frost-leo/fathomry/adapters/notification/lark/v1"
 	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
 	notification "github.com/frost-leo/fathomry/adapters/notification/v1"
 	minio "github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
@@ -258,6 +259,16 @@ func TestPublicAdapterMail(t *testing.T) {
 		func(runtime *adapters.Runtime, inbox *adapters.Inbox[mail.Result]) mail.Dependencies {
 			return mail.Dependencies{Runtime: runtime, Evidence: inbox}
 		}, mail.Open, canary)
+}
+
+func TestPublicAdapterLark(t *testing.T) {
+	const canary = "lark-private-contract"
+	value := lark.Settings{Name: "contract", Profile: "application", AppID: "fixture", AppSecret: canary}
+	checkPublicAdapter(t, value, lark.Validate, lark.Recommend,
+		func(value lark.Policy) adapterPolicy { return adapterPolicy{value.Runtime, value.Evidence} },
+		func(runtime *adapters.Runtime, inbox *adapters.Inbox[lark.Result]) lark.Dependencies {
+			return lark.Dependencies{Runtime: runtime, Evidence: inbox}
+		}, lark.Open, canary)
 }
 
 func TestPublicAdapterTemporal(t *testing.T) {

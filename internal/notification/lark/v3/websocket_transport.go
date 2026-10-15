@@ -45,8 +45,23 @@ func (run *socketRun) connect() (*websocket.Conn, socketConfiguration, error) {
 		return nil, configuration, err
 	}
 	defer cancel()
-	state, requestErr := run.receiver.owner.nativeRequest(work, run.call, requestSpec{operation: "websocket-bootstrap", method: "POST", path: larkws.GenEndpointUri,
-		body: &larkws.BootstrapRequest{AppID: value.AppID, AppSecret: value.AppSecret}, responseLimit: 64 << 10}, "")
+	credentialRequest := CredentialRequest{Purpose: "websocket"}
+	if value.Profile == "client-assertion" {
+		target, _ := url.Parse(value.BaseURL)
+		credentialRequest.Audience = target.Host
+	}
+	credential, err := run.receiver.owner.credentials(work, credentialRequest)
+	if err != nil {
+		return nil, configuration, err
+	}
+	spec := requestSpec{operation: "websocket-bootstrap", method: "POST", path: larkws.GenEndpointUri,
+		body: &larkws.BootstrapRequest{AppID: credential.AppID, AppSecret: credential.AppSecret, ClientAssertion: credential.ClientAssertion}, responseLimit: 64 << 10}
+	if value.Profile == "client-assertion" && value.AssertionProxyURL != "" {
+		spec.baseURL = value.AssertionProxyURL
+		spec.path = value.AssertionProxyPrefix + spec.path
+		spec.headers = http.Header{larkcore.HeaderXTargetService: {credentialRequest.Audience}}
+	}
+	state, requestErr := run.receiver.owner.nativeRequest(work, run.call, spec, "")
 	run.bootstrap = exchange(state)
 	if state.cleanup != nil {
 		return nil, configuration, failure(ErrCleanup, "websocket-bootstrap", state.cleanup, requestErr)

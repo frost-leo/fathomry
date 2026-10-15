@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,7 +38,24 @@ import (
 func TestActualConsumingExecutable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	binary := filepath.Join(t.TempDir(), "consumer")
+	location, err := exec.CommandContext(ctx, "go", "env", "GOTMPDIR").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporary := strings.TrimSpace(string(location))
+	if temporary == "" {
+		temporary = filepath.Join(os.TempDir(), "fathomry")
+	}
+	jobs := filepath.Join(filepath.Dir(temporary), "jobs")
+	if err := os.MkdirAll(jobs, 0700); err != nil {
+		t.Fatal(err)
+	}
+	directory, err := os.MkdirTemp(jobs, "build.lark-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	binary := filepath.Join(directory, "consumer")
 	command := exec.CommandContext(ctx, "go", "build", "-o", binary, "./testdata/consumer")
 	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOSUMDB=off")
 	if output, err := command.CombinedOutput(); err != nil {
@@ -51,7 +69,7 @@ func TestActualConsumingExecutable(t *testing.T) {
 		Go, SDK, Mode string
 		Closed        bool
 	}
-	if json.Unmarshal(output, &got) != nil || got.Go != runtime.Version() || got.SDK != "v3.12.0" || got.Mode != "lark-application" || !got.Closed {
+	if json.Unmarshal(output, &got) != nil || got.Go != runtime.Version() || got.SDK != "v3.12.1" || got.Mode != "lark-application" || !got.Closed {
 		t.Fatal("consuming-binary evidence differs")
 	}
 	info, err := buildinfo.ReadFile(binary)
@@ -61,7 +79,7 @@ func TestActualConsumingExecutable(t *testing.T) {
 	found, transportFound := false, false
 	for _, dep := range info.Deps {
 		if dep.Path == "github.com/larksuite/oapi-sdk-go/v3" {
-			found = dep.Version == "v3.12.0" && dep.Replace == nil && dep.Sum == "h1:H8NP6YIgfEX0RBhKse25npdeZoiaDv8mrw9nCnCVFRc="
+			found = dep.Version == "v3.12.1" && dep.Replace == nil && dep.Sum == "h1:5Zu2z+meHR/ETyTSWOB6gyRN0FIiImXdq/ReQGlGYH8="
 		}
 		if dep.Path == "github.com/gorilla/websocket" {
 			transportFound = dep.Version == "v1.5.4-0.20240701034025-d67f41855da4" && dep.Replace == nil && dep.Sum == "h1:PYKzliEgITjLJoJqbV90S0YRaG8LNAsICH6fp6MApC0="
@@ -86,5 +104,5 @@ func TestFacadesContainNoNativeOrShutdownAuthority(t *testing.T) {
 		"Send", "Reply", "UpdateMessage", "PatchMessage", "Recall", "GetMessage", "ListMessages", "ReadUsers", "Forward", "MergeForward", "ResolveEmail",
 		"UploadImage", "UploadFile", "DownloadImage", "DownloadFile", "DownloadResource",
 		"CreateCard", "UpdateCard", "CardSettings", "BatchUpdateCard", "InsertElements", "UpdateElement", "PatchElement", "DeleteElement", "ElementContent",
-		"SendWebhook", "Receive", "AddReaction", "DeleteReaction", "ListReactions")
+		"SendWebhook", "Receive", "ReceiveLegacy", "Do", "UploadAsset", "RequestLimit", "WebSocketStatus", "AddReaction", "DeleteReaction", "ListReactions")
 }
