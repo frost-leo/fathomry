@@ -33,6 +33,7 @@ import (
 	logging "github.com/frost-leo/fathomry/adapters/logging/v1"
 	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
 	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
+	lark "github.com/frost-leo/fathomry/adapters/notification/lark/v1"
 	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
 	"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	"github.com/frost-leo/fathomry/adapters/orchestration/temporal/v1"
@@ -79,6 +80,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "tableformat_iceberg", BaseLocale: "en", Resources: iceberg.Resources(), Directory: "resources", Definitions: iceberg.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "browser_chromedp", BaseLocale: "en", Resources: chromedp.Resources(), Directory: "resources", Definitions: chromedp.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "notification_mail", BaseLocale: "en", Resources: mail.Resources(), Directory: "resources", Definitions: mail.Definitions()},
+		i18n.Component{Module: "fathomry", Name: "notification_lark", BaseLocale: "en", Resources: lark.Resources(), Directory: "resources", Definitions: lark.Definitions()},
 	)
 	var definitions []failure.Definition
 	for _, component := range components {

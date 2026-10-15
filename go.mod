@@ -62,7 +62,7 @@ require (
 	// TODO(gh-64): Requalify native global caches, hidden auth/dial retries,
 	// multipart/response bounds, callback verification and the WebSocket wire,
 	// fragment, acknowledgement and lifecycle controls before SDK upgrades.
-	github.com/larksuite/oapi-sdk-go/v3 v3.12.0
+	github.com/larksuite/oapi-sdk-go/v3 v3.12.1
 	github.com/miekg/dns v1.1.69
 	github.com/minio/minio-go/v7 v7.3.0
 	// TODO(gh-21): Recheck this pin and lifecycle compatibility before Nacos upgrades

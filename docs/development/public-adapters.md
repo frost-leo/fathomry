@@ -90,6 +90,7 @@ overlays. For overlaid settings, consume resolved preparation metadata.
 | Provider | Native input to public policy |
 | --- | --- |
 | Mail | Frozen `PrepareV1.Metadata` for effective SMTP/native options, resident sessions, message work and independent evidence; `DataBudgetV1` for data-only validation/recommendation |
+| Lark | Frozen `PrepareV1.Metadata` for source/finite work, all authentication stages, WSS buffers and independent event/ACK evidence; public policy also reserves saturation fallback facts |
 | PostgreSQL/MySQL | `LimitsV1` and `EvidenceBytesV1`, validated and without later layers |
 | MinIO | `BudgetV1`, validated and without later layers |
 | Kafka | `BudgetV1`, including persistent clients and the defaulted record bound |

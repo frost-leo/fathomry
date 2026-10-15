@@ -88,9 +88,11 @@ acknowledge the Feishu event. Reconnection does not provide a durable replay log
 
 ## Authentication, identity and bounds
 
-Only the `application` profile is supported. Bootstrap uses the explicitly frozen
-AppID/AppSecret through the existing bounded HTTP mechanism; no implicit token
-cache or client-assertion callback is created. Gateway URLs are private credentials.
+Self-built `application` and `client-assertion` profiles are supported. Bootstrap
+uses one coherent source-bound secret or assertion snapshot through the bounded
+HTTP mechanism. CredentialRequest distinguishes the WSS audience from OAuth;
+explicit frozen assertion proxy routes retain the original audience header.
+No implicit token cache or marketplace WSS claim is created. Gateway URLs are private credentials.
 Only verified `wss` URLs on an exact configured host[:port] allowlist are accepted.
 Default Feishu/Lark bases select their public frontier host; custom bases need an
 explicit allowlist. No redirects, ambient proxy, cookie jar or compression extension
@@ -100,8 +102,10 @@ WebSocket transport authentication replaces HTTP callback signature/decryption:
 payloads must be schema 2.0, match AppID and carry a valid tenant identity.
 A configured TenantKey must match; absent TenantKey trusts the authenticated
 self-built application's tenant scope and retains the observed key in the event.
-VerificationToken and EncryptKey are not required for WSS. Supported events remain
-IM message lifecycle events and `card.action.trigger`, not unrelated enterprise APIs.
+VerificationToken and EncryptKey are not required for WSS. Selected schema-2
+IM message/chat/member events, modern card/URL callbacks and adjacent bot-menu/
+token-revocation events are supported, not unrelated enterprise APIs or legacy
+card frames. Platform subscription eligibility is a separate service gate.
 
 | Dimension | Default |
 | --- | --- |
@@ -164,7 +168,7 @@ platform or silently weakening the resource contract.
 
 ## Example and service gates
 
-The [showcase](../../../../../../internal/notification/lark/v3/testdata/showcase/README.md)
+The [public showcase](../../../../../../adapters/notification/lark/v1/testdata/showcase/README.md)
 has a bounded `-listen` mode. Its optional exact-message probe validates the
 authorized sender/text, writes an owner-only event file, syncs it and its parent
 directory, then requests an ACK. This is an example-owned file format, not a
@@ -182,6 +186,6 @@ that subscription is configured, nor that a user's message reached this listener
 
 Primary references:
 [Feishu subscription configuration](https://open.feishu.cn/document/server-docs/event-subscription-guide/event-subscription-configure-/request-url-configuration-case),
-[pinned SDK WebSocket source](https://github.com/larksuite/oapi-sdk-go/tree/v3.12.0/ws),
+[pinned SDK WebSocket source](https://github.com/larksuite/oapi-sdk-go/tree/c11ccc66d80b5ab438115233158555daa6bea339/ws),
 [pinned Gorilla transport](https://github.com/gorilla/websocket/tree/d67f41855da42d7bccd9ef050c49f7e54e783b95),
 [mask-key advisory](https://github.com/advisories/GHSA-w67g-5rqw-f597).

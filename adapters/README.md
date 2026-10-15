@@ -43,6 +43,7 @@ automatically own or construct the packages below it.
 | `v1` | mechanism | [Operation Runtime, admission, actual-work references and independent evidence](../docs/reference/adapters/v1/interface.md) |
 | `notification/v1` | capability | [Notification budgets, provenance and distinct observations; no notifier or report model](../docs/reference/adapters/notification/v1/interface.md) |
 | `notification/mail/v1` | data-provider | [Managed MIME preparation, authentication, SMTP and explicit local delivery](../docs/reference/adapters/notification/mail/v1/interface.md) |
+| `notification/lark/v1` | data-provider | [Native notification operations, authenticated HTTP callbacks and source/connection-bound WSS acknowledgements](../docs/reference/adapters/notification/lark/v1/interface.md) |
 | `browser/v1` | capability | [Browser budgets and separate operation, effect and ownership observations](../docs/reference/adapters/browser/v1/interface.md) |
 | `browser/chromedp/v1` | data-provider | [Closed native operations and retained contexts; #139 qualification remains incomplete](../docs/reference/adapters/browser/chromedp/v1/interface.md) |
 | `database/v1` | capability | [SQL budgets, attribution and profile vocabulary; no pool/client](../docs/reference/adapters/database/v1/interface.md) |

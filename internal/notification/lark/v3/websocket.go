@@ -115,7 +115,7 @@ func BindReceiver(assembly *resource.Assembly, selected resource.Selection[Sourc
 		return nil, failure(ErrInput, "bind-receiver")
 	}
 	value, limits := source.owner.settings, access.Limits()
-	if !value.WebSocket.Enabled || value.Profile != "application" {
+	if !value.WebSocket.Enabled || value.Profile != "application" && value.Profile != "client-assertion" {
 		return nil, failure(ErrUnsupported, "websocket-profile")
 	}
 	if limits.Active > value.MaxActive || limits.Bytes < value.reservation() || limits.MaxLeases < value.maxLeases() || limits.Queued > 32 ||
@@ -434,6 +434,11 @@ func (run *socketRun) ping(conn *websocket.Conn, service int32) error {
 	return nil
 }
 func socketRetryable(err error) bool {
+	// Credential providers can return arbitrary cause graphs. Their owned auth
+	// frame is already decisive; do not traverse those graphs to choose reconnect.
+	if value, ok := err.(*fault.Error); ok && value.Diagnostic().Kind == ErrAuth {
+		return false
+	}
 	return !errors.Is(err, ErrInput) && !errors.Is(err, ErrProtocol) && !errors.Is(err, ErrUnsupported) && !errors.Is(err, ErrLimit) && !errors.Is(err, ErrCleanup) && !errors.Is(err, ErrResponse) &&
 		!errors.Is(err, invocation.ErrEvidence) && !errors.Is(err, ErrAuth) && !errors.Is(err, context.Canceled)
 }

@@ -53,15 +53,6 @@ func (client *Client) SendWebhook(ctx context.Context, id fault.Correlation, con
 	if !contentValid(content) {
 		return nil, failure(ErrInput, "webhook")
 	}
-	if content.kind == "interactive" {
-		var shape struct {
-			Type string `json:"type"`
-		}
-		_ = json.Unmarshal(content.json.Bytes(), &shape)
-		if shape.Type != "" {
-			return nil, failure(ErrUnsupported, "webhook-card-reference")
-		}
-	}
 	return client.execute(ctx, id, requestSpec{operation: "webhook", method: "POST", webhook: true, bodyBytes: len(content.json.value), webhookContent: content})
 }
 func (owned *owner) webhookBody(content Content) any {

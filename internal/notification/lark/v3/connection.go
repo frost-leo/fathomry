@@ -47,6 +47,8 @@ type owner struct {
 	socketGate   chan struct{}
 	socketMu     sync.Mutex
 	socketStatus WebSocketStats
+	hooks        NativeOptions
+	credential   Credentials
 }
 
 // Client is a concurrent non-owning facade. Copies and borrowed selections share
@@ -59,23 +61,38 @@ type Client struct {
 	observer *invocation.Observer
 }
 
+// RequestLimit is the exact prepared ingress/JSON bound, not a service limit.
+func (client *Client) RequestLimit() int {
+	if client == nil || client.owner == nil {
+		return 0
+	}
+	return client.owner.settings.MaxRequestBytes
+}
+
+// WebSocketStatus inspects this source without acquiring or starting a receiver.
+func (client *Client) WebSocketStatus() WebSocketStats {
+	if client == nil {
+		return WebSocketStats{}
+	}
+	return (&Receiver{owner: client.owner}).Status()
+}
+
 // Select validates and freezes strict versioned configuration without network I/O.
 func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Source], error) {
-	version := options.Version
-	if version == 0 {
-		version = 1
-	}
-	prepared, err := resource.Prepare(resource.Schema[settings]{Format: 1, Defaults: defaults(options), Validate: validate},
-		resource.Input{Identity: resource.Identity{Provider: ProviderID, Name: options.Name}, Format: version, Layers: layers})
+	prepared, err := PrepareV1(options, layers...)
 	if err != nil {
 		return resource.Selection[Source]{}, err
 	}
-	return resource.Select(prepared, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
+	return prepared.Select(), nil
+}
+
+func (prepared Prepared) Select() resource.Selection[Source] {
+	return resource.Select(prepared.configuration, func(ctx context.Context, value settings) (resource.Resource[Source], error) {
 		if ctx.Err() != nil {
 			return resource.Resource[Source]{}, failure(ErrInput, "construct", ctx.Err(), context.Cause(ctx))
 		}
 		config, _ := value.tls()
-		owned := &owner{settings: value, tokenLock: make(chan struct{}, 1), socketGate: make(chan struct{}, 1)}
+		owned := &owner{settings: value, hooks: prepared.native, tokenLock: make(chan struct{}, 1), socketGate: make(chan struct{}, 1)}
 		owned.transport = &http.Transport{TLSClientConfig: config, Proxy: nil, DisableCompression: true, DisableKeepAlives: true,
 			ForceAttemptHTTP2: false, TLSNextProto: map[string]func(string, *tls.Conn) http.RoundTripper{},
 			DialTLSContext: owned.dialTLS, TLSHandshakeTimeout: value.Timeout,
@@ -83,12 +100,15 @@ func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Sou
 		// Do not call root NewClient/NewCache: the native token managers are global.
 		owned.native = &larkcore.Config{BaseUrl: value.BaseURL, AppId: value.AppID, AppSecret: value.AppSecret,
 			EnableTokenCache: false, HttpClient: owned, Logger: quietLogger{}, Serializable: &larkcore.DefaultSerialization{}}
+		if owned.native.AppSecret == "" {
+			owned.native.AppSecret = "managed-authentication"
+		}
 		if value.Profile == "webhook" {
 			owned.native.AppId = "custom-bot"
 			owned.native.AppSecret = "custom-bot"
 		}
 		return resource.Resource[Source]{Acquired: true, Capability: Source{owner: owned}, Release: owned.close}, nil
-	}), nil
+	})
 }
 
 // Bind requires a separately owned evidence inbox. Draining/releasing it is a

@@ -57,8 +57,8 @@ func TestRejectMalformedAmbiguousAndOversizedJSON(t *testing.T) {
 			t.Fatal("invalid or unbounded JSON accepted")
 		}
 	}
-	if _, err := Card([]byte(`{"elements":[]}`)); err == nil {
-		t.Fatal("legacy card silently called schema 2")
+	if card, err := Card([]byte(`{"elements":[]}`)); err != nil || string(card.JSON().Bytes()) != `{"elements":[]}` {
+		t.Fatal("native legacy card was rejected or relabeled as schema 2")
 	}
 	if _, err := NewContent("unknown", []byte("{}")); err == nil {
 		t.Fatal("unknown message type accepted")

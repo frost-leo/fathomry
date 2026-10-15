@@ -92,6 +92,17 @@ func Table(elementID string, columns, rows JSON) (JSON, error) {
 // ComposeCard combines up to 200 native components in Card JSON 2.0. Use Card
 // directly for native layouts, localized bodies, forms or other advanced settings.
 func ComposeCard(title string, elements ...JSON) (Content, error) {
+	return ComposeCardWithOptions(title, CardOptions{}, elements...)
+}
+
+// CardOptions makes presentation and multi-user updates explicit. Nil UpdateMulti
+// omits the native field; an empty HeaderTemplate leaves the platform default.
+type CardOptions struct {
+	HeaderTemplate string
+	UpdateMulti    *bool
+}
+
+func ComposeCardWithOptions(title string, options CardOptions, elements ...JSON) (Content, error) {
 	if !shortText(title, 1024) || len(elements) == 0 || len(elements) > 200 {
 		return Content{}, failure(ErrInput, "card")
 	}
@@ -104,9 +115,18 @@ func ComposeCard(title string, elements ...JSON) (Content, error) {
 		}
 		parts[index] = json.RawMessage(element.value)
 	}
-	data, err := json.Marshal(map[string]any{"schema": "2.0", "config": map[string]bool{"update_multi": true},
-		"header": map[string]any{"template": "blue", "title": map[string]string{"tag": "plain_text", "content": title}},
-		"body":   map[string]any{"elements": parts}})
+	if options.HeaderTemplate != "" && !identifier(options.HeaderTemplate) {
+		return Content{}, failure(ErrInput, "header-template")
+	}
+	header := map[string]any{"title": map[string]string{"tag": "plain_text", "content": title}}
+	if options.HeaderTemplate != "" {
+		header["template"] = options.HeaderTemplate
+	}
+	card := map[string]any{"schema": "2.0", "header": header, "body": map[string]any{"elements": parts}}
+	if options.UpdateMulti != nil {
+		card["config"] = map[string]bool{"update_multi": *options.UpdateMulti}
+	}
+	data, err := json.Marshal(card)
 	if err != nil {
 		return Content{}, failure(ErrInput, "card", err)
 	}
