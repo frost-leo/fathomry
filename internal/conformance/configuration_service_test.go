@@ -137,6 +137,24 @@ func configurationServiceVariable(name, path string, json bool) configuration.Va
 	return configuration.Variable{Path: path, Value: value, Present: present, JSON: json}
 }
 
+func configurationServiceSeed() configuration.Declaration[configurationServiceSettings] {
+	schema := configurationServiceSchema()
+	schema.Defaults = configurationServiceSettings{Version: 1, Label: "initial", Database: configurationServiceDatabase{PoolSize: 1}}
+	return configuration.Declaration[configurationServiceSettings]{
+		Schema: schema,
+		Variables: []configuration.Variable{
+			configurationServiceVariable("FATHOMRY_LIVE_DB_ADDRESS", "/database/address", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_PORT", "/database/port", true),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_USER", "/database/user", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_PASSWORD", "/database/password", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_DATABASE", "/database/database", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_ROOT_CA_PEM", "/database/root_ca_pem", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_SERVER_NAME", "/database/server_name", false),
+			configurationServiceVariable("FATHOMRY_LIVE_DB_PLAINTEXT", "/database/plaintext", true),
+		},
+	}
+}
+
 func configurationServiceBootstrap(t *testing.T, ctx context.Context, deps configuration.Dependencies, writable bool) nacos.Settings {
 	t.Helper()
 	role := "READER"
@@ -366,6 +384,109 @@ func configurationServiceCRUD(t *testing.T, ctx context.Context, database *servi
 	return transaction
 }
 
+func TestConfigurationServiceSeed(t *testing.T) {
+	const syntheticPEM = "-----BEGIN CERTIFICATE-----\nsynthetic-not-a-certificate\n\"quoted\"\\literal\n-----END CERTIFICATE-----\n"
+	for _, test := range []struct {
+		name       string
+		tlsPresent bool
+		rootCA     string
+		serverName string
+		plaintext  string
+		defaults   bool
+	}{
+		{name: "absent"},
+		{name: "explicit-empty", tlsPresent: true},
+		{name: "absent-preserves-defaults", defaults: true},
+		{name: "empty-overrides-defaults", tlsPresent: true, defaults: true},
+		{name: "multiline-raw", tlsPresent: true, rootCA: syntheticPEM, serverName: "database.fixture.invalid", plaintext: "false"},
+		{name: "json-string-literals", tlsPresent: true, rootCA: `"literal\nCA\\text"`, serverName: `"literal\\name"`},
+		{name: "json-null-literals", tlsPresent: true, rootCA: "null", serverName: "null"},
+		{name: "ca-only", tlsPresent: true, rootCA: syntheticPEM},
+		{name: "name-only", tlsPresent: true, serverName: "database.fixture.invalid"},
+		{name: "explicit-plaintext", plaintext: "true"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			expected := configurationServiceSettings{Version: 1, Label: "initial", Database: configurationServiceDatabase{
+				Address: "127.0.0.1", Port: 5433, User: "synthetic-user", Password: "synthetic-\"password\"\\text",
+				Database: "synthetic-db", RootCAPEM: test.rootCA, ServerName: test.serverName,
+				Plaintext: test.plaintext == "true", PoolSize: 1,
+			}}
+			for name, value := range map[string]string{
+				"FATHOMRY_LIVE_DB_ADDRESS":  expected.Database.Address,
+				"FATHOMRY_LIVE_DB_PORT":     "5433",
+				"FATHOMRY_LIVE_DB_USER":     expected.Database.User,
+				"FATHOMRY_LIVE_DB_PASSWORD": expected.Database.Password,
+				"FATHOMRY_LIVE_DB_DATABASE": expected.Database.Database,
+			} {
+				t.Setenv(name, value)
+			}
+			for name, input := range map[string]struct {
+				value   string
+				present bool
+			}{
+				"FATHOMRY_LIVE_DB_ROOT_CA_PEM": {test.rootCA, test.tlsPresent},
+				"FATHOMRY_LIVE_DB_SERVER_NAME": {test.serverName, test.tlsPresent},
+				"FATHOMRY_LIVE_DB_PLAINTEXT":   {test.plaintext, test.plaintext != ""},
+			} {
+				t.Setenv(name, input.value)
+				if !input.present {
+					if err := os.Unsetenv(name); err != nil {
+						t.Fatal("synthetic environment input could not be unset")
+					}
+				}
+			}
+			declaration := configurationServiceSeed()
+			if test.defaults {
+				declaration.Schema.Defaults.Database.RootCAPEM = "default-ca-canary"
+				declaration.Schema.Defaults.Database.ServerName = "default.fixture.invalid"
+				if !test.tlsPresent {
+					expected.Database.RootCAPEM = declaration.Schema.Defaults.Database.RootCAPEM
+					expected.Database.ServerName = declaration.Schema.Defaults.Database.ServerName
+				}
+			}
+			result, err := configuration.Load(t.Context(), declaration, configuration.Dependencies{Provider: configuration.Values()})
+			if err != nil || result.State == nil {
+				t.Fatal("synthetic seed environment loading failed")
+			}
+			status, err := result.State.Status()
+			if err != nil || !status.Closed || !status.Released || status.Accepted != 1 || status.Published != 1 {
+				t.Fatal("finite seed load did not publish and release")
+			}
+			if len(result.Records) != 1 {
+				t.Fatal("finite seed load did not return its configuration evidence")
+			}
+			for _, record := range result.Records {
+				if !record.Info().Resolved || !record.Info().Released || record.Err() != nil {
+					t.Fatal("finite seed evidence is unresolved, unreleased or failed")
+				}
+			}
+			accepted, err := result.State.Capture()
+			if err != nil {
+				t.Fatal("accepted seed unavailable")
+			}
+			actual, err := accepted.ValueCopy()
+			if err != nil {
+				t.Fatal("accepted seed copy failed")
+			}
+			if actual.Database.RootCAPEM != expected.Database.RootCAPEM {
+				t.Error("seed root CA text was not preserved")
+			}
+			if actual.Database.ServerName != expected.Database.ServerName {
+				t.Error("seed server name text was not preserved")
+			}
+			actual.Database.RootCAPEM, actual.Database.ServerName = expected.Database.RootCAPEM, expected.Database.ServerName
+			if actual != expected {
+				t.Error("existing seed fields or defaults changed")
+			}
+			selected, present, err := settings.Read(accepted.View(), "/database",
+				func(value configurationServiceDatabase) configurationServiceDatabase { return value })
+			if err != nil || !present || selected != expected.Database {
+				t.Error("accepted database subsection did not preserve seed inputs")
+			}
+		})
+	}
+}
+
 func TestConfigurationServicePreparation(t *testing.T) {
 	value := configurationServiceSettings{Version: 1, Label: "synthetic", Database: configurationServiceDatabase{
 		Address: "127.0.0.1", Port: 5432, User: "synthetic", Password: "environment-only-canary",
@@ -448,19 +569,7 @@ func TestConfigurationService(t *testing.T) {
 	})
 	t.Log("PASS: environment -> Framework Load -> typed Nacos Settings -> authenticated reader/writer")
 
-	seedSchema := configurationServiceSchema()
-	seedSchema.Defaults = configurationServiceSettings{Version: 1, Label: "initial", Database: configurationServiceDatabase{PoolSize: 1}}
-	seed, err := configuration.Load(ctx, configuration.Declaration[configurationServiceSettings]{
-		Schema: seedSchema,
-		Variables: []configuration.Variable{
-			configurationServiceVariable("FATHOMRY_LIVE_DB_ADDRESS", "/database/address", false),
-			configurationServiceVariable("FATHOMRY_LIVE_DB_PORT", "/database/port", true),
-			configurationServiceVariable("FATHOMRY_LIVE_DB_USER", "/database/user", false),
-			configurationServiceVariable("FATHOMRY_LIVE_DB_PASSWORD", "/database/password", false),
-			configurationServiceVariable("FATHOMRY_LIVE_DB_DATABASE", "/database/database", false),
-			configurationServiceVariable("FATHOMRY_LIVE_DB_PLAINTEXT", "/database/plaintext", true),
-		},
-	}, configDeps)
+	seed, err := configuration.Load(ctx, configurationServiceSeed(), configDeps)
 	if err != nil {
 		t.Fatal("isolated application seed environment loading failed")
 	}

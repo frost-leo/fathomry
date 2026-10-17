@@ -173,12 +173,15 @@ Framework configuration, settings and resource contracts. Only the database
 factory reuses the existing maintainer-only Internal pgx bridge; this is not a
 public database Adapter or a production bootstrap recipe.
 
-From the repository root, first run the synthetic preparation check without
-services or credentials:
+From the repository root, first run the synthetic seed-loading and preparation
+checks without services or credentials. The seed regression shares the live
+test's input declaration and exercises Framework Load, accepted settings and
+released evidence; it does not perform a TLS handshake or contact Nacos/PostgreSQL.
+These tests require the build tag even though they run offline:
 
 ```sh
 go test -race -tags=resource_service ./internal/conformance \
-  -run '^TestConfigurationServicePreparation$' -count=1
+  -run '^TestConfigurationService(Seed|Preparation)$' -count=1
 ```
 
 For the live check, an explicitly authorized launcher must supply these process
@@ -193,8 +196,19 @@ environment variables without putting values in shell history, logs or fixtures:
 | `NACOS_ALLOW_INSECURE` | JSON boolean; plaintext requires explicit development authorization |
 | `DB_ADDRESS`, `DB_PORT` | Literal PostgreSQL IP and JSON integer port |
 | `DB_USER`, `DB_PASSWORD`, `DB_DATABASE` | Authorized PostgreSQL connection with CONNECT/TEMP permissions |
-| `DB_PLAINTEXT` | JSON boolean; this environment fixture supports the explicit plaintext development profile, not a TLS qualification |
+| `DB_ROOT_CA_PEM` | Literal PEM text, including newlines; explicit trust set for verified database TLS |
+| `DB_SERVER_NAME` | Literal certificate verification name for database TLS |
+| `DB_PLAINTEXT` | JSON boolean; absent defaults to false (verified TLS); true requires explicit development authorization |
 | `ALLOW_WRITES` | Exactly `1`; absent authorization skips the live test |
+
+The two database TLS inputs use raw strings, not JSON: quotes, backslashes and
+newlines are preserved exactly. An absent input leaves its seed default unchanged;
+an explicitly empty input supplies an empty string. Both defaults are empty.
+The native database profile requires a nonempty CA PEM and server name for TLS;
+empty inputs do not select ambient trust or disable verification. For explicit
+plaintext, both TLS fields must be empty. Supporting these inputs is not itself
+live TLS qualification: that requires a separately authorized verified-TLS target
+and execution of the live scenario. The write opt-in alone is not authorization.
 
 Inherited nonempty `PG*` variables are outside the explicit native connection
 profile. The initial pool size is one; a watched update changes it to four.

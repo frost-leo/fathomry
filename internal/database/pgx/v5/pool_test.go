@@ -21,6 +21,7 @@ package pgx
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"net"
 	"sync/atomic"
@@ -117,6 +118,15 @@ func TestIndependentSourcesAndTLSVerification(t *testing.T) {
 		t.Fatal("untrusted server was accepted")
 	}
 	drain(t, untrusted.inbox, 1)
+	wrongName := secondPeer.options()
+	wrongName.Name = "wrong-name"
+	wrongName.ServerName = "wrong.fixture.invalid"
+	mismatched := bindFixture(t, wrongName, 1)
+	var hostnameError x509.HostnameError
+	if result := queryResult(t, mismatched.database, "wrong-name", "SELECT cells"); !errors.As(result.Err(), &hostnameError) {
+		t.Fatal("server name mismatch did not retain certificate verification failure")
+	}
+	drain(t, mismatched.inbox, 1)
 }
 
 type closeWitness struct {
