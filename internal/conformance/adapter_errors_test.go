@@ -29,8 +29,6 @@ import (
 	"testing"
 )
 
-var publicDataAdapters = []string{"database/postgres", "database/mysql", "objectstore/minio", "broker/kafka", "cache/redis", "sqlengine/duckdb", "sqlengine/trino", "sqlengine/doris", "httpclient/nethttp", "httpclient/tlsclient", "httpclient/surf", "httpclient/httpcloak", "httpclient/nuki", "telemetry/otel", "logging/zap", "logging/zerolog", "orchestration/temporal", "tableformat/iceberg", "browser/chromedp", "notification/mail"}
-
 // These files are offline metadata boundaries. Native translation and runtime
 // diagnostics stay separately reviewable without changing public package APIs.
 func TestPublicAdapterErrorResponsibilities(t *testing.T) {
@@ -157,13 +155,21 @@ func TestPublicAdapterPolicyResponsibilities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, provider := range publicDataAdapters {
+	checkPublicAdapterPolicyResponsibilities(t, root, adapterPackageProfiles)
+}
+
+func checkPublicAdapterPolicyResponsibilities(t *testing.T, root string, profiles map[string]adapterPackageProfile) {
+	t.Helper()
+	for provider, profile := range profiles {
+		if profile.role != "data-provider" {
+			continue
+		}
 		t.Run(provider, func(t *testing.T) {
 			for name, required := range map[string][]string{
-				adapterOptionsFile(provider + "/v1"): {"Settings", "Dependencies", "Validate"},
-				"policy.go":                          {"Recommend"},
+				adapterOptionsFile(provider): {"Settings", "Dependencies", "Validate"},
+				"policy.go":                  {"Recommend"},
 			} {
-				syntax, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, "adapters", provider, "v1", name), nil, 0)
+				syntax, err := parser.ParseFile(token.NewFileSet(), filepath.Join(root, "adapters", provider, name), nil, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
