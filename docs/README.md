@@ -78,6 +78,8 @@ go-redis v9.22.0 without a local SDK replacement. Its
 topologies, experimental caching/batching, service-version requirements and native
 limits; [verification](reference/internal/cache/redis/v9/verification.md) separates
 protocol checks from authorized Standalone, Sentinel, Cluster and Ring profiles.
+The Redis contracts also distinguish selected Sentinel replica preference from
+strict primary isolation: no eligible replica can still lead to primary fallback.
 
 The [Zap integration](reference/internal/logging/zap/v1/interface.md) adds typed,
 context-aware logging with independent evidence, multiple sinks and bounded Linux

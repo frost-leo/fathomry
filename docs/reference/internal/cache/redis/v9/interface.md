@@ -75,6 +75,14 @@ complete TCP endpoint authority, defaulting to seeds/Ring shards. Include every
 authorized discovered master, replica and Sentinel. Unlisted redirects and
 discovery targets are refused, not silently trusted. Only TCP is supplied.
 
+For Sentinel and explicit Universal-Sentinel with `ReadOnly=true`, this Provider
+sets go-redis v9.22.0 `ReplicaOnly`. The SDK filters down/disconnected replicas,
+but successful discovery with no eligible replica can still fall back to the
+primary. This is not fail-closed primary isolation; replica reads can also be
+stale. These are the selected Sentinel semantics, not a guarantee for every
+Redis mode. See the pinned [replica selector](https://github.com/redis/go-redis/blob/c7f59a2a950eb5131cc27bfff716d6d3382e4490/sentinel.go#L938-L958)
+and [fixture correction #147](https://github.com/frost-leo/fathomry/issues/147).
+
 TLS uses supplied CA PEM and peer-name verification, TLS 1.2 minimum, and optional
 client certificate/private-key PEM. Plaintext requires explicit selection. Trust
 and certificate rotation require a replacement source. Static data-node and

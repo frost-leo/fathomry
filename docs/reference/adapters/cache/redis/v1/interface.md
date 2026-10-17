@@ -136,6 +136,14 @@ false flags and explicit zero idle are not lost. Nil/empty authority/grant
 collections follow the Internal validation/default rules. Public option-mapping,
 strict-loading and effective-profile tests guard all fields.
 
+In Sentinel and explicit Universal-Sentinel mode, `ReadOnly=true` maps to the
+selected SDK's `ReplicaOnly`, not strict primary isolation. With go-redis v9.22.0,
+successful discovery with no eligible replica can fall back to the primary;
+down/disconnected replicas are filtered. Replica reads can be stale. This note
+does not generalize routing behavior to other modes; see the
+[Internal Sentinel contract](../../../../internal/cache/redis/v9/interface.md#configuration-and-authority)
+and [#147](https://github.com/frost-leo/fathomry/issues/147).
+
 `Password.Replace` is local synchronized replacement, not a credential fetcher
 or reauthentication operation. CSC rejects rotation. TLS/Sentinel credential
 replacement requires an explicitly constructed replacement source.
