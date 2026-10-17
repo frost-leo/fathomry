@@ -239,6 +239,13 @@ dependency boundaries and declaration/presentation locations. An unclassified
 new package or a stale entry fails the gate. The data-provider behavior
 matrix is intentionally narrower than this all-role structural gate.
 
+When adding a package, declare its versioned path and role in
+`adapterPackageProfiles` and the Adapter tree map. The Policy responsibility
+guard derives its traversal directly from the `data-provider` profiles, regardless
+of catalog membership; do not maintain a second provider list. It uses the declared
+versioned path and the existing options-file convention, including Temporal's
+`option.go`. Other roles retain their own contracts.
+
 Retain a requirement → native authority → public path → test matrix. Verify
 affected field/default parity, budgets, aliasing, cancellation, evidence saturation,
 partial/lost effects, old generations and cleanup. Keep provider differences as

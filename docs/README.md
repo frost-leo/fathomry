@@ -449,7 +449,7 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
 - [Maintain public adapter errors](development/adapter-errors.md), including the private forwarding seam and contract checks.
-- [Maintain public Adapter contracts](development/public-adapters.md), including provider differences, authoritative budgets and executable change checks.
+- [Maintain public Adapter contracts](development/public-adapters.md), including role-selected responsibility checks, provider differences, authoritative budgets and executable change checks.
 - [Adapter tree map](../adapters/README.md), covering shared mechanisms, capability contracts, configuration preparation/providers, data providers and private helpers.
 - [Write documentation](development/documentation.md), the canonical writing policy.
 - [Contribution policy](../.github/CONTRIBUTING.md), the canonical branch/signing/review rules.
