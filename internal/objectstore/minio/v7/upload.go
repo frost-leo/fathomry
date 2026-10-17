@@ -213,7 +213,11 @@ func (response *controlResponse) allocationIdentity(bucket, key, uploadID string
 
 func (client *Client) upload(ctx context.Context, state *exchange, request WriteRequest, opts native.PutObjectOptions, input io.Reader, data *resultData) error {
 	value := client.owner.settings
-	buffer := make([]byte, value.PartBytes+1)
+	stagingBytes := min(int64(value.PartBytes), value.MaxTransferBytes)
+	if request.Size >= 0 {
+		stagingBytes = min(stagingBytes, request.Size)
+	}
+	buffer := make([]byte, int(stagingBytes)+1)
 	hash := sha256.New()
 	var completed []native.CompletePart
 	eof := false

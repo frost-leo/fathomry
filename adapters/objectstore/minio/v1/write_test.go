@@ -20,12 +20,45 @@
 package minio
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
 
 	"github.com/frost-leo/fathomry/adapters/v1"
 )
+
+func TestPutBoundedSmallInputs(t *testing.T) {
+	for _, entry := range []struct {
+		name        string
+		actual      int
+		size, limit int64
+	}{
+		{"known-empty", 0, 0, 8 << 20},
+		{"known-small", 64 << 10, 64 << 10, 8 << 20},
+		{"unknown-small-bound", 64 << 10, -1, 64 << 10},
+	} {
+		t.Run(entry.name, func(t *testing.T) {
+			peer := newPeer(t)
+			options := peer.options
+			options.MaxTransferBytes, options.MaxReadBytes = entry.limit, 1
+			test := newFixture(t, options)
+			ctx := testContext(t)
+			body := bytes.Repeat([]byte("s"), entry.actual)
+			key := "owned/small"
+			result := test.result(test.client.Put(ctx, ctx, WriteRequest{Key: key, Size: entry.size}, bytes.NewReader(body)))
+			object, present := result.Object()
+			if !present || object.Size != int64(len(body)) || !bytes.Equal(peer.content(key), body) {
+				t.Fatal("public upload content/size")
+			}
+			stat := test.result(test.client.Stat(ctx, Address{Key: key}))
+			object, present = stat.Object()
+			if !present || object.Size != int64(len(body)) {
+				t.Fatal("independent object existence/size")
+			}
+		})
+	}
+}
 
 func TestWriteRefusalPrecedesNativeDispatch(t *testing.T) {
 	peer := newPeer(t)
