@@ -344,12 +344,8 @@ func TestRedisTopologies(t *testing.T) {
 			return err == nil && strings.Contains(info, "master_link_status:up")
 		})
 		sentinel := startNode(t, fmt.Sprintf("sentinel monitor gh62 %s %s 1\nsentinel down-after-milliseconds gh62 500\nsentinel failover-timeout gh62 3000\nsentinel parallel-syncs gh62 1\n", host, port), true)
-		monitor := sdk.NewSentinelClient(&sdk.Options{Addr: sentinel.address, MaxRetries: -1, DialerRetries: 1, DisableIdentity: true})
+		monitor := sdk.NewSentinelClient(&sdk.Options{Addr: sentinel.address, MaxRetries: -1, DialerRetries: 1, DisableIdentity: true, ContextTimeoutEnabled: true})
 		defer monitor.Close()
-		eventually(t, 10*time.Second, func() bool {
-			replicas, err := monitor.Replicas(ctx, "gh62").Result()
-			return err == nil && len(replicas) == 1
-		})
 		options := topologyOptions(sentinel.address)
 		options.Mode = "sentinel"
 		options.MasterName = "gh62"
@@ -357,7 +353,10 @@ func TestRedisTopologies(t *testing.T) {
 		readOptions := options
 		readOptions.ReadOnly = true
 		readOptions.AdminCommands = []string{"ROLE"}
-		reader, _, readEvidence, _ := bindTest(t, readOptions, 16)
+		reader, readEvidence, err := bindReplicaTest(t, ctx, monitor, replica.address, readOptions)
+		if err != nil {
+			t.Fatal(err)
+		}
 		role := executeTest(t, reader, "replica-role", "ROLE")
 		if role.Err() != nil {
 			t.Fatal(role.Err())

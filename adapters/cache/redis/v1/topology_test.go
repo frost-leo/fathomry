@@ -309,12 +309,8 @@ func TestPublicRedisTopologies(t *testing.T) {
 			return err == nil && strings.Contains(info, "master_link_status:up")
 		})
 		sentinel := startServer(t, fmt.Sprintf("sentinel monitor gh108 %s %s 1\nsentinel down-after-milliseconds gh108 500\nsentinel failover-timeout gh108 3000\nsentinel parallel-syncs gh108 1\n", host, port), true)
-		monitor := sdk.NewSentinelClient(&sdk.Options{Addr: sentinel.address, MaxRetries: -1, DialerRetries: 1, DisableIdentity: true})
+		monitor := sdk.NewSentinelClient(&sdk.Options{Addr: sentinel.address, MaxRetries: -1, DialerRetries: 1, DisableIdentity: true, ContextTimeoutEnabled: true})
 		defer monitor.Close()
-		until(t, 10*time.Second, func() bool {
-			replicas, err := monitor.Replicas(ctx, "gh108").Result()
-			return err == nil && len(replicas) == 1
-		})
 		options := topologySettings(sentinel.address)
 		options.Mode = "sentinel"
 		options.MasterName = "gh108"
@@ -327,7 +323,10 @@ func TestPublicRedisTopologies(t *testing.T) {
 			if mode == "universal" {
 				reading.UniversalMode = "sentinel"
 			}
-			owner, deps := openTest(t, reading)
+			owner, deps, err := openReplicaTest(t, ctx, monitor, replica.address, reading)
+			if err != nil {
+				t.Fatal(err)
+			}
 			role, err := owner.Client().Cache().Execute(ctx, command(t, Cache, "ROLE"))
 			serviceOK(t, err)
 			name, _ := role.Replies()[0].Value().Elements()[0].Text()
