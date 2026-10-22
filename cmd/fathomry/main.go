@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Command fathomry provides official project generation and offline catalogs.
+// Command fathomry provides project creation/building and offline catalog tools.
 package main
 
 import (

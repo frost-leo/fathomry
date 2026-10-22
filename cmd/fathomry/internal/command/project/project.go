@@ -17,53 +17,23 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+// Package project assembles project commands without adding a user-facing namespace.
 package project
 
 import (
-	"context"
-	"fmt"
-	"io"
-
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
+	buildcmd "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/build"
+	newcmd "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/new"
+	"github.com/frost-leo/fathomry/i18n/v1"
 	"github.com/spf13/cobra"
 )
 
-// New declares the official offline project-creation command.
-func New(invocation *command.Invocation) *cobra.Command {
-	input := request{}
-	root := &cobra.Command{Use: "new PROJECT", Short: "fathomry.project_creation.new", Args: cobra.ExactArgs(1)}
-	root.Flags().StringVar(&input.module, "module", "", "fathomry.project_creation.module")
-	root.Flags().StringVar(&input.name, "name", "", "fathomry.project_creation.name")
-	root.Flags().StringVar(&input.mode, "config-source", "local", "fathomry.project_creation.source")
-	root.Flags().StringVar(&input.provider, "config-provider", "viper", "fathomry.project_creation.provider")
-	root.Flags().StringVar(&input.encoding, "config-format", "yaml", "fathomry.project_creation.format")
-	root.Flags().StringVar(&input.frameworkSource, "framework-source", "", "fathomry.project_creation.framework_source")
-	invocation.Bind(root, func(ctx context.Context, args []string) error {
-		input.destination = args[0]
-		if root.Flags().Changed("config-provider") && input.provider == "" {
-			return command.Fail(command.ErrUsage)
-		}
-		tree, err := prepare(input)
-		if err != nil {
-			return err
-		}
-		if err := create(ctx, tree, writeProjectFile); err != nil {
-			return err
-		}
-		result := struct {
-			Destination string `json:"destination"`
-			Module      string `json:"module"`
-			Name        string `json:"name"`
-			Source      string `json:"config_source"`
-			Provider    string `json:"config_provider"`
-			Encoding    string `json:"config_format"`
-			Files       int    `json:"files"`
-			Status      string `json:"status"`
-		}{tree.destination, tree.module, tree.name, tree.mode, tree.provider, tree.encoding, len(tree.files), "created"}
-		return invocation.Result("new", result, func(writer io.Writer) error {
-			_, err := fmt.Fprintf(writer, "%s %q\n", invocation.Text("fathomry.project_creation.created"), tree.destination)
-			return err
-		})
-	})
-	return root
+// Commands returns the top-level new and build commands.
+func Commands(invocation *command.Invocation) []*cobra.Command {
+	return []*cobra.Command{newcmd.New(invocation), buildcmd.New(invocation)}
+}
+
+// Components supplies only the project commands' metadata.
+func Components() []i18n.Component {
+	return []i18n.Component{newcmd.Component(), buildcmd.Component()}
 }

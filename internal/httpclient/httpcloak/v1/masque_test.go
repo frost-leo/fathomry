@@ -456,6 +456,14 @@ func TestManagedMASQUEFailureNeverFallsBackAndReleasesSetup(t *testing.T) {
 			if result.Outcome.Value.Complete() || originCalls.Load() != 0 {
 				t.Fatal("failed MASQUE setup reached the origin directly")
 			}
+			// Receipt release does not join source-owned QUIC accounting.
+			joined := make(chan struct{})
+			go func() { fixture.client.owner.workers.Wait(); close(joined) }()
+			select {
+			case <-joined:
+			case <-time.After(time.Second):
+				t.Fatal("failed setup did not release source workers")
+			}
 			fixture.client.owner.mu.Lock()
 			sockets, quic, controls := fixture.client.owner.connections, fixture.client.owner.quicActive, fixture.client.owner.controlActive
 			fixture.client.owner.mu.Unlock()

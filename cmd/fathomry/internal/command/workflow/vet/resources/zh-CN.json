@@ -1,0 +1,55 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_vet",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.workflow_vet.command",
+      "source": "b34b91f2e2cfb536f688e24aabfb9bbb09e33d66acc98d742a1d5f489cd6ab97",
+      "forms": {
+        "other": "离线检查显式提供的工作流声明包。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.passed",
+      "source": "7cb478a39f8925bf5cedf5d13742a8f49a8ba34e402a07980984944894b9d89f",
+      "forms": {
+        "other": "工作流声明通过静态检查。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.failed",
+      "source": "0d7468c346a679e75d5ee6456b859626adadb130d76763d33ada015dd1586a34",
+      "forms": {
+        "other": "工作流声明检查未通过。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.truncated",
+      "source": "41211e4f8de6c5302459ce47fb20d0699603c329611a1229047b1a852fe55bb1",
+      "forms": {
+        "other": "部分冲突详情已省略。"
+      }
+    }
+  ]
+}

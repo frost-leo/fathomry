@@ -43,9 +43,7 @@ import (
 	"github.com/frost-leo/fathomry/adapters/tableformat/iceberg/v1"
 	"github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
-	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
-	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages"
-	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project"
+	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
 	"github.com/frost-leo/fathomry/failure/v1"
 	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
@@ -54,10 +52,6 @@ import (
 // catalogs is offline metadata composition, not Framework runtime construction.
 func catalogs() (command.Catalogs, error) {
 	components := append(configuration.Components(),
-		command.Component(),
-		errorcatalog.Component(),
-		messages.Component(),
-		project.Component(),
 		i18n.Component{Module: "fathomry", Name: "cache_redis", BaseLocale: "en", Resources: redis.CacheResources(), Directory: ".", Definitions: redis.CacheDefinitions()},
 		i18n.Component{Module: "fathomry", Name: "messaging_redis", BaseLocale: "en", Resources: redis.MessagingResources(), Directory: ".", Definitions: redis.MessagingDefinitions()},
 		i18n.Component{Module: "fathomry", Name: "broker_kafka", BaseLocale: "en", Resources: kafka.Resources(), Directory: "resources", Definitions: kafka.Definitions()},
@@ -82,6 +76,7 @@ func catalogs() (command.Catalogs, error) {
 		i18n.Component{Module: "fathomry", Name: "notification_mail", BaseLocale: "en", Resources: mail.Resources(), Directory: "resources", Definitions: mail.Definitions()},
 		i18n.Component{Module: "fathomry", Name: "notification_lark", BaseLocale: "en", Resources: lark.Resources(), Directory: "resources", Definitions: lark.Definitions()},
 	)
+	components = append(components, cli.Components()...)
 	var definitions []failure.Definition
 	for _, component := range components {
 		definitions = append(definitions, component.Definitions...)

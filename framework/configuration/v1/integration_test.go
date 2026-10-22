@@ -246,7 +246,7 @@ func TestGeneratedRemoteProjects(t *testing.T) {
 			run(t, root, cli, "new", directory, "--name=demo", "--module=example.org/demo", "--framework-source", root, "--config-source=remote", "--config-provider=nacos", "--config-format", encoding)
 			run(t, directory, goTool, "mod", "tidy")
 			binary := filepath.Join(job, "application-"+encoding+suffix)
-			run(t, directory, goTool, "build", "-mod=readonly", "-o", binary, "./cmd/demo")
+			run(t, directory, goTool, "build", "-mod=readonly", "-o", binary, ".")
 			base, err := os.ReadFile(filepath.Join(directory, "configs", "base."+encoding))
 			if err != nil {
 				t.Fatal(err)

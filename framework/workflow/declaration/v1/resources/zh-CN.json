@@ -1,0 +1,69 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.workflow.invalid_declaration",
+      "source": "4a542bbd0667f46503f41e4d914247a7a401182837b96e5c396e437631b6f750",
+      "forms": {
+        "other": "工作流声明无效。"
+      }
+    },
+    {
+      "id": "fathomry.workflow.unsupported_profile",
+      "source": "c7eeac5c8777106af461d606569535de4bf500590ecbc1788755ad3f8b5a9a25",
+      "forms": {
+        "other": "不支持该工作流文档格式或校验配置。"
+      }
+    },
+    {
+      "id": "fathomry.workflow.integrity_failed",
+      "source": "ef1573fe70604a76fc15a0c1039d9ec9f77473bf15b6d6e2d3bb3ba7b42297b7",
+      "forms": {
+        "other": "工作流文档指纹与内容不一致。"
+      }
+    },
+    {
+      "id": "fathomry.workflow.limit_exceeded",
+      "source": "06783ad8133011baedbe7ae3b82376d1c98cc41d4ed06597811d96feea725e6b",
+      "forms": {
+        "other": "工作流声明超出准入限制。"
+      }
+    },
+    {
+      "id": "fathomry.workflow.canceled",
+      "source": "86dc0ef197b23b43bfa99c51f7fc745d2177181d9851006581015e1c494986b8",
+      "forms": {
+        "other": "工作流声明处理已取消。"
+      }
+    },
+    {
+      "id": "fathomry.workflow.invalid_handle",
+      "source": "0d6ff05e7bea9fcfa3a5c4f49793d2a49f374aa15a8a105b53823a98088aa38b",
+      "forms": {
+        "other": "工作流声明句柄或输入集合无效。"
+      }
+    }
+  ]
+}

@@ -103,7 +103,7 @@ jobs:
             exit 1
           fi
           go vet ./...
-          cold_package=github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project
+          cold_package=github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/new
           go list ./... > "$RUNNER_TEMP/fathomry-test-packages"
           grep -Fxq "$cold_package" "$RUNNER_TEMP/fathomry-test-packages"
           mapfile -t remaining_packages < <(grep -Fxv "$cold_package" "$RUNNER_TEMP/fathomry-test-packages")

@@ -24,10 +24,7 @@ import (
 	"context"
 
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
-	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog"
-	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages"
-	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project"
-	"github.com/spf13/cobra"
+	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
 )
 
 // Run owns one finite CLI invocation; it does not read process globals.
@@ -36,11 +33,9 @@ func Run(ctx context.Context, args []string, options command.Options) error {
 	if err != nil {
 		return command.Unavailable(options.ErrorOutput, err)
 	}
-	return command.Run(ctx, args, options, catalogs, commands)
-}
-
-func commands(invocation *command.Invocation) *cobra.Command {
-	root := invocation.Group("fathomry", "fathomry.command_line.root")
-	root.AddCommand(errorcatalog.New(invocation), messages.New(invocation), project.New(invocation))
-	return root
+	return cli.Run(ctx, args, cli.Options{
+		Input: options.Input, Output: options.Output, ErrorOutput: options.ErrorOutput,
+		Language: options.Language, CleanupTimeout: options.CleanupTimeout,
+		Errors: catalogs.Errors, Messages: catalogs.Messages,
+	})
 }

@@ -82,6 +82,8 @@ const (
 	FacilityConfiguration Facility = 0x045
 	// FacilityProjectCreation owns independent project creation and its effects.
 	FacilityProjectCreation Facility = 0x00A
+	// FacilityProjectBuild owns offline project build admission and publication.
+	FacilityProjectBuild Facility = 0x00B
 	// FacilityPostgreSQL owns the public PostgreSQL database capability.
 	FacilityPostgreSQL Facility = 0x080
 	// FacilityMySQL owns the public MySQL database capability.
@@ -120,6 +122,8 @@ const (
 	FacilityZerolog Facility = 0x283
 	// FacilityTemporal owns the public Temporal orchestration capability.
 	FacilityTemporal Facility = 0x1C0
+	// FacilityWorkflow owns portable workflow declaration and comparison semantics.
+	FacilityWorkflow Facility = 0x1C1
 	// FacilityIceberg owns the public Iceberg table-format capability.
 	FacilityIceberg Facility = 0x320
 	// FacilityChromedp owns the managed Browser capability.
@@ -188,6 +192,8 @@ func Allocations() []Allocation {
 		{Facility: FacilityZap, Module: "fathomry", Component: "logging_zap"},
 		{Facility: FacilityZerolog, Module: "fathomry", Component: "logging_zerolog"},
 		{Facility: FacilityTemporal, Module: "fathomry", Component: "temporal"},
+		{Facility: FacilityWorkflow, Module: "fathomry", Component: "workflow"},
+		{Facility: FacilityProjectBuild, Module: "fathomry", Component: "project_build"},
 		{Facility: FacilityMail, Module: "fathomry", Component: "notification_mail"},
 		{Facility: FacilityLark, Module: "fathomry", Component: "notification_lark"},
 	}

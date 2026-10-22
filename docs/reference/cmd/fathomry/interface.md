@@ -23,10 +23,12 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 **Audience:** users and maintainers of the official Fathomry executable.
 **Status:** implemented offline help, searchable error definitions/explanations,
-translation inspection/rendering/coverage checks and project generation. Generated executables perform finite configuration
+translation inspection/rendering/coverage checks, project generation, native gated
+builds and workflow-bundle checking. Generated executables perform finite configuration
 loading. Version, deployment and Worker commands are not included.
 **Executable source:** [cmd/fathomry](../../../../cmd/fathomry/main.go).
-The private implementation is not a public command-extension SDK.
+The [public Go entry](v1/interface.md) exposes the fixed commands to independent
+projects. The private implementation is not a public command-extension SDK.
 
 ## Run the implemented commands
 
@@ -76,6 +78,8 @@ projects. Unknown well-formed codes are not silently assigned meanings.
 | i18n render MESSAGE_ID | Render with --locale, repeatable --arg NAME=VALUE and optional --count; report language/plural provenance |
 | i18n coverage LOCALE | Summary and per-owner exact missing translations; --module/--component filters and optional --strict |
 | new PROJECT | Create an absent project directory with the selected configuration profile |
+| build [PROJECT] | Compile a trusted native root project, validate its declarations, then publish the inspected binary |
+| workflow vet BUNDLE [BUNDLE...] | Validate explicitly supplied workflow bundles and compare local identities/content |
 
 A known message with no exact translation is a successful inspection with
 translation_exists=false. Unknown messages, errors or owners return not-found.
@@ -170,7 +174,59 @@ cleanup or output failure still takes precedence; an unqualified staged report
 is not emitted. A failed stdout write may deliver a prefix, and a failed stderr
 write may occur after a complete report: check framing, diagnostics and exit code.
 
+## Vet workflow bundles
+
+`fathomry workflow vet first.bundle.json [second.bundle.json ...]` reads explicit
+local files using the public [workflow declaration core](../../framework/workflow/declaration/v1/interface.md).
+Use `--output json` for a `fathomry.cli/v1` envelope with command `workflow.vet`.
+The checker does not discover/build/launch a project, invoke Boot, read application
+settings or contact services. There is no workflow-creation or `run` command.
+The private [workflow group](../../../../cmd/fathomry/internal/command/workflow/workflow.go)
+owns subcommand and message-catalog composition; its
+[`vet` leaf](../../../../cmd/fathomry/internal/command/workflow/vet/vet.go)
+owns file admission, declaration checking and report presentation. The group
+currently exposes only `vet`; the public declaration API retains `Check` for
+comparison of already validated bundles.
+
+Each file must be a self-contained supported bundle: portable workflow/version
+identity, complete specification, and version-owned mode revisions. The
+[profile](../../framework/workflow/declaration/v1/profile.md) defines strict input and fingerprint
+rules. The [independent helper recipe](../../../../framework/workflow/declaration/v1/testdata/consumer/README.md)
+generates these files from Go rather than maintaining a second JSON source.
+
+The command accepts 1–16 regular files, at most 16 MiB each and 64 MiB in aggregate.
+Explicit symlinks may select regular targets. It verifies the opened file identity
+and kind; Unix nonblocking opens reject special-file replacement without waiting
+on a FIFO. Streams/stdin, directories, devices and sockets are not admitted.
+Read/close failures and cancellation do not produce completed-set success. This is
+not a filesystem sandbox or a guarantee of interrupting arbitrary kernel I/O;
+special-file race/ownership acceptance is exercised on Linux.
+
+`data.passed` reports static consistency only. `entries` contains consistent
+identities/fingerprints; `conflicts` contains same-identity differing paths without
+values; `diagnostics` names rejected documents by zero-based input index. Counts
+refer to validated declarations. `uncompared_modes` reports modes beneath conflicting
+parent specs. `truncated`/`paths_truncated` mark omitted details without turning a
+failed check into a success. A workflow with zero modes reports zero, not readiness.
+
+Completed invalid/unsupported/conflicting checks return the report on stdout and
+`check_failed` on stderr, exiting 1 after successful cleanup/delivery. Missing files,
+admission failures, cancellation and output errors retain ordinary invocation
+failure behavior. Both reports and diagnostics honor `--output`; human labels honor
+`--lang`, while machine identities/reasons do not change with locale.
+
+Re-export explicitly after declaration edits. The command checks supplied bytes,
+not whether those files cover every project declaration, match the latest source,
+describe an actual binary, are registered, or can run. Failed export must stop a
+developer/CI recipe before an older output is presented as newly generated.
+
 ## Create an independent project
+
+The generated root `main.go` connects the [shared CLI entry](v1/interface.md) before
+application Boot. After dependency preparation, `fathomry build PROJECT` and
+project-local `go run . build` use the same build command. See the
+[build contract](v1/interface.md#build-a-project) for options, inspection limits,
+native-host support and the distinction between compilation and artifact admission.
 
 From the Framework checkout, explicitly select development dependencies:
 
@@ -206,7 +262,7 @@ Each profile contains 21 files:
 
 ```text
 go.mod, .gitignore, .env.example, README.md
-cmd/<name>/main.go, main_test.go
+main.go, main_test.go
 internal/bootstrap/boot.go, boot_test.go
 internal/bootstrap/options.go, options_test.go, inputs.go, inputs_test.go
 internal/setting/setting.go, setting_test.go, application.go, application_test.go
@@ -264,7 +320,7 @@ policy. No installer or release publication is added by project generation.
 In particular, the offline tls-client, Surf, HTTPcloak and Nuki catalogs are part of their concrete Adapter
 packages and therefore compile against the corrected SDKs even without constructing
 a client. A module-based CLI build must supply the maintained
-[versioned SDK selections](../../../../cmd/fathomry/internal/command/project/dependency.go)
+[versioned SDK selections](../../../../cmd/fathomry/internal/command/project/new/dependency.go)
 before building; the versioned-root qualification does this without copying nested
 source or inheriting root replacements. Generated projects use that same policy.
 
@@ -327,7 +383,8 @@ Each official command family owns its declarations and resource bundle, followin
 the project command's assembly pattern. `errorcatalog/resources/` and
 `messages/resources/` each contain `en.json` and `zh-CN.json`, embedded by their
 own `resources.go`. Their `Resources()` and `Component()` are composed explicitly
-by the private app alongside `command.Component()` and `project.Component()`.
+through the public CLI's fixed `Components()` inventory. The private official app
+adds its wider Adapter metadata catalog; projects need not import that catalog.
 Neither family implicitly imports the other's resources or a global registry.
 
 The command entry files only bind flags, invoke catalog operations and stage
@@ -381,9 +438,10 @@ Go operations. Do not add a Framework API solely to mirror a command.
 - [Typed scalar arguments, plural rendering, fallback and argument fuzzing](../../../../cmd/fathomry/internal/command/messages/render_test.go).
 - [Built executable, broken pipe, process exit and signal cleanup tests](../../../../cmd/fathomry/main_test.go).
 - [Import and private-package boundaries](../../../../internal/conformance/imports_test.go).
-- [Exclusive generation and failure/retention controls](../../../../cmd/fathomry/internal/command/project/project_test.go).
-- [Four independent profiles and cold versioned-module-cache qualification](../../../../cmd/fathomry/internal/command/project/integration_test.go).
-- [Linux FIFO/racing-file and generated repeated-signal controls](../../../../cmd/fathomry/internal/command/project/integration_linux_test.go).
+- [Exclusive generation and failure/retention controls](../../../../cmd/fathomry/internal/command/project/new/project_test.go).
+- [Four independent profiles and cold versioned-module-cache qualification](../../../../cmd/fathomry/internal/command/project/new/integration_test.go).
+- [Linux FIFO/racing-file and generated repeated-signal controls](../../../../cmd/fathomry/internal/command/project/new/integration_linux_test.go).
+- [Native build, invalid-input and prior-artifact controls](../../../../cmd/fathomry/internal/command/project/build/integration_test.go).
 - [Generated remote YAML/TOML programs against a loopback Nacos protocol fixture](../../../../framework/configuration/v1/integration_test.go).
 
 ```sh
