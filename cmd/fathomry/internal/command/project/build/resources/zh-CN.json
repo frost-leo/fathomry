@@ -1,0 +1,160 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "project_build",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.project_build.invalid_options",
+      "source": "62c1553f1988e2b5b53a7e44e2a61571a6a6d3047969dbb808234c302a1ba5ec",
+      "forms": {
+        "other": "项目构建参数或根模块无效。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.compilation_failed",
+      "source": "2566be13a61503ef5a4b9b9adf308b0ddb1f7daa531737061b49f04293f23bab",
+      "forms": {
+        "other": "Go 编译失败；未发布新产物。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.inspection_failed",
+      "source": "6e0c91afaa976681cbf98059fec4a8a18b30e7c8e41351b76e0df396ff324c68",
+      "forms": {
+        "other": "可执行程序未提供受支持的离线项目声明。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.rejected",
+      "source": "ab879c1a92d65dcd41e3f29fa930bf9011ae3f300c93f939e010379a7d000708",
+      "forms": {
+        "other": "项目声明未通过校验或存在身份冲突。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.publication_failed",
+      "source": "2670ce003ca36b157bffcc0a96596a7cd2b25a3a9ef84cd2437461fac1581202",
+      "forms": {
+        "other": "产物发布失败。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.canceled",
+      "source": "6c63792f2fb3fd7c6fa737fb9517188d3e10ee7b717b03347fbc37b5faeef29c",
+      "forms": {
+        "other": "项目构建已取消或超时。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.limit_exceeded",
+      "source": "9b7d8fcfc56ab344fa90109f7aee60a19d31d9fcc5d1817a3da95950a5793bff",
+      "forms": {
+        "other": "项目构建超出资源限制。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.output_failed",
+      "source": "eb2fa0ace1a505b8121f32903f22704b7a00484e38fa5dd3401925eac2ea2e3a",
+      "forms": {
+        "other": "无法输出构建结果；产物可能已存在。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.cleanup_failed",
+      "source": "6613141c46c6c41d2545946b909dfd58cb231ec604f829cd74ae629f08d02d16",
+      "forms": {
+        "other": "构建清理失败；产物可能已存在。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.unsupported_platform",
+      "source": "5260b612834735a9d21d07d0cddf94a50c2f447e8427dfb433c1ed6b1f28874f",
+      "forms": {
+        "other": "项目构建要求 Linux 或 macOS 原生目标。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.command",
+      "source": "e30f2d51485d7f5747230936e6e4d304c061b978c88fce507fbb0f26c6581b2f",
+      "forms": {
+        "other": "构建可信项目，校验通过后发布可执行程序。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.out",
+      "source": "bc25f4f9d564a2f153352352429001dbf6fd24512f8f5c9a2df9ebe626c6ee7b",
+      "forms": {
+        "other": "产物文件；相对路径以项目目录为基准。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.timeout",
+      "source": "11023c7e6a9b25b3fe711d0d5eaed6fe1569aa58d892a93968839165a33d2641",
+      "forms": {
+        "other": "构建总超时（1ms 至 30m）。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.complete",
+      "source": "0761ff9ea6794278e446415de4ce48d3b8be25f2fa4ca88d9ac0980293fc0c92",
+      "forms": {
+        "other": "构建已通过校验"
+      }
+    },
+    {
+      "id": "fathomry.project_build.project",
+      "source": "b4becd7fb9f501b9a52b23c8f644a23b9c7102cbbcf5784b96f6fc362af87cbb",
+      "forms": {
+        "other": "项目"
+      }
+    },
+    {
+      "id": "fathomry.project_build.target",
+      "source": "1de36f21e8d8051fe4dac1d6d11d74a7114edde540bf88a9b4384d799fd57b1e",
+      "forms": {
+        "other": "目标"
+      }
+    },
+    {
+      "id": "fathomry.project_build.declarations",
+      "source": "cee858da3b2e2d04b964fe43cba9fad882be4d28b190688efde3add10a969013",
+      "forms": {
+        "other": "工作流/模式"
+      }
+    },
+    {
+      "id": "fathomry.project_build.artifact",
+      "source": "f2f7621f71bab74b776ad0d848121926f8abf9ddb046de96c7fe4d047b024d63",
+      "forms": {
+        "other": "产物"
+      }
+    },
+    {
+      "id": "fathomry.project_build.digest",
+      "source": "f86ce1cedfba39c80b653db9dc307cd99c4198d625c0e381c9e9666216708ff4",
+      "forms": {
+        "other": "SHA256"
+      }
+    }
+  ]
+}

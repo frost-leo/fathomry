@@ -64,6 +64,14 @@ func TestCodeLayout(t *testing.T) {
 func TestAllocations(t *testing.T) {
 	t.Run("stable_first_party_manifest", func(t *testing.T) {
 		allocations := failure.Allocations()
+		if failure.FacilityProjectBuild != 0x00B || failure.FacilityProjectBuild.Domain() != failure.DomainCore ||
+			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityProjectBuild, Module: "fathomry", Component: "project_build"}) {
+			t.Fatal("project build capability allocation changed")
+		}
+		if failure.FacilityWorkflow != 0x1C1 || failure.FacilityWorkflow.Domain() != failure.DomainOrchestration ||
+			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityWorkflow, Module: "fathomry", Component: "workflow"}) {
+			t.Fatal("workflow declaration capability allocation changed")
+		}
 		if len(allocations) < 14 || allocations[0] != (failure.Allocation{Facility: 1, Module: "fathomry", Component: "failure"}) ||
 			allocations[1] != (failure.Allocation{Facility: 0x003, Module: "fathomry", Component: "i18n"}) ||
 			allocations[2] != (failure.Allocation{Facility: 0x004, Module: "fathomry", Component: "resource"}) ||

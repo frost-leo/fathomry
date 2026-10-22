@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
+	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
 	"github.com/frost-leo/fathomry/failure/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -44,7 +45,7 @@ func execute(args []string, language string) (string, string, error) {
 
 func TestOfficialCommands(t *testing.T) {
 	t.Run("offline_help_and_scope", func(t *testing.T) {
-		for _, args := range [][]string{nil, {"--help"}, {"error"}, {"error", "--help"}, {"help", "error", "explain"}, {"i18n", "--help"}, {"help", "help"}} {
+		for _, args := range [][]string{nil, {"--help"}, {"error"}, {"error", "--help"}, {"help", "error", "explain"}, {"i18n", "--help"}, {"workflow", "--help"}, {"workflow", "vet", "--help"}, {"help", "help"}} {
 			output, diagnostic, err := execute(args, "en")
 			if err != nil || diagnostic != "" || !strings.Contains(output, "Usage:") {
 				t.Fatalf("help %q: %v / %s", args, err, diagnostic)
@@ -327,6 +328,9 @@ func TestInvalidCommands(t *testing.T) {
 		{[]string{"version"}, 2},
 		{[]string{"--version"}, 2},
 		{[]string{"new", "unwanted"}, 2},
+		{[]string{"workflow", "check"}, 2},
+		{[]string{"workflow", "run"}, 2},
+		{[]string{"workflow", "vet"}, 2},
 		{[]string{"completion"}, 2},
 		{[]string{"__complete", "error"}, 2},
 		{[]string{"__completeNoDesc", "error"}, 2},
@@ -394,9 +398,14 @@ func FuzzArguments(f *testing.F) {
 			return
 		}
 		args := strings.Split(input, "\n")
+		for _, argument := range args {
+			if argument == "build" {
+				return
+			} // Builds execute trusted project code, not fuzz input.
+		}
 		// Real command assembly exercises Cobra's grammar without ambient process state.
 		var output, diagnostic bytes.Buffer
-		err := command.Run(context.Background(), args, command.Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic, Language: "en"}, catalogs, commands)
+		err := cli.Run(context.Background(), args, cli.Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic, Language: "en", Errors: catalogs.Errors, Messages: catalogs.Messages})
 		if command.ExitCode(err) == 0 && diagnostic.Len() != 0 {
 			t.Fatal("success emitted an error")
 		}

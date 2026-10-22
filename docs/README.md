@@ -186,9 +186,16 @@ provider descriptors, atomic data domains and optional borrowed resource adoptio
 Project Boot supplies choices and settings without importing Adapters; Framework
 owns source/operation/evidence lifecycle and performs no ambient environment lookup. The official
 [CLI](reference/cmd/fathomry/interface.md) now provides offline help, error and
-translation catalogs plus `new` project generation; its former public Go API stays
-withdrawn. Generated projects share one Boot/Watch flow with mode-specific dependency declarations.
+translation catalogs, `new` project generation, offline `workflow vet`, and native
+`build` with declaration admission before artifact publication. The
+[fixed public CLI entry](reference/cmd/fathomry/v1/interface.md) supports the same
+commands from a generated root `main.go`; no generic command/plugin SDK is exposed.
+Generated projects share one Boot/Watch flow with mode-specific dependency declarations.
 There is no production-qualified application runtime or Run/Item execution model.
+The [workflow declaration package](reference/framework/workflow/declaration/v1/interface.md)
+adds shared static compilation, self-contained bundle export and canonical local
+comparison. An independent Go helper supplies declarations without Boot or project
+launching by the CLI; checking does not establish source freshness or execution readiness.
 Internal raw acquisition, strict JSON preparation and type-admission improvements
 remain implemented. Business authors are not expected to recreate private
 assembly machinery as startup boilerplate.
@@ -407,6 +414,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Complete supported remote reads/observations/management/search, effect evidence and resource-backed borrowing |
 | [`framework/v1`](reference/framework/v1/interface.md) | Public runtime composition, released-evidence reception and once-bound safe localized logging |
 | [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Strict application/business configuration acceptance, last-good Watch and explicit resource-adoption handoff |
+| [`framework/workflow/declaration/v1`](reference/framework/workflow/declaration/v1/interface.md) | Pure workflow/mode declaration compilation, canonical portable bundles and offline identity/conflict checking |
+| [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Shared fixed CLI commands, project-root inspection and native build publication gate |
 
 ## Internal package reference
 

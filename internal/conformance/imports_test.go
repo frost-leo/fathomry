@@ -108,12 +108,17 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatal("package inventory could not be inspected")
 	}
 	cliPackages := map[string]bool{
-		"github.com/frost-leo/fathomry/cmd/fathomry":                               true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":                  true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command":              true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog": true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages":     true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project":      true,
+		"github.com/frost-leo/fathomry/cmd/fathomry":                                true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/v1":                             true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":                   true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command":               true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog":  true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages":      true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project":       true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/new":   true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/build": true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow":      true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow/vet":  true,
 	}
 	for _, path := range strings.Fields(string(output)) {
 		if cliPackages[path] {
@@ -121,6 +126,9 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		}
 		if path == "github.com/frost-leo/fathomry/adapters/internal/errorbridge" {
 			continue // Private integration helper, not another public capability.
+		}
+		if path == "github.com/frost-leo/fathomry/framework/workflow/declaration/v1" {
+			continue // Pure declaration admission, not a Workflow host.
 		}
 		switch path {
 		case "github.com/frost-leo/fathomry/adapters/broker/v1",
@@ -208,7 +216,10 @@ func TestCLIConsumesPublicCapabilities(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				if filepath.ToSlash(relative) != "internal/app/catalog.go" || item.Name == nil {
+				if cliWorkflowDeclarationUseAllowed(filepath.ToSlash(relative), imported, item, file) {
+					continue
+				}
+				if filepath.ToSlash(relative) != "internal/app/catalog.go" || item.Name == nil || item.Name.Name == "." || item.Name.Name == "_" {
 					t.Errorf("CLI execution depends on Framework: %s: %s", path, imported)
 					continue
 				}
@@ -256,6 +267,9 @@ func TestFrameworkHasNoDirectInternalImports(t *testing.T) {
 			}
 			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/internal/") {
 				t.Errorf("Framework bypasses public Adapters: %s: %s", path, imported)
+			}
+			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/cmd/") {
+				t.Errorf("Framework depends on command tools: %s: %s", path, imported)
 			}
 		}
 		return nil
