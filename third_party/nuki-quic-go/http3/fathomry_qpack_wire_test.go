@@ -454,21 +454,25 @@ func TestFathomryQPACKWireBlockedSettingsAndMalformed(t *testing.T) {
 				}
 				fathomryQPACKFrame(t, response, 1, block, false)
 				done := make(chan error, 2)
+				readers := 1
 				go func() { _, err := request.ReadResponse(); done <- err }()
 				if scenario == "one-blocked" {
 					peer.waitBlocked(t, 1)
 					next, server := peer.open(t, peer.ctx)
 					fathomryQPACKFrame(t, server, 1, block, false)
+					readers++
 					go func() { _, err := next.ReadResponse(); done <- err }()
 				}
 				peer.wantClosed(t, ErrCodeQPACKDecompressionFailed)
-				select {
-				case err := <-done:
-					if err == nil {
-						t.Fatal("invalid section succeeded")
+				for range readers {
+					select {
+					case err := <-done:
+						if err == nil {
+							t.Fatal("invalid section succeeded")
+						}
+					case <-peer.ctx.Done():
+						t.Fatal("invalid section remained blocked")
 					}
-				case <-peer.ctx.Done():
-					t.Fatal("invalid section remained blocked")
 				}
 			}
 		})
