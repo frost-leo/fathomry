@@ -55,7 +55,7 @@ func sdkPins() []modulePin {
 		{"github.com/enetx/surf", "third_party/surf", "v0.0.0-20261008013857-a2ab5bb59121", "h1:VzdaOF0y3GZLUfeCO33ns92Xv2K3b//ifAlm2r3fafg="},
 		{"github.com/nukilabs/http", "third_party/nuki-http", "v0.0.0-20261008154844-bef11a0743d6", "h1:usqRNwEdDbL5QrAGMfveeMXLkJg/1DV4DZw7HXbgoHs="},
 		{"github.com/nukilabs/qpack", "third_party/nuki-qpack", "v0.0.0-20261008154844-bef11a0743d6", "h1:loc4Qqer2FIDNFjk08J/CAy+E7lP6xYcsq+nE8CqXEU="},
-		{"github.com/nukilabs/quic-go", "third_party/nuki-quic-go", "v0.0.0-20261008154844-bef11a0743d6", "h1:l0EmyeFmZsEtx+Y1C/+OJLJsiyydBmgnXmaxtjTch4o="},
+		{"github.com/nukilabs/quic-go", "third_party/nuki-quic-go", "v0.0.0-20261022094000-12ecc63eae1c", "h1:BJhoeFyDkIzjA/w0qKYaDgmHIofBqUVo5IcB3pJCeQo="},
 		{"github.com/nukilabs/socks", "third_party/nuki-socks", "v0.0.0-20260930074612-e7c164f1d613", "h1:gCQEnfYNVwLit12biJMWMT9eBNrxRGCgGMdVrXULp+4="},
 		{"github.com/nukilabs/tlsclient", "third_party/nuki", "v0.0.0-20261008154844-bef11a0743d6", "h1:HxtC65QIvTfdbzfcFwe0XWR8VqrXV8F2C5MjF8JIQ+c="},
 		{"github.com/sardanioss/httpcloak", "third_party/httpcloak", "v0.0.0-20261008143415-2e24df88d7d2", "h1:b7SKwMwzE97clRt8sRRp8oTsl2Gq4Z22/f84U5p9Gx0="},
