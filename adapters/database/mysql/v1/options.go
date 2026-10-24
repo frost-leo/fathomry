@@ -34,9 +34,11 @@ type Dependencies struct {
 }
 
 const (
-	ProviderID            = native.ProviderID
-	MaxSQLBytes           = native.MaxSQLBytes
-	MaxArguments          = native.MaxArguments
+	ProviderID   = native.ProviderID
+	MaxSQLBytes  = native.MaxSQLBytes
+	MaxArguments = native.MaxArguments
+	// MaxArgumentBytes retains the 1 MiB default. Settings.MaxArgumentBytes
+	// selects the effective per-source aggregate argument budget.
 	MaxArgumentBytes      = native.MaxArgumentBytes
 	MaxColumns            = native.MaxColumns
 	MaxPreparedStatements = native.MaxPreparedStatements
@@ -81,6 +83,13 @@ type Settings struct {
 	TransactionTimeout      time.Duration `json:"transaction_timeout_ns" mapstructure:"transaction_timeout_ns"`
 	MaxPacketBytes          int           `json:"max_packet_bytes" mapstructure:"max_packet_bytes"`
 	MaxResponseBytes        int           `json:"max_response_bytes" mapstructure:"max_response_bytes"`
+
+	// MaxArgumentBytes counts aggregate argument payload and encoding overhead.
+	// Zero selects 1 MiB; allowed 1 KiB–8 MiB. Recommend accounts for it.
+	MaxArgumentBytes int `json:"max_argument_bytes" mapstructure:"max_argument_bytes"`
+	// ResolveDNS explicitly permits TCP Address hostnames and deployment DNS/hosts.
+	// False preserves literal-IP-only admission. TLS identity remains explicit.
+	ResolveDNS bool `json:"resolve_dns" mapstructure:"resolve_dns"`
 }
 
 func options(value Settings) native.OptionsV1 {
@@ -114,6 +123,8 @@ func options(value Settings) native.OptionsV1 {
 		TransactionTimeout:      value.TransactionTimeout,
 		MaxPacketBytes:          value.MaxPacketBytes,
 		MaxResponseBytes:        value.MaxResponseBytes,
+		MaxArgumentBytes:        value.MaxArgumentBytes,
+		ResolveDNS:              value.ResolveDNS,
 	}
 }
 

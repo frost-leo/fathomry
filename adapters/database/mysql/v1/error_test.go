@@ -148,7 +148,7 @@ func TestDiagnostics(t *testing.T) {
 			t.Fatal("implicit structured disclosure")
 		}
 	}
-	runtime := []any{new(Owner), new(Handle), new(Client), new(Result), new(Row), new(Column), new(Transaction), new(Statement)}
+	runtime := []any{new(Owner), new(Handle), new(Client), new(Result), new(Row), new(Column), new(Transaction), new(Statement), new(Session)}
 	for _, value := range runtime {
 		if _, err := json.Marshal(value); !errors.Is(err, ErrSerialization) {
 			t.Fatal("runtime serialized", err)
@@ -157,7 +157,7 @@ func TestDiagnostics(t *testing.T) {
 			t.Fatal("runtime reconstructed", err)
 		}
 	}
-	nils := []any{(*Owner)(nil), (*Handle)(nil), (*Client)(nil), (*Result)(nil), (*Row)(nil), (*Column)(nil), (*Transaction)(nil), (*Statement)(nil)}
+	nils := []any{(*Owner)(nil), (*Handle)(nil), (*Client)(nil), (*Result)(nil), (*Row)(nil), (*Column)(nil), (*Transaction)(nil), (*Statement)(nil), (*Session)(nil)}
 	for _, value := range nils {
 		if got := slog.AnyValue(value).Resolve(); got.Kind() != slog.KindString || got.String() != "mysql[restricted]" {
 			t.Fatal("nil runtime emitted panic diagnostic")

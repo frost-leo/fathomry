@@ -1,0 +1,125 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_catalog",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.workflow_catalog.invalid_registration",
+      "source": "5c3724645b28bbb4bca046b1bbf2c49e56f9e28cb4aadb68c6afd110297eaefa",
+      "forms": {
+        "other": "目录请求无效。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.invalid_metadata",
+      "source": "8895cbcc4ab15417a06792ac32150b1583ac75dfc794fdde121ac72099778af6",
+      "forms": {
+        "other": "目录展示信息或初始元数据无效。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.limit_exceeded",
+      "source": "b50a10261b7daafda4ad311d77fa167b46e970f875944a10f403221f144267ee",
+      "forms": {
+        "other": "目录操作超出限制。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.canceled",
+      "source": "d891f21497596d99a1dcb4ff5b098a8880a2c19ccbdcd2b5bff0886f5cc37fad",
+      "forms": {
+        "other": "目录操作已取消。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.invalid_prepared",
+      "source": "e6c47cdc389246817fd2cf84426e01cbfcf64b208a526ec6981a0a2cba8472b2",
+      "forms": {
+        "other": "已准备的目录注册对象无效。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.serialization_unsupported",
+      "source": "18cfe185ce35a65637182d5002716f3d9af6c72fc9c014928c78afe6f08ef7b8",
+      "forms": {
+        "other": "进程内的目录句柄不能序列化。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.registration_conflict",
+      "source": "e7cde6cc7805bb624a742637774cfb9692e4fcc51cd77eb76b68fe1da5263384",
+      "forms": {
+        "other": "已注册的不可变内容或所选发布元数据存在冲突。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.database_failed",
+      "source": "9229be1764359ef008424b2cecfb02bed8f4e869ea8eae0b1820d05888c91750",
+      "forms": {
+        "other": "目录数据库操作失败；事务影响须单独判断。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.category_unavailable",
+      "source": "8d31ad91636472280d51fd3d6685baa06bd3faf474d7f2b80551af3ad02cbc59",
+      "forms": {
+        "other": "初始分类不存在或不允许新增关联。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.stored_content_invalid",
+      "source": "de81726c2911aa46cc5643e4bd6979262c9d7f47a678764beecb1b814d8c1014",
+      "forms": {
+        "other": "存储的目录内容不受支持、已损坏或不完整。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.schema_refused",
+      "source": "c35a0ad462a422a7605709d158731281509036afbe35f21ca0dc1ba90bf427ed",
+      "forms": {
+        "other": "当前保留的数据库事务尚未证明目录结构处于兼容的最新状态。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.operation_unavailable",
+      "source": "7da54036b9357b4ec49876de9dd8f12a9164e37e4d0bcc54f9bff77f82ff39f4",
+      "forms": {
+        "other": "目录操作在当前状态下不可用。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.cleanup_incomplete",
+      "source": "160fced159b9f7793f01cba18875e9b326acb852c19ed414b61d25b11a1087af",
+      "forms": {
+        "other": "目录清理尚未成功完成，请保留原始所有者。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_catalog.identity_missing",
+      "forms": {
+        "other": "请求的目录身份不存在。"
+      },
+      "source": "506706d00c9d0787d55bc602f6b234e8a18f582d733c2e1b6d0986087afa4279"
+    }
+  ]
+}

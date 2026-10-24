@@ -36,8 +36,10 @@ import (
 )
 
 const (
-	MaxSQLBytes      = 64 << 10
-	MaxArguments     = 128
+	MaxSQLBytes  = 64 << 10
+	MaxArguments = 128
+	// MaxArgumentBytes is the default aggregate argument budget. OptionsV1 may
+	// explicitly select a different per-source budget without changing this default.
 	MaxArgumentBytes = 1 << 20
 	MaxColumns       = 64
 )
@@ -148,6 +150,10 @@ func (r Result) First() (Row, error) {
 	return r.data.rows[0], nil
 }
 func validStatement(query string, args []any) error {
+	return validStatementLimit(query, args, MaxArgumentBytes)
+}
+
+func validStatementLimit(query string, args []any, argumentBytes int) error {
 	if !textValid(query, MaxSQLBytes, false) || len(args) > MaxArguments {
 		return failure(ErrInput, "statement")
 	}
@@ -167,17 +173,17 @@ func validStatement(query string, args []any) error {
 			}
 			size += 16
 		case string:
-			if !textValid(v, MaxArgumentBytes, true) {
+			if !textValid(v, argumentBytes, true) {
 				return failure(ErrInput, "argument")
 			}
 			size += len(v) + 16
 		case []byte:
-			if len(v) > MaxArgumentBytes {
+			if len(v) > argumentBytes {
 				return failure(ErrLimit, "argument")
 			}
 			size += len(v) + 16
 		case json.RawMessage:
-			if len(v) > MaxArgumentBytes {
+			if len(v) > argumentBytes {
 				return failure(ErrLimit, "argument")
 			}
 			size += len(v) + 16
@@ -189,7 +195,7 @@ func validStatement(query string, args []any) error {
 		default:
 			return failure(ErrUnsupported, "argument")
 		}
-		if size > MaxArgumentBytes {
+		if size > argumentBytes {
 			return failure(ErrLimit, "arguments")
 		}
 	}
@@ -215,16 +221,20 @@ func (db *Database) beginCall(ctx context.Context, id fault.Correlation, name st
 // Query executes and consumes one bounded native result synchronously. Setup errors
 // have no receipt; accepted failures/partial results remain in receipt and Inbox.
 func (db *Database) Query(ctx context.Context, id fault.Correlation, query string, args ...any) (*invocation.Receipt[Result], error) {
-	return db.statement(ctx, id, query, args, true, nil, nil)
+	return db.statement(ctx, id, query, args, true, nil, nil, nil)
 }
 
 // Exec accepts authorized native SQL and preserves changed-row/insert-ID evidence.
 // Native parameter binding is used without a database/sql statement retry loop.
 func (db *Database) Exec(ctx context.Context, id fault.Correlation, query string, args ...any) (*invocation.Receipt[Result], error) {
-	return db.statement(ctx, id, query, args, false, nil, nil)
+	return db.statement(ctx, id, query, args, false, nil, nil, nil)
 }
-func (db *Database) statement(ctx context.Context, id fault.Correlation, query string, args []any, keep bool, parent *Transaction, prepared *Statement) (*invocation.Receipt[Result], error) {
-	if err := validStatement(query, args); err != nil {
+func (db *Database) statement(ctx context.Context, id fault.Correlation, query string, args []any, keep bool, parent *Transaction, prepared *Statement, retained *Session) (*invocation.Receipt[Result], error) {
+	argumentBytes := MaxArgumentBytes
+	if db != nil && db.owner != nil {
+		argumentBytes = db.owner.settings.MaxArgumentBytes
+	}
+	if err := validStatementLimit(query, args, argumentBytes); err != nil {
 		return nil, err
 	}
 	name := "exec"
@@ -238,6 +248,9 @@ func (db *Database) statement(ctx context.Context, id fault.Correlation, query s
 	if prepared != nil {
 		parentCall = prepared.call
 	}
+	if retained != nil {
+		parentCall = retained.call
+	}
 	call, err := db.beginCall(ctx, id, name, invocation.Finite, parentCall)
 	if err != nil {
 		return nil, err
@@ -249,10 +262,16 @@ func (db *Database) statement(ctx context.Context, id fault.Correlation, query s
 		return receipt, nil
 	}
 	defer cancel()
+	var lifetime context.Context
 	if parent != nil {
-		stop := context.AfterFunc(parent.lifetime, cancel)
+		lifetime = parent.lifetime
+	} else if retained != nil {
+		lifetime = retained.lifetime
+	}
+	if lifetime != nil {
+		stop := context.AfterFunc(lifetime, cancel)
 		defer stop()
-		if parent.lifetime.Err() != nil {
+		if lifetime.Err() != nil {
 			cancel()
 		}
 	}
@@ -263,6 +282,8 @@ func (db *Database) statement(ctx context.Context, id fault.Correlation, query s
 		conn, owned = parent.conn, parent.owned
 	case prepared != nil:
 		conn, owned = prepared.conn, prepared.owned
+	case retained != nil:
+		conn, owned = retained.conn, retained.owned
 	default:
 		conn, owned, err = db.owner.take(work)
 		if err != nil {
@@ -280,8 +301,8 @@ func (db *Database) statement(ctx context.Context, id fault.Correlation, query s
 		if err := work.Err(); err != nil {
 			return err
 		}
-		if parent != nil && parent.lifetime.Err() != nil {
-			return parent.lifetime.Err()
+		if lifetime != nil && lifetime.Err() != nil {
+			return lifetime.Err()
 		}
 		var stmt driver.Stmt
 		if prepared != nil {
@@ -303,8 +324,11 @@ func (db *Database) statement(ctx context.Context, id fault.Correlation, query s
 	if primary == nil && err != nil {
 		primary = failure(ErrQuery, "execute", err, contextCause(work, err))
 	}
+	if retained != nil && primary != nil && retained.lifetime.Err() != nil {
+		primary = joined(ErrQuery, "session-lifetime", primary, retained.lifetime.Err(), context.Cause(retained.lifetime))
+	}
 	data.complete = primary == nil
-	if parent == nil && prepared == nil {
+	if parent == nil && prepared == nil && retained == nil {
 		cleanup = give(conn, owned, primary != nil || owned.wire.closed.Load() || owned.wire.inTransaction)
 	}
 	call.Complete(invocation.Outcome[Result]{Present: true, Value: Result{data: data}, Primary: primary, Cleanup: cleanup})

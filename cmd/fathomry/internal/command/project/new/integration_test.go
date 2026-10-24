@@ -23,6 +23,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -111,9 +113,35 @@ func qualifyProject(t *testing.T, directory string, environment []string, mode s
 	if bytes.Contains(boot, []byte("configuration.Bootstrap")) || !bytes.Contains(boot, []byte("configuration.Load(")) || !bytes.Contains(boot, []byte("configuration.Watch(")) {
 		t.Fatal("generated boot does not consume the Framework scenario")
 	}
-	packages := runConsumer(t, directory, environment, goTool(), "list", "-f", "{{.ImportPath}} {{join .Imports \" \"}}", "./...")
-	if bytes.Contains(packages, []byte(frameworkModule+"/adapters/")) || bytes.Contains(packages, []byte(frameworkModule+"/internal/")) {
-		t.Fatal("project assembly imports Adapter or Internal APIs")
+	packages := runConsumer(t, directory, environment, goTool(), "list", "-json", "./...")
+	decoder := json.NewDecoder(bytes.NewReader(packages))
+	for {
+		var entry struct {
+			Dir                                string
+			GoFiles, TestGoFiles, XTestGoFiles []string
+		}
+		err := decoder.Decode(&entry)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		files := append(append(entry.GoFiles, entry.TestGoFiles...), entry.XTestGoFiles...)
+		for _, name := range files {
+			path := filepath.Join(entry.Dir, name)
+			relative, err := filepath.Rel(directory, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			content, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !projectImportsAllowed(filepath.ToSlash(relative), content) {
+				t.Fatal("project crossed the data-only Adapter boundary", relative)
+			}
+		}
 	}
 
 }

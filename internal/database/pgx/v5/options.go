@@ -31,6 +31,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/frost-leo/fathomry/internal/compatibility"
+	"github.com/frost-leo/fathomry/internal/database/endpoint"
 	"github.com/frost-leo/fathomry/internal/resource"
 	sdk "github.com/jackc/pgx/v5"
 	sdkpgconn "github.com/jackc/pgx/v5/pgconn"
@@ -43,7 +44,8 @@ import (
 type OptionsV1 struct {
 	private
 	Name string
-	// Address is one non-unspecified literal IP; DNS, sockets and failover are not supported.
+	// Address is one non-unspecified literal IP, or an ASCII hostname with ResolveDNS.
+	// DNS/hosts resolution is opt-in; sockets and post-connect failover are unsupported.
 	Address string
 	// Port must be explicit and nonzero.
 	Port uint16
@@ -85,36 +87,43 @@ type OptionsV1 struct {
 	MaxRows        int
 	MaxResultBytes int
 	// MaxMessageBytes bounds each native protocol message body. Default 1 MiB,
-	// range 1 KiB–4 MiB. It does not bound total response traffic or native heap.
+	// range 1 KiB–16 MiB. It does not bound total response traffic or native heap.
 	MaxMessageBytes int
+	// MaxArgumentBytes bounds aggregate encoded arguments, including bytea hex
+	// expansion. Zero selects 1 MiB; range 1 KiB–16 MiB. Input buffers remain borrowed.
+	MaxArgumentBytes int
+	// ResolveDNS authorizes deployment resolver/hosts lookup for Address. Default false.
+	ResolveDNS bool
 }
 
 type settings struct {
-	Address         string        `json:"address"`
-	Port            uint16        `json:"port"`
-	Database        string        `json:"database"`
-	User            string        `json:"user"`
-	Password        string        `json:"password"`
-	RootCAPEM       string        `json:"root_ca_pem"`
-	ServerName      string        `json:"server_name"`
-	Plaintext       bool          `json:"plaintext"`
-	ParserHome      string        `json:"parser_home"`
-	MaxConnections  int           `json:"max_connections"`
-	MaxIdleTime     time.Duration `json:"max_idle_time_ns"`
-	MaxLifetime     time.Duration `json:"max_lifetime_ns"`
-	QueuedCalls     int           `json:"queued_calls"`
-	Timeout         time.Duration `json:"timeout_ns"`
-	CloseTimeout    time.Duration `json:"close_timeout_ns"`
-	MaxRows         int           `json:"max_rows"`
-	MaxResultBytes  int           `json:"max_result_bytes"`
-	MaxMessageBytes int           `json:"max_message_bytes"`
+	Address          string        `json:"address"`
+	Port             uint16        `json:"port"`
+	Database         string        `json:"database"`
+	User             string        `json:"user"`
+	Password         string        `json:"password"`
+	RootCAPEM        string        `json:"root_ca_pem"`
+	ServerName       string        `json:"server_name"`
+	Plaintext        bool          `json:"plaintext"`
+	ParserHome       string        `json:"parser_home"`
+	MaxConnections   int           `json:"max_connections"`
+	MaxIdleTime      time.Duration `json:"max_idle_time_ns"`
+	MaxLifetime      time.Duration `json:"max_lifetime_ns"`
+	QueuedCalls      int           `json:"queued_calls"`
+	Timeout          time.Duration `json:"timeout_ns"`
+	CloseTimeout     time.Duration `json:"close_timeout_ns"`
+	MaxRows          int           `json:"max_rows"`
+	MaxResultBytes   int           `json:"max_result_bytes"`
+	MaxMessageBytes  int           `json:"max_message_bytes"`
+	MaxArgumentBytes int           `json:"max_argument_bytes"`
+	ResolveDNS       bool          `json:"resolve_dns"`
 }
 
 func defaults(input OptionsV1) settings {
 	value := settings{input.Address, input.Port, input.Database, input.User, input.Password,
 		input.RootCAPEM, input.ServerName, input.Plaintext, input.ParserHome,
 		input.MaxConnections, input.MaxIdleTime, input.MaxLifetime, input.QueuedCalls, input.Timeout, input.CloseTimeout,
-		input.MaxRows, input.MaxResultBytes, input.MaxMessageBytes}
+		input.MaxRows, input.MaxResultBytes, input.MaxMessageBytes, input.MaxArgumentBytes, input.ResolveDNS}
 	if value.MaxConnections == 0 {
 		value.MaxConnections = 4
 	}
@@ -133,6 +142,9 @@ func defaults(input OptionsV1) settings {
 	if value.MaxMessageBytes == 0 {
 		value.MaxMessageBytes = 1 << 20
 	}
+	if value.MaxArgumentBytes == 0 {
+		value.MaxArgumentBytes = MaxArgumentBytes
+	}
 	return value
 }
 
@@ -142,15 +154,15 @@ func validText(value string, maximum int, empty bool) bool {
 }
 
 func validate(value settings) error {
-	address, err := netip.ParseAddr(value.Address)
-	if err != nil || address.Zone() != "" || address.Unmap().IsUnspecified() || value.Port == 0 ||
+	if !endpoint.ValidHost(value.Address, value.ResolveDNS) || value.Port == 0 ||
 		!validText(value.Database, 256, false) || !validText(value.User, 256, false) ||
 		!validText(value.Password, 4096, false) || !validText(value.ParserHome, 4096, true) ||
 		value.MaxConnections < 1 || value.MaxConnections > 32 || value.QueuedCalls < 0 || value.QueuedCalls > 64 ||
 		value.Timeout < time.Millisecond || value.Timeout > time.Minute ||
 		value.CloseTimeout < time.Millisecond || value.CloseTimeout > 30*time.Second ||
 		value.MaxRows < 1 || value.MaxRows > 65536 || value.MaxResultBytes < 1024 || value.MaxResultBytes > 16<<20 ||
-		value.MaxMessageBytes < 1024 || value.MaxMessageBytes > 4<<20 {
+		value.MaxMessageBytes < 1024 || value.MaxMessageBytes > 16<<20 ||
+		value.MaxArgumentBytes < 1024 || value.MaxArgumentBytes > 16<<20 {
 		return failure(ErrInput, "options")
 	}
 	for _, duration := range []time.Duration{value.MaxIdleTime, value.MaxLifetime} {
@@ -158,7 +170,7 @@ func validate(value settings) error {
 			return failure(ErrInput, "expiration")
 		}
 	}
-	_, err = tlsConfig(value)
+	_, err := tlsConfig(value)
 	return err
 }
 
@@ -216,8 +228,10 @@ func nativeConfig(value settings) (*sdk.ConnConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	address, _ := netip.ParseAddr(value.Address)
-	config.Host, config.Port, config.Database = address.Unmap().String(), value.Port, value.Database
+	config.Host, config.Port, config.Database = value.Address, value.Port, value.Database
+	if address, err := netip.ParseAddr(value.Address); err == nil {
+		config.Host = address.Unmap().String()
+	}
 	config.User, config.Password, config.TLSConfig = value.User, value.Password, trust
 	config.Fallbacks = nil
 	config.ConnectTimeout = value.Timeout
@@ -235,7 +249,7 @@ func nativeConfig(value settings) (*sdk.ConnConfig, error) {
 func (value settings) reservation() int64 {
 	// Cell arrays plus simultaneous old/new row-list storage during growth.
 	// Fixed overhead covers allocator rounding and bounded metadata, not RSS.
-	return int64(MaxSQLBytes+MaxArgumentBytes+value.MaxMessageBytes+value.MaxResultBytes) +
+	return int64(MaxSQLBytes+value.MaxArgumentBytes+value.MaxMessageBytes+value.MaxResultBytes) +
 		int64(MaxPreparedStatements)*(int64(MaxSQLBytes+value.MaxMessageBytes)+4<<20) +
 		int64(value.MaxRows)*(MaxColumns*24+4*24) + 64<<10
 }
@@ -277,6 +291,8 @@ func (database *Database) Profile() compatibility.Profile {
 		{Name: "max-rows", Value: strconv.Itoa(value.MaxRows)},
 		{Name: "max-result-bytes", Value: strconv.Itoa(value.MaxResultBytes)},
 		{Name: "max-message-bytes", Value: strconv.Itoa(value.MaxMessageBytes)},
+		{Name: "max-argument-bytes", Value: strconv.Itoa(value.MaxArgumentBytes)},
+		{Name: "resolve-dns", Value: strconv.FormatBool(value.ResolveDNS)},
 	}
 	return compatibility.Profile{ImplementationModule: compatibility.FrameworkModule, SDKMode: "pgx-puddle-synchronous",
 		ServiceMode: declared("single-server"), Protocol: declared("postgresql-3.0"), Native: compatibility.Fact{Kind: compatibility.NotApplicable}, Options: options}

@@ -94,6 +94,8 @@ const (
 	FacilityTrino Facility = 0x083
 	// FacilityDoris owns the public Doris SQL-engine capability.
 	FacilityDoris Facility = 0x084
+	// FacilityDatabaseControl owns explicit control-database binding and management.
+	FacilityDatabaseControl Facility = 0x085
 	// FacilityMinIO owns the public object-storage MinIO capability.
 	FacilityMinIO Facility = 0x140
 	// FacilityKafka owns the public Kafka broker capability.
@@ -124,6 +126,8 @@ const (
 	FacilityTemporal Facility = 0x1C0
 	// FacilityWorkflow owns portable workflow declaration and comparison semantics.
 	FacilityWorkflow Facility = 0x1C1
+	// FacilityWorkflowCatalog owns workflow publication and stored catalog semantics.
+	FacilityWorkflowCatalog Facility = 0x1C2
 	// FacilityIceberg owns the public Iceberg table-format capability.
 	FacilityIceberg Facility = 0x320
 	// FacilityChromedp owns the managed Browser capability.
@@ -193,6 +197,8 @@ func Allocations() []Allocation {
 		{Facility: FacilityZerolog, Module: "fathomry", Component: "logging_zerolog"},
 		{Facility: FacilityTemporal, Module: "fathomry", Component: "temporal"},
 		{Facility: FacilityWorkflow, Module: "fathomry", Component: "workflow"},
+		{Facility: FacilityWorkflowCatalog, Module: "fathomry", Component: "workflow_catalog"},
+		{Facility: FacilityDatabaseControl, Module: "fathomry", Component: "database_control"},
 		{Facility: FacilityProjectBuild, Module: "fathomry", Component: "project_build"},
 		{Facility: FacilityMail, Module: "fathomry", Component: "notification_mail"},
 		{Facility: FacilityLark, Module: "fathomry", Component: "notification_lark"},

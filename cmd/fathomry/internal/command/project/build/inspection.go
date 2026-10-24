@@ -28,6 +28,7 @@ import (
 	"io"
 	"strings"
 
+	projectworkflows "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow"
 	wf "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
 )
 
@@ -36,11 +37,13 @@ const InspectionArgument = "--fathomry-project=v1"
 const inspectionSchema = "fathomry.project-inspection/v1"
 const maxInspectionBytes = wf.MaxInputBytes + 4096
 
-// Definition is project-owned assembly data. An empty Declarations slice explicitly
-// describes a configuration-only project; it never claims a workflow was checked.
+// Definition is project-owned assembly data. Workflows combines declarations and
+// optional metadata; legacy Declarations is mutually exclusive. Empty inputs
+// describe a configuration-only project, never a completed workflow check.
 // Name is a portable lowercase project name, also used for the default binary path.
 type Definition struct {
 	Name         string
+	Workflows    []projectworkflows.Workflow
 	Declarations []wf.Declaration
 }
 
@@ -96,8 +99,31 @@ func Export(ctx context.Context, definition Definition, output io.Writer) error 
 	if len(definition.Declarations) > wf.MaxInputs {
 		return fail(ErrLimit)
 	}
+	if len(definition.Workflows) > 0 && len(definition.Declarations) > 0 {
+		return fail(ErrOptions)
+	}
 	document := inspection{Schema: inspectionSchema, Name: definition.Name, Bundles: []jsontext.Value{}}
 	total := 0
+	if len(definition.Workflows) > 0 {
+		report, bundles, err := projectworkflows.CheckProject(ctx, projectworkflows.ProjectInput{Workflows: definition.Workflows}, projectworkflows.Selection{})
+		if err != nil {
+			return phaseError(ctx, ErrRejected, err)
+		}
+		if !report.Passed || !report.FullProject || report.Empty {
+			return fail(ErrRejected)
+		}
+		for _, bundle := range bundles {
+			raw, err := bundle.BytesCopy()
+			if err != nil {
+				return fail(ErrRejected, err)
+			}
+			total += len(raw)
+			if total > wf.MaxInputBytes {
+				return fail(ErrLimit)
+			}
+			document.Bundles = append(document.Bundles, jsontext.Value(raw))
+		}
+	}
 	for _, declared := range definition.Declarations {
 		bundle, err := wf.Compile(ctx, declared)
 		if err != nil {

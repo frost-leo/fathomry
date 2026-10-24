@@ -1,0 +1,69 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "database_create",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.database_create.command",
+      "source": "ffda240778ef013d45538ebacbbc1aeb76bd3bac2dbdcab39ac813074b7302a5",
+      "forms": {
+        "other": "显式创建绑定数据库，不安装 Fathomry 表。"
+      }
+    },
+    {
+      "id": "fathomry.database_create.admin_config",
+      "source": "49e69e5436e322d584b874ae695d181caa7dd69316008856eb54844a720a247d",
+      "forms": {
+        "other": "必需的管理连接配置文件（JSON、YAML 或 TOML）。"
+      }
+    },
+    {
+      "id": "fathomry.database_create.effect",
+      "source": "e78d929522159ccbc8f21778f601e625cb4662a4466d0b120ef5408d426eac0c",
+      "forms": {
+        "other": "数据库操作效果："
+      }
+    },
+    {
+      "id": "fathomry.database_create.schema_effect",
+      "source": "1a730c3d5eb2e8f057c4739924493c3a6ed42ad07be38682e788287e6a489852",
+      "forms": {
+        "other": "Schema 操作效果："
+      }
+    },
+    {
+      "id": "fathomry.database_create.stage",
+      "source": "f8cdd4183f98021683c9f066c2eb763fddd65bfaa271ffef8820429d1dd18b10",
+      "forms": {
+        "other": "已观察阶段："
+      }
+    },
+    {
+      "id": "fathomry.database_create.ready",
+      "source": "b8fc69d9f0a559efd382a4db6c92b4eb5a294389662e1115622c40898741eb38",
+      "forms": {
+        "other": "目标已验证："
+      }
+    }
+  ]
+}

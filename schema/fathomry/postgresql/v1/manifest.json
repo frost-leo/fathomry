@@ -1,0 +1,172 @@
+{
+  "format": "fathomry.schema-manifest/v1",
+  "family": "fathomry.control",
+  "dialect": "postgresql",
+  "profile": "postgresql-18-utf8",
+  "bootstrap": {
+    "id": "bootstrap.history",
+    "path": "bootstrap/fathomry_schema_history.sql",
+    "sha256": "933a3d7082ae1a4bf8900b8de031840de1522ea7871724c7a86ddbc14b627714"
+  },
+  "structure": {
+    "path": "0001/structure.json",
+    "sha256": "4ff8f8703ffe4d649833ca113985bb14f19eabb0cb729904922c16bd29fb6835"
+  },
+  "migrations": [
+    {
+      "revision": 1,
+      "name": "workflow_catalog",
+      "transaction": "required",
+      "steps": [
+        {
+          "id": "table.i18n_locale",
+          "path": "0001/i18n_locale.sql",
+          "sha256": "29c26127af2a06dea6e885b9308b79a1f927443686208c9573c92d74ae736e85"
+        },
+        {
+          "id": "table.i18n_resource",
+          "path": "0001/i18n_resource.sql",
+          "sha256": "2e48a4d309bc1f5b7703d8543247bf09d4d06d8c89e4d8ec69d7a6c7cb1bc82d"
+        },
+        {
+          "id": "table.i18n_text",
+          "path": "0001/i18n_text.sql",
+          "sha256": "4930d68b9f8b4f104d2e17c518ef6ed036023cad657f1601e3a6f5f8629ca06e"
+        },
+        {
+          "id": "table.workflow_category",
+          "path": "0001/workflow_category.sql",
+          "sha256": "699995b9e5e49dbf214498e5b331b248b25f8bec9f486cb6d5cd5ea7bc0792d8"
+        },
+        {
+          "id": "table.workflow_definition",
+          "path": "0001/workflow_definition.sql",
+          "sha256": "afe309f2f0cb95e6fc8c576a30d852d4785461d6d53e8bfbba432b64459ca913"
+        },
+        {
+          "id": "table.workflow_definition_tag",
+          "path": "0001/workflow_definition_tag.sql",
+          "sha256": "06d4398652e1d23d84127a08dc90086e0ce8669c37e01a68b3a121cbf54eb1a8"
+        },
+        {
+          "id": "table.workflow_version",
+          "path": "0001/workflow_version.sql",
+          "sha256": "abe8bcb842cc5c2b8ae984a12989e32c86ebc47f6783e96de77d6bff56f81daf"
+        },
+        {
+          "id": "table.workflow_mode",
+          "path": "0001/workflow_mode.sql",
+          "sha256": "32a41e8c715b617e251f57933462aa527a8b0b0edd4202acf83e0a2f30846653"
+        },
+        {
+          "id": "table.workflow_mode_version",
+          "path": "0001/workflow_mode_version.sql",
+          "sha256": "9e2aafca8f00fcf197ffd418ddfa39c96c92927d153511221a39d48e5077d089"
+        },
+        {
+          "id": "index.i18n_locale_code",
+          "path": "0001/indexes/i18n_locale_code.sql",
+          "sha256": "5bcec7a985ef45bd53cedadc8501edf3d47fd9c61bd353dee43672e2de3f3f35"
+        },
+        {
+          "id": "default.workflow_definition",
+          "path": "0001/defaults/workflow_definition.sql",
+          "sha256": "d9e1e4f40447a967b4b8875b53062cd3eb8f4a8b902c0b6133c576d8d6143f3a"
+        },
+        {
+          "id": "default.workflow_version",
+          "path": "0001/defaults/workflow_version.sql",
+          "sha256": "5b55e0ed7e654c700c52a60e1935a432694cca771400e0ad4df5fbd4759b8753"
+        },
+        {
+          "id": "default.workflow_mode",
+          "path": "0001/defaults/workflow_mode.sql",
+          "sha256": "511b26e44e06eedf91c1205793539866821f0b109ad1583c06b6d4916b57c809"
+        },
+        {
+          "id": "function.reject_catalog_change",
+          "path": "0001/guards/reject_change.sql",
+          "sha256": "ef4a58bdcafbbec37a46d44306ab73c0b6eec4b71f57090627cbf3548aba3841"
+        },
+        {
+          "id": "guard.i18n_locale",
+          "path": "0001/guards/i18n_locale.sql",
+          "sha256": "eb200195a36c0d7e8a7af6e9cb206343ee713d097ff2828c4d5b1489c563ff93"
+        },
+        {
+          "id": "guard.i18n_resource",
+          "path": "0001/guards/i18n_resource.sql",
+          "sha256": "134092e4bb7974fb0f22152d61e7737a7d3954b5f3dd94e5af6b55308f7788b8"
+        },
+        {
+          "id": "guard.i18n_text",
+          "path": "0001/guards/i18n_text.sql",
+          "sha256": "81e67435790cdef9aa0f901ec2a42368610ea3e186b249b5d2650b37ec6b8514"
+        },
+        {
+          "id": "guard.workflow_category",
+          "path": "0001/guards/workflow_category.sql",
+          "sha256": "8305a5e0ab1b3fd466227c5f28add8113631bff9f528389590750830ca2d5e65"
+        },
+        {
+          "id": "guard.workflow_definition",
+          "path": "0001/guards/workflow_definition.sql",
+          "sha256": "2150ce75b5ed899a1cbf90a7113784b1dec77aec95e250ef77beefaf605f4b83"
+        },
+        {
+          "id": "guard.workflow_definition_tag",
+          "path": "0001/guards/workflow_definition_tag.sql",
+          "sha256": "54c8f630578c0b664b6d6ffc618b28bebfc3ff16865024733745bf735a4730e5"
+        },
+        {
+          "id": "guard.workflow_version",
+          "path": "0001/guards/workflow_version.sql",
+          "sha256": "dd4199da14c315e82cdd5d215fbf428ba61dd365fb444c2245779a79492ad9a0"
+        },
+        {
+          "id": "guard.workflow_mode",
+          "path": "0001/guards/workflow_mode.sql",
+          "sha256": "a62759de58c9f1e6e47c513bb2f88fea0625579462366c242f413f1884c3abf3"
+        },
+        {
+          "id": "guard.workflow_mode_version",
+          "path": "0001/guards/workflow_mode_version.sql",
+          "sha256": "efdba240aebc00a2207367156a29c11b9866140ae562787b0726e11fc2854275"
+        },
+        {
+          "id": "guard.english_locale",
+          "path": "0001/guards/english_locale.sql",
+          "sha256": "e5677872563ebd65b10c6582830208aef2c512f9edd5e56fd2a575baa95b007f"
+        },
+        {
+          "id": "seed.english",
+          "path": "0001/seed/english.sql",
+          "sha256": "f08d2f43b82eb468821fb346109079f3677eb439a5d708075025ec5b92f8ba26"
+        }
+      ]
+    }
+  ],
+  "license": "GPL-3.0-or-later",
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "documentation_locales": [
+    "en",
+    "zh-CN"
+  ]
+}

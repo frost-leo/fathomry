@@ -55,6 +55,8 @@ Public declarations and helpers are documented in
 [declaration.go](../../../../../../framework/workflow/declaration/v1/declaration.go);
 [bundle.go](../../../../../../framework/workflow/declaration/v1/bundle.go) and
 [compare.go](../../../../../../framework/workflow/declaration/v1/compare.go) define snapshot/report APIs.
+[content.go](../../../../../../framework/workflow/declaration/v1/content.go) provides
+the detached canonical-content seam for persistence consumers.
 `Fixed` and `Tuned` express a slot; they do not validate or install defaults.
 
 ## Authoring versus file admission
@@ -77,6 +79,31 @@ Mode ownership is inherited from the enclosing workflow tuple, never inferred fr
 compatible parameter shapes. Namespace/code/version and mode/revision are explicit
 identities, not content hashes or SemVer compatibility calculations. Duplicate
 identities within one bundle reject; different identities may have identical content.
+
+## Canonical inner content and stored-byte verification
+
+`bundle.ContentsCopy()` returns detached `Content` values in machine-identity order:
+each has verified `Entry` metadata and canonical inner `Bytes`. It copies every
+selected specification/mode document, not mutable internal compilation state.
+This data is for explicit inspection/storage; it is not another portable bundle
+protocol or a metadata-only history listing. Format/log diagnostics hide its bytes.
+
+`ParseContents(ctx, contents)` accepts a bounded selected set in any order. It
+requires every selected mode's exact parent specification, rejects duplicate
+identities (even equal duplicates), reconstructs the existing closed bundle, and
+uses the same Parse/graph/control/fingerprint authority. No parent lookup, mode
+default, missing digest or new executable field is invented. Supported limits are
+unchanged, including the reconstructed 16 MiB bundle envelope and the aggregate
+value budget; the sum of inner-document caps is not an unlimited entitlement.
+
+Unlike ordinary Parse, reconstruction additionally compares the **original inner
+bytes** with verified canonical bytes. Whitespace, changed member/set ordering or
+other normalization cannot silently repair stored content. Noncanonical bytes and
+digest mismatch are integrity failures; unsupported formats/profiles and malformed
+declarations remain their distinct errors. Parent-dependent mode rules are checked
+against that supplied parent, not a compatible-looking different version. A
+successful reconstruction proves static content integrity, not database schema,
+storage ownership, source freshness or artifact provenance.
 
 ## Ownership, limits and concurrency
 
@@ -132,7 +159,7 @@ The workflow owner uses facility `0x1C1` in the orchestration capability domain:
 | --- | --- |
 | `ErrInvalid` | Invalid JSON, shape, identity, references, graph, slots or mode values |
 | `ErrUnsupported` | Unknown or mismatched document kind/format/semantics/profile |
-| `ErrIntegrity` | Malformed or mismatching supplied fingerprint; missing required fields are invalid declarations |
+| `ErrIntegrity` | Malformed or mismatching supplied fingerprint, or noncanonical stored inner bytes; missing required fields are invalid declarations |
 | `ErrLimit` | Admission or processing bound exceeded |
 | `ErrCanceled` | Caller cancellation; native context cause remains inspectable |
 | `ErrHandle` | Invalid context, bundle handle, decoding route or input set |

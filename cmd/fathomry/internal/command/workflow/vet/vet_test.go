@@ -65,7 +65,7 @@ func invoke(t testing.TB, ctx context.Context, args []string, writer io.Writer) 
 	var diagnostics bytes.Buffer
 	err := command.Run(ctx, args, command.Options{Input: strings.NewReader(""), Output: writer, ErrorOutput: &diagnostics}, catalogs(t), func(invocation *command.Invocation) *cobra.Command {
 		root := invocation.Group("fathomry", "fathomry.command_line.root")
-		root.AddCommand(New(invocation))
+		root.AddCommand(New(invocation, nil))
 		return root
 	})
 	return diagnostics.String(), err

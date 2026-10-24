@@ -202,6 +202,21 @@ func TestCatalog(t *testing.T) {
 	})
 }
 
+func TestNormalizeLocaleUsesRequestPolicy(t *testing.T) {
+	for _, input := range []string{"en", "EN", "zh-cn", "iw-IL", "zh-Hant-TW", "zh-CN-u-ca-chinese"} {
+		tag, err := parseLocale(input, false)
+		normalized, actual := NormalizeLocale(input)
+		if err != nil || actual != nil || normalized != tag.String() {
+			t.Fatal("normalization diverged from request parsing", input, actual)
+		}
+	}
+	for _, input := range []string{"", "und", "zh_CN", "en-x-private", "fr-fr ", "en\x00", strings.Repeat("a", 129)} {
+		if _, err := NormalizeLocale(input); !errors.Is(err, ErrLocale) {
+			t.Fatal("invalid request locale admitted")
+		}
+	}
+}
+
 func TestResourceAdmission(t *testing.T) {
 	for name, mutate := range map[string]func(fstest.MapFS){
 		"duplicate_member":   func(files fstest.MapFS) { files["en.json"].Data = []byte(`{"schema":"a","schema":"b"}`) },

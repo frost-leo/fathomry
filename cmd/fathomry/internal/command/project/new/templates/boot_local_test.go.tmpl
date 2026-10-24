@@ -29,6 +29,36 @@ import (
 	"time"
 )
 
+func TestControlConfigurationOnly(t *testing.T) {
+	options := localProject(t, DocumentEncoding)
+	t.Setenv("FATHOMRY_CONFIG_DIR", options.Directory)
+	t.Setenv("FATHOMRY_ENV", options.Environment)
+	for _, name := range []string{"FATHOMRY_DOTENV", "FATHOMRY_LOCAL_CONFIG", "FATHOMRY_APP_LOCALE"} {
+		previous := os.Getenv(name)
+		t.Setenv(name, previous)
+		if os.Unsetenv(name) != nil { t.Fatal("environment isolation failed") }
+	}
+	selected, err := Control(context.Background())
+	if err == nil || len(selected.Records) == 0 { t.Fatal("missing control did not retain finite evidence") }
+	content := "database: {fathomry: {dialect: mysql, mysql: {name: control, address: 127.0.0.1, port: 1, database: catalog_test, user: test, password: private-control-test, plaintext: true}}}\n"
+	if DocumentEncoding == configuration.TOML {
+		content = "[database.fathomry]\ndialect='mysql'\n[database.fathomry.mysql]\nname='control'\naddress='127.0.0.1'\nport=1\ndatabase='catalog_test'\nuser='test'\npassword='private-control-test'\nplaintext=true\n"
+	}
+	path := filepath.Join(options.Directory, "environments", options.Environment+"."+string(DocumentEncoding))
+	put(t, path, content)
+	selected, err = Control(context.Background())
+	if err != nil || selected.Dialect != "mysql" || selected.MySQL == nil || selected.MySQL.Port != 1 || len(selected.Records) == 0 {
+		t.Fatal("configuration-only control handoff failed", err)
+	}
+	for _, record := range selected.Records {
+		if !record.Info().Released || !record.Info().Resolved || record.Err() != nil { t.Fatal("live or failed configuration evidence returned") }
+	}
+	invalid := "database: {fathomry: {unknown: true}}\n"
+	if DocumentEncoding == configuration.TOML { invalid = "[database.fathomry]\nunknown=true\n" }
+	put(t, path, invalid)
+	if _, err := Control(context.Background()); err == nil { t.Fatal("unknown control field accepted") }
+}
+
 func localProject(t *testing.T, encoding configuration.Encoding) Options {
 	t.Helper()
 	directory := t.TempDir()

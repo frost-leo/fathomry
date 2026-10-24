@@ -1,0 +1,111 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_list",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.workflow_list.command",
+      "source": "a8c7a50462a2e1b6404343040e7e64849f0e51904a3a0e891a84df02d637b95b",
+      "forms": {
+        "other": "列出指定命名空间内有界的目录元数据。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.namespace",
+      "source": "64c67091805e70774c54cd61d96d410cb0828f3ccb079620c3bdb0b29f4cb118",
+      "forms": {
+        "other": "选择精确匹配的命名空间（必填）。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.workflow",
+      "source": "7b971ff2c225ac58b3da0375bd45eb7d046d829e2e27e8156e373721c2c55cb6",
+      "forms": {
+        "other": "列出此精确工作流的版本。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.version",
+      "source": "c4b78e5f3e44f20dcaad3ff902acf5204721666ace3287f2f44ee6b5fc1a61f9",
+      "forms": {
+        "other": "列出此精确版本的模式。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.mode",
+      "source": "4e378d805ce4c3df5be98f0453aa3951ca5300ecf7d659a398204c0348ff9f8a",
+      "forms": {
+        "other": "列出此精确模式的修订。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.code",
+      "source": "58c9e1b15abdd435405bbb96d4286cf576472a68c4bc5f959a639b9e70c264a9",
+      "forms": {
+        "other": "精确筛选当前列表中的子项代码。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.category",
+      "source": "b4f024b15662841d2e4d118c66ed15e5cf441a4d1ae5dfae1f563223c4d16f8b",
+      "forms": {
+        "other": "按精确分类代码筛选工作流定义。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.enabled",
+      "source": "4e2f946e7435420a5f2dc47ab879ef815c13e9923a6041c33c539161c5d1f696",
+      "forms": {
+        "other": "显式提供时筛选启用或禁用的元数据。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.locale",
+      "source": "a4b6949db420d025aef1ff59cb72e26e6024887fd17fa66967001dd35b9f25cd",
+      "forms": {
+        "other": "选择精确匹配的展示语言；默认使用英语。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.limit",
+      "source": "4f72f120cb2b56ec37a9d1b3b7827623908b07e9d774711c758138163504b3e1",
+      "forms": {
+        "other": "每页数量，范围为 1 至 64。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.cursor",
+      "source": "1c243835f0c4f92767693419369122d3dfd2264c103334c361d4f650b1d51b39",
+      "forms": {
+        "other": "使用相同所属对象和筛选条件的游标继续查询。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.next",
+      "source": "19a37e76d73a16d57a2207d234c3d160e772137d3fca6f37dcd91d5375c9fc64",
+      "forms": {
+        "other": "下一页游标："
+      }
+    }
+  ]
+}

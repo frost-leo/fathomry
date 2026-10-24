@@ -26,7 +26,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"net"
-	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,6 +33,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/frost-leo/fathomry/internal/compatibility"
+	"github.com/frost-leo/fathomry/internal/database/endpoint"
 	"github.com/frost-leo/fathomry/internal/resource"
 	sdk "github.com/go-sql-driver/mysql"
 )
@@ -83,12 +83,18 @@ type OptionsV1 struct {
 	// (1KiB–16MiB); it counts retained cell bytes and column names, not RSS.
 	MaxRows        int
 	MaxResultBytes int
-	// MaxPacketBytes defaults to 1MiB (1KiB–4MiB), enforced BEFORE a MySQL
+	// MaxPacketBytes defaults to 1MiB (1KiB–8MiB), enforced BEFORE a MySQL
 	// packet header reaches native allocation, on plaintext and owned TLS paths.
 	MaxPacketBytes int
 	// MaxResponseBytes defaults to 8MiB (1KiB–32MiB) per native command,
 	// including packet headers/metadata/drain. Oversize retires the connection.
 	MaxResponseBytes int
+	// MaxArgumentBytes bounds aggregate argument payload and encoding overhead.
+	// Zero selects 1MiB; range 1KiB–8MiB. Native long-data packets remain bounded.
+	MaxArgumentBytes int
+	// ResolveDNS authorizes deployment resolver/hosts lookup for TCP Address.
+	// Default false preserves literal-IP admission. Unix sockets do not use DNS.
+	ResolveDNS bool
 }
 type settings struct {
 	Network                 string        `json:"network"`
@@ -119,6 +125,8 @@ type settings struct {
 	MaxResultBytes          int           `json:"max_result_bytes"`
 	MaxPacketBytes          int           `json:"max_packet_bytes"`
 	MaxResponseBytes        int           `json:"max_response_bytes"`
+	MaxArgumentBytes        int           `json:"max_argument_bytes"`
+	ResolveDNS              bool          `json:"resolve_dns"`
 }
 
 func defaults(v OptionsV1) settings {
@@ -127,7 +135,7 @@ func defaults(v OptionsV1) settings {
 		Authentication: v.Authentication, ParseTime: v.ParseTime, ClientFoundRows: v.ClientFoundRows, ColumnsWithAlias: v.ColumnsWithAlias,
 		MaxConnections: v.MaxConnections, MaxIdleConnections: v.MaxIdleConnections, MaxIdleTime: v.MaxIdleTime, MaxLifetime: v.MaxLifetime,
 		QueuedCalls: v.QueuedCalls, Timeout: v.Timeout, ReadTimeout: v.ReadTimeout, WriteTimeout: v.WriteTimeout, CloseTimeout: v.CloseTimeout,
-		TransactionTimeout: v.TransactionTimeout, MaxRows: v.MaxRows, MaxResultBytes: v.MaxResultBytes, MaxPacketBytes: v.MaxPacketBytes, MaxResponseBytes: v.MaxResponseBytes}
+		TransactionTimeout: v.TransactionTimeout, MaxRows: v.MaxRows, MaxResultBytes: v.MaxResultBytes, MaxPacketBytes: v.MaxPacketBytes, MaxResponseBytes: v.MaxResponseBytes, MaxArgumentBytes: v.MaxArgumentBytes, ResolveDNS: v.ResolveDNS}
 	if s.Network == "" {
 		s.Network = "tcp"
 	}
@@ -167,21 +175,24 @@ func defaults(v OptionsV1) settings {
 	if s.MaxResponseBytes == 0 {
 		s.MaxResponseBytes = 8 << 20
 	}
+	if s.MaxArgumentBytes == 0 {
+		s.MaxArgumentBytes = MaxArgumentBytes
+	}
 	return s
 }
 func textValid(s string, max int, empty bool) bool {
 	return (empty || s != "") && len(s) <= max && utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 func validate(s settings) error {
-	ip, err := netip.ParseAddr(s.Address)
-	validAddress := s.Network == "tcp" && err == nil && !ip.IsUnspecified() && !ip.Unmap().IsUnspecified() && ip.Zone() == "" && s.Port != 0 ||
+	validAddress := s.Network == "tcp" && endpoint.ValidHost(s.Address, s.ResolveDNS) && s.Port != 0 ||
 		s.Network == "unix" && filepath.IsAbs(s.Address) && textValid(s.Address, 4096, false) && s.Port == 0
 	if !validAddress ||
 		!textValid(s.Database, 256, true) || !textValid(s.User, 256, false) || !textValid(s.Password, 4096, true) ||
 		s.MaxConnections < 1 || s.MaxConnections > 32 || s.QueuedCalls < 0 || s.QueuedCalls > 64 ||
 		s.MaxIdleConnections < -1 || s.MaxIdleConnections > s.MaxConnections || s.MaxIdleTime < 0 || s.MaxIdleTime > 24*time.Hour || s.MaxLifetime < 0 || s.MaxLifetime > 24*time.Hour ||
 		s.MaxRows < 1 || s.MaxRows > 65536 || s.MaxResultBytes < 1024 || s.MaxResultBytes > 16<<20 ||
-		s.MaxPacketBytes < 1024 || s.MaxPacketBytes > 4<<20 || s.MaxResponseBytes < 1024 || s.MaxResponseBytes > 32<<20 {
+		s.MaxPacketBytes < 1024 || s.MaxPacketBytes > 8<<20 || s.MaxResponseBytes < 1024 || s.MaxResponseBytes > 32<<20 ||
+		s.MaxArgumentBytes < 1024 || s.MaxArgumentBytes > 8<<20 {
 		return failure(ErrInput, "options")
 	}
 	for _, d := range []time.Duration{s.Timeout, s.ReadTimeout, s.WriteTimeout, s.CloseTimeout, s.TransactionTimeout} {
@@ -192,7 +203,7 @@ func validate(s settings) error {
 	if s.Authentication != "caching_sha2_password" && s.Authentication != "mysql_native_password" {
 		return failure(ErrUnsupported, "authentication")
 	}
-	_, err = trust(s)
+	_, err := trust(s)
 	return err
 }
 func trust(s settings) (*tls.Config, error) {
@@ -258,7 +269,7 @@ func (s settings) address() string {
 	return net.JoinHostPort(s.Address, strconv.Itoa(int(s.Port)))
 }
 func (s settings) reservation() int64 {
-	return int64(2*MaxArgumentBytes+MaxSQLBytes+3*s.MaxPacketBytes+s.MaxResultBytes) + int64(s.MaxRows)*(MaxColumns*24+96) + int64(MaxPreparedStatements)*(int64(MaxSQLBytes)+int64(s.MaxResponseBytes)) + 128<<10
+	return int64(2*s.MaxArgumentBytes+MaxSQLBytes+3*s.MaxPacketBytes+s.MaxResultBytes) + int64(s.MaxRows)*(MaxColumns*24+96) + int64(MaxPreparedStatements)*(int64(MaxSQLBytes)+int64(s.MaxResponseBytes)) + 128<<10
 }
 func (s settings) evidenceReservation() int64 {
 	return int64(s.MaxResultBytes+3*s.MaxPacketBytes) + int64(s.MaxRows)*(MaxColumns*24+48) + 128<<10
@@ -298,6 +309,8 @@ func (db *Database) Profile() compatibility.Profile {
 		{Name: "timeout-ns", Value: strconv.FormatInt(int64(s.Timeout), 10)}, {Name: "close-timeout-ns", Value: strconv.FormatInt(int64(s.CloseTimeout), 10)},
 		{Name: "transaction-timeout-ns", Value: strconv.FormatInt(int64(s.TransactionTimeout), 10)},
 		{Name: "max-rows", Value: strconv.Itoa(s.MaxRows)}, {Name: "max-result-bytes", Value: strconv.Itoa(s.MaxResultBytes)},
+		{Name: "max-argument-bytes", Value: strconv.Itoa(s.MaxArgumentBytes)},
+		{Name: "resolve-dns", Value: strconv.FormatBool(s.ResolveDNS)},
 		{Name: "max-packet-bytes", Value: strconv.Itoa(s.MaxPacketBytes)}, {Name: "max-response-bytes", Value: strconv.Itoa(s.MaxResponseBytes)}}
 	return compatibility.Profile{ImplementationModule: compatibility.FrameworkModule, SDKMode: "sql-pinned-framed",
 		ServiceMode: compatibility.Fact{Kind: compatibility.Declared, Value: "mysql-innodb-single-server"},

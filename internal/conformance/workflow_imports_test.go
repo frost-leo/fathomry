@@ -38,10 +38,12 @@ func cliWorkflowDeclarationUseAllowed(relative, imported string, item *ast.Impor
 	testFile := filepath.ToSlash(filepath.Dir(relative)) == "internal/command/workflow/vet" && strings.HasSuffix(relative, "_test.go")
 	buildTest := relative == "internal/command/project/build/inspection_test.go"
 	entryTest := relative == "v1/cli_test.go"
+	projectTest := relative == "internal/command/workflow/workflow_test.go"
+	publicationTest := relative == "internal/command/workflow/publication_test.go"
 	var allowed []string
 	name := ""
 	switch {
-	case imported == workflow+"/testdata/health" && (testFile || buildTest || entryTest):
+	case imported == workflow+"/testdata/health" && (testFile || buildTest || entryTest || projectTest):
 		name = "health"
 		allowed = []string{"Declarations"}
 	case imported == workflow:
@@ -52,6 +54,18 @@ func cliWorkflowDeclarationUseAllowed(relative, imported string, item *ast.Impor
 			allowed = []string{"Component"}
 		} else if relative == "v1/cli.go" || entryTest {
 			allowed = []string{"Declaration", "Component"}
+			if entryTest {
+				allowed = append(allowed, "Decimal")
+			}
+		} else if relative == "internal/command/workflow/publication.go" {
+			allowed = []string{"Diagnostic", "MaxInputs"}
+		} else if relative == "internal/command/workflow/comparison.go" {
+			allowed = []string{"Diagnostic", "MaxInputs"}
+		} else if relative == "internal/command/workflow/workflow.go" || projectTest || publicationTest {
+			allowed = []string{"Declaration", "WorkflowDeclaration", "ModeDeclaration", "Identity", "Report", "Bundle", "Entry", "Conflict", "InputDiagnostic", "Compile", "Check", "Diagnose", "MaxInputs", "MaxInputBytes", "MaxWorkflows", "MaxModes", "MaxDiagnostics"}
+			if projectTest || publicationTest {
+				allowed = append(allowed, "Decimal", "Fixed", "DataSchema", "ErrLimit")
+			}
 		} else if relative == "internal/command/project/build/build.go" {
 			allowed = []string{"Entry"}
 		} else if relative == "internal/command/project/build/inspection.go" || buildTest {
@@ -63,10 +77,37 @@ func cliWorkflowDeclarationUseAllowed(relative, imported string, item *ast.Impor
 			if relative != "internal/command/workflow/vet/vet.go" && !testFile {
 				return false
 			}
-			allowed = []string{"Report", "Bundle", "Entry", "Conflict", "InputDiagnostic", "MaxInputs", "MaxBundleBytes", "MaxInputBytes", "Parse", "Check", "Diagnose"}
+			allowed = []string{"Report", "Bundle", "Entry", "Identity", "Conflict", "InputDiagnostic", "MaxInputs", "MaxBundleBytes", "MaxInputBytes", "Parse", "Check", "Diagnose"}
 			if testFile {
 				allowed = append(allowed, "Compile", "Component", "Decimal")
 			}
+		}
+	case imported == "github.com/frost-leo/fathomry/framework/workflow/catalog/v1":
+		if item.Name == nil {
+			return false
+		}
+		name = item.Name.Name
+		switch relative {
+		case "v1/cli.go":
+			allowed = []string{"Component", "ListRequest", "Page", "ReadRequest", "View"}
+		case "v1/control.go":
+			allowed = []string{"Catalog", "ErrLimit", "Options", "PostgreSQL", "MySQL", "WorkBytes", "ListRequest", "Page", "ReadRequest", "View", "ValidateList", "ValidateRead"}
+		case "internal/command/workflow/list/list.go", "internal/command/workflow/list/list_test.go":
+			allowed = []string{"ListRequest", "Page"}
+		case "internal/command/workflow/show/show.go", "internal/command/workflow/show/show_test.go":
+			allowed = []string{"ReadRequest", "View"}
+		case "v1/cli_test.go", "internal/command/workflow/workflow_test.go", "internal/command/project/build/inspection_test.go":
+			allowed = []string{"Metadata", "Resource", "Target", "Definition", "Version", "Mode", "Node", "Name", "Description", "Text", "MaxResources"}
+		case "internal/command/workflow/workflow.go":
+			allowed = []string{"Metadata", "Diagnostic", "PreparedRegistration", "Prepare", "Registration", "Diagnose", "Definition", "Mode", "ModeRevision", "MaxResources", "MaxTags"}
+		case "internal/command/workflow/publication.go":
+			allowed = []string{"Diagnostic", "Publication", "PreparedRegistration", "Applied", "Unchanged", "Unknown"}
+		case "internal/command/workflow/comparison.go":
+			allowed = []string{"Diagnostic", "Comparison", "PreparedRegistration"}
+		case "internal/command/workflow/publication_test.go", "internal/command/workflow/comparison_test.go":
+			allowed = []string{"PreparedRegistration", "Publication", "Comparison", "Effect", "Applied", "Unchanged", "NotStarted", "RolledBack", "Unknown", "Prepare", "Registration", "Diagnose"}
+		default:
+			return false
 		}
 	default:
 		return false
@@ -110,7 +151,7 @@ func TestWorkflowCLIImportException(t *testing.T) {
 		{"future_version", "internal/command/workflow/vet/vet.go", "github.com/frost-leo/fathomry/framework/workflow/declaration/v2", "wf", "wf.Parse(nil,nil)", false},
 		{"former_package", "internal/command/workflow/vet/vet.go", "github.com/frost-leo/fathomry/framework/workflow/v1", "wf", "wf.Parse(nil,nil)", false},
 		{"group_execution", "internal/command/workflow/workflow.go", workflow, "wf", "wf.Parse(nil,nil)", false},
-		{"group_test", "internal/command/workflow/workflow_test.go", workflow, "wf", "wf.Compile(nil,nil)", false},
+		{"group_test", "internal/command/workflow/integration_test.go", workflow, "wf", "wf.Compile(nil,nil)", false},
 		{"other_workflow_command", "internal/command/workflow/run/run.go", workflow, "wf", "wf.Parse(nil,nil)", false},
 		{"other_workflow_test", "internal/command/workflow/run/run_test.go", workflow, "wf", "wf.Compile(nil,nil)", false},
 		{"other_command", "internal/command/project/project.go", workflow, "wf", "wf.Parse(nil,nil)", false},
@@ -119,6 +160,20 @@ func TestWorkflowCLIImportException(t *testing.T) {
 		{"dot_import", "internal/app/catalog.go", workflow, ".", "Parse(nil,nil)", false},
 		{"blank_import", "internal/app/catalog.go", workflow, "_", "0", false},
 		{"unknown_selector", "internal/command/workflow/vet/vet.go", workflow, "wf", "wf.StartWorker(nil)", false},
+		{"shared_analysis_prepares", "internal/command/workflow/workflow.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.Prepare(nil,catalog.Registration{})", true},
+		{"publication_does_not_prepare_again", "internal/command/workflow/publication.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.Prepare(nil,catalog.Registration{})", false},
+		{"publication_does_not_compile_again", "internal/command/workflow/publication.go", workflow, "wf", "wf.Compile(nil,nil)", false},
+		{"composition_has_no_batch_policy", "v1/control.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.Applied", false},
+		{"publication_cannot_open", "internal/command/workflow/publication.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.PostgreSQL(nil,\"\",catalog.Options{})", false},
+		{"register_leaf_cannot_open", "internal/command/workflow/register/register.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.PostgreSQL(nil,\"\",catalog.Options{})", false},
+		{"entry_catalog_composition", "v1/control.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.PostgreSQL(nil,\"\",catalog.Options{})", true},
+		{"entry_no_catalog_composition", "v1/cli.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.PostgreSQL(nil,\"\",catalog.Options{})", false},
+		{"list_leaf_data", "internal/command/workflow/list/list.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.ListRequest{}", true},
+		{"list_leaf_no_runtime", "internal/command/workflow/list/list.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.PostgreSQL(nil,\"\",catalog.Options{})", false},
+		{"show_leaf_data", "internal/command/workflow/show/show.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.ReadRequest{}", true},
+		{"comparison_data", "internal/command/workflow/comparison.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.Comparison{}", true},
+		{"comparison_no_owner", "internal/command/workflow/comparison.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.PostgreSQL(nil,\"\",catalog.Options{})", false},
+		{"compare_leaf_no_owner", "internal/command/workflow/compare/compare.go", "github.com/frost-leo/fathomry/framework/workflow/catalog/v1", "catalog", "catalog.PostgreSQL(nil,\"\",catalog.Options{})", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			source := "package probe\nimport " + test.alias + " " + strconv.Quote(test.imported) + "\nvar _ = " + test.expression + "\n"

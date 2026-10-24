@@ -29,6 +29,23 @@ contracts; development guides explain tasks. Choose a reading path below.
 
 ## What is implemented
 
+The Fathomry [control-schema assets](architecture/control-schema-assets.md) provide
+read-only, checksummed PostgreSQL/MySQL SQL with one file per table and complete
+English/Chinese table and column comments. Isolated public-Adapter tests verify
+their metadata and SQL constraints. The [private schema commands](reference/cmd/fathomry/internal/command/schema/interface.md)
+adds read-only status/plan, explicit installation, history/structure checks and
+truthful uncertain effects. The [creation command](reference/cmd/fathomry/internal/command/database/create/interface.md)
+and [project CLI](reference/cmd/fathomry/v1/interface.md) use project-owned runtime
+configuration and Resource-backed Adapter clients, retaining cleanup/effect reports.
+The [catalog registration boundary](reference/framework/workflow/catalog/v1/interface.md)
+validates declarations plus owner-addressed metadata offline, then creates/compares
+one aggregate through a Resource-backed transaction with current-schema admission.
+Public results and project workflow register commands preserve commit uncertainty,
+partial batches and cleanup/output failures. Bounded localized metadata/document
+reads and list/show/compare commands are implemented. Comparison validates actual
+stored canonical bytes and selected English/context without changing operator state.
+This is not a qualified Kubernetes Worker runtime.
+
 The [Mail Adapter](reference/adapters/notification/mail/v1/interface.md) provides
 managed MIME/EML/template/signing preparation, SMTP authentication and explicit
 local-process delivery with independent evidence and Direct/Fixed/Follow ownership.
@@ -186,10 +203,13 @@ provider descriptors, atomic data domains and optional borrowed resource adoptio
 Project Boot supplies choices and settings without importing Adapters; Framework
 owns source/operation/evidence lifecycle and performs no ambient environment lookup. The official
 [CLI](reference/cmd/fathomry/interface.md) now provides offline help, error and
-translation catalogs, `new` project generation, offline `workflow vet`, and native
+translation catalogs, `new` project generation, offline `workflow vet`, project
+`workflow register`, and native
 `build` with declaration admission before artifact publication. The
 [fixed public CLI entry](reference/cmd/fathomry/v1/interface.md) supports the same
 commands from a generated root `main.go`; no generic command/plugin SDK is exposed.
+Its private entry composition supplies lazy control-database ownership to separate
+`schema status|plan|apply` leaves; there is no `control` command group.
 Generated projects share one Boot/Watch flow with mode-specific dependency declarations.
 There is no production-qualified application runtime or Run/Item execution model.
 The [workflow declaration package](reference/framework/workflow/declaration/v1/interface.md)
@@ -415,6 +435,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`framework/v1`](reference/framework/v1/interface.md) | Public runtime composition, released-evidence reception and once-bound safe localized logging |
 | [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Strict application/business configuration acceptance, last-good Watch and explicit resource-adoption handoff |
 | [`framework/workflow/declaration/v1`](reference/framework/workflow/declaration/v1/interface.md) | Pure workflow/mode declaration compilation, canonical portable bundles and offline identity/conflict checking |
+| [`framework/workflow/catalog/v1`](reference/framework/workflow/catalog/v1/interface.md) | Atomic registration, truthful outcomes and bounded localized metadata/document reads |
 | [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Shared fixed CLI commands, project-root inspection and native build publication gate |
 
 ## Internal package reference

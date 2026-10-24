@@ -21,6 +21,10 @@
 // and independent projects. Run uses the existing internal command engine; Handle
 // lets a project keep its application startup path while handling the same commands
 // and the offline inspection protocol before configuration Boot.
+// Project vet defaults to all registered workflows and can select an exact
+// Namespace/code/version/mode/revision. Build inspection always checks the full
+// registration set, including supplied catalog metadata. Explicit Bundle input
+// retains the existing offline workflow-vet contract.
 //
 // This is not a command-registration or plugin SDK. Projects supply data-only
 // workflow declarations, not callbacks to the builder. No concrete Adapter catalog
@@ -30,4 +34,9 @@
 // Contexts, streams, project data and prepared catalogs are borrowed. Do not mutate
 // inputs during a call; synchronize shared writers. No process globals, application
 // settings, service clients, or runtime are initialized by command assembly.
+// Project.Control is a lazy DatabaseResolver returning DatabaseConfiguration for explicit online schema
+// commands. Those commands own Framework resources through the invocation scope.
+// ExecutionError retains mutation facts and unfinished cleanup on failure.
+// Private control.go composes this ownership and injects lazy database operations into the
+// leaf commands; it is neither another command group nor an exported plugin hook.
 package cli

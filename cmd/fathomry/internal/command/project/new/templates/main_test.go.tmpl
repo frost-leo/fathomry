@@ -24,6 +24,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	wf "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
 {{if eq .Mode "local"}}
 "errors"
 "os"
@@ -56,6 +57,8 @@ func TestProcessContext(t *testing.T) {
 }
 
 func TestOfflineProjectEntry(t *testing.T) {
+	t.Setenv("FATHOMRY_ENV","invalid-offline-environment")
+	t.Setenv("FATHOMRY_CONFIG_DIR",t.TempDir())
 	var output, diagnostic bytes.Buffer
 	if err := execute(context.Background(), []string{"--fathomry-project=v1"}, &output, &diagnostic); err != nil {
 		t.Fatal(err)
@@ -65,8 +68,18 @@ func TestOfflineProjectEntry(t *testing.T) {
 		Name string `json:"name"`
 		Bundles []json.RawMessage `json:"bundles"`
 	}
-	if json.Unmarshal(output.Bytes(), &document) != nil || document.Schema != "fathomry.project-inspection/v1" || document.Name != {{quote .Name}} || document.Bundles == nil || len(document.Bundles) != 0 || diagnostic.Len() != 0 {
-		t.Fatal("offline entry started configuration or invented workflows")
+	if json.Unmarshal(output.Bytes(), &document) != nil || document.Schema != "fathomry.project-inspection/v1" || document.Name != {{quote .Name}} || document.Bundles == nil || diagnostic.Len() != 0 {
+		t.Fatal("offline entry started configuration or returned an invalid inspection")
+	}
+	var bundles []*wf.Bundle
+	for _,raw:=range document.Bundles {
+		bundle,err:=wf.Parse(context.Background(),raw)
+		if err!=nil { t.Fatal("project exported an invalid declaration",err) }
+		bundles=append(bundles,bundle)
+	}
+	if len(bundles)>0 {
+		report,err:=wf.Check(context.Background(),bundles...)
+		if err!=nil || !report.Passed { t.Fatal("project exported conflicting declarations",err) }
 	}
 }
 

@@ -1,0 +1,41 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "schema_status",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.schema_status.command",
+      "source": "407fe3796228ffa4ac5e6ed608d5ef42ea4fde18808fcdfb947b59cdd7e25682",
+      "forms": {
+        "other": "检查控制 Schema，不更改持久化状态。"
+      }
+    },
+    {
+      "id": "fathomry.schema_status.state",
+      "source": "4569e6c5f0003fdd55e5b40e66bcde2a54ba93d824984ef1ab0849b3950b4c23",
+      "forms": {
+        "other": "Schema 状态："
+      }
+    }
+  ]
+}

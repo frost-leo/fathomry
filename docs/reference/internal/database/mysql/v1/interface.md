@@ -53,9 +53,9 @@ can run, but SQL permissions and the transactional profile remain caller duties.
    ownership. Overrides changing bounds require corresponding explicit limits.
 3. `Bind` attaches the source's original `resource.Access`, a separately owned
    `invocation.Inbox[Result]` and optional bounded observer.
-4. Call `Ping`, `Query`, `Exec`, `Prepare` or `Begin` with an explicit context
+4. Call `Ping`, `Query`, `Exec`, `Prepare`, `Begin` or `Retain` with an explicit context
    and valid correlation. Inspect both the direct receipt and independent delivery.
-5. Close retained statements/finalize transactions, release received evidence,
+5. Close retained statements/sessions or finalize transactions, release received evidence,
    then close the owning assembly. An incomplete assembly close retains its
    continuation and dependencies; retry only its recorded cleanup continuation.
 
@@ -77,6 +77,22 @@ retains the original native finalizer result even when `database/sql` returns
 `sql.ErrTxDone` before that finalizer completes. One retained guard joins the owned
 lifetime worker. A later finalizer cannot replace the original receipt.
 
+`Retain` reserves a root, independent evidence and a lifetime guard before returning
+a controlled `Session`. It pins one physical pooled connection without a `sql.Tx`;
+transaction-ending SQL and implicit-commit DDL do not revoke session authority.
+SessionOptionsV1.Timeout bounds acquisition/use after admission to 1 ms–1 minute,
+default 1 minute, in addition to caller lifetime and per-call phase bounds. It
+does not bound admission waiting or promise native cleanup by that deadline.
+Query/Exec are serialized, preserve child evidence and never reconnect. The initial
+connection may carry prior pooled session state; callers must establish their profile.
+
+Session.Close signals one pre-owned retirement worker and waits with the supplied
+context. It always physically retires the connection, even under evidence saturation;
+there is no new admission for a SQL unlock. A canceled waiter still requests cleanup,
+and repeat Close joins the original receipt. Cancellation and cleanup failure remain
+separate. That receipt has no native result merely because teardown succeeds, and
+local release is not a server lock-release, commit or rollback acknowledgement.
+
 ## Configuration and limits
 
 `EvidenceBytesV1(options)` exposes the native per-call retained envelope rather
@@ -94,7 +110,8 @@ no lossy DSN conversion or process-global SDK configuration is used.
 | Fields | Meaning and defaults |
 | --- | --- |
 | `Name` | Valid resource identity, not a database identifier |
-| `Network`, `Address`, `Port` | Default tcp: literal non-unspecified IP and nonzero port; unix: absolute socket path, port zero; no DNS discovery |
+| `Network`, `Address`, `Port` | Default tcp: literal non-unspecified IP and nonzero port; unix: absolute socket path, port zero |
+| `ResolveDNS` | Default false; true permits an ASCII TCP hostname and authorizes deployment DNS/hosts lookup; no service/credential discovery |
 | `Database`, `User`, `Password` | Explicit; database/password may be empty; user required; bounded UTF-8 without NUL |
 | `RootCAPEM`, `ServerName` | Explicit trust, at most 64 KiB PEM, verified server DNS/IP identity; TLS minimum 1.2 |
 | `ServerCertificateSHA256` | Alternative to ServerName: exact leaf DER SHA-256 **and** normal chain/server-auth/time verification; never trust-all |
@@ -108,8 +125,9 @@ no lossy DSN conversion or process-global SDK configuration is used.
 | `CloseTimeout`, `TransactionTimeout` | Default 5 seconds and 1 minute; operation/close/transaction durations each 1 ms–1 min |
 | `MaxRows` | Default 1024, range 1–65536 |
 | `MaxResultBytes` | Default 4 MiB, range 1 KiB–16 MiB; copied cell encodings and column names/type strings |
-| `MaxPacketBytes` | Default 1 MiB, range 1 KiB–4 MiB; incoming packet payload before native allocation |
+| `MaxPacketBytes` | Default 1 MiB, range 1 KiB–8 MiB; incoming packet payload before native allocation |
 | `MaxResponseBytes` | Default 8 MiB, range 1 KiB–32 MiB; all incoming frames including headers, metadata and drainage, per native command |
+| `MaxArgumentBytes` | Default 1 MiB, range 1 KiB–8 MiB; aggregate argument payload and encoding overhead |
 
 Strict overlays use the JSON field names in
 [options.go](../../../../../../internal/database/mysql/v1/options.go), with
@@ -125,10 +143,14 @@ is not pinned-session affinity; use retained scopes where affinity is required.
 
 ### What the bounds prove
 
-SQL is at most 64 KiB, with at most 128 scalar arguments and a total argument
-envelope of 1 MiB. Results/preparation have at most 64 columns and eight retained
+SQL is at most 64 KiB, with at most 128 scalar arguments and a configurable argument
+envelope defaulting to 1 MiB. `MaxArgumentBytes` the constant retains the default;
+`OptionsV1.MaxArgumentBytes` selects the effective bound and work reservation.
+Results/preparation have at most 64 columns and eight retained
 transaction statements. The native outgoing `MaxAllowedPacket=2 MiB` is **not**
-the incoming or result limit.
+the incoming, result or aggregate-argument limit. The pinned SDK uses bounded
+COM_STMT_SEND_LONG_DATA packets for larger parameters; the native outgoing maximum
+is unchanged. All arguments are validated before any long-data packet is sent.
 
 The transport reads and validates the four-byte MySQL header before allocating
 its bounded frame or exposing that header to the SDK. Its packet maximum is less
@@ -151,7 +173,7 @@ retained evidence, cleanup history and downstream copies.
 
 Before admission, invalid input/identity/limits or saturated admission/evidence
 return an error without a receipt. After admission, failures are delivered in the
-receipt (the direct setup error can be nil). A failed Prepare/Begin can therefore
+receipt (the direct setup error can be nil). A failed Prepare/Begin/Retain can therefore
 return a nil handle with a non-nil receipt. Do not equate nil setup error with
 successful native execution.
 
@@ -223,7 +245,7 @@ does not overwrite an already observed successful native acknowledgement.
 Returned Rows are consumed and closed synchronously, with drainage errors recorded
 independently. Standalone queries returning unexpected transaction state retire
 their connection rather than returning an unowned transaction to the pool.
-Retained statements and transactions hold admission until their explicit/automatic
+Retained statements, transactions and sessions hold admission until their explicit/automatic
 cleanup; source close does not revoke active Go handles or deadlock reacquiring
 their allowance.
 

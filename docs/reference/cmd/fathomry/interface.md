@@ -24,8 +24,9 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 **Audience:** users and maintainers of the official Fathomry executable.
 **Status:** implemented offline help, searchable error definitions/explanations,
 translation inspection/rendering/coverage checks, project generation, native gated
-builds and workflow-bundle checking. Generated executables perform finite configuration
-loading. Version, deployment and Worker commands are not included.
+builds, workflow checks/registration and explicit database/schema operations. Generated executables
+perform finite configuration loading and can supply a lazy control-database binding.
+Deployment and Worker commands are not included.
 **Executable source:** [cmd/fathomry](../../../../cmd/fathomry/main.go).
 The [public Go entry](v1/interface.md) exposes the fixed commands to independent
 projects. The private implementation is not a public command-extension SDK.
@@ -59,10 +60,10 @@ go build -o "$job/fathomry" ./cmd/fathomry
 "$job/fathomry" error explain 0xA0450001 --lang zh-CN --output json
 ```
 
-No project, application settings, configuration source or live service is needed.
+These inspection commands need no project, application settings, configuration source or live service.
 The command catalog explicitly gathers all currently implemented public component
 declarations and translations, plus the command-line capability. Framework
-components contribute static metadata only; no Framework loading/runtime API runs.
+components contribute static metadata only to inspection; no Framework loading/runtime API runs for it.
 It is not an inventory of every SDK's private native errors or arbitrary business
 projects. Unknown well-formed codes are not silently assigned meanings.
 
@@ -79,7 +80,14 @@ projects. Unknown well-formed codes are not silently assigned meanings.
 | i18n coverage LOCALE | Summary and per-owner exact missing translations; --module/--component filters and optional --strict |
 | new PROJECT | Create an absent project directory with the selected configuration profile |
 | build [PROJECT] | Compile a trusted native root project, validate its declarations, then publish the inspected binary |
-| workflow vet BUNDLE [BUNDLE...] | Validate explicitly supplied workflow bundles and compare local identities/content |
+| workflow vet [BUNDLE...] | Check the project's registered workflows, or explicitly supplied bundles; project-only exact selectors |
+| workflow register | Register the project's selected declarations/metadata; whole-project by default, with exact selectors |
+| workflow list | Page catalog metadata in an explicit namespace/parent; exact filters, locale and cursor |
+| workflow show | Read one exact catalog entity, with optional verified canonical documents |
+| workflow compare | Read-only comparison of the project's selected declarations/English metadata with stored state |
+| schema status | Inspect the explicitly bound control schema without persistent writes |
+| schema plan | Plan initial installation or current no-op; never create history |
+| schema apply | Explicitly install an empty target or verify current state; preserve mutation effects on failure |
 
 A known message with no exact translation is a successful inspection with
 translation_exists=false. Unknown messages, errors or owners return not-found.
@@ -176,13 +184,19 @@ write may occur after a complete report: check framing, diagnostics and exit cod
 
 ## Vet workflow bundles
 
+On a generated/project executable, no Bundle arguments select the project registry.
+The [project check contract](v1/interface.md#project-workflow-checks) defines whole
+project, workflow, version and mode selection, metadata checks and scope-aware
+reporting. These checks are offline. Build continues to require full admission.
+Standalone `fathomry workflow vet` does not scan or launch a project implicitly.
+
 `fathomry workflow vet first.bundle.json [second.bundle.json ...]` reads explicit
 local files using the public [workflow declaration core](../../framework/workflow/declaration/v1/interface.md).
 Use `--output json` for a `fathomry.cli/v1` envelope with command `workflow.vet`.
 The checker does not discover/build/launch a project, invoke Boot, read application
 settings or contact services. There is no workflow-creation or `run` command.
-The private [workflow group](../../../../cmd/fathomry/internal/command/workflow/workflow.go)
-owns subcommand and message-catalog composition; its
+The shared entry attaches fixed leaves to the private
+[workflow group](../../../../cmd/fathomry/internal/command/workflow/workflow.go); its
 [`vet` leaf](../../../../cmd/fathomry/internal/command/workflow/vet/vet.go)
 owns file admission, declaration checking and report presentation. The group
 currently exposes only `vet`; the public declaration API retains `Check` for
@@ -258,14 +272,16 @@ Generated runtime options select only that provider's paths/environment/credenti
 they cannot implicitly switch the provider. Framework receives an explicit
 [Provider dependency](../../framework/configuration/v1/interface.md#explicit-declarations-and-dependencies).
 
-Each profile contains 21 files:
+Each profile contains 23 files:
 
 ```text
 go.mod, .gitignore, .env.example, README.md
 main.go, main_test.go
 internal/bootstrap/boot.go, boot_test.go
+internal/bootstrap/control.go
 internal/bootstrap/options.go, options_test.go, inputs.go, inputs_test.go
 internal/setting/setting.go, setting_test.go, application.go, application_test.go
+internal/setting/database.go
 configs/base.<format>
 configs/environments/{development,testing,production}.<format>
 ```
@@ -350,13 +366,17 @@ Put global automation options before the command.
 --output accepts text (default) or json. stdout contains finite results only;
 stderr contains final diagnostics. There are no implicit prompts, color, progress
 spinners, native error dumps or extra library usage banners.
-Successful finite results are staged within 16 MiB and emitted only after successful
-execution/cleanup. A failed output write is not retried and can have delivered a
+Ordinary finite results are staged within 16 MiB and emitted only after successful
+execution/cleanup. Explicit mutation reports are different: schema apply preserves
+known effect/state alongside execution or cleanup failure, using the
+[public entry's mutation contract](v1/interface.md#runtime-control-database-binding).
+A failed output write is not retried and can have delivered a
 prefix; consumers must check the process exit code and complete JSON framing.
 
 Machine result envelopes contain schema=fathomry.cli/v1, command and command-owned
 data. Error envelopes contain schema, code, identifier, message, requested_locale,
-locale and optional fallback. Code is the canonical hexadecimal string. Stable
+locale, optional fallback and, for mutation failures, bounded effect/state facts.
+Code is the canonical hexadecimal string. Stable
 identities, numeric values and field names do not change with display language;
 human description/message fields may. Error list/explain retain the baseline
 Definition separately from the localized message. Strict negative coverage checks
@@ -366,7 +386,7 @@ are the explicit report-plus-nonzero-exit case described above.
 | --- | --- |
 | 0 | Command/help/inspection completed successfully |
 | 1 | Failed strict check, not found, execution, output or cleanup failure |
-| 2 | Usage or invocation/output-bound refusal |
+| 2 | Usage, missing/ambiguous project selection, or invocation/output-bound refusal |
 | 130 | Caller cancellation, unless a cleanup/output failure also occurred |
 
 Exit categories are not truncated 32-bit failure codes. Command-owned failures
@@ -386,6 +406,12 @@ own `resources.go`. Their `Resources()` and `Component()` are composed explicitl
 through the public CLI's fixed `Components()` inventory. The private official app
 adds its wider Adapter metadata catalog; projects need not import that catalog.
 Neither family implicitly imports the other's resources or a global registry.
+
+The `schema` group has one package per `status`, `plan` and `apply` leaf.
+Private `cmd/fathomry/v1/control.go` resolves the project binding and composes
+Framework ownership, injecting one lazy operation into those leaves. It is not a
+root command or exported plugin API. Use these commands on the project's executable
+with an explicit binding; standalone online calls without one refuse safely.
 
 The command entry files only bind flags, invoke catalog operations and stage
 results. `options.go` owns request admission; `catalog.go` and `render.go` operate

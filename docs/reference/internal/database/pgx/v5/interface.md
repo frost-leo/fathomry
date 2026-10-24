@@ -108,7 +108,8 @@ overlay's zero is explicit and does not reapply those defaults.
 | Option | Meaning |
 | --- | --- |
 | Name | Required resource identity under resource's existing safe-label rules; not overridable in raw settings |
-| Address / Port | One explicit, non-unspecified literal IP and nonzero port; no DNS, sockets, multi-host, proxy or HA discovery |
+| Address / Port | One non-unspecified literal IP and nonzero port; ASCII hostname only with ResolveDNS; no sockets, multi-host list, proxy or HA discovery |
+| ResolveDNS | Default false; explicit deployment DNS/hosts lookup, with cancellation pinned to the actual connected peer |
 | Database / User / Password | Required UTF-8, no NUL; maximum 256 / 256 / 4096 bytes |
 | RootCAPEM / ServerName | Explicit trust set up to 64 KiB and verified server name up to 256 bytes; no system-root or certificate-file discovery |
 | Plaintext | False by default; explicit isolated-test plaintext requires empty TLS inputs |
@@ -120,7 +121,8 @@ overlay's zero is explicit and does not reapply those defaults.
 | CloseTimeout | Default 5 s; 1 ms–30 s; native graceful-close budget, not a hard bound on all native cleanup |
 | MaxRows | Default 1024; 1–65536 observed rows; the first over-limit row is a rejection witness |
 | MaxResultBytes | Default 4 MiB; 1 KiB–16 MiB retained raw cell/name bytes, excluding Go structural overhead |
-| MaxMessageBytes | Default 1 MiB; 1 KiB–4 MiB per incoming protocol message body |
+| MaxMessageBytes | Default 1 MiB; 1 KiB–16 MiB per incoming protocol message body |
+| MaxArgumentBytes | Default 1 MiB; 1 KiB–16 MiB aggregate encoded arguments, including bytea hex expansion |
 
 Raw field names are the private schema's explicit JSON tags in
 [options.go](../../../../../../internal/database/pgx/v5/options.go); durations use
@@ -169,8 +171,10 @@ temporary tables, prepared state, session locks, cursors and notifications and
 restores startup session defaults. Reset failure is independent cleanup evidence
 and retires the connection. There is no reset between retained nested calls.
 
-SQL is at most 64 KiB. At most 128 arguments are admitted with a 1 MiB aggregate
-encoding reservation (bytea accounts for hexadecimal expansion). Conservative
+SQL is at most 64 KiB. At most 128 arguments are admitted with a configurable
+aggregate encoding reservation, defaulting to 1 MiB. `MaxArgumentBytes` the
+constant retains that default; `OptionsV1.MaxArgumentBytes` selects the effective
+bound and its work reservation. Bytea accounts for hexadecimal expansion. Conservative
 scalar reservations are 32 bytes for nil/bool/integers, 64 for float32/time.Time,
 and 512 for float64; native fixed-point float text is not its Go memory width.
 Supported arguments are nil, built-in bool/integer types, finite float32/64, string, []byte

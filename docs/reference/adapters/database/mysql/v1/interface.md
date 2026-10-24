@@ -66,6 +66,7 @@ raw-overlay explicit-zero behavior.
 | --- | --- |
 | Name | Required non-secret 1–64-byte lowercase ASCII letters, digits, dot, underscore or hyphen |
 | Network, Address, Port | Network defaults to tcp: one non-unspecified literal IP/nonzero uint16 port; unix requires an absolute socket path and port zero |
+| ResolveDNS | Default false; true additionally admits ASCII TCP Address hostnames through deployment DNS/hosts; TLS identity remains explicit; [hostname/dial bounds](../../../../internal/database/endpoint/interface.md) |
 | Database, User, Password | Database may be empty; User is required; Password may be empty; UTF-8/no NUL, at most 256 / 256 / 4096 bytes |
 | RootCAPEM, ServerName | Explicit trust up to 64 KiB and verified identity up to 256 bytes; no implicit system roots |
 | ServerCertificateSHA256 | Alternative to ServerName: exact leaf DER SHA-256 **plus** normal chain/server-auth/time verification |
@@ -79,8 +80,9 @@ raw-overlay explicit-zero behavior.
 | CloseTimeout, TransactionTimeout | Defaults 5 s and 1 min; each 1 ms–1 min |
 | MaxRows | Zero defaults to 1024; allowed 1–65536 |
 | MaxResultBytes | Zero defaults to 4 MiB; allowed 1 KiB–16 MiB |
-| MaxPacketBytes | Zero defaults to 1 MiB; allowed 1 KiB–4 MiB incoming packet payload before SDK allocation |
+| MaxPacketBytes | Zero defaults to 1 MiB; allowed 1 KiB–8 MiB incoming packet payload before SDK allocation |
 | MaxResponseBytes | Zero defaults to 8 MiB; allowed 1 KiB–32 MiB all incoming frames/metadata/drain per native command |
+| MaxArgumentBytes | Zero defaults to 1 MiB; allowed 1 KiB–8 MiB aggregate argument payload and encoding overhead |
 
 Validate performs no pool construction or service I/O. Native bootstrap sets
 autocommit=1, UTC session time_zone and utf8mb4/utf8mb4_0900_ai_ci without reading
@@ -114,9 +116,10 @@ rather than silently increasing a supplied Runtime.
 
 ## SQL routes and native differences
 
-Client exposes Ping, Query, Exec, Prepare and Begin. Transactions expose Query,
+Client exposes Ping, Query, Exec, Prepare, Begin and Retain. Transactions expose Query,
 Exec, Prepare, Commit and Rollback. Preparations expose Query, Exec, Ready,
-Receipt and Close. Stats returns detached sql.DBStats; Profile returns non-secret
+Receipt and Close. Sessions expose Query, Exec, Receipt and Close, without a raw
+connection or transaction/preparation constructor. Stats returns detached sql.DBStats; Profile returns non-secret
 effective settings without service I/O or a new SQL admission slot.
 
 A standalone preparation pins one connection. A transaction retains one connection
@@ -135,7 +138,7 @@ TxOptions accepts sql.LevelDefault or the four supported MySQL isolation levels
 (ReadUncommitted, ReadCommitted, RepeatableRead, Serializable). ReadOnly defaults
 false; LevelDefault preserves the server session setting.
 
-Commit, Rollback and Statement.Close use existing reservations, including under
+Commit, Rollback, Statement.Close and Session.Close use existing reservations, including under
 work/evidence saturation. A fresh cleanup context cannot authorize new business
 operations on a canceled owner. Actual release is joined independently of caller
 wait timeouts. Repeated statement Close returns original final evidence; repeated
@@ -158,14 +161,45 @@ savepoints still exist. Raw transaction-control SQL can end or invalidate the
 retained scope. Ordinary pool calls do not guarantee session affinity:
 database/sql ResetSession is not a PostgreSQL DISCARD ALL equivalent.
 
-SQL is at most 64 KiB, with at most 128 arguments / 1 MiB aggregate reservation
-and 64 columns. Basic scalar Go values, finite floats, strings, byte slices,
+`Retain(ctx, SessionOptions{Timeout: ...})` pins one physical pooled connection and
+source generation without starting a transaction. Its context owns acquisition and
+the whole retained lifetime; `Timeout` additionally bounds native acquisition/use
+after admission to 1 ms–1 minute, default 1 minute. Queueing and actual cleanup
+completion are separate bounds. Per-operation SQL/argument/result and phase limits
+still apply. Initial session state is not guaranteed pristine. Explicit SQL transaction
+control and DDL implicit commits do not end this session, unlike the controlled Tx.
+No failed session operation implicitly reconnects or switches generations.
+
+Session.Close **always physically retires** the connection, even after an explicit
+unlock, instead of returning possible session state/advisory locks to the pool. It
+signals cleanup even with a canceled waiting context; a fresh Close joins the same
+retirement and original evidence. Overlapping business/finalization calls are refused.
+The unresolved Receipt becomes final only after native cleanup, with cancellation
+and cleanup failures distinct. Successful closure has no native statement result
+or transaction outcome. It proves local release, not immediate server lock release,
+rollback, commit or absence of remote effects. A competing lock acquisition must
+still use its own finite wait/refusal policy.
+
+SQL is at most 64 KiB, with at most 128 arguments and 64 columns. Aggregate argument
+reservation defaults to 1 MiB and is selected by `Settings.MaxArgumentBytes`;
+the `MaxArgumentBytes` constant remains the default. `Recommend` accounts for the
+selected bound without changing old defaults. Basic scalar Go values, finite floats, strings, byte slices,
 json.RawMessage and time.Time are accepted. Nonzero times must have a UTC year
 1–9999. Native callbacks, driver.Valuer, arbitrary structs/pointers, bulk/streaming
 paths and SDK handles are refused. LOCAL INFILE is denied before global
 file/reader lookup, including over TLS. These boundaries are not an SQL permission
 sandbox. See the [native profile](../../../../internal/database/mysql/v1/interface.md)
 for framing, session and prepared-protocol constraints.
+
+Argument, packet, response and retained-result budgets are independent. A complete
+4 MiB cell needs additional packet framing. The native outgoing packet maximum
+remains 2 MiB: the SDK's existing long-data path splits larger parameters rather
+than requiring an unbounded packet. Isolated plaintext MySQL 8.4.11 tests cover an
+exactly 4 MiB valid declaration through ordinary, prepared and transaction calls,
+with rejecting default/packet/result controls. A separate 45-mode aggregate test
+passes per-document transport, commit and shared reconstruction; each full-shape
+mode has 4,096 controls and 340,033 canonical bytes, below the unchanged 1 MiB cap.
+These are not production/RSS or catalog-registration claims.
 
 ## Results, semantic errors and evidence
 
@@ -236,7 +270,7 @@ encoding is still configuration serialization, not redacted log output.
 A public resource.Instance holds Owner.Handle and delegates cleanup to
 Owner.Release. Using(lifetime, ref, budget, dependencies) borrows one generation
 per root. Fixed retains its original instance; Follow adopts only later roots.
-Live transactions/preparations and all descendants keep their original pool,
+Live transactions/preparations/sessions and all descendants keep their original pool,
 generation and attribution. Failed replacement preserves last-good ownership;
 a larger-than-declared generation is rejected before SQL.
 
@@ -264,10 +298,19 @@ rollback; independently reads effects; and verifies fixture absence after cleanu
 Unconfirmed creation/cleanup retains recovery responsibility. Normal tests do not
 run it. This does not qualify MySQL TCP service writes.
 
-No ORM/Ent, provisioning API, migration, generic retained session, distributed
+The explicit [schema-service tests](../../../../../../schema/fathomry/session_test.go)
+exercise the retained session on isolated plaintext MySQL 8.4.11: connection identity
+and named-lock exclusion across actual implicit-commit DDL, full-size document
+transport, cancellation, physical retirement, bounded competing reacquisition and
+server-killed-session refusal without replacement. Protocol-peer tests separately
+cover TLS ownership, saturated finalization and source-generation retention. This
+does not qualify production deployment, arbitrary server profiles or TLS service DDL.
+
+No ORM/Ent, provisioning API, migration engine, distributed
 quota, cross-database transaction, automatic mutation retry, HA, arbitrary engine
 or Workflow execution is added. Implementation lineage is
-[#102](https://github.com/frost-leo/fathomry/issues/102); local qualification does
+[#102](https://github.com/frost-leo/fathomry/issues/102), with the bounded session and
+large-document prerequisites in [#155](https://github.com/frost-leo/fathomry/issues/155); local qualification does
 not establish merged/released status.
 
 ## Error boundary organization

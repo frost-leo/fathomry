@@ -22,15 +22,17 @@ package command
 import "github.com/frost-leo/fathomry/failure/v1"
 
 const (
-	ErrOptions   failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0001
-	ErrUsage     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0002
-	ErrNotFound  failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0003
-	ErrExecution failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0004
-	ErrOutput    failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0005
-	ErrCleanup   failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0006
-	ErrCanceled  failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0007
-	ErrLimit     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0008
-	ErrCheck     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0009
+	ErrOptions            failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0001
+	ErrUsage              failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0002
+	ErrNotFound           failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0003
+	ErrExecution          failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0004
+	ErrOutput             failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0005
+	ErrCleanup            failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0006
+	ErrCanceled           failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0007
+	ErrLimit              failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0008
+	ErrCheck              failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x0009
+	ErrSelectionMissing   failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x000a
+	ErrSelectionAmbiguous failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityCommandLine)<<16 | 0x000b
 )
 
 // Definitions describes command invocation failures, not every domain command.
@@ -45,6 +47,8 @@ func Definitions() []failure.Definition {
 		{Code: ErrCanceled, Identifier: "fathomry.command_line.canceled", Module: "fathomry", Component: "command_line", Revision: 1, Message: "The command was canceled; cancellation does not establish absence of effects."},
 		{Code: ErrLimit, Identifier: "fathomry.command_line.limit_exceeded", Module: "fathomry", Component: "command_line", Revision: 1, Message: "A command invocation or output limit was exceeded."},
 		{Code: ErrCheck, Identifier: "fathomry.command_line.check_failed", Module: "fathomry", Component: "command_line", Revision: 1, Message: "The check did not pass. Consult the report for details."},
+		{Code: ErrSelectionMissing, Identifier: "fathomry.command_line.selection_missing", Module: "fathomry", Component: "command_line", Revision: 1, Message: "No declared workflow, version or mode matches the selection."},
+		{Code: ErrSelectionAmbiguous, Identifier: "fathomry.command_line.selection_ambiguous", Module: "fathomry", Component: "command_line", Revision: 1, Message: "The workflow selection matches more than one Namespace. Specify --namespace."},
 	}
 }
 

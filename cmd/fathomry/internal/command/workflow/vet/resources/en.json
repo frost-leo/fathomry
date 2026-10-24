@@ -30,7 +30,7 @@
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Check explicitly supplied workflow bundles offline."
+        "other": "Check project workflows or explicitly supplied bundles offline."
       }
     },
     {
@@ -61,6 +61,146 @@
       "cardinal": false,
       "forms": {
         "other": "Additional conflict details were omitted."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.flag_namespace",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select an exact declared Namespace."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.flag_workflow",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Check one declared workflow code."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.flag_version",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Check one version and its modes; requires --workflow."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.flag_mode",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Check one mode with its parent version; requires --version."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.flag_revision",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Check one mode revision; requires --mode."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.scope_all",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Scope: all project workflows."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.scope_selected",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Scope: selected project workflows only."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.empty_project",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The project declares no workflows; no workflow was checked."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.checked",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Checked workflows:"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.omitted",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Unselected workflows:"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.metadata_not_supplied",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Catalog metadata was not supplied."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.metadata_not_checked",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Catalog metadata was not checked because declarations failed."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.metadata_passed",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Catalog metadata passed offline checks."
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.metadata_failed",
+      "contract": "v1",
+      "context": "Offline project workflow selection and validation; no configuration or service access.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Catalog metadata failed offline checks."
       }
     }
   ]

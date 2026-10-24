@@ -47,7 +47,7 @@ type Client struct {
 }
 
 // Using borrows one generation per root operation and retains it for the whole
-// transaction/preparation family. lifetime fences all calls and owns retained work
+// transaction/preparation/session family. lifetime fences all calls and owns retained work
 // after short setup contexts end. budget must cover every adopted generation; a larger
 // replacement is refused before native dispatch, never undercharged.
 func Using(lifetime context.Context, ref resource.Ref[Handle], budget database.Budget, dependencies Dependencies) (*Client, error) {

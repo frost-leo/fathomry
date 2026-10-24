@@ -32,8 +32,10 @@ import (
 )
 
 const (
-	MaxSQLBytes           = 64 << 10
-	MaxArguments          = 128
+	MaxSQLBytes  = 64 << 10
+	MaxArguments = 128
+	// MaxArgumentBytes is the default encoded-argument budget. OptionsV1 may
+	// explicitly select a different per-source budget without changing this default.
 	MaxArgumentBytes      = 1 << 20
 	MaxColumns            = 64
 	MaxPreparedStatements = 8
@@ -189,6 +191,10 @@ func (database *Database) Exec(ctx context.Context, correlation fault.Correlatio
 }
 
 func validStatement(sql string, args []any) error {
+	return validStatementLimit(sql, args, MaxArgumentBytes)
+}
+
+func validStatementLimit(sql string, args []any, argumentBytes int) error {
 	if len(sql) == 0 || len(sql) > MaxSQLBytes || !validText(sql, MaxSQLBytes, false) || len(args) > MaxArguments {
 		return failure(ErrInput, "statement")
 	}
@@ -210,12 +216,12 @@ func validStatement(sql string, args []any) error {
 			}
 			total += 512
 		case string:
-			if !validText(value, MaxArgumentBytes, true) {
+			if !validText(value, argumentBytes, true) {
 				return failure(ErrInput, "argument")
 			}
 			total += len(value)
 		case []byte:
-			if len(value) > MaxArgumentBytes {
+			if len(value) > argumentBytes {
 				return failure(ErrLimit, "argument")
 			}
 			total += 2*len(value) + 2
@@ -224,7 +230,7 @@ func validStatement(sql string, args []any) error {
 		default:
 			return failure(ErrUnsupported, "argument")
 		}
-		if total > MaxArgumentBytes {
+		if total > argumentBytes {
 			return failure(ErrLimit, "argument")
 		}
 	}
@@ -249,7 +255,11 @@ func (database *Database) beginCall(ctx context.Context, correlation fault.Corre
 	return invocation.Begin(ctx, database.access, request, database.inbox, database.observer)
 }
 func (database *Database) statement(ctx context.Context, correlation fault.Correlation, sql string, args []any, keep bool, parent *Transaction, prepared *Statement) (*invocation.Receipt[Result], error) {
-	if err := validStatement(sql, args); err != nil {
+	argumentBytes := MaxArgumentBytes
+	if database != nil && database.owner != nil {
+		argumentBytes = database.owner.settings.MaxArgumentBytes
+	}
+	if err := validStatementLimit(sql, args, argumentBytes); err != nil {
 		return nil, err
 	}
 	name := "query"

@@ -1,0 +1,147 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_list",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.workflow_list.command",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List bounded catalog metadata in one explicit namespace."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.namespace",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select the exact namespace (required)."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.workflow",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List versions of this exact workflow."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.version",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List modes of this exact version."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.mode",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "List revisions of this exact mode."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.code",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Filter the listed child code exactly."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.category",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Filter definitions by exact category code."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.enabled",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Filter enabled/disabled metadata when explicitly supplied."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.locale",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select the exact display locale; empty defaults to English."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.limit",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Page size, from 1 to 64."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.cursor",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Continue with a cursor from the same owner and filters."
+      }
+    },
+    {
+      "id": "fathomry.workflow_list.next",
+      "contract": "v1",
+      "context": "Read-only catalog command; display locale is independent of CLI message language.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Next cursor:"
+      }
+    }
+  ]
+}

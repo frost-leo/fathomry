@@ -26,11 +26,11 @@
     {
       "id": "fathomry.workflow_commands.root",
       "contract": "v1",
-      "context": "Offline workflow declaration metadata.",
+      "context": "Workflow command namespace; command construction and help remain offline.",
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Inspect portable workflow declarations."
+        "other": "Inspect and publish project workflow declarations."
       }
     }
   ]

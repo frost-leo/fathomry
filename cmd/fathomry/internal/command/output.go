@@ -52,6 +52,7 @@ type diagnostic struct {
 	RequestedLocale string             `json:"requested_locale,omitempty"`
 	Locale          string             `json:"locale"`
 	Fallback        string             `json:"fallback,omitempty"`
+	Mutation        *MutationSummary   `json:"mutation,omitempty"`
 }
 
 func encode(writer io.Writer, value any) error {
@@ -70,16 +71,17 @@ func writeAll(writer io.Writer, value []byte) error {
 	return nil
 }
 
-func (invocation *Invocation) finish(err, cleanup error) error {
+func (invocation *Invocation) finish(err, cleanup error) (result error) {
+	defer func() { result = invocation.preserve(result) }()
 	if cleanup != nil {
 		err = Fail(ErrCleanup, err, cleanup)
 	}
 	if invocation.presentationError != nil {
 		err = Fail(ErrExecution, err, invocation.presentationError)
 	}
-	if err == nil && len(invocation.pending) != 0 {
+	if len(invocation.pending) != 0 && (err == nil || invocation.mutation != nil && invocation.presentationError == nil) {
 		if problem := writeAll(invocation.options.Output, invocation.pending); problem != nil {
-			err = Fail(ErrOutput, problem)
+			err = Fail(ErrOutput, err, problem)
 		}
 	}
 	if err == nil && invocation.checkFailed {
@@ -106,7 +108,7 @@ func (invocation *Invocation) finish(err, cleanup error) error {
 	}
 	metadata := core.Diagnostic()
 	value := diagnostic{Schema: Schema, Code: metadata.Definition.Code, Identifier: metadata.Definition.Identifier,
-		Message: metadata.Definition.Message, Locale: "en"}
+		Message: metadata.Definition.Message, Locale: "en", Mutation: invocation.mutation}
 	if presented, ok := shown.(*i18n.Presented); ok {
 		info := presented.Info()
 		value.Message, value.Locale = info.Message.Text, info.Message.Locale
@@ -117,7 +119,11 @@ func (invocation *Invocation) finish(err, cleanup error) error {
 	if invocation.format == "json" {
 		problem = encode(buffer, value)
 	} else {
-		_, problem = fmt.Fprintf(buffer, "%s: %s\n", value.Code.String(), value.Message)
+		if value.Mutation != nil {
+			_, problem = fmt.Fprintf(buffer, "%s: %s [effect=%s state=%s]\n", value.Code.String(), value.Message, value.Mutation.Effect, value.Mutation.State)
+		} else {
+			_, problem = fmt.Fprintf(buffer, "%s: %s\n", value.Code.String(), value.Message)
+		}
 	}
 	if problem == nil {
 		problem = writeAll(invocation.options.ErrorOutput, buffer.Bytes())

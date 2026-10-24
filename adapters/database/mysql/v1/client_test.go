@@ -123,6 +123,7 @@ func TestClientLifetimeFencesAllWork(t *testing.T) {
 		{"exec", func() error { _, err := client.Exec(context.Background(), "UPDATE cells"); return err }},
 		{"prepare", func() error { _, err := client.Prepare(context.Background(), "SELECT cells"); return err }},
 		{"begin", func() error { _, err := client.Begin(context.Background(), txOptions()); return err }},
+		{"retain", func() error { _, err := client.Retain(context.Background(), SessionOptions{}); return err }},
 		{"stats", func() error { _, err := client.Stats(context.Background()); return err }},
 		{"profile", func() error { _, err := client.Profile(context.Background()); return err }},
 	}

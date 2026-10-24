@@ -23,7 +23,6 @@ import (
 	"embed"
 	"io/fs"
 
-	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow/vet"
 	"github.com/frost-leo/fathomry/i18n/v1"
 )
 
@@ -37,6 +36,5 @@ func Resources() fs.FS { return messages }
 func Components() []i18n.Component {
 	return []i18n.Component{
 		{Module: "fathomry", Name: "workflow_commands", BaseLocale: "en", Resources: Resources(), Directory: "resources"},
-		vet.Component(),
 	}
 }

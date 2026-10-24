@@ -21,6 +21,8 @@
 // Compile accepts concrete Go data; Parse verifies a complete portable bundle.
 // Both use the same closed finite-DAG semantics, exact control values and
 // canonical comparison rules. Check compares explicitly supplied bundles only.
+// ContentsCopy detaches canonical inner documents; ParseContents reconstructs a
+// selected set with exact parents and additionally verifies stored-byte canonicality.
 //
 // Compilation creates no clients, settings, workers or process registries and
 // calls no business functions. Callers must not mutate declarations during Compile;

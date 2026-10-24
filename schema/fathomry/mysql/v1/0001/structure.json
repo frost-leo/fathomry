@@ -1,0 +1,1064 @@
+{
+  "format": "fathomry.schema-structure/v1",
+  "sources_sha256": "4bf65f0a74536bdae7a1272af3f88cc1d9edfc79258754eae14aae17d0fa3391",
+  "objects": [
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_acknowledgement",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_digest",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_family",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_manifest",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_ordinal",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_state",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "fathomry_schema_history",
+      "name": "ck_schema_history_step",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "ck_i18n_locale_code",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "ck_i18n_locale_direction",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "ck_i18n_locale_enabled",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "ck_i18n_locale_english",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "ck_i18n_locale_name",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "ck_i18n_locale_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "ck_i18n_locale_sort",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_locale",
+      "name": "uq_i18n_locale_code",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_resource",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_resource",
+      "name": "ck_i18n_resource_code",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_resource",
+      "name": "ck_i18n_resource_note",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_resource",
+      "name": "ck_i18n_resource_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_resource",
+      "name": "ck_i18n_resource_scope",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_resource",
+      "name": "uq_i18n_resource_address",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_text",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_text",
+      "name": "ck_i18n_text_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_text",
+      "name": "ck_i18n_text_value",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_text",
+      "name": "fk_i18n_text_locale",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_text",
+      "name": "fk_i18n_text_resource",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "i18n_text",
+      "name": "uq_i18n_text_resource_locale",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "ck_workflow_category_code",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "ck_workflow_category_enabled",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "ck_workflow_category_namespace",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "ck_workflow_category_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "ck_workflow_category_sort",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "uq_workflow_category_identity",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_category",
+      "name": "uq_workflow_category_namespace_id",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "ck_workflow_definition_code",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "ck_workflow_definition_enabled",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "ck_workflow_definition_namespace",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "ck_workflow_definition_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "fk_workflow_definition_category",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "fk_workflow_definition_default_version",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition",
+      "name": "uq_workflow_definition_identity",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition_tag",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition_tag",
+      "name": "ck_workflow_definition_tag_key",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition_tag",
+      "name": "ck_workflow_definition_tag_value",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_definition_tag",
+      "name": "fk_workflow_definition_tag_definition",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "ck_workflow_mode_code",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "ck_workflow_mode_enabled",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "ck_workflow_mode_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "fk_workflow_mode_default_revision",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "fk_workflow_mode_version",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "uq_workflow_mode_identity",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode",
+      "name": "uq_workflow_mode_owner_id",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "ck_workflow_mode_version_code",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "ck_workflow_mode_version_digest",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "ck_workflow_mode_version_document",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "ck_workflow_mode_version_enabled",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "ck_workflow_mode_version_format",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "ck_workflow_mode_version_profile",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "ck_workflow_mode_version_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "fk_workflow_mode_version_mode",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "uq_workflow_mode_version_identity",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_mode_version",
+      "name": "uq_workflow_mode_version_owner_id",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "PRIMARY",
+      "attributes": [
+        "PRIMARY KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "ck_workflow_version_code",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "ck_workflow_version_digest",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "ck_workflow_version_document",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "ck_workflow_version_enabled",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "ck_workflow_version_format",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "ck_workflow_version_profile",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "ck_workflow_version_revision",
+      "attributes": [
+        "CHECK",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "fk_workflow_version_default_mode",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "fk_workflow_version_definition",
+      "attributes": [
+        "FOREIGN KEY",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "uq_workflow_version_identity",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "constraint",
+      "owner": "workflow_version",
+      "name": "uq_workflow_version_owner_id",
+      "attributes": [
+        "UNIQUE",
+        "YES"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "fathomry_schema_history",
+      "name": "fathomry_schema_history",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "i18n_locale",
+      "name": "i18n_locale",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "i18n_resource",
+      "name": "i18n_resource",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "i18n_text",
+      "name": "i18n_text",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "workflow_category",
+      "name": "workflow_category",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "workflow_definition",
+      "name": "workflow_definition",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "workflow_definition_tag",
+      "name": "workflow_definition_tag",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "workflow_mode",
+      "name": "workflow_mode",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "workflow_mode_version",
+      "name": "workflow_mode_version",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "relation",
+      "owner": "workflow_version",
+      "name": "workflow_version",
+      "attributes": [
+        "BASE TABLE"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "fathomry_schema_history",
+      "name": "fathomry_schema_history",
+      "attributes": [
+        "CREATE TABLE `fathomry_schema_history` (\n  `family` varbinary(64) NOT NULL COMMENT 'en: Schema family identity, independent of package and server versions; zh-CN: Schema 家族标识，独立于包版本和数据库版本',\n  `migration_revision` bigint NOT NULL COMMENT 'en: Positive logical migration revision; zh-CN: 正整数逻辑迁移修订号',\n  `step_ordinal` int NOT NULL COMMENT 'en: Zero identifies the migration header; positive values identify ordered statements; zh-CN: 零表示迁移头记录；正整数表示有序语句',\n  `manifest_sha256` varbinary(32) NOT NULL COMMENT 'en: Exact 32-byte digest of the selected embedded manifest; zh-CN: 所选嵌入式 manifest 的精确 32 字节摘要',\n  `step_id` varbinary(128) NOT NULL COMMENT 'en: Immutable manifest step identity, or migration name for the header; zh-CN: 不可变 manifest 步骤标识，头记录使用迁移名称',\n  `step_sha256` varbinary(32) NOT NULL COMMENT 'en: Exact 32-byte original SQL asset digest; the header binds bootstrap SQL; zh-CN: 原始 SQL 资产的精确 32 字节摘要；头记录绑定引导 SQL',\n  `state` varbinary(16) NOT NULL COMMENT 'en: Intent is not proof of effect; applied acknowledges a step; complete terminates the migration; zh-CN: intent 不证明实际效果；applied 表示步骤已确认；complete 表示迁移终结',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable journal creation time, UTC microsecond precision; zh-CN: 不可变日志创建时间，UTC 微秒精度',\n  `acknowledged_at` datetime(6) DEFAULT NULL COMMENT 'en: Acknowledgement time, UTC microsecond precision; NULL means no recorded acknowledgement; zh-CN: 确认时间，UTC 微秒精度；NULL 表示没有已记录的确认',\n  PRIMARY KEY (`migration_revision`,`step_ordinal`),\n  CONSTRAINT `ck_schema_history_acknowledgement` CHECK ((((`state` = _utf8mb4'intent') and (`acknowledged_at` is null)) or ((`state` <> _utf8mb4'intent') and (`acknowledged_at` is not null)))),\n  CONSTRAINT `ck_schema_history_digest` CHECK ((length(`step_sha256`) = 32)),\n  CONSTRAINT `ck_schema_history_family` CHECK ((length(`family`) between 1 and 64)),\n  CONSTRAINT `ck_schema_history_manifest` CHECK ((length(`manifest_sha256`) = 32)),\n  CONSTRAINT `ck_schema_history_ordinal` CHECK ((`step_ordinal` between 0 and 128)),\n  CONSTRAINT `ck_schema_history_revision` CHECK ((`migration_revision` > 0)),\n  CONSTRAINT `ck_schema_history_state` CHECK ((((`step_ordinal` = 0) and (`state` in (_utf8mb4'intent',_utf8mb4'complete'))) or ((`step_ordinal` > 0) and (`state` in (_utf8mb4'intent',_utf8mb4'applied'))))),\n  CONSTRAINT `ck_schema_history_step` CHECK ((length(`step_id`) between 1 and 128))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Bounded installation intent and acknowledgement journal; not proof of authenticated origin; zh-CN: 有界安装意图与确认日志；不证明来源已经认证'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "i18n_locale",
+      "name": "i18n_locale",
+      "attributes": [
+        "CREATE TABLE `i18n_locale` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `code` varchar(128) CHARACTER SET ascii COLLATE ascii_general_ci NOT NULL COMMENT 'en: Canonical locale tag; case-insensitive identity, at most 128 bytes; zh-CN: 规范化语言标签；身份不区分大小写，最多 128 字节',\n  `native_name` varchar(128) COLLATE utf8mb4_0900_bin NOT NULL COMMENT 'en: Language autonym, 1 to 128 Unicode characters; zh-CN: 语言自称，1 至 128 个 Unicode 字符',\n  `text_direction` varbinary(3) NOT NULL DEFAULT 'ltr' COMMENT 'en: Text direction: ltr or rtl; zh-CN: 文字方向：ltr 或 rtl',\n  `enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'en: Available for display selection; English must remain enabled; zh-CN: 是否可选择用于展示；英语必须保持启用',\n  `sort_order` int NOT NULL DEFAULT '0' COMMENT 'en: Nonnegative display-selection order; zh-CN: 非负展示选择顺序',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_i18n_locale_code` (`code`),\n  CONSTRAINT `ck_i18n_locale_code` CHECK ((length(`code`) between 1 and 128)),\n  CONSTRAINT `ck_i18n_locale_direction` CHECK ((`text_direction` in (_utf8mb4'ltr',_utf8mb4'rtl'))),\n  CONSTRAINT `ck_i18n_locale_enabled` CHECK ((`enabled` in (0,1))),\n  CONSTRAINT `ck_i18n_locale_english` CHECK (((`code` <> _utf8mb4'en') or (`enabled` = 1))),\n  CONSTRAINT `ck_i18n_locale_name` CHECK ((char_length(`native_name`) between 1 and 128)),\n  CONSTRAINT `ck_i18n_locale_revision` CHECK ((`row_revision` > 0)),\n  CONSTRAINT `ck_i18n_locale_sort` CHECK ((`sort_order` >= 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Display locale directory; availability does not imply translation coverage; zh-CN: 展示语言目录；可用状态不代表翻译覆盖完整'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "i18n_resource",
+      "name": "i18n_resource",
+      "attributes": [
+        "CREATE TABLE `i18n_resource` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `scope` varbinary(64) NOT NULL COMMENT 'en: Immutable resource group, at most 64 bytes; not a Temporal Namespace; zh-CN: 不可变资源分组，最多 64 字节；不是 Temporal 命名空间',\n  `code` varbinary(1024) NOT NULL COMMENT 'en: Immutable owner-derived resource key, at most 1024 bytes; zh-CN: 由所属对象生成的不可变资源键，最多 1024 字节',\n  `translator_note` text COLLATE utf8mb4_0900_bin COMMENT 'en: Optional publisher-owned English translation context, at most 1024 UTF-8 bytes; zh-CN: 发布方维护的可选英文翻译上下文，最多 1024 个 UTF-8 字节',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_i18n_resource_address` (`scope`,`code`),\n  CONSTRAINT `ck_i18n_resource_code` CHECK ((length(`code`) between 1 and 1024)),\n  CONSTRAINT `ck_i18n_resource_note` CHECK ((length(`translator_note`) <= 1024)),\n  CONSTRAINT `ck_i18n_resource_revision` CHECK ((`row_revision` > 0)),\n  CONSTRAINT `ck_i18n_resource_scope` CHECK ((length(`scope`) between 1 and 64))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Stable declared display-resource identities; separate from localized text; zh-CN: 已声明展示资源的稳定身份；与各语言文本分离'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "i18n_text",
+      "name": "i18n_text",
+      "attributes": [
+        "CREATE TABLE `i18n_text` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `resource_id` bigint NOT NULL COMMENT 'en: Immutable owning resource identity; zh-CN: 不可变的所属资源标识',\n  `locale_id` bigint NOT NULL COMMENT 'en: Immutable display-locale identity; zh-CN: 不可变的展示语言标识',\n  `value` text COLLATE utf8mb4_0900_bin NOT NULL COMMENT 'en: UTF-8 display text, at most 16 KiB; permitted empty text is intentional, not missing; zh-CN: UTF-8 展示文本，最多 16 KiB；字段允许的空文本表示有意留空，不代表缺失',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_i18n_text_resource_locale` (`resource_id`,`locale_id`),\n  KEY `fk_i18n_text_locale` (`locale_id`),\n  CONSTRAINT `fk_i18n_text_locale` FOREIGN KEY (`locale_id`) REFERENCES `i18n_locale` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `fk_i18n_text_resource` FOREIGN KEY (`resource_id`) REFERENCES `i18n_resource` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `ck_i18n_text_revision` CHECK ((`row_revision` > 0)),\n  CONSTRAINT `ck_i18n_text_value` CHECK ((length(`value`) <= 16384))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Independent text per resource and locale; missing rows use English fallback; zh-CN: 每个资源和语言独立保存的文本；缺失行使用英语回退'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "workflow_category",
+      "name": "workflow_category",
+      "attributes": [
+        "CREATE TABLE `workflow_category` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `namespace` varbinary(255) NOT NULL COMMENT 'en: Native Temporal Namespace; exact UTF-8 identity, at most 255 bytes; zh-CN: 原生 Temporal 命名空间；精确 UTF-8 身份，最多 255 字节',\n  `code` varbinary(128) NOT NULL COMMENT 'en: Immutable category code, at most 128 bytes; zh-CN: 不可变分类编码，最多 128 字节',\n  `enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'en: Allows new category associations; disabling preserves existing associations; zh-CN: 是否允许新的分类关联；禁用后保留已有关系',\n  `sort_order` int NOT NULL DEFAULT '0' COMMENT 'en: Nonnegative category display order; zh-CN: 非负分类展示顺序',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_workflow_category_identity` (`namespace`,`code`),\n  UNIQUE KEY `uq_workflow_category_namespace_id` (`namespace`,`id`),\n  CONSTRAINT `ck_workflow_category_code` CHECK ((length(`code`) between 1 and 128)),\n  CONSTRAINT `ck_workflow_category_enabled` CHECK ((`enabled` in (0,1))),\n  CONSTRAINT `ck_workflow_category_namespace` CHECK ((length(`namespace`) between 1 and 255)),\n  CONSTRAINT `ck_workflow_category_revision` CHECK ((`row_revision` > 0)),\n  CONSTRAINT `ck_workflow_category_sort` CHECK ((`sort_order` >= 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Flat Namespace-local category directory, not a tenant or Workflow Type; zh-CN: 命名空间内的平面分类目录，不是租户或工作流类型'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "workflow_definition",
+      "name": "workflow_definition",
+      "attributes": [
+        "CREATE TABLE `workflow_definition` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `namespace` varbinary(255) NOT NULL COMMENT 'en: Native Temporal Namespace; exact UTF-8 identity, at most 255 bytes; zh-CN: 原生 Temporal 命名空间；精确 UTF-8 身份，最多 255 字节',\n  `code` varbinary(128) NOT NULL COMMENT 'en: Immutable workflow code, at most 128 bytes; not a display name; zh-CN: 不可变工作流编码，最多 128 字节；不是展示名称',\n  `category_id` bigint DEFAULT NULL COMMENT 'en: Optional primary category in the same Namespace; NULL means unclassified; zh-CN: 同一命名空间内的可选主分类；NULL 表示未分类',\n  `enabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'en: New-run admission intent; initially disabled, not Worker readiness; zh-CN: 新执行准入意图；初始禁用，不代表 Worker 就绪',\n  `default_version_id` bigint DEFAULT NULL COMMENT 'en: Default version owned by this definition; NULL means unconfigured, never latest; zh-CN: 本定义拥有的默认版本；NULL 表示未配置，绝不表示最新版本',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_workflow_definition_identity` (`namespace`,`code`),\n  KEY `fk_workflow_definition_category` (`namespace`,`category_id`),\n  KEY `fk_workflow_definition_default_version` (`id`,`default_version_id`),\n  CONSTRAINT `fk_workflow_definition_category` FOREIGN KEY (`namespace`, `category_id`) REFERENCES `workflow_category` (`namespace`, `id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `fk_workflow_definition_default_version` FOREIGN KEY (`id`, `default_version_id`) REFERENCES `workflow_version` (`workflow_definition_id`, `id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `ck_workflow_definition_code` CHECK ((length(`code`) between 1 and 128)),\n  CONSTRAINT `ck_workflow_definition_enabled` CHECK ((`enabled` in (0,1))),\n  CONSTRAINT `ck_workflow_definition_namespace` CHECK ((length(`namespace`) between 1 and 255)),\n  CONSTRAINT `ck_workflow_definition_revision` CHECK ((`row_revision` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Stable workflow identity and management intent, not runtime or deployment state; zh-CN: 稳定工作流身份及管理意图，不表示运行或部署状态'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "workflow_definition_tag",
+      "name": "workflow_definition_tag",
+      "attributes": [
+        "CREATE TABLE `workflow_definition_tag` (\n  `workflow_definition_id` bigint NOT NULL COMMENT 'en: Immutable owning workflow definition; tag writes use its management revision; zh-CN: 不可变的所属工作流定义；标签写入使用该定义的管理修订号',\n  `tag_key` varbinary(128) NOT NULL COMMENT 'en: Immutable raw metadata key, 1 to 128 UTF-8 bytes; reserved keys are rejected; zh-CN: 不可变原始元数据键，1 至 128 个 UTF-8 字节；拒绝保留键',\n  `tag_value` varbinary(256) NOT NULL COMMENT 'en: Raw metadata value, at most 256 UTF-8 bytes; empty is present; no credentials; zh-CN: 原始元数据值，最多 256 个 UTF-8 字节；空值表示存在；不得保存凭据',\n  PRIMARY KEY (`workflow_definition_id`,`tag_key`),\n  CONSTRAINT `fk_workflow_definition_tag_definition` FOREIGN KEY (`workflow_definition_id`) REFERENCES `workflow_definition` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `ck_workflow_definition_tag_key` CHECK ((length(`tag_key`) between 1 and 128)),\n  CONSTRAINT `ck_workflow_definition_tag_value` CHECK ((length(`tag_value`) <= 256))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Definition-owned bounded raw key/value metadata; at most 64 tags per definition; zh-CN: 定义拥有的有界原始键值元数据；每个定义最多 64 项'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "workflow_mode",
+      "name": "workflow_mode",
+      "attributes": [
+        "CREATE TABLE `workflow_mode` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `workflow_version_id` bigint NOT NULL COMMENT 'en: Immutable workflow version that interprets these controls; zh-CN: 不可变的、负责解释这些控制参数的工作流版本',\n  `code` varbinary(128) NOT NULL COMMENT 'en: Immutable preset code within its workflow version, at most 128 bytes; zh-CN: 工作流版本内不可变的预设编码，最多 128 字节',\n  `enabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'en: Allows new selection of this named mode; initially disabled; zh-CN: 是否允许新选择此命名模式；初始禁用',\n  `default_mode_version_id` bigint DEFAULT NULL COMMENT 'en: Default revision owned by this mode; NULL means unconfigured, never latest; zh-CN: 本模式拥有的默认修订版本；NULL 表示未配置，绝不表示最新修订',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_workflow_mode_identity` (`workflow_version_id`,`code`),\n  UNIQUE KEY `uq_workflow_mode_owner_id` (`workflow_version_id`,`id`),\n  KEY `fk_workflow_mode_default_revision` (`id`,`default_mode_version_id`),\n  CONSTRAINT `fk_workflow_mode_default_revision` FOREIGN KEY (`id`, `default_mode_version_id`) REFERENCES `workflow_mode_version` (`workflow_mode_id`, `id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `fk_workflow_mode_version` FOREIGN KEY (`workflow_version_id`) REFERENCES `workflow_version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `ck_workflow_mode_code` CHECK ((length(`code`) between 1 and 128)),\n  CONSTRAINT `ck_workflow_mode_enabled` CHECK ((`enabled` in (0,1))),\n  CONSTRAINT `ck_workflow_mode_revision` CHECK ((`row_revision` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Named control preset owned by one exact workflow version; zh-CN: 由一个确定工作流版本拥有的命名控制预设'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "workflow_mode_version",
+      "name": "workflow_mode_version",
+      "attributes": [
+        "CREATE TABLE `workflow_mode_version` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `workflow_mode_id` bigint NOT NULL COMMENT 'en: Immutable owning version-scoped named mode; zh-CN: 不可变的所属版本内命名模式',\n  `version_code` varbinary(128) NOT NULL COMMENT 'en: Immutable explicit control revision, at most 128 bytes; not row_revision; zh-CN: 不可变显式控制参数修订标签，最多 128 字节；不是 row_revision',\n  `config_format` varbinary(64) NOT NULL COMMENT 'en: Immutable control-value document format identifier, at most 64 bytes; zh-CN: 不可变控制参数文档格式标识，最多 64 字节',\n  `fingerprint_profile` varbinary(64) NOT NULL COMMENT 'en: Immutable control canonicalization and comparison profile, at most 64 bytes; zh-CN: 不可变控制参数规范化及比较协议标识，最多 64 字节',\n  `config_sha256` varbinary(32) NOT NULL COMMENT 'en: Immutable 32-byte comparison digest; deliberately not unique; zh-CN: 不可变的 32 字节比较摘要；刻意不设唯一约束',\n  `config_document` longblob NOT NULL COMMENT 'en: Immutable canonical complete control JSON bytes, 1 byte to 1 MiB; no runtime handles; zh-CN: 不可变规范化完整控制 JSON 字节，1 字节至 1 MiB；不包含运行时句柄',\n  `enabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'en: Allows new selection of this exact control revision; initially disabled; zh-CN: 是否允许新选择此确定控制参数修订版本；初始禁用',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_workflow_mode_version_identity` (`workflow_mode_id`,`version_code`),\n  UNIQUE KEY `uq_workflow_mode_version_owner_id` (`workflow_mode_id`,`id`),\n  CONSTRAINT `fk_workflow_mode_version_mode` FOREIGN KEY (`workflow_mode_id`) REFERENCES `workflow_mode` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `ck_workflow_mode_version_code` CHECK ((length(`version_code`) between 1 and 128)),\n  CONSTRAINT `ck_workflow_mode_version_digest` CHECK ((length(`config_sha256`) = 32)),\n  CONSTRAINT `ck_workflow_mode_version_document` CHECK ((length(`config_document`) between 1 and 1048576)),\n  CONSTRAINT `ck_workflow_mode_version_enabled` CHECK ((`enabled` in (0,1))),\n  CONSTRAINT `ck_workflow_mode_version_format` CHECK ((length(`config_format`) between 1 and 64)),\n  CONSTRAINT `ck_workflow_mode_version_profile` CHECK ((length(`fingerprint_profile`) between 1 and 64)),\n  CONSTRAINT `ck_workflow_mode_version_revision` CHECK ((`row_revision` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Immutable complete control values for one named mode and explicit revision; zh-CN: 一个命名模式及显式修订版本的不可变完整控制参数'"
+      ]
+    },
+    {
+      "kind": "table",
+      "owner": "workflow_version",
+      "name": "workflow_version",
+      "attributes": [
+        "CREATE TABLE `workflow_version` (\n  `id` bigint NOT NULL AUTO_INCREMENT COMMENT 'en: Environment-local immutable row identity; zh-CN: 环境内不可变行标识',\n  `created_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Immutable creation time, UTC microsecond precision; zh-CN: 不可变创建时间，UTC 微秒精度',\n  `updated_at` datetime(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'en: Time of effective management change, UTC microsecond precision; zh-CN: 有效管理变更时间，UTC 微秒精度',\n  `row_revision` bigint NOT NULL DEFAULT '1' COMMENT 'en: Positive optimistic management revision, not a workflow or mode version; zh-CN: 正整数管理并发修订号，不是工作流版本或模式版本',\n  `workflow_definition_id` bigint NOT NULL COMMENT 'en: Immutable owning stable workflow definition; zh-CN: 不可变的所属稳定工作流定义',\n  `version_code` varbinary(128) NOT NULL COMMENT 'en: Immutable explicit version label, at most 128 bytes; never inferred from a hash; zh-CN: 不可变的显式版本标签，最多 128 字节；不由哈希推导',\n  `spec_format` varbinary(64) NOT NULL COMMENT 'en: Immutable executable-document format identifier, at most 64 bytes; zh-CN: 不可变执行文档格式标识，最多 64 字节',\n  `fingerprint_profile` varbinary(64) NOT NULL COMMENT 'en: Immutable canonicalization and conflict-comparison profile, at most 64 bytes; zh-CN: 不可变规范化及冲突比较协议标识，最多 64 字节',\n  `spec_sha256` varbinary(32) NOT NULL COMMENT 'en: Immutable 32-byte comparison digest; deliberately not unique; zh-CN: 不可变的 32 字节比较摘要；刻意不设唯一约束',\n  `spec_document` longblob NOT NULL COMMENT 'en: Immutable exact canonical executable JSON bytes, 1 byte to 4 MiB; zh-CN: 不可变规范化执行 JSON 精确字节，1 字节至 4 MiB',\n  `enabled` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'en: Allows new selection of this version; does not prove deployment or govern old-run recovery; zh-CN: 是否允许新选择此版本；不证明已部署，也不控制旧执行恢复',\n  `default_mode_id` bigint DEFAULT NULL COMMENT 'en: Default mode owned by this version; NULL means unconfigured, never latest; zh-CN: 本版本拥有的默认模式；NULL 表示未配置，绝不表示最新模式',\n  PRIMARY KEY (`id`),\n  UNIQUE KEY `uq_workflow_version_identity` (`workflow_definition_id`,`version_code`),\n  UNIQUE KEY `uq_workflow_version_owner_id` (`workflow_definition_id`,`id`),\n  KEY `fk_workflow_version_default_mode` (`id`,`default_mode_id`),\n  CONSTRAINT `fk_workflow_version_default_mode` FOREIGN KEY (`id`, `default_mode_id`) REFERENCES `workflow_mode` (`workflow_version_id`, `id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `fk_workflow_version_definition` FOREIGN KEY (`workflow_definition_id`) REFERENCES `workflow_definition` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT,\n  CONSTRAINT `ck_workflow_version_code` CHECK ((length(`version_code`) between 1 and 128)),\n  CONSTRAINT `ck_workflow_version_digest` CHECK ((length(`spec_sha256`) = 32)),\n  CONSTRAINT `ck_workflow_version_document` CHECK ((length(`spec_document`) between 1 and 4194304)),\n  CONSTRAINT `ck_workflow_version_enabled` CHECK ((`enabled` in (0,1))),\n  CONSTRAINT `ck_workflow_version_format` CHECK ((length(`spec_format`) between 1 and 64)),\n  CONSTRAINT `ck_workflow_version_profile` CHECK ((length(`fingerprint_profile`) between 1 and 64)),\n  CONSTRAINT `ck_workflow_version_revision` CHECK ((`row_revision` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin ROW_FORMAT=DYNAMIC COMMENT='en: Immutable executable declaration with separately mutable admission and default mode; zh-CN: 不可变执行声明，以及独立可变的准入状态和默认模式'"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "i18n_locale",
+      "name": "immutable_i18n_locale",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (CAST(OLD.code AS BINARY) <=> CAST(NEW.code AS BINARY)) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "i18n_locale",
+      "name": "protect_english_locale",
+      "attributes": [
+        "BEFORE",
+        "DELETE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF OLD.code = 'en' THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'English locale is required';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "i18n_resource",
+      "name": "immutable_i18n_resource",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (OLD.scope <=> NEW.scope)\n       OR NOT (OLD.code <=> NEW.code) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "i18n_text",
+      "name": "immutable_i18n_text",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (OLD.resource_id <=> NEW.resource_id)\n       OR NOT (OLD.locale_id <=> NEW.locale_id) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "workflow_category",
+      "name": "immutable_workflow_category",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (OLD.namespace <=> NEW.namespace)\n       OR NOT (OLD.code <=> NEW.code) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "workflow_definition",
+      "name": "immutable_workflow_definition",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (OLD.namespace <=> NEW.namespace)\n       OR NOT (OLD.code <=> NEW.code) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "workflow_definition_tag",
+      "name": "immutable_workflow_definition_tag",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.workflow_definition_id <=> NEW.workflow_definition_id)\n       OR NOT (OLD.tag_key <=> NEW.tag_key) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "workflow_mode",
+      "name": "immutable_workflow_mode",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (OLD.workflow_version_id <=> NEW.workflow_version_id)\n       OR NOT (OLD.code <=> NEW.code) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "workflow_mode_version",
+      "name": "immutable_workflow_mode_version",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (OLD.workflow_mode_id <=> NEW.workflow_mode_id)\n       OR NOT (OLD.version_code <=> NEW.version_code)\n       OR NOT (OLD.config_format <=> NEW.config_format)\n       OR NOT (OLD.fingerprint_profile <=> NEW.fingerprint_profile)\n       OR NOT (OLD.config_sha256 <=> NEW.config_sha256)\n       OR NOT (OLD.config_document <=> NEW.config_document) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    },
+    {
+      "kind": "trigger",
+      "owner": "workflow_version",
+      "name": "immutable_workflow_version",
+      "attributes": [
+        "BEFORE",
+        "UPDATE",
+        "ROW",
+        "1",
+        "BEGIN\n    IF NOT (OLD.id <=> NEW.id)\n       OR NOT (OLD.created_at <=> NEW.created_at)\n       OR NOT (OLD.workflow_definition_id <=> NEW.workflow_definition_id)\n       OR NOT (OLD.version_code <=> NEW.version_code)\n       OR NOT (OLD.spec_format <=> NEW.spec_format)\n       OR NOT (OLD.fingerprint_profile <=> NEW.fingerprint_profile)\n       OR NOT (OLD.spec_sha256 <=> NEW.spec_sha256)\n       OR NOT (OLD.spec_document <=> NEW.spec_document) THEN\n        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'immutable catalog field';\n    END IF;\nEND",
+        "NO_BACKSLASH_ESCAPES,STRICT_ALL_TABLES,NO_ENGINE_SUBSTITUTION",
+        "utf8mb4",
+        "utf8mb4_0900_bin"
+      ]
+    }
+  ],
+  "license": "GPL-3.0-or-later",
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ]
+}

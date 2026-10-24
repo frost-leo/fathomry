@@ -60,3 +60,5 @@ func (*Column) LogValue() slog.Value { return private{}.LogValue() }
 func (*Transaction) LogValue() slog.Value { return private{}.LogValue() }
 
 func (*Statement) LogValue() slog.Value { return private{}.LogValue() }
+
+func (*Session) LogValue() slog.Value { return private{}.LogValue() }

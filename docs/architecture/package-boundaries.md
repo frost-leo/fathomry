@@ -70,6 +70,26 @@ technical contracts/shared foundations, not public framework attribution, concre
 Adapters or business implementations. Composition
 may know selected concrete implementations. All dependencies must remain acyclic.
 
+The [control-schema packages](control-schema-assets.md) at
+`schema/fathomry/{postgresql,mysql}/v1` are pure read-only SQL/manifest assets.
+They depend only on the standard library, not Framework, Adapters or database
+SDKs. Their `schema/fathomry` parent is a test-only parity/qualification harness,
+not a forwarding production package or a migration runtime.
+
+The public `cmd/fathomry/v1` entry owns fixed command-tree composition. Its private
+`control.go` supplies project configuration and resource-scope wiring through the
+existing Resource and Adapter APIs; leaf presentation receives lazy operation
+callbacks, not a configuration loader or connection-pool shutdown authority.
+Schema helpers stay in the private command family; creation stays in its leaf.
+Neither is a public Framework capability or a replacement for workflow catalog
+business rules. Leaves never import the entry back.
+
+The generated project is the application host, with Fathomry compiled into the
+same executable as a library. Its own database settings declare deployment roles.
+Only that data declaration may name public provider Settings and offline Validate;
+resource construction stays in shared entry composition. Commands do not start
+the business host or manufacture a second application's database configuration.
+
 The HTTP capability vocabulary in `adapters/httpclient/v1` shares declared
 accounting and attribution only. The nethttp provider retains native request,
 context, stream and direct-connection semantics; later HTTP providers must not
@@ -332,7 +352,8 @@ mechanisms and concrete configsource Adapters now use those public foundations;
 strict public preparation is independent of Internal's engine. Framework common
 composition and configuration scenarios now reuse those public owners. The official
 [CLI](../reference/cmd/fathomry/interface.md) provides offline catalogs and project generation through
-private command packages; the former public CLI Go API remains withdrawn. No complete
+the fixed public `cmd/fathomry/v1` entry and private command packages. The former
+standalone `cli` package remains withdrawn. No complete
 application/Worker runtime is implied. No compatibility
 with the unreleased outer interfaces or earlier uint64 code draft is implied.
 

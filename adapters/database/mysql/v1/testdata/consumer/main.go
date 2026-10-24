@@ -178,6 +178,29 @@ func run() error {
 	if err := receive(); err != nil {
 		return err
 	}
+	session, err := client.Retain(ctx, database.SessionOptions{Timeout: 5 * time.Second})
+	if err != nil {
+		return err
+	}
+	if snapshot, _ := session.Receipt().Snapshot(); snapshot.Info().Resolved {
+		return errors.New("session acquisition fabricated final evidence")
+	}
+	if value, err := session.Query(ctx, "SELECT ?", "retained"); err != nil || !value.Complete() {
+		return errors.New("retained public query failed")
+	}
+	if err := receive(); err != nil {
+		return err
+	}
+	if err := session.Close(ctx); err != nil {
+		return err
+	}
+	snapshot, resolved := session.Receipt().Snapshot()
+	if value, present := snapshot.ValueCopy(); !resolved || !snapshot.Info().Released || !present || value.HasData() {
+		return errors.New("session retirement evidence incorrect")
+	}
+	if err := receive(); err != nil {
+		return err
+	}
 	if err := owner.Close(ctx); err != nil {
 		return err
 	}

@@ -165,6 +165,11 @@ another Scope.Close resumes it. Close reports known incomplete cleanup with
 The same scope remains the continuation handle. Multiple callers never cause
 concurrent cleanup callbacks for one binding.
 
+ShutdownComplete reports the scope's joined shutdown, independently of retained
+cleanup errors. Nil, zero and open empty scopes report false. All bindings being
+Closed is not sufficient while an Apply callback or watch receiver is still running.
+Use this completion fact when adapting cleanup; continue to use Close for errors.
+
 Close stops new input/borrows, cancels candidates and joins the actual receiver,
 selectors, construction, borrowers and cleanup. A completed scope can still return
 retained completed-cleanup errors. Status.CleanupErr is the last failure occurrence,

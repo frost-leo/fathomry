@@ -44,7 +44,7 @@ func main() {
 	}
 }
 func execute(ctx context.Context, args []string, output, diagnostic io.Writer) error {
-	definition := cli.Project{Name: {{quote .Name}}}
+	definition := cli.Project{Name: {{quote .Name}}, Control: bootstrap.Control}
 	if handled, err := cli.Handle(ctx, args, definition, cli.Options{
 		Input: os.Stdin, Output: output, ErrorOutput: diagnostic, Language: os.Getenv("FATHOMRY_LANG"),
 	}); handled {

@@ -267,6 +267,22 @@ func (scope *Scope) Close(ctx context.Context) error {
 	}
 }
 
+// ShutdownComplete reports that shutdown joined all constructors, borrowers,
+// cleanup callbacks, Apply work and the watch receiver. It is false for nil,
+// zero or still-open scopes, including empty scopes. Completion does not erase
+// cleanup errors; Close remains the operation that reports retained failures.
+func (scope *Scope) ShutdownComplete() bool {
+	if scope == nil || scope.state == nil {
+		return false
+	}
+	select {
+	case <-scope.state.done:
+		return true
+	default:
+		return false
+	}
+}
+
 func (state *scopeState) closeResult(entries []managed) error {
 	var causes []error
 	for _, entry := range entries {

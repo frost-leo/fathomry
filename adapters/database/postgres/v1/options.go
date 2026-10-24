@@ -34,9 +34,11 @@ type Dependencies struct {
 }
 
 const (
-	ProviderID            = native.ProviderID
-	MaxSQLBytes           = native.MaxSQLBytes
-	MaxArguments          = native.MaxArguments
+	ProviderID   = native.ProviderID
+	MaxSQLBytes  = native.MaxSQLBytes
+	MaxArguments = native.MaxArguments
+	// MaxArgumentBytes retains the 1 MiB default. Settings.MaxArgumentBytes
+	// selects the effective per-source encoded-argument budget.
 	MaxArgumentBytes      = native.MaxArgumentBytes
 	MaxColumns            = native.MaxColumns
 	MaxPreparedStatements = native.MaxPreparedStatements
@@ -72,29 +74,38 @@ type Settings struct {
 	MaxResultBytes  int           `json:"max_result_bytes" mapstructure:"max_result_bytes"`
 	ParserHome      string        `json:"parser_home" mapstructure:"parser_home"`
 	MaxMessageBytes int           `json:"max_message_bytes" mapstructure:"max_message_bytes"`
+
+	// MaxArgumentBytes counts aggregate encoded arguments, including bytea hex
+	// expansion. Zero selects 1 MiB; allowed 1 KiB–16 MiB. Recommend accounts for it.
+	MaxArgumentBytes int `json:"max_argument_bytes" mapstructure:"max_argument_bytes"`
+	// ResolveDNS explicitly permits ASCII Address hostnames and deployment DNS/hosts.
+	// False preserves literal-IP-only admission. TLS ServerName remains explicit.
+	ResolveDNS bool `json:"resolve_dns" mapstructure:"resolve_dns"`
 }
 
 func options(value Settings) native.OptionsV1 {
 	return native.OptionsV1{
-		Name:            value.Name,
-		Address:         value.Address,
-		Port:            value.Port,
-		Database:        value.Database,
-		User:            value.User,
-		Password:        value.Password,
-		RootCAPEM:       value.RootCAPEM,
-		ServerName:      value.ServerName,
-		Plaintext:       value.Plaintext,
-		MaxConnections:  value.MaxConnections,
-		MaxIdleTime:     value.MaxIdleTime,
-		MaxLifetime:     value.MaxLifetime,
-		QueuedCalls:     value.QueuedCalls,
-		Timeout:         value.Timeout,
-		CloseTimeout:    value.CloseTimeout,
-		MaxRows:         value.MaxRows,
-		MaxResultBytes:  value.MaxResultBytes,
-		ParserHome:      value.ParserHome,
-		MaxMessageBytes: value.MaxMessageBytes,
+		Name:             value.Name,
+		Address:          value.Address,
+		Port:             value.Port,
+		Database:         value.Database,
+		User:             value.User,
+		Password:         value.Password,
+		RootCAPEM:        value.RootCAPEM,
+		ServerName:       value.ServerName,
+		Plaintext:        value.Plaintext,
+		MaxConnections:   value.MaxConnections,
+		MaxIdleTime:      value.MaxIdleTime,
+		MaxLifetime:      value.MaxLifetime,
+		QueuedCalls:      value.QueuedCalls,
+		Timeout:          value.Timeout,
+		CloseTimeout:     value.CloseTimeout,
+		MaxRows:          value.MaxRows,
+		MaxResultBytes:   value.MaxResultBytes,
+		ParserHome:       value.ParserHome,
+		MaxMessageBytes:  value.MaxMessageBytes,
+		MaxArgumentBytes: value.MaxArgumentBytes,
+		ResolveDNS:       value.ResolveDNS,
 	}
 }
 
