@@ -57,6 +57,18 @@ func TestExport(t *testing.T) {
 	if err != nil || !report.Passed || report.Workflows != 1 || report.Modes != 2 {
 		t.Fatal(report, err)
 	}
+	contents, err := bundle.ContentsCopy()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := wf.ParseContents(context.Background(), contents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := restored.BytesCopy()
+	if err != nil || !bytes.Equal(raw, output.Bytes()) {
+		t.Fatal("public content reconstruction changed the portable bundle", err)
+	}
 	if err := export(context.Background(), shortWriter{}); !errors.Is(err, io.ErrShortWrite) {
 		t.Fatal(err)
 	}

@@ -25,9 +25,9 @@
   "messages": [
     {
       "id": "fathomry.workflow_commands.root",
-      "source": "cb52ecd61cebca71d59635e7d9aa2a794658639a1f73be7222736ad2279622e0",
+      "source": "d57cceab22628f314bd23f773eaa19c46c66f16d690e017f54cbcadb62bdfbf2",
       "forms": {
-        "other": "检查可移植工作流声明。"
+        "other": "检查并发布项目工作流声明。"
       }
     }
   ]

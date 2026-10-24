@@ -114,6 +114,13 @@ locale versus missing translation. Rendered.Locale is the actual resource langua
 
 ## Runtime presentation without locale parameters
 
+NormalizeLocale is a narrow offline seam for consumers with their own matching
+policy, such as database-backed catalog text. It uses the same request parser as
+Resolve, rejects empty/invalid/und/private-use inputs and retains supported Unicode
+extensions in canonical output. It selects no resource, supplies no default and
+changes no process-wide locale. Database exact-match/English fallback is owned by
+the catalog consumer, not the static resource matcher's negotiation policy.
+
 Include the component-owned `Preferences` type at `/application/i18n` in the
 project's own settings root. Locale is required and is one BCP 47 tag, not an
 Accept-Language list. The data has JSON/YAML/mapstructure locale tags; Settings

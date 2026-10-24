@@ -22,17 +22,21 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../README.md) / Public package reference
 
 **Audience:** independent project authors and official CLI maintainers.
-**Status:** implemented fixed command entry and native build gate; no Worker,
-Temporal admission, remote registration, deployment or generic plugin SDK.
+**Status:** fixed command entry, explicit schema operations, project catalog
+registration and native build gate are implemented; no Worker, Temporal admission,
+deployment or generic plugin SDK.
 **Package:** `github.com/frost-leo/fathomry/cmd/fathomry/v1` (package `cli`).
 
 ## One command implementation
 
 The official executable calls `Run` with its explicit full error/message catalog.
 A generated project's root main calls `Handle` before its existing application
-startup, supplying a `Project` with its name and workflow declaration set.
+startup, supplying a `Project` with its name, workflow declaration set and optional
+lazy `Control` configuration resolver.
 Known commands use the same private engine and handlers, including
-`project/new`, `project/build`, and `workflow/vet`. No per-command public shim,
+`project/new`, `project/build`, `workflow/vet`, `workflow/register`,
+`workflow/list`, `workflow/show`, `workflow/compare`, and separate
+`schema/status`, `schema/plan`, `schema/apply` leaf packages. No per-command public shim,
 second parser or separate management executable exists.
 
 `Handle` returns false for no arguments or an unrecognized first word, without
@@ -42,6 +46,49 @@ the application must return immediately, including on error. Known root commands
 The versioned `--fathomry-project=v1` argument is an offline machine protocol,
 not a business startup option. Unknown protocol versions fail closed.
 
+## Project workflow checks
+
+`Project.Workflows` is the combined registry: each `cli.Workflow` contains a
+`declaration.Declaration` for one Namespace/code (possibly several versions) and
+optional `*catalog.Metadata`. Declare each logical workflow once. A nil metadata
+pointer means declaration-only, not catalog publication readiness. The legacy
+`Project.Declarations` form remains supported; supplying both forms rejects.
+Each form admits at most 16 inputs and retains existing declaration/aggregate
+budgets. The new form counts logical registration units, while a legacy declaration
+input can contain several workflows.
+
+On the project executable, `workflow vet` checks all registrations. `--namespace`
+and `--workflow` narrow the set. `--version` requires Workflow, `--mode` requires
+Version, and `--revision` requires Mode. Unspecified versions/mode revisions mean
+all selected descendants, never latest. A mode check retains its parent specification.
+Ambiguous Namespace selection, no match, explicit empty selectors and selectors
+combined with Bundle paths reject. Standalone CLI vet still requires explicit files.
+
+Project results use `data.format=fathomry.project-workflow-check/v1`, report the
+selection and full_project flag, total/selected/omitted workflow counts and
+per-workflow declaration and metadata outcomes. Metadata is not_supplied,
+not_checked, passed or failed; absence never claims metadata validation. Diagnostic
+identities identify versions/modes; paths do not expose declaration values.
+One failed workflow does not suppress checks for other valid registry entries.
+Malformed registry structure and operation/input-budget failures remain errors.
+
+Empty project vet is an explicit failed zero-work check. Configuration-only build
+remains valid. Build's offline inspection always validates all registrations and
+supplied metadata before emitting bundles; it accepts no selection parameter.
+
+One private selected-analysis pass produces the checked declarations and prepared
+metadata. Report-only vet does not retain build/publication outputs; registration
+and comparison reuse the prepared snapshots. Build export preserves original-source
+order and grouping. Mixed legacy sources still require full-source admission even
+when their logical groups pass separately, so grouping cannot bypass the per-source
+bundle envelope. No cache or second validator is introduced.
+Selected success cannot authorize publishing an otherwise invalid artifact.
+The inspection wire format remains v1; metadata admission happens in the project's
+shared entry before export. This is not an attestation of arbitrary project code.
+
+No project vet, metadata preparation, help or build path invokes Control or Boot.
+`go run` still compiles the project; selectors do not hide Go compiler errors.
+
 `Options` borrows streams, context-independent display preferences, and optional
 prepared catalogs. All three streams are required. Empty language means English.
 A nil Errors/Messages pair selects core plus fixed-command metadata; supplying only
@@ -49,6 +96,148 @@ one catalog is invalid. `Components` supplies command metadata for explicit wide
 catalog assembly. The public entry imports no concrete Adapter catalog, so using
 it does not compile every Adapter into the project. This is not arbitrary command
 registration, a service locator, or an application host.
+
+## Register project workflows
+
+`./project workflow register` selects all project workflows by default. The exact
+namespace/workflow/version/mode/revision selectors follow vet's rules, including
+parent retention and ambiguity refusal. No Bundle input, project scanning or
+second workflow list is introduced. Declaration-only entries need catalog Metadata
+before publication; an empty selection/project is an error, never a successful no-op.
+
+All selected declarations and metadata are checked and copied before Control runs
+or any database resource is acquired. One invalid selected workflow prevents every
+database write. Selecting a valid subset does not qualify omitted workflows or
+weaken full-project build inspection.
+
+The separate register leaf owns flags/localization/presentation; shared workflow
+preflight remains offline. Private control.go composes the existing Resource,
+Adapter and catalog API, not another database owner. Schema/create do not depend
+on catalog execution. Registration checks current schema and never auto-installs it.
+
+The JSON envelope uses command workflow.register and
+data.format=fathomry.project-publication/v1. It includes scope, total/selected/omitted,
+checked/attempted/complete, and bounded per-workflow diagnostics/results. A missing
+per-workflow result means unattempted, not successful. Full vet remains available
+for detailed declaration diagnostics; executable documents and metadata text/tags
+are not emitted in registration reports.
+
+Each workflow aggregate is one transaction, not the whole project. A later failure
+does not roll back earlier acknowledged aggregates; the batch stops and reports
+partial or unknown with individual outcomes intact. Lost COMMIT acknowledgement
+stops the batch and never triggers automatic replay. The
+[catalog contract](../../../framework/workflow/catalog/v1/interface.md)
+defines native acknowledgement, committed counts and retained cleanup ownership.
+
+Known effects use the existing mutation-output custody path even on error. A failed
+stdout write is not rollback or delivery success: ExecutionError.ReportCopy retains
+the bounded JSON report, and its Close/CleanupComplete preserve overall invocation
+cleanup ownership. Catalog result cleanup concerns its transaction; source/runtime
+cleanup remains a separate invocation responsibility.
+
+## Runtime control-database binding
+
+`./project workflow compare` compares all locally authored workflows with stored
+state. The namespace/workflow/version/mode/revision selectors match vet/register;
+all selected declarations/metadata pass the same offline preflight before Control.
+It never opens a separate registry, reads an ambient Bundle, or publishes data.
+
+The existing CLI envelope contains data.format=fathomry.project-comparison/v1,
+selected/omitted counts and per-workflow validation/comparison results. Completed
+missing/different selections emit the report and return the existing failed-check
+policy (nonzero), while corrupt/unsupported/unavailable storage returns an execution
+error rather than a completed non-match. Ordinary read/check output gating applies.
+Workflows are independent read observations, not one cross-project snapshot.
+
+`./project workflow list --namespace NS` lists definitions; --workflow lists
+versions, --version lists modes and --mode lists revisions. --code, --category
+(definitions only) and explicit --enabled/--enabled=false are exact filters.
+--limit accepts 1..64 and --cursor resumes the same owner/filter/locale scope.
+
+`./project workflow show --namespace NS --workflow CODE` reads a definition;
+version/mode/revision select exact descendants. --document opts into verified
+canonical bytes for a version or complete mode revision, never an inferred default.
+JSON canonical document fields use base64. --locale chooses database display text,
+independently of global --lang for CLI messages.
+
+These read commands require Control but do not require local declarations or
+registration metadata: a restarted configuration-only application can inspect the
+stored catalog. Shape/locale validation precedes Control. Help remains offline.
+No source, pool or schema policy is constructed in either leaf; ordinary read-output
+gating applies, including refusal to emit successful data after cleanup failure.
+
+`Project.Control` returns validated data and released configuration records,
+never a client or a project-owned runtime. Direct commands and commands preceded
+by `--lang`/`--output` retain the same Project. Help, vet, build and machine
+inspection never invoke this resolver. Standalone online commands without it
+fail explicitly; there is no ambient project scan or implicit target discovery.
+
+Private `v1/control.go` owns this entry composition. It registers fixed target
+and, only for creation, administrative Handles in the existing Resource scope.
+Adapter Using clients borrow those instances; source construction is confined to
+binding Build callbacks and source Release callbacks stay with Resource.
+Schema, creation and catalog execution use these clients, not direct Owner.Client handles.
+Leaf presentation receives typed operation callbacks and no pool shutdown authority.
+There is no `control` command, parallel database manager or command-plugin API.
+
+Common database diagnostics, operation bounds and physical-target admission belong
+to the existing private `internal/command/database` package. Its namespace does
+not import a command executor; this entry attaches the create leaf, just as it
+attaches schema/workflow leaves. Creation does not depend on the schema executor.
+Each operation supplies its own workspace charge. Workflow publication/comparison
+files own batch sequencing, partial/unknown outcomes and aggregate reports through
+borrowed operation callbacks; this entry retains resource cleanup and final output
+gating rather than duplicating batch policy.
+
+Generated `internal/setting/database.go` declares `database.fathomry`; it contains
+no deployed values. `internal/bootstrap/control.go` performs one finite Boot
+using existing project environment/location inputs. `setting.go` remains the
+aggregate. The project-owned `setting.FathomryDatabase` specifies exactly one
+dialect/provider database and, for PostgreSQL only, a physical schema. Its data
+declaration uses public provider Settings and offline Validate only, never clients,
+pool constructors or private packages. The finite Control callback copies these
+values into the in-process `DatabaseConfiguration` handoff, with at most 128
+released/resolved configuration records. The handoff itself is not a durable DTO.
+Credentials and addresses belong in protected runtime configuration, not Go source.
+
+The generated project is the application host; Fathomry is a library compiled into
+the same executable, not a second database service. CLI and application paths use
+the project's configuration model but acquire only the resources they need. Separate
+process invocations do not share connection pools or start a Worker for migration.
+
+`./project schema status|plan|apply` uses that binding. Status/plan are read-only;
+apply explicitly installs a positively empty target or verifies a current no-op.
+Neither creates a physical database/schema. Missing/unmanaged/incomplete targets
+are not adopted. Resource construction and normal project startup never auto-migrate.
+
+`./project database create --admin-config FILE` is the separate explicit
+[physical creation operation](../internal/command/database/create/interface.md).
+It uses the same selected endpoint and separate administrative authentication,
+then verifies access with the target role. It does not install tables, grant
+privileges, adopt an existing database or replay an unknown mutation.
+
+Schema apply has a separate mutation-output path. Known effect/state can be
+emitted alongside execution/cleanup errors; ordinary offline Result gating remains
+unchanged. Failed output may be partial and is not retried. A returned
+`*ExecutionError` (use `errors.As`) retains a detached JSON `ReportCopy`, original
+failure identity/causes, and `Close(ctx)`/`CleanupComplete()` for local cleanup
+continuation. Completed cleanup never rewrites original effect or error evidence.
+The JSON diagnostic adds bounded `mutation.effect`/`mutation.state` machine facts.
+
+For build-once/deploy-many use, reuse the same supported-platform artifact and vary
+external configuration. Runtime schema commands require neither Go nor source.
+A compatible pure-Go project can request `CGO_ENABLED=0 go run . build`; the
+existing actual-artifact inspection gate still runs. This is not forced on projects
+that require native libraries. Such projects need an explicit runtime-library
+baseline or image. Cross-platform variants need separate native qualification;
+containerization does not erase OS, architecture or ABI constraints.
+
+For PostgreSQL, explicitly align the container's HOME with the selected
+`parser_home` authorization. The directory need not exist or be writable; for
+example, a scratch image can use `HOME=/nonexistent` and matching runtime
+`parser_home`. Do not assume that requesting an empty HOME prevents the container
+runtime from supplying a default. Mismatch is an environment refusal, not a reason
+to disable the provider's ambient-input protections.
 
 ## Build a project
 

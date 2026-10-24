@@ -69,3 +69,4 @@ func (*Transaction) LogValue() slog.Value { return slog.StringValue("mysql[restr
 func (*Result) LogValue() slog.Value      { return slog.StringValue("mysql[restricted]") }
 func (*Row) LogValue() slog.Value         { return slog.StringValue("mysql[restricted]") }
 func (*Statement) LogValue() slog.Value   { return slog.StringValue("mysql[restricted]") }
+func (*Session) LogValue() slog.Value     { return slog.StringValue("mysql[restricted]") }

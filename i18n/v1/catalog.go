@@ -213,6 +213,18 @@ func (catalog *Catalog) Resolve(id, locale string) (Selection, error) {
 	return Selection{item: selected, info: info}, nil
 }
 
+// NormalizeLocale validates a request locale using the same policy as Resolve
+// and returns its canonical BCP 47 spelling. Empty input is invalid; callers own
+// their default. Supported Unicode extensions are retained, not negotiated away.
+// It performs no resource lookup and does not change process-wide locale state.
+func NormalizeLocale(input string) (string, error) {
+	tag, err := parseLocale(input, false)
+	if err != nil {
+		return "", err
+	}
+	return tag.String(), nil
+}
+
 func parseLocale(input string, resource bool) (language.Tag, error) {
 	if len(input) == 0 || len(input) > 128 {
 		return language.Tag{}, reject(ErrLocale)

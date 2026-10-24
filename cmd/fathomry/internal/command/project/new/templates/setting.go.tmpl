@@ -19,10 +19,15 @@
 
 package setting
 
-import "context"
+import (
+ "context"
+ "fmt"
+ "log/slog"
+)
 
 type Settings struct {
 	Application Application `json:"application"`
+	Database Database `json:"database"`
 }
 
 func Defaults() Settings { return Settings{Application: ApplicationDefaults()} }
@@ -30,5 +35,13 @@ func Validate(ctx context.Context, value Settings) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	return value.Application.Validate()
+	if err := value.Application.Validate(); err != nil {
+		return err
+	}
+	return value.Database.Validate()
 }
+
+// Settings can contain secrets. Explicit JSON remains sensitive configuration;
+// ordinary formatting/logging emits no configuration values.
+func (Settings) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("setting.Settings")) }
+func (Settings) LogValue() slog.Value { return slog.StringValue("setting.Settings") }

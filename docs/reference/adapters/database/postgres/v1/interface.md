@@ -70,7 +70,8 @@ does not forward private raw overlays with different explicit-zero semantics.
 | Fields | Contract |
 | --- | --- |
 | Name | Required non-secret 1–64-byte lowercase ASCII identity: letters, digits, dot, underscore or hyphen |
-| Address, Port | One explicit non-unspecified literal IP and nonzero uint16 port; no DNS, Unix socket, multi-host or failover |
+| Address, Port | One non-unspecified literal IP and nonzero uint16 port; ASCII hostname only with ResolveDNS; no Unix socket or multi-host list |
+| ResolveDNS | Default false; true authorizes deployment DNS/hosts lookup for Address without changing explicit TLS identity; [hostname/dial bounds](../../../../internal/database/endpoint/interface.md) |
 | Database, User, Password | Required UTF-8 without NUL; at most 256 / 256 / 4096 bytes |
 | RootCAPEM, ServerName, Plaintext | Explicit PEM trust up to 64 KiB and verified identity up to 256 bytes; plaintext is isolated-test opt-in and forbids TLS inputs |
 | ParserHome | Explicit authorized home metadata-probe base matching the process home; see environment constraints below |
@@ -81,7 +82,8 @@ does not forward private raw overlays with different explicit-zero semantics.
 | CloseTimeout | Zero selects 5 s; 1 ms–30 s for statement/savepoint/connection cleanup, not a proof of completed release |
 | MaxRows | Zero selects 1024; allowed 1–65536 |
 | MaxResultBytes | Zero selects 4 MiB; allowed 1 KiB–16 MiB retained cell/name bytes |
-| MaxMessageBytes | Zero selects 1 MiB; allowed 1 KiB–4 MiB per incoming protocol message body |
+| MaxMessageBytes | Zero selects 1 MiB; allowed 1 KiB–16 MiB per incoming protocol message body |
+| MaxArgumentBytes | Zero selects 1 MiB; allowed 1 KiB–16 MiB aggregate encoded arguments |
 
 `Validate` checks settings without pool construction or service I/O. `Open`
 also checks the current pgx parser environment: nonempty PG-prefixed variables
@@ -157,8 +159,10 @@ commit its parent. Lost commit response remains FinalizationUnknown; an aborted
 PostgreSQL COMMIT can instead be CommitRolledBack, preserving
 `pgx.ErrTxCommitRollback`.
 
-SQL is at most 64 KiB, at most 128 parameters with a 1 MiB encoding reservation,
-and at most 64 columns. Basic scalar Go values, finite floats, `time.Time`,
+SQL is at most 64 KiB, at most 128 parameters with a configurable encoding reservation
+(default 1 MiB), and at most 64 columns. The `MaxArgumentBytes` constant retains
+the default; `Settings.MaxArgumentBytes` is the effective per-source choice.
+`Recommend` derives its work charge without changing old defaults. Basic scalar Go values, finite floats, `time.Time`,
 strings and byte slices are supported; bytea expansion counts toward the bound.
 Arbitrary pointers/structs, codecs, Valuer callbacks and raw SDK options are not
 admitted. Streaming COPY responses are refused after dispatch; this does not
@@ -166,6 +170,14 @@ prove SQL was never sent or sandbox server-file/program COPY or external effects
 PostgreSQL json.RawMessage is not silently treated as its
 underlying unnamed byte slice. This is not a SQL authorization sandbox: roles
 and composition authorize statements, DDL, extensions and external effects.
+
+Argument, protocol-message and retained-result limits are independent. A 4 MiB
+bytea document needs more than 8 MiB once hex and row framing are included; opt in
+to sufficient limits and the corresponding recommended policy. Isolated plaintext
+PostgreSQL 18.6 tests cover an exactly 4 MiB valid declaration through ordinary,
+prepared and transaction calls, with rejecting default/message/result controls.
+Protocol-size refusal preserves `pgproto3.ExceededMaxBodyLenErr` under `ErrQuery`,
+not a new normalized error identity. This is not a production/RSS capacity claim.
 
 ## Results, errors and evidence
 

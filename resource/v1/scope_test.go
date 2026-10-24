@@ -33,6 +33,94 @@ import (
 	"github.com/frost-leo/fathomry/settings/v1"
 )
 
+func TestScopeShutdownComplete(t *testing.T) {
+	if (*Scope)(nil).ShutdownComplete() || new(Scope).ShutdownComplete() {
+		t.Fatal("invalid scope claimed completion")
+	}
+	empty := testScope(t, Options{})
+	if empty.ShutdownComplete() {
+		t.Fatal("open empty scope claimed shutdown")
+	}
+	if err := empty.Close(context.Background()); err != nil || !empty.ShutdownComplete() {
+		t.Fatal("empty shutdown was not joined", err)
+	}
+
+	t.Run("borrow_and_cleanup", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			scope, err := New(context.Background(), Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var attempts atomic.Int32
+			cause := errors.New("completed-cleanup-error")
+			binding := testBinding("source", Fixed)
+			binding.Build = func(context.Context, int) (*Instance[int], error) {
+				return &Instance[int]{Value: 1, Release: func(context.Context) ReleaseResult {
+					return ReleaseResult{Complete: attempts.Add(1) > 1, Err: cause}
+				}}, nil
+			}
+			ref, err := Bind(scope, binding)
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitTest(t, applyTest(t, scope, 1))
+			lease, err := ref.Acquire(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			short, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+			defer cancel()
+			if err := scope.Close(short); !errors.Is(err, context.DeadlineExceeded) || scope.ShutdownComplete() || attempts.Load() != 0 {
+				t.Fatal("borrowed source was reported released", err)
+			}
+			if err := lease.Release(); err != nil {
+				t.Fatal(err)
+			}
+			synctest.Wait()
+			if scope.ShutdownComplete() || attempts.Load() != 1 {
+				t.Fatal("incomplete native cleanup claimed completion")
+			}
+			if err := scope.Close(context.Background()); !errors.Is(err, cause) || !scope.ShutdownComplete() {
+				t.Fatal("completion was confused with a clean result", err)
+			}
+		})
+	})
+	t.Run("active_selection", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			scope := testScope(t, Options{})
+			entered, release := make(chan struct{}), make(chan struct{})
+			binding := testBinding("source", Fixed)
+			binding.Select = func(settings.View) (int, error) {
+				close(entered)
+				<-release
+				return 1, nil
+			}
+			if _, err := Bind(scope, binding); err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() { _, err := scope.Apply(context.Background(), testView(1)); done <- err }()
+			<-entered
+			short, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+			defer cancel()
+			if err := scope.Close(short); !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatal(err)
+			}
+			bindings, err := scope.Inspect()
+			if err != nil || len(bindings) != 1 || !bindings[0].Closed || scope.ShutdownComplete() {
+				t.Fatal("closed bindings hid in-flight selection", err)
+			}
+			close(release)
+			if err := <-done; !errors.Is(err, ErrClosed) {
+				t.Fatal(err)
+			}
+			if err := scope.Close(context.Background()); err != nil || !scope.ShutdownComplete() {
+				t.Fatal("selection was not joined", err)
+			}
+		})
+	})
+}
+
 func FuzzLifecycleFailures(f *testing.F) {
 	f.Add([]byte{1, 6, 12, 3, 18, 1, 4, 2})
 	f.Add([]byte{0, 1, 1, 4, 5, 2, 2})

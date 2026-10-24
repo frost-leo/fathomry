@@ -73,7 +73,7 @@ func TestComposedSourceProfileAndIndependentReception(t *testing.T) {
 			}
 		},
 	}})
-	conformance.Facade(t, fixture.db, "Query", "Exec", "Prepare", "Begin", "Ping", "Stats", "Profile", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
+	conformance.Facade(t, fixture.db, "Query", "Exec", "Prepare", "Begin", "Retain", "Ping", "Stats", "Profile", "Format", "LogValue", "MarshalJSON", "UnmarshalJSON")
 	conformance.Runtime(t, fixture.db, new(Database), "credential-canary")
 	conformance.Runtime(t, options, new(OptionsV1), "credential-canary")
 }

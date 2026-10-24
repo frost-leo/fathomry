@@ -36,6 +36,7 @@ import (
 	"testing"
 	"time"
 
+	sdk "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 )
@@ -163,17 +164,28 @@ func TestUnspecifiedAddressRefusalAndNativeCancellationCounterexample(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Deliberately bypass the validated input boundary to reproduce why the
-	// unspecified dial target cannot authorize cancellation to its resolved peer.
 	config.Host = options.Address
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	native, err := connect(ctx, config, peer.roots)
+	if guarded, err := connect(ctx, config, peer.roots); guarded != nil || err == nil {
+		if guarded != nil {
+			_ = guarded.close(ctx)
+		}
+		t.Fatal("socket guard admitted an unspecified destination")
+	}
+	// Disable both input and socket guards only for the historical counterexample.
+	// Its address fence must still reject cancellation to the resolved peer.
+	wire := newWireScope(net.JoinHostPort(config.Host, strconv.Itoa(int(config.Port))))
+	wire.dialer = (&net.Dialer{}).DialContext
+	defer wire.close()
+	config.DialFunc = wire.dial
+	config.LookupFunc = func(_ context.Context, host string) ([]string, error) { return []string{host}, nil }
+	native, err := sdk.ConnectConfig(ctx, config)
 	if err != nil {
 		t.Fatal("counterexample could not enter native connection", err)
 	}
-	defer native.close(ctx)
-	if err := native.native.PgConn().CancelRequest(ctx); !errors.Is(err, ErrState) {
+	defer func() { _ = native.Close(ctx); <-native.PgConn().CleanupDone() }()
+	if err := native.PgConn().CancelRequest(ctx); !errors.Is(err, ErrState) {
 		t.Fatal("defective unspecified destination no longer distinguishes the cancellation-address mismatch")
 	}
 }

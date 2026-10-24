@@ -161,7 +161,7 @@ func (tx *Transaction) Query(ctx context.Context, id fault.Correlation, query st
 	if tx.ended || tx.lifetime.Err() != nil {
 		return nil, failure(ErrState, "transaction", tx.lifetime.Err())
 	}
-	return tx.db.statement(ctx, id, query, args, true, tx, nil)
+	return tx.db.statement(ctx, id, query, args, true, tx, nil, nil)
 }
 func (tx *Transaction) Exec(ctx context.Context, id fault.Correlation, query string, args ...any) (*invocation.Receipt[Result], error) {
 	if err := tx.lock(); err != nil {
@@ -171,7 +171,7 @@ func (tx *Transaction) Exec(ctx context.Context, id fault.Correlation, query str
 	if tx.ended || tx.lifetime.Err() != nil {
 		return nil, failure(ErrState, "transaction", tx.lifetime.Err())
 	}
-	return tx.db.statement(ctx, id, query, args, false, tx, nil)
+	return tx.db.statement(ctx, id, query, args, false, tx, nil, nil)
 }
 func (tx *Transaction) Commit(ctx context.Context) (*invocation.Receipt[Result], error) {
 	return tx.finish(ctx, true)

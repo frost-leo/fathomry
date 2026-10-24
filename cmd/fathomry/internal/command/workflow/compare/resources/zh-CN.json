@@ -1,0 +1,125 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_compare",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.workflow_compare.command",
+      "source": "80d1e4ec87fda6a5dc229f5ef79b70e25cf5951a996891d9abd5ee758d288d08",
+      "forms": {
+        "other": "比较选中的本地声明、英文元数据与目录存储状态。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.namespace",
+      "source": "773d3a3bcf3ef774b15a546f3896bd8193567b6b6e687a2b7ec58ea80d51aefa",
+      "forms": {
+        "other": "选择精确匹配的工作流命名空间。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.workflow",
+      "source": "1d7cdf2e4ddba347db0c4d75b3bd7a3de0161bb3be02fa6d5707d7b0fc5df630",
+      "forms": {
+        "other": "选择精确工作流；默认比较整个项目。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.version",
+      "source": "875aefff25ce1bae2f05852dac1584f5b5d969f0489cdfa354ff8a25649ccc0e",
+      "forms": {
+        "other": "选择工作流中的精确版本。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.mode",
+      "source": "1014da290a54b41de6ecae1be62bfcefa8c151900bc9bd6c6ecb7ad1b6378640",
+      "forms": {
+        "other": "选择版本中的精确模式。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.revision",
+      "source": "4daff88f39795d5fffe6f5d35ad93138b0895ede8621d02e18f7857b6eefe818",
+      "forms": {
+        "other": "选择模式中的精确修订。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.compared",
+      "source": "3fa51306312b97d40a07874b13c3e070d78992f61414dc6de0887a5104c79899",
+      "forms": {
+        "other": "已比较"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.omitted",
+      "source": "34bfbc5d174cec44800a6283165ecc29324fa8ba049edcdf268ad0b75f831047",
+      "forms": {
+        "other": "未选择"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.equal",
+      "source": "84b2a354972601278a0b8edce918d4850ab591f816e6424debba82f0951cea80",
+      "forms": {
+        "other": "与所选声明及元数据一致"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.different",
+      "source": "333b5fe5ec9c2e78cd80ed567d36d0ddffbe24ef783cc64a850f96a4ab813742",
+      "forms": {
+        "other": "与所选发布内容不一致"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.missing",
+      "source": "629524cb41c3a7ee4798e2c87408aede06cd5c493ef867f360c83dbf111ee741",
+      "forms": {
+        "other": "缺失"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.changed",
+      "source": "a4f1ef17834f17ef949c89cc2d40b99fb0d5527548efa10ffda890d00dda869c",
+      "forms": {
+        "other": "不同"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.preflight",
+      "source": "dcff3a3fddc40afca008d5bc4bdac63eee5f7cd6db05e8587d67bc0a53a3ac03",
+      "forms": {
+        "other": "请先对所选范围运行 workflow vet 并提供发布元数据；本次未执行数据库比较。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_compare.truncated",
+      "source": "b8e93e7c27ef3ba806983f9e62833e02a7f7a6e9a27e700b27f680b7bfc6d422",
+      "forms": {
+        "other": "其余差异已计数，但未逐项显示。"
+      }
+    }
+  ]
+}

@@ -240,7 +240,7 @@ func TestResourceFrameworkComposition(t *testing.T) {
 	firstPeer, secondPeer := newPeer(t, true, false), newPeer(t, true, false)
 	first, second := firstPeer.options(), secondPeer.options()
 	first.Name, second.Name = "first", "second"
-	first.MaxConnections, second.MaxConnections = 2, 2
+	first.MaxConnections, second.MaxConnections = 3, 3
 	policy, err := Recommend(first)
 	if err != nil {
 		t.Fatal(err)
@@ -394,7 +394,11 @@ func TestResourceFrameworkComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status, _ := followRef.Inspect(); status.Borrowers != 2 {
+	retained, err := follow.Retain(context.Background(), SessionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := followRef.Inspect(); status.Borrowers != 3 {
 		t.Fatal("retained roots did not each pin their generation")
 	}
 	if err := apply(second); err != nil {
@@ -437,6 +441,16 @@ func TestResourceFrameworkComposition(t *testing.T) {
 		t.Fatal("one family released another family's lease")
 	}
 	if _, err := statement.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if old.ShutdownComplete() {
+		t.Fatal("other retained families released the session's generation")
+	}
+	value, err = retained.Query(context.Background(), "SELECT cells")
+	if err != nil || value.Source().Name != "first" || value.Attribution().Source.Generation != oldStatus.Generation || secondPeer.queries.Load() != beforeSecond {
+		t.Fatal("session retargeted its physical generation", err)
+	}
+	if err := retained.Close(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if finalized() != old || !old.ShutdownComplete() {
@@ -660,7 +674,7 @@ func testUsingClient(t testing.TB, lifetime context.Context, owner *Owner, inbox
 }
 
 func TestUsingRetainedLifetime(t *testing.T) {
-	for _, shape := range []string{"statement", "transaction"} {
+	for _, shape := range []string{"statement", "transaction", "session"} {
 		t.Run(shape, func(t *testing.T) {
 			peer := newPeer(t, false, false)
 			owner, inbox, runtime := testOwner(t, peer.options(), 0)
@@ -679,6 +693,15 @@ func TestUsingRetainedLifetime(t *testing.T) {
 					t.Fatal("setup ended retained preparation", err)
 				}
 				receipt = statement.Receipt()
+			} else if shape == "session" {
+				retained, err := client.Retain(context.Background(), SessionOptions{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := retained.Query(context.Background(), "SELECT cells"); err != nil {
+					t.Fatal("return ended retained session", err)
+				}
+				receipt = retained.Receipt()
 			} else {
 				transaction, err := client.Begin(context.Background(), txOptions())
 				if err != nil {

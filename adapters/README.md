@@ -60,7 +60,7 @@ automatically own or construct the packages below it.
 | `configsource/viper/v1` | configuration-provider | [Explicit local acquisition, native decoding and owned observation](../docs/reference/adapters/configsource/viper/v1/interface.md) |
 | `configsource/nacos/v1` | configuration-provider | [Nacos acquisition/mutation/search and retained observation](../docs/reference/adapters/configsource/nacos/v1/interface.md) |
 | `database/postgres/v1` | data-provider | [PostgreSQL ownership, SQL, preparation, transactions and savepoints](../docs/reference/adapters/database/postgres/v1/interface.md) |
-| `database/mysql/v1` | data-provider | [MySQL ownership, SQL, preparation and provider-specific transactions](../docs/reference/adapters/database/mysql/v1/interface.md) |
+| `database/mysql/v1` | data-provider | [MySQL ownership, SQL, preparation, retained sessions and provider-specific transactions](../docs/reference/adapters/database/mysql/v1/interface.md) |
 | `sqlengine/duckdb/v1` | data-provider | [Embedded SQL, parameter batches, Appender, transactions and bounded incremental results](../docs/reference/adapters/sqlengine/duckdb/v1/interface.md) |
 | `sqlengine/trino/v1` | data-provider | [Coordinator Query/Execute/Insert, provisional page consumption and independent effect evidence](../docs/reference/adapters/sqlengine/trino/v1/interface.md) |
 | `sqlengine/doris/v1` | data-provider | [Finite/incremental SQL, strict labeled Stream Load, label observations and independent cleanup evidence](../docs/reference/adapters/sqlengine/doris/v1/interface.md) |

@@ -28,6 +28,7 @@ import (
 	"net"
 	"sync"
 
+	"github.com/frost-leo/fathomry/internal/database/endpoint"
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/internal/invocation"
 	"github.com/frost-leo/fathomry/internal/resource"
@@ -61,7 +62,7 @@ func Select(options OptionsV1, layers ...resource.Layer) (resource.Selection[Sou
 		return resource.Selection[Source]{}, err
 	}
 	return resource.Select(prepared, func(ctx context.Context, s settings) (resource.Resource[Source], error) {
-		owner := &pool{settings: s, closed: make(chan struct{}), dial: (&net.Dialer{}).DialContext}
+		owner := &pool{settings: s, closed: make(chan struct{}), dial: endpoint.DialContext}
 		owner.db = sql.OpenDB(owner)
 		owner.db.SetMaxOpenConns(s.MaxConnections)
 		owner.db.SetMaxIdleConns(s.MaxIdleConnections)

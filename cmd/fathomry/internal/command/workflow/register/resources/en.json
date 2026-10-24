@@ -1,0 +1,137 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_register",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.workflow_register.command",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Register selected project workflows with the configured catalog."
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_namespace",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select one exact workflow namespace."
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_workflow",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select one exact workflow code; defaults to the project selection."
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_version",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select one version within the selected workflow."
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_mode",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select one mode within the selected version."
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_revision",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Select one revision within the selected mode."
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.attempted",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Attempted"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.omitted",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Omitted"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.acknowledgement",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Acknowledgement"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.unknown",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "After cleanup, inspect stored state or explicitly retry the same registration; the original commit is not acknowledged."
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.preflight",
+      "contract": "v1",
+      "context": "Explicit project workflow registration; validation precedes database access and aggregate outcomes remain separate.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Run workflow vet for the selected scope and supply catalog metadata before registration."
+      }
+    }
+  ]
+}

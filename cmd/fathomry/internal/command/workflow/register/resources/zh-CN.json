@@ -1,0 +1,104 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_register",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.workflow_register.command",
+      "source": "fa9419a6c0a89c6dc116173dbd2c905250293a8f5d2158a48c5613f73afdb5e8",
+      "forms": {
+        "other": "将选中的项目工作流注册到已配置的目录。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_namespace",
+      "source": "6502026da67406043a99331c2e7cf53f8f326593bd5a8b6a6955d2155f132b79",
+      "forms": {
+        "other": "选择一个精确匹配的工作流命名空间。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_workflow",
+      "source": "b533ec3119169d6ffa41fe3a95588fb950ebfcdf6620d4c75e36e38379c011fc",
+      "forms": {
+        "other": "选择一个精确匹配的工作流代码；默认选择项目中的工作流。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_version",
+      "source": "fd702f5a2272c1f73f166f456ca0b3a2e2e30cfe0a303501ea6725b2f2f75be2",
+      "forms": {
+        "other": "选择所选工作流的一个版本。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_mode",
+      "source": "d4a7ddb06e2dae4f83cda87c075e9f0023ba2e5c8a104dbecffa744e25d64a18",
+      "forms": {
+        "other": "选择所选版本的一个模式。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.flag_revision",
+      "source": "e315364d580d6cbce8e4fa64d8423524cabaf078b8d4293471f75730053d6278",
+      "forms": {
+        "other": "选择所选模式的一个修订。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.attempted",
+      "source": "9dbd680ff8ae37004389e29bedc7661f2a293468e033dacc71f21d814cffde67",
+      "forms": {
+        "other": "已尝试"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.omitted",
+      "source": "3afe777c97086f02885655f50f37b91cfeeeed00db50acfad44e2340e6fccdd0",
+      "forms": {
+        "other": "未选择"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.acknowledgement",
+      "source": "c26cbf3632f99c3d5cfce35d8e49560255727960f0826d2cde17ba55c0f6a74f",
+      "forms": {
+        "other": "提交确认"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.unknown",
+      "source": "3dc6ce3f5aae949c14f06445a37acb29c77ce26fc8d33189a67559fbf635605e",
+      "forms": {
+        "other": "清理完成后，请检查存储状态或显式重试同一注册请求；原始提交尚未获得确认。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_register.preflight",
+      "source": "0cd82e28b8b5a771eb781aae72764936433190575199e33d37d7db4494fc7e94",
+      "forms": {
+        "other": "请先对所选范围运行 workflow vet，并在注册前提供目录发布元数据。"
+      }
+    }
+  ]
+}

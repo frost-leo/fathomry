@@ -122,6 +122,7 @@ func TestSettings(t *testing.T) {
 	original.CloseTimeout = 12 * time.Millisecond
 	original.MaxRows = 17
 	original.MaxResultBytes = 8192
+	original.MaxArgumentBytes = 2 << 20
 	original.MaxMessageBytes = 8192
 	variants := []Settings{original}
 
@@ -176,6 +177,8 @@ func TestSettings(t *testing.T) {
 		func(value *Settings) { value.MaxConnections = 33 },
 		func(value *Settings) { value.MaxRows = 65537 },
 		func(value *Settings) { value.MaxResultBytes = 1023 },
+		func(value *Settings) { value.MaxArgumentBytes = 1023 },
+		func(value *Settings) { value.MaxArgumentBytes = (16 << 20) + 1 },
 		func(value *Settings) { value.Timeout = -1 },
 		func(value *Settings) { value.CloseTimeout = time.Nanosecond },
 		func(value *Settings) { value.QueuedCalls = 65 },
@@ -197,6 +200,7 @@ func TestRecommendedDefaultsAndBounds(t *testing.T) {
 	explicit.CloseTimeout = 5 * time.Second
 	explicit.MaxRows = 1024
 	explicit.MaxResultBytes = 4 << 20
+	explicit.MaxArgumentBytes = MaxArgumentBytes
 	explicit.MaxMessageBytes = 1 << 20
 	before, err := Recommend(defaults)
 	if err != nil {
@@ -211,7 +215,8 @@ func TestRecommendedDefaultsAndBounds(t *testing.T) {
 	maximum.QueuedCalls = 64
 	maximum.MaxRows = 65536
 	maximum.MaxResultBytes = 16 << 20
-	maximum.MaxMessageBytes = 4 << 20
+	maximum.MaxMessageBytes = 16 << 20
+	maximum.MaxArgumentBytes = 16 << 20
 	for _, input := range []Settings{defaults, maximum} {
 		policy, err := Recommend(input)
 		if err != nil {
@@ -249,6 +254,7 @@ func TestEffectiveSettingsProfile(t *testing.T) {
 	defaults.CloseTimeout = 0
 	defaults.MaxRows = 0
 	defaults.MaxResultBytes = 0
+	defaults.MaxArgumentBytes = 0
 	defaults.MaxMessageBytes = 0
 	owner, _, _ := testOwner(t, defaults, 0)
 	profile, err := owner.Client().Profile(context.Background())
@@ -263,7 +269,8 @@ func TestEffectiveSettingsProfile(t *testing.T) {
 		"max-connections": "4", "max-idle-time-ns": "0", "max-lifetime-ns": "0",
 		"queued-calls": "0", "timeout-ns": "10000000000", "close-timeout-ns": "5000000000",
 		"max-rows": "1024", "max-result-bytes": "4194304", "plaintext": "true",
-		"max-message-bytes": "1048576",
+		"max-argument-bytes": "1048576",
+		"max-message-bytes":  "1048576",
 	}
 	for name, want := range expected {
 		if observed[name] != want {

@@ -42,16 +42,70 @@ offline declarations, validates them, and publishes the same bytes to
 failure before publication preserves the previous artifact. `--out FILE` selects
 another path, resolved relative to this project. `--output json` omits the banner.
 
-The initial project has zero declared workflows. Add project-owned declarations
-to `cli.Project` in `main.go`; an empty project does not claim a workflow check.
+The initial project has zero declared workflows. Register each logical workflow
+once in `cli.Project.Workflows` in `main.go`, with its versions and optional
+catalog metadata together. A registration is `cli.Workflow{Declaration: ...,
+Metadata: ...}`; the declaration uses the existing declaration API and metadata
+uses `catalog.Metadata`. Keep authored values in the corresponding workflow
+package. At most 16 registration units are admitted, with the existing per-bundle
+and 64 MiB project input limits. Legacy `Project.Declarations` remains supported,
+but the two input forms cannot be mixed.
+
+An empty project does not claim a workflow check.
 Inspection and package initialization must not Boot configuration, access services,
 or execute business handlers. Only trusted native Linux/macOS projects are
 supported. This is a publication gate, not a hook into native `go build`, a
 Temporal admission gate, a deployment, or a Workflow execution engine.
 
-The root also supports the existing fixed commands, for example
-`go run . workflow vet BUNDLE` and `go run . build --help`. No arguments retains
-the application's configuration startup behavior.
+Use project vet directly, without exporting a temporary JSON file:
+
+```sh
+go run . workflow vet
+go run . workflow vet --workflow server-health
+go run . workflow vet --namespace example --workflow server-health --version 1
+go run . workflow vet --workflow server-health --version 1 --mode patient
+```
+
+Omitting selectors checks all registered workflows; a workflow selector includes
+all its versions and modes. Version selects its modes; Mode keeps its parent
+specification; optional Revision selects one mode revision. Cross-Namespace
+ambiguity and unmatched selectors are errors, never zero-work success. JSON reports
+identify full/selected scope, omitted workflows, declaration diagnostics/fingerprints
+and whether catalog metadata was supplied and checked. Empty project vet reports
+zero work and fails; a configuration-only project can still build.
+
+Build always checks the entire declared set and supplied metadata, irrespective
+of earlier selected vet success. Metadata absence is reported, not invented.
+The generated inspection test accepts real authored workflows and checks their
+consistency; it does not require the project to remain empty.
+
+Existing `workflow vet BUNDLE [BUNDLE...]` stays available for explicit file
+inspection and cannot be combined with project selectors. No command implicitly
+discovers another project or queries a database. `go run` still compiles the Go
+program: selection skips unrelated workflow validation, not Go compilation.
+No arguments retains the application's configuration startup behavior.
+
+Control schema commands are explicit and opt-in:
+`./bin/{{.Name}} schema status`, `schema plan`, and `schema apply`.
+Only apply can install the initial schema; status/plan never create history.
+Help, vet, build and build inspection never invoke the control resolver.
+No command auto-migrates or starts a Worker.
+
+Set an optional `database.fathomry` object in the selected configuration document using
+the project's own `setting.FathomryDatabase`: explicit `dialect`
+(`postgresql` or `mysql`) and exactly one `postgresql` or `mysql` provider settings
+object with its physical `database`. PostgreSQL also requires an explicit
+`schema`; MySQL must omit `schema`. Provision the database/schema separately; no credentials
+or target are generated. Use a protected document, not command-line passwords.
+
+The configuration-only resolver is `internal/bootstrap/control.go`. Online
+commands use the existing `FATHOMRY_ENV` and configuration-location process
+variables described below, not application startup flags. They perform one finite
+Boot; Framework owns the selected database, operation runtime and evidence cleanup.
+Absent or invalid control configuration fails before database acquisition.
+Known mutation facts remain in JSON/text output even with a later cleanup error;
+failed writes can be partial. In-process callers can use `errors.As` to inspect
+`cli.ExecutionError`, copy its JSON report and continue local cleanup with Close.
 {{if .Source}}
 This is explicit development mode. go.mod contains live replacements into the
 selected Framework checkout and its confined SDK directories. Changes there affect
@@ -66,6 +120,8 @@ No source tree or external dependency manifest is copied.
 ## Project responsibilities
 
 - internal/setting: aggregate/application data, defaults and validation.
+- internal/setting/database.go: database role declarations and offline validation;
+  all deployed addresses, targets, credentials and trust are runtime configuration.
 - internal/bootstrap/options.go: the selected provider's typed inputs and bindings.
 - internal/bootstrap/inputs.go: project environment names and captured application overrides.
 - internal/bootstrap/boot.go: one shared Boot/Watch path over Framework scenarios.

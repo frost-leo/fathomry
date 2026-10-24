@@ -123,6 +123,7 @@ func TestSettings(t *testing.T) {
 	original.CloseTimeout = 12 * time.Millisecond
 	original.MaxRows = 17
 	original.MaxResultBytes = 8192
+	original.MaxArgumentBytes = 2 << 20
 	original.Network = "tcp"
 	original.ParseTime = true
 	original.ClientFoundRows = true
@@ -191,6 +192,8 @@ func TestSettings(t *testing.T) {
 		func(value *Settings) { value.MaxConnections = 33 },
 		func(value *Settings) { value.MaxRows = 65537 },
 		func(value *Settings) { value.MaxResultBytes = 1023 },
+		func(value *Settings) { value.MaxArgumentBytes = 1023 },
+		func(value *Settings) { value.MaxArgumentBytes = (8 << 20) + 1 },
 		func(value *Settings) { value.Timeout = -1 },
 		func(value *Settings) { value.CloseTimeout = time.Nanosecond },
 		func(value *Settings) { value.QueuedCalls = 65 },
@@ -212,6 +215,7 @@ func TestRecommendedDefaultsAndBounds(t *testing.T) {
 	explicit.CloseTimeout = 5 * time.Second
 	explicit.MaxRows = 1024
 	explicit.MaxResultBytes = 4 << 20
+	explicit.MaxArgumentBytes = MaxArgumentBytes
 	explicit.Network = "tcp"
 	explicit.Authentication = "caching_sha2_password"
 	explicit.MaxIdleConnections = 4
@@ -233,7 +237,8 @@ func TestRecommendedDefaultsAndBounds(t *testing.T) {
 	maximum.QueuedCalls = 64
 	maximum.MaxRows = 65536
 	maximum.MaxResultBytes = 16 << 20
-	maximum.MaxPacketBytes = 4 << 20
+	maximum.MaxPacketBytes = 8 << 20
+	maximum.MaxArgumentBytes = 8 << 20
 	maximum.MaxResponseBytes = 32 << 20
 	for _, input := range []Settings{defaults, maximum} {
 		policy, err := Recommend(input)
@@ -272,6 +277,7 @@ func TestEffectiveSettingsProfile(t *testing.T) {
 	defaults.CloseTimeout = 0
 	defaults.MaxRows = 0
 	defaults.MaxResultBytes = 0
+	defaults.MaxArgumentBytes = 0
 	defaults.Network = ""
 	defaults.Authentication = ""
 	defaults.MaxIdleConnections = 0
@@ -293,6 +299,7 @@ func TestEffectiveSettingsProfile(t *testing.T) {
 		"max-connections": "4", "max-idle-time-ns": "0", "max-lifetime-ns": "0",
 		"queued-calls": "0", "timeout-ns": "10000000000", "close-timeout-ns": "5000000000",
 		"max-rows": "1024", "max-result-bytes": "4194304", "plaintext": "true",
+		"max-argument-bytes":    "1048576",
 		"authentication-policy": "caching_sha2_password", "network": "tcp",
 		"max-idle-connections": "4", "read-timeout-ns": "10000000000", "write-timeout-ns": "10000000000",
 		"transaction-timeout-ns": "60000000000", "max-packet-bytes": "1048576", "max-response-bytes": "8388608",

@@ -25,6 +25,8 @@
 // runtime details. Presenter reads typed preferences from settings, or uses a bound
 // override, without changing business function signatures. Present freezes text,
 // retains the exact original error, and reports localization failures separately.
+// NormalizeLocale exposes only request-locale validation/canonicalization for
+// consumers with their own exact-match policy; it performs no resource lookup.
 //
 // Detail types remain component-owned. Optional projectors explicitly select safe
 // builtin scalar arguments; the engine never reflects arbitrary error fields or

@@ -1,0 +1,50 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+package bootstrap
+
+import (
+ "context"
+ "errors"
+ "os"
+
+ cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
+)
+
+// Control resolves only the explicitly configured control target through finite
+// Boot. It opens no database or runtime and starts no watcher or business service.
+// Online CLI commands select Boot inputs through the existing process variables.
+func Control(ctx context.Context) (cli.DatabaseConfiguration, error) {
+ options, err := ParseOptions(ctx, nil, os.LookupEnv)
+ selected := cli.DatabaseConfiguration{Records: options.Records}
+ if err != nil { return selected, err }
+ result, err := Boot(ctx, options)
+ selected.Records = result.Records
+ if err != nil { return selected, err }
+ if result.State == nil { return selected, errors.New("control database configuration is unavailable") }
+ accepted, err := result.State.Capture()
+ if err != nil { return selected, err }
+ value, err := accepted.ValueCopy()
+ if err != nil { return selected, err }
+ if value.Database.Fathomry == nil { return selected, errors.New("control database configuration is unavailable") }
+ binding := value.Database.Fathomry.Copy()
+ selected.Dialect, selected.Schema = binding.Dialect, binding.Schema
+ selected.PostgreSQL, selected.MySQL = binding.PostgreSQL, binding.MySQL
+ selected.Timeout, selected.CleanupTimeout = binding.Timeout, binding.CleanupTimeout
+ return selected, nil
+}

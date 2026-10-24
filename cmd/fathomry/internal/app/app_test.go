@@ -50,8 +50,17 @@ func TestOfficialCommands(t *testing.T) {
 			if err != nil || diagnostic != "" || !strings.Contains(output, "Usage:") {
 				t.Fatalf("help %q: %v / %s", args, err, diagnostic)
 			}
-			if strings.Contains(output, "version") || strings.Contains(output, "completion") {
-				t.Fatal("deferred command advertised")
+			structured, diagnostic, err := execute(append(append([]string(nil), args...), "--output=json"), "en")
+			var help struct {
+				Data struct{ Commands []struct{ Name string } }
+			}
+			if err != nil || diagnostic != "" || json.Unmarshal([]byte(structured), &help) != nil {
+				t.Fatal("structured help unavailable", err)
+			}
+			for _, item := range help.Data.Commands {
+				if item.Name == "version" || item.Name == "completion" {
+					t.Fatal("deferred command advertised")
+				}
 			}
 		}
 		if _, err := settings.Default(); !errors.Is(err, settings.ErrUnconfigured) {

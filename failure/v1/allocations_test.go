@@ -64,6 +64,14 @@ func TestCodeLayout(t *testing.T) {
 func TestAllocations(t *testing.T) {
 	t.Run("stable_first_party_manifest", func(t *testing.T) {
 		allocations := failure.Allocations()
+		if failure.FacilityWorkflowCatalog != 0x1C2 ||
+			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityWorkflowCatalog, Module: "fathomry", Component: "workflow_catalog"}) {
+			t.Fatal("workflow catalog capability allocation changed")
+		}
+		if failure.FacilityDatabaseControl != 0x085 || failure.FacilityDatabaseControl.Domain() != failure.DomainDatabase ||
+			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityDatabaseControl, Module: "fathomry", Component: "database_control"}) {
+			t.Fatal("control database capability allocation changed")
+		}
 		if failure.FacilityProjectBuild != 0x00B || failure.FacilityProjectBuild.Domain() != failure.DomainCore ||
 			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityProjectBuild, Module: "fathomry", Component: "project_build"}) {
 			t.Fatal("project build capability allocation changed")

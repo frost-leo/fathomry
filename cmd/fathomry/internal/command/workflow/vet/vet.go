@@ -17,7 +17,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package vet implements explicit offline bundle inspection, not project hosting.
+// Package vet presents offline project selection or explicit Bundle inspection,
+// without project discovery, configuration loading or service access.
 package vet
 
 import (
@@ -27,14 +28,36 @@ import (
 	"strings"
 
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
+	projectworkflows "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow"
 	wf "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
 	"github.com/spf13/cobra"
 )
 
 // New declares the workflow vet command without acquiring files or settings.
-func New(invocation *command.Invocation) *cobra.Command {
-	cmd := &cobra.Command{Use: "vet BUNDLE [BUNDLE...]", Short: "fathomry.workflow_vet.command", Args: cobra.RangeArgs(1, wf.MaxInputs)}
+func New(invocation *command.Invocation, project func(context.Context, projectworkflows.Selection) (projectworkflows.ProjectReport, error)) *cobra.Command {
+	var selection projectworkflows.Selection
+	cmd := &cobra.Command{Use: "vet [BUNDLE...]", Short: "fathomry.workflow_vet.command", Args: cobra.MaximumNArgs(wf.MaxInputs)}
+	cmd.Flags().StringVar(&selection.Namespace, "namespace", "", "fathomry.workflow_vet.flag_namespace")
+	cmd.Flags().StringVar(&selection.Workflow, "workflow", "", "fathomry.workflow_vet.flag_workflow")
+	cmd.Flags().StringVar(&selection.Version, "version", "", "fathomry.workflow_vet.flag_version")
+	cmd.Flags().StringVar(&selection.Mode, "mode", "", "fathomry.workflow_vet.flag_mode")
+	cmd.Flags().StringVar(&selection.Revision, "revision", "", "fathomry.workflow_vet.flag_revision")
 	invocation.Bind(cmd, func(ctx context.Context, args []string) error {
+		for _, flag := range []struct{ name, value string }{{"namespace", selection.Namespace}, {"workflow", selection.Workflow}, {"version", selection.Version}, {"mode", selection.Mode}, {"revision", selection.Revision}} {
+			if cmd.Flags().Changed(flag.name) && (flag.value == "" || len(args) > 0) {
+				return command.Fail(command.ErrUsage)
+			}
+		}
+		if len(args) == 0 {
+			if project == nil {
+				return command.Fail(command.ErrUsage)
+			}
+			report, err := project(ctx, selection)
+			if err != nil {
+				return err
+			}
+			return invocation.CheckResult("workflow.vet", report, report.Passed, func(writer io.Writer) error { return renderProject(invocation, writer, report) })
+		}
 		report, err := inspect(ctx, args, readInput)
 		if err != nil {
 			return err
@@ -77,6 +100,63 @@ func New(invocation *command.Invocation) *cobra.Command {
 		})
 	})
 	return cmd
+}
+
+func renderProject(invocation *command.Invocation, writer io.Writer, report projectworkflows.ProjectReport) error {
+	scope := "fathomry.workflow_vet.scope_selected"
+	if report.FullProject {
+		scope = "fathomry.workflow_vet.scope_all"
+	}
+	if _, err := fmt.Fprintln(writer, invocation.Text(scope)); err != nil {
+		return err
+	}
+	if report.Empty {
+		_, err := fmt.Fprintln(writer, invocation.Text("fathomry.workflow_vet.empty_project"))
+		return err
+	}
+	if !report.FullProject {
+		selection := report.Selection
+		if _, err := fmt.Fprintf(writer, "namespace=%q workflow=%q version=%q mode=%q revision=%q\n", selection.Namespace, selection.Workflow, selection.Version, selection.Mode, selection.Revision); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(writer, "%s %d/%d; %s %d\n", invocation.Text("fathomry.workflow_vet.checked"), report.Selected, report.Total, invocation.Text("fathomry.workflow_vet.omitted"), report.Omitted); err != nil {
+		return err
+	}
+	for _, item := range report.Workflows {
+		status := "fathomry.workflow_vet.failed"
+		if item.Passed {
+			status = "fathomry.workflow_vet.passed"
+		}
+		if _, err := fmt.Fprintf(writer, "%s %q/%q %q; %s\n", invocation.Text(status), item.Namespace, item.Code, item.Versions, invocation.Text("fathomry.workflow_vet.metadata_"+item.Metadata)); err != nil {
+			return err
+		}
+		for index, problem := range item.Declaration.Diagnostics {
+			var identity wf.Identity
+			if index < len(item.DiagnosticIdentities) {
+				identity = item.DiagnosticIdentities[index]
+			}
+			if _, err := fmt.Fprintf(writer, "%d %q %q %q %s %s %s\n", problem.Input, identity.Version, identity.Mode, identity.Revision, problem.Diagnostic.Code.String(), problem.Diagnostic.Reason, problem.Diagnostic.Path); err != nil {
+				return err
+			}
+		}
+		for _, conflict := range item.Declaration.Conflicts {
+			if _, err := fmt.Fprintf(writer, "%q %q %q %s\n", conflict.Identity.Version, conflict.Identity.Mode, conflict.Identity.Revision, strings.Join(conflict.Paths, ", ")); err != nil {
+				return err
+			}
+		}
+		if item.MetadataDiagnostic != nil {
+			problem := item.MetadataDiagnostic
+			if _, err := fmt.Fprintf(writer, "%s %s %s\n", problem.Code.String(), problem.Reason, problem.Path); err != nil {
+				return err
+			}
+		}
+	}
+	if report.Truncated {
+		_, err := fmt.Fprintln(writer, invocation.Text("fathomry.workflow_vet.truncated"))
+		return err
+	}
+	return nil
 }
 
 func inspect(ctx context.Context, paths []string, read func(context.Context, string, int) ([]byte, error)) (wf.Report, error) {

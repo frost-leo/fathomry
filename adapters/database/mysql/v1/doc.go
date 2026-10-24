@@ -18,8 +18,8 @@
  */
 
 // Package mysql provides the bounded public MySQL database capability.
-// Sources have explicit owners; transactions and preparations retain one pool
-// generation. Required evidence is caller-owned and never silently drained.
+// Sources have explicit owners; transactions, preparations and retained sessions
+// pin one pool generation. Required evidence is caller-owned and never silently drained.
 //
 // Validate loadable Settings, obtain explicit policies with Recommend, then Open
 // a source with a caller-owned Runtime and Inbox[Result]. Open is local ownership;
@@ -27,5 +27,7 @@
 // finalize retained handles, and keep the Owner through incomplete Close attempts.
 // Prepare uses a setup context; Begin's context owns the transaction lifetime and
 // native automatic rollback. Using retains public generations, not raw SDK handles.
+// Retain owns one bounded physical session across implicit-commit DDL. Close
+// always retires that connection; local release is not remote lock-release evidence.
 // These are process-local APIs, not deterministic Workflow code or durable DTOs.
 package mysql

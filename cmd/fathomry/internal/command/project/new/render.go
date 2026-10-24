@@ -44,9 +44,11 @@ func render(tree plan) ([]projectFile, error) {
 		{"gitignore.tmpl", ".gitignore"}, {"dotenv.tmpl", ".env.example"}, {"readme.tmpl", "README.md"},
 		{"main.go.tmpl", "main.go"}, {"main_test.go.tmpl", "main_test.go"},
 		{"boot.go.tmpl", "internal/bootstrap/boot.go"}, {"boot_" + tree.mode + "_test.go.tmpl", "internal/bootstrap/boot_test.go"},
+		{"control.go.tmpl", "internal/bootstrap/control.go"},
 		{"options_" + tree.mode + ".go.tmpl", "internal/bootstrap/options.go"}, {"options_" + tree.mode + "_test.go.tmpl", "internal/bootstrap/options_test.go"},
 		{"inputs.go.tmpl", "internal/bootstrap/inputs.go"}, {"inputs_test.go.tmpl", "internal/bootstrap/inputs_test.go"},
 		{"setting.go.tmpl", "internal/setting/setting.go"}, {"setting_test.go.tmpl", "internal/setting/setting_test.go"},
+		{"database.go.tmpl", "internal/setting/database.go"},
 		{"application.go.tmpl", "internal/setting/application.go"}, {"application_test.go.tmpl", "internal/setting/application_test.go"},
 		{"base." + tree.encoding + ".tmpl", "configs/base." + tree.encoding},
 	}

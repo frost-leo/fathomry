@@ -53,6 +53,12 @@
 // Successful transaction-ending SQL also ends the retained transaction's authority.
 // Lost commit replies remain unknown and mutations are never replayed by this API.
 //
+// Retain pins one physical session for a bounded caller-owned lifetime without
+// starting a transaction. It survives implicit commits, never reconnects, and
+// always physically retires on Close or cancellation using reserved ownership.
+// Its final receipt describes lifecycle/cleanup, not a transaction outcome or
+// acknowledgement of immediate server-side advisory lock release.
+//
 // SQL is structurally bounded, not filtered by keywords or a SQL sandbox.
 // Database roles and composition own authorization and InnoDB table, trigger,
 // implicit-commit and session-state constraints. No migrations, multi-statements,

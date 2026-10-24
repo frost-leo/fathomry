@@ -23,11 +23,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -37,6 +39,66 @@ import (
 	"github.com/frost-leo/fathomry/i18n/v1"
 	"github.com/spf13/cobra"
 )
+
+func projectImportsAllowed(name string, source []byte) bool {
+	file, err := parser.ParseFile(token.NewFileSet(), name, source, 0)
+	if err != nil {
+		return false
+	}
+	aliases := map[string]bool{}
+	for _, item := range file.Imports {
+		imported, err := strconv.Unquote(item.Path.Value)
+		if err != nil || strings.HasPrefix(imported, frameworkModule+"/internal/") || strings.Contains(imported, "/cmd/fathomry/internal/") {
+			return false
+		}
+		if !strings.HasPrefix(imported, frameworkModule+"/adapters/") {
+			continue
+		}
+		if name != "internal/setting/database.go" || item.Name == nil || item.Name.Name == "_" || item.Name.Name == "." ||
+			(imported != frameworkModule+"/adapters/database/postgres/v1" && imported != frameworkModule+"/adapters/database/mysql/v1") {
+			return false
+		}
+		aliases[item.Name.Name] = true
+	}
+	valid := true
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		owner, ok := selector.X.(*ast.Ident)
+		if ok && aliases[owner.Name] && selector.Sel.Name != "Settings" && selector.Sel.Name != "Validate" {
+			valid = false
+		}
+		return true
+	})
+	return valid
+}
+
+func TestProjectDatabaseImportsStayDataOnly(t *testing.T) {
+	provider := frameworkModule + "/adapters/database/postgres/v1"
+	for _, test := range []struct {
+		path, imported, alias, expression string
+		allowed                           bool
+	}{
+		{"internal/setting/database.go", provider, "postgres", "postgres.Settings{}", true},
+		{"internal/setting/database.go", provider, "postgres", "postgres.Validate(postgres.Settings{})", true},
+		{"internal/bootstrap/control.go", provider, "postgres", "postgres.Settings{}", false},
+		{"internal/setting/database.go", provider, "postgres", "postgres.Open(nil,postgres.Settings{},postgres.Dependencies{})", false},
+		{"internal/setting/database.go", provider, "postgres", "postgres.Using(nil,nil,nil,nil)", false},
+		{"internal/setting/database.go", provider, "postgres", "postgres.Client{}", false},
+		{"internal/setting/database.go", provider, "_", "0", false},
+		{"internal/setting/database.go", provider, ".", "Settings{}", false},
+		{"internal/setting/database.go", frameworkModule + "/adapters/v1", "runtime", "runtime.New(nil,runtime.Options{})", false},
+		{"internal/setting/database.go", frameworkModule + "/internal/database/pgx/v5", "native", "native.OptionsV1{}", false},
+		{"internal/setting/database.go", frameworkModule + "/cmd/fathomry/internal/command/schema", "schema", "schema.Options{}", false},
+	} {
+		source := []byte("package setting\nimport " + test.alias + " " + strconv.Quote(test.imported) + "\nvar _ = " + test.expression + "\n")
+		if got := projectImportsAllowed(test.path, source); got != test.allowed {
+			t.Fatalf("wrong project boundary for %s in %s", test.expression, test.path)
+		}
+	}
+}
 
 func repository(t testing.TB) string {
 	t.Helper()
@@ -121,7 +183,7 @@ func TestNew(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if len(tree.files) != 21 {
+					if len(tree.files) != 23 {
 						t.Fatal("unexpected project surface")
 					}
 					for _, file := range tree.files {
@@ -148,8 +210,8 @@ func TestNew(t *testing.T) {
 						t.Fatal("project did not consume the complete Framework scenario")
 					}
 					for _, file := range tree.files {
-						if strings.HasSuffix(file.name, ".go") && (bytes.Contains(file.content, []byte(frameworkModule+"/adapters/")) || bytes.Contains(file.content, []byte(frameworkModule+"/internal/"))) {
-							t.Fatal("generated project requires Adapter or Internal imports", file.name)
+						if strings.HasSuffix(file.name, ".go") && !projectImportsAllowed(file.name, file.content) {
+							t.Fatal("generated project crosses the data-only Adapter boundary", file.name)
 						}
 					}
 					if _, err := os.Stat(filepath.Join(input.destination, "go.sum")); !errors.Is(err, os.ErrNotExist) {

@@ -164,14 +164,14 @@ func (stmt *Statement) Query(ctx context.Context, id fault.Correlation, args ...
 		return nil, err
 	}
 	defer stmt.mu.Unlock()
-	return stmt.db.statement(ctx, id, stmt.query, args, true, stmt.parent, stmt)
+	return stmt.db.statement(ctx, id, stmt.query, args, true, stmt.parent, stmt, nil)
 }
 func (stmt *Statement) Exec(ctx context.Context, id fault.Correlation, args ...any) (*invocation.Receipt[Result], error) {
 	if err := stmt.lock(); err != nil {
 		return nil, err
 	}
 	defer stmt.mu.Unlock()
-	return stmt.db.statement(ctx, id, stmt.query, args, false, stmt.parent, stmt)
+	return stmt.db.statement(ctx, id, stmt.query, args, false, stmt.parent, stmt, nil)
 }
 func (stmt *Statement) Close(ctx context.Context) (*invocation.Receipt[Result], error) {
 	if stmt == nil || stmt.statementState == nil {

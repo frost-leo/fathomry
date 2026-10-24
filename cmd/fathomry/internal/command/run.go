@@ -50,6 +50,9 @@ type Invocation struct {
 	helperError       error
 	presentationError error
 	pending           []byte
+	report            []byte
+	mutation          *MutationSummary
+	managed           bool
 	checkFailed       bool
 	emitted           bool
 	scopeMu           sync.Mutex
@@ -296,7 +299,7 @@ func ExitCode(err error) int {
 		return 0
 	case errors.Is(err, ErrOutput), errors.Is(err, ErrCleanup), errors.Is(err, ErrOptions), errors.Is(err, ErrExecution):
 		return 1
-	case errors.Is(err, ErrUsage), errors.Is(err, ErrLimit):
+	case errors.Is(err, ErrUsage), errors.Is(err, ErrLimit), errors.Is(err, ErrSelectionMissing), errors.Is(err, ErrSelectionAmbiguous):
 		return 2
 	case errors.Is(err, ErrCanceled), errors.Is(err, context.Canceled):
 		return 130

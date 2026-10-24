@@ -25,9 +25,11 @@ import (
 	"crypto/x509"
 	"errors"
 	"net"
+	"net/netip"
 	"strconv"
 	"sync"
 
+	"github.com/frost-leo/fathomry/internal/database/endpoint"
 	"github.com/frost-leo/fathomry/internal/fault"
 	sdk "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -47,6 +49,8 @@ type wireScope struct {
 	mu       sync.Mutex
 	sealed   bool
 	address  string
+	peer     string
+	dns      bool
 	dials    sync.WaitGroup
 	lifetime context.Context
 	cancel   context.CancelFunc
@@ -63,12 +67,18 @@ type wireSocket struct {
 
 func newWireScope(address string) *wireScope {
 	ctx, cancel := context.WithCancel(context.Background())
+	host, _, _ := net.SplitHostPort(address)
+	_, parseErr := netip.ParseAddr(host)
 	return &wireScope{address: address, lifetime: ctx, cancel: cancel, sockets: make(map[*wireSocket]struct{}),
-		dialer: (&net.Dialer{}).DialContext}
+		dns: parseErr != nil, dialer: endpoint.DialContext}
 }
 func (scope *wireScope) dial(ctx context.Context, network, address string) (net.Conn, error) {
 	scope.mu.Lock()
-	if scope.sealed || network != "tcp" && network != "tcp4" && network != "tcp6" || address != scope.address || len(scope.sockets) >= 2 {
+	allowed := scope.address
+	if scope.peer != "" {
+		allowed = scope.peer
+	}
+	if scope.sealed || network != "tcp" && network != "tcp4" && network != "tcp6" || address != allowed || len(scope.sockets) >= 2 {
 		scope.mu.Unlock()
 		return nil, failure(ErrState, "dial")
 	}
@@ -89,6 +99,18 @@ func (scope *wireScope) dial(ctx context.Context, network, address string) (net.
 	owned := &wireSocket{Conn: socket, scope: scope}
 	scope.mu.Lock()
 	sealed := scope.sealed
+	if scope.dns && !sealed {
+		peer := socket.RemoteAddr().String()
+		host, port, err := net.SplitHostPort(peer)
+		_, expectedPort, _ := net.SplitHostPort(scope.address)
+		if err != nil || !endpoint.ValidHost(host, false) || port != expectedPort || scope.peer != "" && scope.peer != peer {
+			sealed = true
+		} else {
+			// pgconn cancellation uses RemoteAddr, not Config.Host. Pin that peer
+			// so cleanup cannot re-resolve DNS or send a cancel to another server.
+			scope.peer = peer
+		}
+	}
 	if !sealed {
 		scope.sockets[owned] = struct{}{}
 	}
