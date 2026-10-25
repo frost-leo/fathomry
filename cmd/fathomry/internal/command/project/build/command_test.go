@@ -31,12 +31,20 @@ import (
 func TestPresentation(t *testing.T) {
 	for _, language := range []string{"en", "zh-CN", "fr"} {
 		var output bytes.Buffer
-		result := Result{Name: "health", Target: "linux/amd64", Artifact: "/private/line\n\x1b[31m", SHA256: strings.Repeat("a", 64), Published: true}
+		result := Result{Name: "health", Target: "linux/amd64", Artifact: "/private/line\n\x1b[31m", SHA256: strings.Repeat("a", 64), Published: true, Inspection: inspectionSchema}
 		if err := Render(&output, result, language); err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(output.String(), "F A T H O M R Y") || strings.Contains(output.String(), "\x1b") {
 			t.Fatal("unsafe banner", output.String())
+		}
+		if language == "en" && !strings.Contains(output.String(), "inspection unavailable") {
+			t.Fatal("legacy build implied inspected binding coverage", output.String())
+		}
+		output.Reset()
+		result.Inspection = implementationInspectionSchema
+		if err := Render(&output, result, language); err != nil || !strings.Contains(output.String(), "0 / 0 ("+implementationInspectionSchema+")") {
+			t.Fatal("v2 coverage not reported", err)
 		}
 	}
 }

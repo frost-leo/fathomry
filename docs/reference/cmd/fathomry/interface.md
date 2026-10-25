@@ -79,7 +79,7 @@ projects. Unknown well-formed codes are not silently assigned meanings.
 | i18n render MESSAGE_ID | Render with --locale, repeatable --arg NAME=VALUE and optional --count; report language/plural provenance |
 | i18n coverage LOCALE | Summary and per-owner exact missing translations; --module/--component filters and optional --strict |
 | new PROJECT | Create an absent project directory with the selected configuration profile |
-| build [PROJECT] | Compile a trusted native root project, validate its declarations, then publish the inspected binary |
+| build [PROJECT] | Compile a trusted native root project, validate declarations and supplied Go bindings, then publish the inspected binary |
 | workflow vet [BUNDLE...] | Check the project's registered workflows, or explicitly supplied bundles; project-only exact selectors |
 | workflow register | Register the project's selected declarations/metadata; whole-project by default, with exact selectors |
 | workflow list | Page catalog metadata in an explicit namespace/parent; exact filters, locale and cursor |

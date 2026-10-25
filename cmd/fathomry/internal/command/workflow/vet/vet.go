@@ -151,6 +151,27 @@ func renderProject(invocation *command.Invocation, writer io.Writer, report proj
 				return err
 			}
 		}
+		for _, binding := range item.Implementations {
+			if _, err := fmt.Fprintf(writer, "%q: %s", binding.Identity.Version, invocation.Text("fathomry.workflow_vet.implementation_"+binding.Status)); err != nil {
+				return err
+			}
+			if binding.RequirementsKnown {
+				if _, err := fmt.Fprintf(writer, "; %s %d/%d/%d", invocation.Text("fathomry.workflow_vet.implementation_counts"), binding.SuppliedBindings, binding.RequiredBindings, binding.CallSites); err != nil {
+					return err
+				}
+			}
+			if _, err := fmt.Fprintln(writer); err != nil {
+				return err
+			}
+			if binding.Diagnostic != nil {
+				if _, err := fmt.Fprintf(writer, "%s %s %s\n", binding.Diagnostic.Code, binding.Diagnostic.Reason, binding.Diagnostic.Path); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if _, err := fmt.Fprintf(writer, "%s %d/%d; %s %d\n", invocation.Text("fathomry.workflow_vet.implementation_versions"), report.SelectedVersions, report.TotalVersions, invocation.Text("fathomry.workflow_vet.omitted"), report.OmittedVersions); err != nil {
+		return err
 	}
 	if report.Truncated {
 		_, err := fmt.Fprintln(writer, invocation.Text("fathomry.workflow_vet.truncated"))

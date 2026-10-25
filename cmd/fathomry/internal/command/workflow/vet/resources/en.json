@@ -202,6 +202,66 @@
       "forms": {
         "other": "Catalog metadata failed offline checks."
       }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_versions",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Implementation versions checked / total"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_counts",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Bindings supplied / required / call sites"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_complete",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Go bindings complete"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_not_supplied",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Go bindings not supplied"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_not_checked",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Go bindings not checked"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_failed",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Go binding check failed"
+      }
     }
   ]
 }

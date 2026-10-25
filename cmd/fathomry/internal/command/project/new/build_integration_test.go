@@ -293,7 +293,7 @@ func SecondaryMetadata() *catalog.Metadata {
 				Selected int  `json:"selected_workflows"`
 			}
 		}
-		if json.Unmarshal(raw, &report) != nil || report.Data.Format != "fathomry.project-workflow-check/v1" || report.Data.Passed != passed || report.Data.Full != full || report.Data.Selected != selected {
+		if json.Unmarshal(raw, &report) != nil || report.Data.Format != "fathomry.project-workflow-check/v2" || report.Data.Passed != passed || report.Data.Full != full || report.Data.Selected != selected {
 			t.Fatal("wrong project scope", string(raw))
 		}
 	}

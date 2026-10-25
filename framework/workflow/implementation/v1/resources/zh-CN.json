@@ -1,0 +1,62 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "workflow_implementation",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.workflow_implementation.invalid_binding",
+      "source": "105369005e054d9269b6ded79a84ed2999d85e22b4eca684df0db649cbf780ca",
+      "forms": {
+        "other": "实现绑定无效。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_implementation.unsupported_profile",
+      "source": "3355f7fa489d57b5389571ed6a5b5bb331f530d5fe5bfc4a8705aebec78d46b1",
+      "forms": {
+        "other": "不支持此实现 ABI 或清单协议。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_implementation.limit_exceeded",
+      "source": "860235aebd9d52d1af3fdafc4dc03521e6b6b4a02d57a8a794d9b369dcdc00b4",
+      "forms": {
+        "other": "超出实现检查的限制。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_implementation.canceled",
+      "source": "0aab21d502bfaf1ceda9155f584a52c65405f905bc96066e1005d332b9178aeb",
+      "forms": {
+        "other": "实现检查已取消。"
+      }
+    },
+    {
+      "id": "fathomry.workflow_implementation.invalid_handle",
+      "source": "9e08605faedecc63622457151c7ff0f35d107c8533ca0dfc6f2aeb9da8e493e4",
+      "forms": {
+        "other": "实现句柄或访问方式无效。"
+      }
+    }
+  ]
+}

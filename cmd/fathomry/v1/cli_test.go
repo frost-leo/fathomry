@@ -110,7 +110,7 @@ func TestProjectInspectionAndFailures(t *testing.T) {
 		t.Fatal(handled, err, output.String(), diagnostic.String())
 	}
 	options.Language = "en"
-	for _, args := range [][]string{{"--fathomry-project=v2"}, {"--fathomry-project=v1", "private-canary"}, {"build", "--unknown=private-canary"}, {"--output=json", "build", "--unknown=private-canary"}} {
+	for _, args := range [][]string{{"--fathomry-project=v3"}, {"--fathomry-project=v1", "private-canary"}, {"build", "--unknown=private-canary"}, {"--output=json", "build", "--unknown=private-canary"}} {
 		output.Reset()
 		diagnostic.Reset()
 		handled, err := cli.Handle(context.Background(), args, project, options)
@@ -202,7 +202,7 @@ func TestProjectVetScopeAndOfflineBehavior(t *testing.T) {
 				Workflows []struct{ Code, Metadata string }
 			}
 		}
-		if json.Unmarshal(output.Bytes(), &decoded) != nil || !handled || decoded.Command != "workflow.vet" || decoded.Data.Format != "fathomry.project-workflow-check/v1" || decoded.Data.Passed != test.passed || decoded.Data.Full != test.full || decoded.Data.Total != 2 || decoded.Data.Selected != test.selected || calls != 0 {
+		if json.Unmarshal(output.Bytes(), &decoded) != nil || !handled || decoded.Command != "workflow.vet" || decoded.Data.Format != "fathomry.project-workflow-check/v2" || decoded.Data.Passed != test.passed || decoded.Data.Full != test.full || decoded.Data.Total != 2 || decoded.Data.Selected != test.selected || calls != 0 {
 			t.Fatal("wrong project vet scope", err, output.String())
 		}
 		if (err == nil) != test.passed {

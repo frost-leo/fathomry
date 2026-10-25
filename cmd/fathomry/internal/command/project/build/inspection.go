@@ -169,19 +169,27 @@ func inspect(ctx context.Context, raw []byte) (inspection, wf.Report, error) {
 	if document.Schema != inspectionSchema || !validName(document.Name) || document.Bundles == nil {
 		return inspection{}, wf.Report{}, fail(ErrInspection)
 	}
+	report, _, err := checkInspectionDocument(ctx, document)
+	return document, report, err
+}
+
+func checkInspectionDocument(ctx context.Context, document inspection) (wf.Report, []*wf.Bundle, error) {
+	if !validName(document.Name) || document.Bundles == nil {
+		return wf.Report{}, nil, fail(ErrInspection)
+	}
 	if len(document.Bundles) > wf.MaxInputs {
-		return inspection{}, wf.Report{}, fail(ErrLimit)
+		return wf.Report{}, nil, fail(ErrLimit)
 	}
 	bundles := make([]*wf.Bundle, 0, len(document.Bundles))
 	total := 0
 	for _, raw := range document.Bundles {
 		total += len(raw)
 		if total > wf.MaxInputBytes {
-			return inspection{}, wf.Report{}, fail(ErrLimit)
+			return wf.Report{}, nil, fail(ErrLimit)
 		}
 		bundle, err := wf.Parse(ctx, raw)
 		if err != nil {
-			return inspection{}, wf.Report{}, phaseError(ctx, ErrRejected, err)
+			return wf.Report{}, nil, phaseError(ctx, ErrRejected, err)
 		}
 		bundles = append(bundles, bundle)
 	}
@@ -190,16 +198,16 @@ func inspect(ctx context.Context, raw []byte) (inspection, wf.Report, error) {
 		var err error
 		report, err = wf.Check(ctx, bundles...)
 		if err != nil {
-			return inspection{}, wf.Report{}, phaseError(ctx, ErrRejected, err)
+			return wf.Report{}, nil, phaseError(ctx, ErrRejected, err)
 		}
 		if !report.Passed {
-			return document, report, fail(ErrRejected)
+			return report, nil, fail(ErrRejected)
 		}
 	}
 	if err := canceled(ctx); err != nil {
-		return inspection{}, wf.Report{}, err
+		return wf.Report{}, nil, err
 	}
-	return document, report, nil
+	return report, bundles, nil
 }
 
 func validName(name string) bool {

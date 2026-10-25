@@ -44,8 +44,8 @@ func Definitions() []failure.Definition {
 	return []failure.Definition{
 		{Code: ErrOptions, Identifier: "fathomry.project_build.invalid_options", Module: "fathomry", Component: "project_build", Revision: 1, Message: "Project build options or the root module are invalid."},
 		{Code: ErrCompile, Identifier: "fathomry.project_build.compilation_failed", Module: "fathomry", Component: "project_build", Revision: 1, Message: "Go compilation failed; no new artifact was published."},
-		{Code: ErrInspection, Identifier: "fathomry.project_build.inspection_failed", Module: "fathomry", Component: "project_build", Revision: 1, Message: "The executable did not provide a supported offline project declaration."},
-		{Code: ErrRejected, Identifier: "fathomry.project_build.rejected", Module: "fathomry", Component: "project_build", Revision: 1, Message: "Project declarations failed validation or contain conflicting identities."},
+		{Code: ErrInspection, Identifier: "fathomry.project_build.inspection_failed", Module: "fathomry", Component: "project_build", Revision: 1, Message: "The executable did not provide a supported offline project inspection."},
+		{Code: ErrRejected, Identifier: "fathomry.project_build.rejected", Module: "fathomry", Component: "project_build", Revision: 1, Message: "Project declarations, metadata or supplied implementations failed validation."},
 		{Code: ErrPublish, Identifier: "fathomry.project_build.publication_failed", Module: "fathomry", Component: "project_build", Revision: 1, Message: "Artifact publication failed."},
 		{Code: ErrCanceled, Identifier: "fathomry.project_build.canceled", Module: "fathomry", Component: "project_build", Revision: 1, Message: "Project building was canceled or its deadline expired."},
 		{Code: ErrLimit, Identifier: "fathomry.project_build.limit_exceeded", Module: "fathomry", Component: "project_build", Revision: 1, Message: "A project build resource limit was exceeded."},

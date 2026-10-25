@@ -148,6 +148,48 @@
       "forms": {
         "other": "目录元数据未通过离线校验。"
       }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_versions",
+      "source": "e5ac870c091fd0e1e766a61626bb4528786c68ab9669951a94ae1bfdcb906fb5",
+      "forms": {
+        "other": "实现版本已检查 / 总数"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_counts",
+      "source": "88453606108042e50e571aae9fa36af9227fb32433f2aacba954bf96d026b03d",
+      "forms": {
+        "other": "已提供绑定 / 所需绑定 / 调用位置"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_complete",
+      "source": "8912fced46dde2452b08ab35f832b6741d48e73fd5d393f3875b62a4864779b4",
+      "forms": {
+        "other": "Go 绑定完整"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_not_supplied",
+      "source": "dd8119eb287321525d3d0dfe98e2c8fe13219b4f7b2ddfc8ce797d2bb5d80075",
+      "forms": {
+        "other": "未提供 Go 绑定"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_not_checked",
+      "source": "8119b6f63aa9abafd59bec1c238fd0b55b37f5ae5f89fe0bd877334a57e1ac17",
+      "forms": {
+        "other": "未检查 Go 绑定"
+      }
+    },
+    {
+      "id": "fathomry.workflow_vet.implementation_failed",
+      "source": "09c7458b9eb04bea584ced9580dbd93ee08fb85defcc749cea6533e0995d4a85",
+      "forms": {
+        "other": "Go 绑定检查失败"
+      }
     }
   ]
 }

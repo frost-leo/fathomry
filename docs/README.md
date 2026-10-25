@@ -205,7 +205,7 @@ owns source/operation/evidence lifecycle and performs no ambient environment loo
 [CLI](reference/cmd/fathomry/interface.md) now provides offline help, error and
 translation catalogs, `new` project generation, offline `workflow vet`, project
 `workflow register`, and native
-`build` with declaration admission before artifact publication. The
+`build` with declaration and explicitly supplied Go binding admission before artifact publication. The
 [fixed public CLI entry](reference/cmd/fathomry/v1/interface.md) supports the same
 commands from a generated root `main.go`; no generic command/plugin SDK is exposed.
 Its private entry composition supplies lazy control-database ownership to separate
@@ -216,6 +216,12 @@ The [workflow declaration package](reference/framework/workflow/declaration/v1/i
 adds shared static compilation, self-contained bundle export and canonical local
 comparison. An independent Go helper supplies declarations without Boot or project
 launching by the CLI; checking does not establish source freshness or execution readiness.
+The [implementation binding package](reference/framework/workflow/implementation/v1/interface.md)
+checks explicitly supplied Activity functions against a narrow required-value Go ABI,
+without invoking them. Project vet and v2 build inspection distinguish complete,
+absent and unchecked version coverage; explicit v1 compatibility remains declaration-only.
+Static binding completeness is not runtime-value validation, Worker registration or
+artifact/deployment authorization.
 Internal raw acquisition, strict JSON preparation and type-admission improvements
 remain implemented. Business authors are not expected to recreate private
 assembly machinery as startup boilerplate.
@@ -435,6 +441,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`framework/v1`](reference/framework/v1/interface.md) | Public runtime composition, released-evidence reception and once-bound safe localized logging |
 | [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Strict application/business configuration acceptance, last-good Watch and explicit resource-adoption handoff |
 | [`framework/workflow/declaration/v1`](reference/framework/workflow/declaration/v1/interface.md) | Pure workflow/mode declaration compilation, canonical portable bundles and offline identity/conflict checking |
+| [`framework/workflow/implementation/v1`](reference/framework/workflow/implementation/v1/interface.md) | Explicit Activity binding, bounded static ABI checks and data-only per-version coverage manifests |
 | [`framework/workflow/catalog/v1`](reference/framework/workflow/catalog/v1/interface.md) | Atomic registration, truthful outcomes and bounded localized metadata/document reads |
 | [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Shared fixed CLI commands, project-root inspection and native build publication gate |
 

@@ -128,6 +128,8 @@ const (
 	FacilityWorkflow Facility = 0x1C1
 	// FacilityWorkflowCatalog owns workflow publication and stored catalog semantics.
 	FacilityWorkflowCatalog Facility = 0x1C2
+	// FacilityWorkflowImplementation owns Go Activity binding and manifest coverage.
+	FacilityWorkflowImplementation Facility = 0x1C3
 	// FacilityIceberg owns the public Iceberg table-format capability.
 	FacilityIceberg Facility = 0x320
 	// FacilityChromedp owns the managed Browser capability.
@@ -198,6 +200,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityTemporal, Module: "fathomry", Component: "temporal"},
 		{Facility: FacilityWorkflow, Module: "fathomry", Component: "workflow"},
 		{Facility: FacilityWorkflowCatalog, Module: "fathomry", Component: "workflow_catalog"},
+		{Facility: FacilityWorkflowImplementation, Module: "fathomry", Component: "workflow_implementation"},
 		{Facility: FacilityDatabaseControl, Module: "fathomry", Component: "database_control"},
 		{Facility: FacilityProjectBuild, Module: "fathomry", Component: "project_build"},
 		{Facility: FacilityMail, Module: "fathomry", Component: "notification_mail"},

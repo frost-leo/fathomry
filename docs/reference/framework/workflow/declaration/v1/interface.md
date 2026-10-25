@@ -56,7 +56,11 @@ Public declarations and helpers are documented in
 [bundle.go](../../../../../../framework/workflow/declaration/v1/bundle.go) and
 [compare.go](../../../../../../framework/workflow/declaration/v1/compare.go) define snapshot/report APIs.
 [content.go](../../../../../../framework/workflow/declaration/v1/content.go) provides
-the detached canonical-content seam for persistence consumers.
+the detached canonical-content seam for persistence and static binding consumers.
+`ContentsCopy` copies every entry; `ContentCopy(identity)` copies one exact entry,
+returning `found=false` for absence, never selecting a latest/default version.
+Both refuse nil/zero handles and return independently owned bytes. The declaration
+package does not import or require the separate implementation capability.
 `Fixed` and `Tuned` express a slot; they do not validate or install defaults.
 
 ## Authoring versus file admission
