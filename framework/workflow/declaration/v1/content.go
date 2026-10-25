@@ -57,6 +57,20 @@ func (bundle *Bundle) ContentsCopy() ([]Content, error) {
 	return result, nil
 }
 
+// ContentCopy returns detached content for one exact identity without copying
+// other documents in the bundle. Missing content is not a default selection.
+func (bundle *Bundle) ContentCopy(identity Identity) (Content, bool, error) {
+	if bundle == nil || !bundle.valid {
+		return Content{}, false, problem(ErrHandle, "bundle", "/")
+	}
+	for _, entry := range bundle.entries {
+		if entry.Identity == identity {
+			return Content{Entry: entry.Entry, Bytes: bytes.Clone(entry.content)}, true, nil
+		}
+	}
+	return Content{}, false, nil
+}
+
 // ParseContents verifies a selected bounded set of stored inner documents through
 // the same authority as Parse. Every mode needs its exact parent specification;
 // duplicate identities reject, and input order is irrelevant. It additionally

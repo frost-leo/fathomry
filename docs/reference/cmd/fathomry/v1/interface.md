@@ -43,15 +43,18 @@ second parser or separate management executable exists.
 starting anything. The application then owns its existing arguments. When true,
 the application must return immediately, including on error. Known root commands,
 `help`, `--help`, `-h`, `--lang` and `--output` are reserved CLI inputs.
-The versioned `--fathomry-project=v1` argument is an offline machine protocol,
-not a business startup option. Unknown protocol versions fail closed.
+The versioned `--fathomry-project=v2` argument selects offline declaration and
+implementation inspection. The retained `--fathomry-project=v1` is declaration-only
+compatibility, not a business startup option. Unknown versions fail closed.
 
 ## Project workflow checks
 
 `Project.Workflows` is the combined registry: each `cli.Workflow` contains a
 `declaration.Declaration` for one Namespace/code (possibly several versions) and
-optional `*catalog.Metadata`. Declare each logical workflow once. A nil metadata
-pointer means declaration-only, not catalog publication readiness. The legacy
+optional `*catalog.Metadata` and `[]implementation.VersionBindings`. Declare each
+logical workflow once. A nil metadata pointer means metadata was not supplied, not
+catalog publication readiness. Absent implementation sets mean no callable claim.
+The legacy
 `Project.Declarations` form remains supported; supplying both forms rejects.
 Each form admits at most 16 inputs and retains existing declaration/aggregate
 budgets. The new form counts logical registration units, while a legacy declaration
@@ -64,7 +67,7 @@ all selected descendants, never latest. A mode check retains its parent specific
 Ambiguous Namespace selection, no match, explicit empty selectors and selectors
 combined with Bundle paths reject. Standalone CLI vet still requires explicit files.
 
-Project results use `data.format=fathomry.project-workflow-check/v1`, report the
+Project results use `data.format=fathomry.project-workflow-check/v2`, report the
 selection and full_project flag, total/selected/omitted workflow counts and
 per-workflow declaration and metadata outcomes. Metadata is not_supplied,
 not_checked, passed or failed; absence never claims metadata validation. Diagnostic
@@ -72,9 +75,29 @@ identities identify versions/modes; paths do not expose declaration values.
 One failed workflow does not suppress checks for other valid registry entries.
 Malformed registry structure and operation/input-budget failures remain errors.
 
+Each version's optional binding set is checked through
+[`workflow/implementation/v1`](../../../framework/workflow/implementation/v1/interface.md).
+Duplicate or unknown owner/version/binding keys reject before selection. The
+helper is inert: omitted known versions do not have their callable ABI checked.
+Reports distinguish `not_checked`, `not_supplied`, `failed`, and `complete`, with
+separate `selected`, `supplied` and `requirements_known` flags. Unknown requirement
+counts are not evidence of zero work. An explicitly supplied empty set is not
+absence. One failed claim prevents a successful full build; selecting another
+version cannot certify the omitted one. Mode selection retains its parent version's
+binding obligation without multiplying it.
+
+The v2 project report adds `total_versions`, `selected_versions`, `omitted_versions`
+without changing logical-workflow counters. Per-version records distinguish required
+bindings, supplied bindings and Activity call sites. Three calls to one binding
+mean one registration and three calls. Vet does not retain callable manifests or
+runtime handles. File-only vet remains a declaration check, not a function check.
+
 Empty project vet is an explicit failed zero-work check. Configuration-only build
 remains valid. Build's offline inspection always validates all registrations and
-supplied metadata before emitting bundles; it accepts no selection parameter.
+supplied metadata and implementation claims before emitting bundles; it accepts no
+selection parameter. The shared register/compare preparation also refuses malformed
+supplied binding claims, but neither requires them nor stores executable authority
+in the catalog. Catalog publication and implementation completeness are separate.
 
 One private selected-analysis pass produces the checked declarations and prepared
 metadata. Report-only vet does not retain build/publication outputs; registration
@@ -83,8 +106,9 @@ order and grouping. Mixed legacy sources still require full-source admission eve
 when their logical groups pass separately, so grouping cannot bypass the per-source
 bundle envelope. No cache or second validator is introduced.
 Selected success cannot authorize publishing an otherwise invalid artifact.
-The inspection wire format remains v1; metadata admission happens in the project's
-shared entry before export. This is not an attestation of arbitrary project code.
+Inspection defaults to v2; explicit declaration-only compatibility retains v1.
+The shared entry checks supplied metadata and implementation claims before either
+export. This is not an attestation of arbitrary project code.
 
 No project vet, metadata preparation, help or build path invokes Control or Boot.
 `go run` still compiles the project; selectors do not hide Go compiler errors.
@@ -259,6 +283,7 @@ to adopt the public entry before using this command.
 | `PROJECT` | Root project directory; defaults to the current directory |
 | `--out FILE` | Artifact file, relative to the project directory; defaults to `bin/<declared-name>` |
 | `--timeout DURATION` | Total deadline; default/zero selects 10 minutes, otherwise 1 ms–30 minutes |
+| `--declaration-only` | Explicit legacy v1 inspection for older projects; no implementation-coverage claim |
 | `--lang LOCALE` | CLI display language, independent of application configuration |
 | `--output text\|json` | Restrained terminal banner or the usual `fathomry.cli/v1` envelope |
 
@@ -267,18 +292,30 @@ The build path:
 1. Checks native target selection and root-module presence.
 2. Compiles `.` to a unique temporary executable with `GOWORK=off`, empty
    `GOFLAGS`, `-mod=readonly`, `-buildvcs=false`, and `-trimpath`.
-3. Runs that executable's bounded offline inspection, without application Boot.
+3. Runs that executable's bounded offline v2 inspection, without application Boot.
 4. Revalidates every returned bundle through the existing
    [declaration core](../../../framework/workflow/declaration/v1/interface.md)
-   and compares supplied identities across the full returned set.
+   and compares supplied identities across the full returned set. For v2 it also
+   requires one coverage record per version and revalidates complete data manifests
+   against the exact declaration profile, identity, fingerprint and call references.
 5. Checks that the executable did not change during inspection and stages identical
    bytes beside the output. Only successful admission permits final rename.
 
 No second compilation occurs after inspection. The result identifies the published
-file, its SHA256, native target, workflow/mode counts and declaration entries.
+file, its SHA256, native target, workflow/mode counts, declaration entries,
+`inspection` schema and per-version `implementations` coverage. These observations
+are associated with the digest of the same inspected executable, not another build.
 The digest describes executable bytes, not the workflow declaration fingerprint.
 An empty project is permitted for configuration-only skeletons and reports zero
 workflows; it does not claim that a workflow was checked.
+
+The default exchange is `fathomry.project-inspection/v2`. A missing, malformed or
+failed v2 response never retries v1. Use `--declaration-only` deliberately for a
+v1-only project. That exchange remains exactly `schema`/`name`/`bundles`, and its
+result states implementation inspection is unavailable. A newer project exporting
+v1 still checks all supplied implementation claims; the flag cannot bypass a bad
+claim. Complete manifests certify static supplied binding coverage, not handler
+behavior, runtime values, DataConverter compatibility or deployment authorization.
 
 ## Ownership, bounds and limitations
 
@@ -294,9 +331,12 @@ group or intentionally leave background work. Filesystem calls and OS process
 termination remain subject to native scheduling and I/O; the deadline is not
 a hard wall-clock return guarantee.
 
-The inspection envelope admits at most 16 bundles, 64 MiB aggregate bundle bytes,
-and 4 KiB envelope allowance. Each bundle retains the declaration core's tighter
-limits. Go diagnostics have a 64 KiB bound per stream; oversized output fails.
+Inspection admits at most 16 bundles and 64 MiB aggregate bundle bytes. The v2
+implementation array admits at most 1,024 version records and 16 MiB encoded data,
+with an 80 MiB + 4 KiB whole-response bound. The v1 whole-response bound remains
+64 MiB + 4 KiB. Both encoded sizes and record relationships are checked; no truncation
+counts as success. Each bundle retains the declaration core's tighter limits.
+Go diagnostics have a 64 KiB bound per stream; oversized output fails.
 Executables are regular, executable files limited to 1 GiB. Native compiler causes
 and independently observed output-limit failures remain inspectable through the
 error chain even when caller cancellation wins; default CLI diagnostics do not print
@@ -304,8 +344,10 @@ compiler stderr, source contents, environment variables or private payloads.
 
 Only trusted source is supported. Go package initialization runs before main:
 it and declaration assembly must be free of service/business side effects.
-This mechanism is not a sandbox and cannot prove that every executable handler
-has a corresponding declaration. Keep declarations deterministic; do not choose
+This mechanism is not a sandbox or attestation of adversarial executable code.
+The trusted shared entry checks actual supplied Go values; its parent checks the
+data relationships, not code through JSON. Unregistered functions are not discovered.
+Keep declarations and binding assembly deterministic; do not choose
 different definitions based on invocation arguments, environment or current time.
 Do not modify source during Go compilation or concurrently mutate output paths.
 The build does not create an immutable filesystem source snapshot.

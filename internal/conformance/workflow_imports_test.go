@@ -31,14 +31,14 @@ import (
 	"testing"
 )
 
-// The exception is a concrete data-only capability at a concrete CLI boundary,
+// The exception is a concrete offline admission capability at a CLI boundary,
 // not permission for arbitrary Framework scenarios or a future version.
 func cliWorkflowDeclarationUseAllowed(relative, imported string, item *ast.ImportSpec, file *ast.File) bool {
 	const workflow = "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
 	testFile := filepath.ToSlash(filepath.Dir(relative)) == "internal/command/workflow/vet" && strings.HasSuffix(relative, "_test.go")
-	buildTest := relative == "internal/command/project/build/inspection_test.go"
+	buildTest := relative == "internal/command/project/build/inspection_test.go" || relative == "internal/command/project/build/implementation_inspection_test.go"
 	entryTest := relative == "v1/cli_test.go"
-	projectTest := relative == "internal/command/workflow/workflow_test.go"
+	projectTest := relative == "internal/command/workflow/workflow_test.go" || relative == "internal/command/workflow/implementations_test.go"
 	publicationTest := relative == "internal/command/workflow/publication_test.go"
 	var allowed []string
 	name := ""
@@ -67,11 +67,15 @@ func cliWorkflowDeclarationUseAllowed(relative, imported string, item *ast.Impor
 				allowed = append(allowed, "Decimal", "Fixed", "DataSchema", "ErrLimit")
 			}
 		} else if relative == "internal/command/project/build/build.go" {
-			allowed = []string{"Entry"}
+			allowed = []string{"Entry", "Report"}
+		} else if relative == "internal/command/workflow/implementations.go" {
+			allowed = []string{"Identity", "Bundle", "Declaration", "WorkflowDeclaration", "MaxWorkflows"}
+		} else if relative == "internal/command/project/build/implementation_inspection.go" {
+			allowed = []string{"MaxInputBytes", "MaxInputs", "MaxWorkflows", "Report", "Identity", "Bundle"}
 		} else if relative == "internal/command/project/build/inspection.go" || buildTest {
 			allowed = []string{"Declaration", "MaxInputs", "MaxInputBytes", "MaxBundleBytes", "Compile", "Parse", "Check", "Report", "Bundle", "Entry", "Conflict", "InputDiagnostic"}
 			if buildTest {
-				allowed = append(allowed, "Decimal")
+				allowed = append(allowed, "Decimal", "MaxWorkflows")
 			}
 		} else {
 			if relative != "internal/command/workflow/vet/vet.go" && !testFile {
@@ -81,6 +85,24 @@ func cliWorkflowDeclarationUseAllowed(relative, imported string, item *ast.Impor
 			if testFile {
 				allowed = append(allowed, "Compile", "Component", "Decimal")
 			}
+		}
+	case imported == "github.com/frost-leo/fathomry/framework/workflow/implementation/v1":
+		if item.Name == nil {
+			return false
+		}
+		switch relative {
+		case "v1/cli.go":
+			allowed = []string{"Component"}
+		case "internal/command/workflow/workflow.go":
+			allowed = []string{"VersionBindings"}
+		case "internal/command/workflow/implementations.go":
+			allowed = []string{"Binding", "VersionBindings", "Diagnostic", "Manifest", "Describe", "Prepare", "Diagnose"}
+		case "internal/command/project/build/implementation_inspection.go":
+			allowed = []string{"MaxManifestBytes", "ErrLimit", "Describe", "ValidateManifest"}
+		case "internal/command/workflow/implementations_test.go", "internal/command/project/build/implementation_inspection_test.go":
+			allowed = []string{"Activity", "Binding", "VersionBindings", "Callable", "MaxManifestBytes", "ErrInvalid", "ErrUnsupported"}
+		default:
+			return false
 		}
 	case imported == "github.com/frost-leo/fathomry/framework/workflow/catalog/v1":
 		if item.Name == nil {
@@ -140,6 +162,9 @@ func TestWorkflowCLIImportException(t *testing.T) {
 		allowed                                 bool
 	}{
 		{"parse", "internal/command/workflow/vet/vet.go", workflow, "wf", "wf.Parse(nil,nil)", true},
+		{"binding_check", "internal/command/workflow/implementations.go", "github.com/frost-leo/fathomry/framework/workflow/implementation/v1", "impl", "impl.Prepare(nil,nil,struct{}{},nil)", true},
+		{"binding_no_execution", "internal/command/workflow/implementations.go", "github.com/frost-leo/fathomry/framework/workflow/implementation/v1", "impl", "impl.StartWorker(nil)", false},
+		{"binding_no_leaf_preparation", "internal/command/workflow/vet/vet.go", "github.com/frost-leo/fathomry/framework/workflow/implementation/v1", "impl", "impl.Prepare(nil,nil,struct{}{},nil)", false},
 		{"check", "internal/command/workflow/vet/vet.go", workflow, "wf", "wf.Check(nil)", true},
 		{"diagnostic", "internal/command/workflow/vet/vet.go", workflow, "wf", "wf.Diagnose(nil)", true},
 		{"metadata", "internal/app/catalog.go", workflow, "wf", "wf.Component()", true},

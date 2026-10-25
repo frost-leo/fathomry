@@ -39,16 +39,16 @@
     },
     {
       "id": "fathomry.project_build.inspection_failed",
-      "source": "6e0c91afaa976681cbf98059fec4a8a18b30e7c8e41351b76e0df396ff324c68",
+      "source": "9a6d6a5caf3c6fedc916069283ebb595858ca22c14151478f3859e166f3a5206",
       "forms": {
-        "other": "可执行程序未提供受支持的离线项目声明。"
+        "other": "可执行程序未提供受支持的离线项目检查结果。"
       }
     },
     {
       "id": "fathomry.project_build.rejected",
-      "source": "ab879c1a92d65dcd41e3f29fa930bf9011ae3f300c93f939e010379a7d000708",
+      "source": "1ad0e28c42297aeaa09b11006bdf7b8816f8fc273f2fadc8f2eed3b592f33871",
       "forms": {
-        "other": "项目声明未通过校验或存在身份冲突。"
+        "other": "项目声明、元数据或已提供的实现未通过校验。"
       }
     },
     {
@@ -154,6 +154,27 @@
       "source": "f86ce1cedfba39c80b653db9dc307cd99c4198d625c0e381c9e9666216708ff4",
       "forms": {
         "other": "SHA256"
+      }
+    },
+    {
+      "id": "fathomry.project_build.declaration_only",
+      "source": "56ca6f3dc4875715218565e8d370666fa06f3c5dc60db63dbe22160c78e4aec6",
+      "forms": {
+        "other": "显式使用旧版仅声明检查，不执行实现清单检查。"
+      }
+    },
+    {
+      "id": "fathomry.project_build.implementation_unavailable",
+      "source": "ea44cdfee8d39d6bdef0151b1ed3cac97772d010af035dbf416a6c9c6ff14ba2",
+      "forms": {
+        "other": "Go 绑定检查不可用（仅声明兼容模式）"
+      }
+    },
+    {
+      "id": "fathomry.project_build.implementation_coverage",
+      "source": "31275df53e5560432efc81f67dc174d235f2eddbbd126d15300279b7de57f48d",
+      "forms": {
+        "other": "Go 绑定完整版本 / 总版本"
       }
     }
   ]

@@ -28,6 +28,7 @@ import (
 	"runtime"
 	"time"
 
+	workflows "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow"
 	"github.com/frost-leo/fathomry/failure/v1"
 
 	wf "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
@@ -44,19 +45,23 @@ type Options struct {
 	Directory string
 	Output    string
 	Timeout   time.Duration
+	// DeclarationOnly explicitly selects legacy v1; a failed v2 never falls back.
+	DeclarationOnly bool
 }
 
 // Result reports publication, not deployment or Temporal admission. On an error,
 // Published may still be true if publication preceded a cleanup failure.
 type Result struct {
-	Name      string     `json:"name"`
-	Artifact  string     `json:"artifact"`
-	SHA256    string     `json:"sha256"`
-	Target    string     `json:"target"`
-	Published bool       `json:"published"`
-	Workflows int        `json:"workflows"`
-	Modes     int        `json:"modes"`
-	Entries   []wf.Entry `json:"entries"`
+	Name            string                           `json:"name"`
+	Artifact        string                           `json:"artifact"`
+	SHA256          string                           `json:"sha256"`
+	Target          string                           `json:"target"`
+	Published       bool                             `json:"published"`
+	Workflows       int                              `json:"workflows"`
+	Modes           int                              `json:"modes"`
+	Entries         []wf.Entry                       `json:"entries"`
+	Inspection      string                           `json:"inspection"`
+	Implementations []workflows.ImplementationReport `json:"implementations"`
 }
 
 // Run freshly compiles the root package, executes its bounded offline inspection,
@@ -126,12 +131,23 @@ func Run(ctx context.Context, options Options) (result Result, err error) {
 		return result, phaseError(ctx, ErrInspection, err)
 	}
 	inspectContext, stop := context.WithTimeout(ctx, 15*time.Second)
-	raw, err = runProcess(inspectContext, directory, environment, maxInspectionBytes, binary, InspectionArgument)
+	argument, maximum := ImplementationInspectionArgument, maxImplementationInspectionBytes
+	if options.DeclarationOnly {
+		argument, maximum = InspectionArgument, maxInspectionBytes
+	}
+	raw, err = runProcess(inspectContext, directory, environment, maximum, binary, argument)
 	stop()
 	if err != nil {
 		return result, phaseError(ctx, ErrInspection, err)
 	}
-	document, report, err := inspect(ctx, raw)
+	var document inspection
+	var report wf.Report
+	var implementations []workflows.ImplementationReport
+	if options.DeclarationOnly {
+		document, report, err = inspect(ctx, raw)
+	} else {
+		document, report, implementations, err = inspectImplementations(ctx, raw)
+	}
 	if err != nil {
 		return result, err
 	}
@@ -152,7 +168,7 @@ func Run(ctx context.Context, options Options) (result Result, err error) {
 	output = filepath.Clean(output)
 	result = Result{Name: document.Name, Artifact: output, SHA256: after,
 		Target: target.GOOS + "/" + target.GOARCH, Workflows: report.Workflows,
-		Modes: report.Modes, Entries: report.Entries}
+		Modes: report.Modes, Entries: report.Entries, Inspection: document.Schema, Implementations: implementations}
 	result.Published, err = publish(ctx, binary, output, after)
 	return result, err
 }

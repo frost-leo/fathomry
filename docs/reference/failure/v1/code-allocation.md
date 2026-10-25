@@ -160,6 +160,7 @@ The authoritative first-party manifest is
 | 0x283 | fathomry / logging_zerolog | [Public zerolog logging, typed event recovery and file maintenance](../../adapters/logging/zerolog/v1/interface.md) |
 | 0x1C0 | fathomry / temporal | [Public Temporal orchestration, Worker lifecycle and native semantic errors](../../adapters/orchestration/temporal/v1/interface.md) |
 | 0x1C1 | fathomry / workflow | [Portable workflow declaration validation and comparison](../../framework/workflow/declaration/v1/interface.md), not workflow execution |
+| 0x1C3 | fathomry / workflow_implementation | [Static Go Activity binding and bounded implementation manifests](../../framework/workflow/implementation/v1/interface.md), not execution qualification |
 | 0x2C0 | fathomry / notification_mail | [Managed Mail notification operations](../../adapters/notification/mail/v1/interface.md) |
 | 0x2C1 | fathomry / notification_lark | [Managed Lark notification and reception operations](../../adapters/notification/lark/v1/interface.md) |
 

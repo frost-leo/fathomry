@@ -45,6 +45,7 @@ import (
 	"github.com/frost-leo/fathomry/failure/v1"
 	catalog "github.com/frost-leo/fathomry/framework/workflow/catalog/v1"
 	wf "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
+	implementation "github.com/frost-leo/fathomry/framework/workflow/implementation/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
 	"github.com/spf13/cobra"
 )
@@ -66,7 +67,7 @@ type Options struct {
 // Project supplies the root executable's offline data and optional lazy control
 // configuration. Control is called only by explicit online commands, never by
 // construction, help, vet, build or build inspection. Name is a portable project
-// name. Workflows is the combined declaration/metadata registry; legacy
+// name. Workflows combines declarations, metadata and optional Go bindings; legacy
 // Declarations remains supported, but setting both is invalid. Empty input means
 // a configuration-only project, not a completed workflow check. Assembly and init
 // must not access services or run business operations.
@@ -77,9 +78,10 @@ type Project struct {
 	Control      DatabaseResolver
 }
 
-// Workflow combines one logical workflow's authored versions and optional catalog
-// metadata. Use Project.Workflows or legacy Declarations, not both. Each registry
-// admits at most declaration.MaxInputs entries; versions remain inside their entry.
+// Workflow combines one logical workflow's authored versions, optional catalog
+// metadata and per-version Go bindings. Use Project.Workflows or legacy
+// Declarations, not both. Each registry admits at most declaration.MaxInputs
+// entries; versions remain inside their entry.
 type Workflow = workflowcmd.Workflow
 
 // ExecutionError retains an online command's original error, bounded JSON mutation
@@ -91,7 +93,7 @@ type ExecutionError = command.ExecutionError
 // Components returns the fixed command set's metadata without preparing a catalog.
 // Callers with a custom catalog add their base/component data separately.
 func Components() []i18n.Component {
-	result := []i18n.Component{command.Component(), errorcatalog.Component(), messages.Component(), wf.Component(), catalog.Component(), vetcmd.Component()}
+	result := []i18n.Component{command.Component(), errorcatalog.Component(), messages.Component(), wf.Component(), catalog.Component(), implementation.Component(), vetcmd.Component()}
 	result = append(result, project.Components()...)
 	result = append(result, schemacmd.Components()...)
 	result = append(result, statuscmd.Component(), plancmd.Component(), applycmd.Component())
@@ -124,8 +126,11 @@ func Handle(ctx context.Context, args []string, project Project, options Options
 		return true, invoke(ctx, nil, options, func(invocation *command.Invocation) *cobra.Command {
 			root := &cobra.Command{Use: "fathomry", Short: "fathomry.command_line.root", Args: cobra.NoArgs}
 			invocation.Bind(root, func(ctx context.Context, _ []string) error {
-				if len(args) != 1 || args[0] != buildcmd.InspectionArgument {
+				if len(args) != 1 || (args[0] != buildcmd.InspectionArgument && args[0] != buildcmd.ImplementationInspectionArgument) {
 					return command.Fail(command.ErrUsage)
+				}
+				if args[0] == buildcmd.ImplementationInspectionArgument {
+					return buildcmd.ExportImplementations(ctx, buildcmd.Definition{Name: project.Name, Workflows: project.Workflows, Declarations: project.Declarations}, options.Output)
 				}
 				return buildcmd.Export(ctx, buildcmd.Definition{Name: project.Name, Workflows: project.Workflows, Declarations: project.Declarations}, options.Output)
 			})

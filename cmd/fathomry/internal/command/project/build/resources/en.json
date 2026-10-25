@@ -50,7 +50,7 @@
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "The executable did not provide a supported offline project declaration."
+        "other": "The executable did not provide a supported offline project inspection."
       }
     },
     {
@@ -60,7 +60,7 @@
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Project declarations failed validation or contain conflicting identities."
+        "other": "Project declarations, metadata or supplied implementations failed validation."
       }
     },
     {
@@ -211,6 +211,36 @@
       "cardinal": false,
       "forms": {
         "other": "SHA256"
+      }
+    },
+    {
+      "id": "fathomry.project_build.declaration_only",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Use explicit legacy declaration-only inspection instead of implementation inspection."
+      }
+    },
+    {
+      "id": "fathomry.project_build.implementation_unavailable",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Go binding inspection unavailable (declaration-only compatibility)"
+      }
+    },
+    {
+      "id": "fathomry.project_build.implementation_coverage",
+      "contract": "v1",
+      "context": "Project implementation binding inspection; no execution or deployment qualification.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Go binding versions complete / total"
       }
     }
   ]

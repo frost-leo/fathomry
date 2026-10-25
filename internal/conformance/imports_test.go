@@ -198,6 +198,9 @@ func TestCatalogPublicationUsesPublicContracts(t *testing.T) {
 		if path == "github.com/frost-leo/fathomry/framework/workflow/catalog/v1" {
 			continue // Catalog publication admission, not database resource ownership.
 		}
+		if path == "github.com/frost-leo/fathomry/framework/workflow/implementation/v1" {
+			continue // Static callable binding, not an Activity executor or Worker.
+		}
 		switch path {
 		case "github.com/frost-leo/fathomry/schema/fathomry":
 			continue // Test-only dialect parity and service qualification harness.
@@ -354,6 +357,15 @@ func TestFrameworkHasNoDirectInternalImports(t *testing.T) {
 				t.Errorf("Framework bypasses public Adapters: %s: %s", path, imported)
 			}
 			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/cmd/") {
+				relative, err := filepath.Rel(root, path)
+				if err != nil {
+					return err
+				}
+				if imported == "github.com/frost-leo/fathomry/cmd/fathomry/v1" &&
+					(filepath.ToSlash(relative) == "framework/workflow/implementation/v1/testdata/consumer/main.go" ||
+						filepath.ToSlash(relative) == "framework/workflow/implementation/v1/testdata/consumer/workflows/example/server_health/v1/workflow.go") {
+					continue // Independent module assembly, never imported by Framework.
+				}
 				t.Errorf("Framework depends on command tools: %s: %s", path, imported)
 			}
 		}

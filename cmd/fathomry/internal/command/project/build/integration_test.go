@@ -41,6 +41,10 @@ import (
 )
 
 func buildFixture(t *testing.T, directory, document string, changeSource bool) {
+	buildFixtureArgument(t, directory, document, changeSource, ImplementationInspectionArgument)
+}
+
+func buildFixtureArgument(t *testing.T, directory, document string, changeSource bool, argument string) {
 	t.Helper()
 	mutation := ""
 	if changeSource {
@@ -56,7 +60,7 @@ func main() {
  }
  fmt.Print("business-result")
 }
-`, InspectionArgument, mutation, document)
+`, argument, mutation, document)
 	if err := os.WriteFile(filepath.Join(directory, "main.go"), []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +83,7 @@ func TestNativeBuildGate(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := filepath.Join(t.TempDir(), "artifact")
-	document := `{"schema":"fathomry.project-inspection/v1","name":"health","bundles":[]}`
+	document := `{"schema":"fathomry.project-inspection/v2","name":"health","bundles":[],"implementations":[]}`
 	buildFixture(t, directory, document, false)
 	result, err := Run(ctx, Options{Directory: directory, Output: output})
 	if err != nil || !result.Published || result.Workflows != 0 || result.Name != "health" {
@@ -92,7 +96,7 @@ func TestNativeBuildGate(t *testing.T) {
 		t.Fatal("artifact not runnable", err)
 	}
 	original := result.SHA256
-	for _, bad := range []string{"{}", `{"schema":"fathomry.project-inspection/v1","name":"health","bundles":[{}]}`} {
+	for _, bad := range []string{"{}", `{"schema":"fathomry.project-inspection/v2","name":"health","bundles":[{}],"implementations":[]}`} {
 		buildFixture(t, directory, bad, false)
 		result, err := Run(ctx, Options{Directory: directory, Output: output})
 		if err == nil || result.Published {
@@ -139,6 +143,59 @@ func TestCrossTargetBuild(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(directory, "bin")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("cross build created output")
+	}
+}
+
+func TestExplicitLegacyInspection(t *testing.T) {
+	if testing.Short() || !supportedHost {
+		t.Skip("real native compiler integration")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "go.mod"), []byte("module example.org/legacy\ngo 1.27.0\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "artifact")
+	document := `{"schema":"fathomry.project-inspection/v1","name":"legacy","bundles":[]}`
+	buildFixtureArgument(t, directory, document, false, InspectionArgument)
+	result, err := Run(ctx, Options{Directory: directory, Output: output, DeclarationOnly: true})
+	if err != nil || !result.Published || result.Inspection != inspectionSchema || len(result.Implementations) != 0 {
+		t.Fatal("explicit v1-only compatibility failed", result, err)
+	}
+	original := result.SHA256
+	if result, err := Run(ctx, Options{Directory: directory, Output: output}); err == nil || result.Published {
+		t.Fatal("v1-only project silently downgraded", result, err)
+	}
+	marker := filepath.Join(directory, "legacy-inspected")
+	source := fmt.Sprintf(`package main
+import ("fmt";"os")
+func main() {
+ if len(os.Args)==2 && os.Args[1]==%q {
+  if err:=os.WriteFile(%q,[]byte("v1"),0600);err!=nil {panic(err)}
+  fmt.Print(%q)
+  return
+ }
+ fmt.Print("{}")
+}
+`, InspectionArgument, marker, document)
+	if err := os.WriteFile(filepath.Join(directory, "main.go"), []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if result, err := Run(ctx, Options{Directory: directory, Output: output}); !errors.Is(err, ErrInspection) || result.Published {
+		t.Fatal("malformed v2 accepted", result, err)
+	}
+	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("failed v2 invoked the legacy branch", err)
+	}
+	if hash, err := executableHash(ctx, output); err != nil || hash != original {
+		t.Fatal("failed inspection replaced the existing artifact", err)
+	}
+	if result, err := Run(ctx, Options{Directory: directory, Output: output, DeclarationOnly: true}); err != nil || !result.Published {
+		t.Fatal("explicit compatibility refused the valid legacy response", result, err)
+	}
+	if raw, err := os.ReadFile(marker); err != nil || string(raw) != "v1" {
+		t.Fatal("legacy positive control did not run", err)
 	}
 }
 

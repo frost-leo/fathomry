@@ -35,16 +35,19 @@ import (
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	catalog "github.com/frost-leo/fathomry/framework/workflow/catalog/v1"
 	wf "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
+	implementation "github.com/frost-leo/fathomry/framework/workflow/implementation/v1"
 	"github.com/spf13/cobra"
 )
 
-// Workflow registers one logical workflow's versions and optional publication
-// metadata together. Its Declaration must contain one Namespace/code. Metadata
+// Workflow registers one logical workflow's versions, optional publication
+// metadata and Go implementation sets. Its Declaration must contain one Namespace/code. Metadata
 // nil means declaration-only, not ready for catalog registration. Inputs are
 // borrowed during a check; concurrent mutation is unsupported.
 type Workflow struct {
 	Declaration wf.Declaration
 	Metadata    *catalog.Metadata
+	// Implementations opts exact versions into Go binding checks; absence is data-only.
+	Implementations []implementation.VersionBindings
 }
 
 func (Workflow) Format(state fmt.State, _ rune) { _, _ = state.Write([]byte("workflow.Registration")) }
@@ -70,37 +73,43 @@ type Selection struct {
 // WorkflowReport names the selected logical workflow; Declaration counts are
 // version/mode-revision counts. Metadata is not_supplied/not_checked/passed/failed.
 type WorkflowReport struct {
-	Namespace            string              `json:"namespace"`
-	Code                 string              `json:"code"`
-	Versions             []string            `json:"versions"`
-	Passed               bool                `json:"passed"`
-	Declaration          wf.Report           `json:"declaration"`
-	DiagnosticIdentities []wf.Identity       `json:"diagnostic_identities,omitempty"`
-	Metadata             string              `json:"metadata"`
-	MetadataDiagnostic   *catalog.Diagnostic `json:"metadata_diagnostic,omitempty"`
+	Namespace            string                 `json:"namespace"`
+	Code                 string                 `json:"code"`
+	Versions             []string               `json:"versions"`
+	Passed               bool                   `json:"passed"`
+	Declaration          wf.Report              `json:"declaration"`
+	DiagnosticIdentities []wf.Identity          `json:"diagnostic_identities,omitempty"`
+	Metadata             string                 `json:"metadata"`
+	MetadataDiagnostic   *catalog.Diagnostic    `json:"metadata_diagnostic,omitempty"`
+	Implementations      []ImplementationReport `json:"implementations"`
 }
 
 // ProjectReport reports only the selected scope, never DB state or readiness.
 // Empty is an explicit zero-work outcome, not a successful workflow check.
 type ProjectReport struct {
-	Format      string           `json:"format"`
-	Selection   Selection        `json:"selection"`
-	FullProject bool             `json:"full_project"`
-	Empty       bool             `json:"empty"`
-	Passed      bool             `json:"passed"`
-	Total       int              `json:"total_workflows"`
-	Selected    int              `json:"selected_workflows"`
-	Omitted     int              `json:"omitted_workflows"`
-	Workflows   []WorkflowReport `json:"workflows"`
-	Truncated   bool             `json:"truncated"`
+	Format           string           `json:"format"`
+	Selection        Selection        `json:"selection"`
+	FullProject      bool             `json:"full_project"`
+	Empty            bool             `json:"empty"`
+	Passed           bool             `json:"passed"`
+	Total            int              `json:"total_workflows"`
+	Selected         int              `json:"selected_workflows"`
+	Omitted          int              `json:"omitted_workflows"`
+	Workflows        []WorkflowReport `json:"workflows"`
+	Truncated        bool             `json:"truncated"`
+	TotalVersions    int              `json:"total_versions"`
+	SelectedVersions int              `json:"selected_versions"`
+	OmittedVersions  int              `json:"omitted_versions"`
 }
 
 type workflowIdentity struct{ namespace, code string }
 type projectGroup struct {
-	identity workflowIdentity
-	parts    []wf.Declaration
-	sources  []int
-	metadata *catalog.Metadata
+	identity        workflowIdentity
+	parts           []wf.Declaration
+	sources         []int
+	metadata        *catalog.Metadata
+	originals       []wf.WorkflowDeclaration
+	implementations []implementation.VersionBindings
 }
 
 type analysisMode uint8
@@ -145,7 +154,7 @@ func CheckProject(ctx context.Context, input ProjectInput, selection Selection) 
 }
 
 func analyzeProject(ctx context.Context, input ProjectInput, selection Selection, mode analysisMode) (result projectAnalysis, err error) {
-	result.report = ProjectReport{Format: "fathomry.project-workflow-check/v1", Selection: selection, FullProject: selection == (Selection{}), Workflows: []WorkflowReport{}}
+	result.report = ProjectReport{Format: "fathomry.project-workflow-check/v2", Selection: selection, FullProject: selection == (Selection{}), Workflows: []WorkflowReport{}}
 	report := &result.report
 	defer func() {
 		if err != nil || !result.report.Passed {
@@ -163,6 +172,9 @@ func analyzeProject(ctx context.Context, input ProjectInput, selection Selection
 		return result, err
 	}
 	report.Total = len(groups)
+	for _, group := range groups {
+		report.TotalVersions += len(allVersions(group))
+	}
 	if selection.Workflow != "" && selection.Namespace == "" {
 		namespaces := map[string]bool{}
 		for _, group := range groups {
@@ -208,7 +220,15 @@ func analyzeProject(ctx context.Context, input ProjectInput, selection Selection
 		if err != nil {
 			return projectAnalysis{}, err
 		}
+		if err := checkImplementations(ctx, group, &checked, mode == exportProject); err != nil {
+			return projectAnalysis{}, err
+		}
 		item := checked.report
+		for _, version := range item.Implementations {
+			if version.Selected {
+				report.SelectedVersions++
+			}
+		}
 		report.Passed = report.Passed && item.Passed
 		if report.FullProject && report.Passed {
 			for index, part := range checked.parts {
@@ -251,6 +271,16 @@ func analyzeProject(ctx context.Context, input ProjectInput, selection Selection
 				remainingDiagnostics--
 			}
 		}
+		for index := range item.Implementations {
+			if item.Implementations[index].Diagnostic != nil {
+				if remainingDiagnostics == 0 {
+					item.Implementations[index].Diagnostic = nil
+					report.Truncated = true
+				} else {
+					remainingDiagnostics--
+				}
+			}
+		}
 		report.Truncated = report.Truncated || item.Declaration.Truncated
 		for _, conflict := range item.Declaration.Conflicts {
 			report.Truncated = report.Truncated || conflict.PathsTruncated
@@ -285,6 +315,7 @@ func analyzeProject(ctx context.Context, input ProjectInput, selection Selection
 	if err := projectContext(ctx); err != nil {
 		return projectAnalysis{}, err
 	}
+	report.OmittedVersions = report.TotalVersions - report.SelectedVersions
 	return result, nil
 }
 
@@ -323,6 +354,11 @@ func projectGroups(input ProjectInput) ([]projectGroup, []wf.Declaration, error)
 		if len(input.Workflows) > 0 && len(identities) != 1 {
 			return nil, nil, command.Fail(command.ErrUsage)
 		}
+		if len(input.Workflows) > 0 {
+			if err := implementationStructure(source, input.Workflows[sourceIndex].Implementations); err != nil {
+				return nil, nil, err
+			}
+		}
 		if len(source.Workflows) == 0 {
 			groups = append(groups, projectGroup{parts: []wf.Declaration{source}, sources: []int{sourceIndex}})
 			continue
@@ -336,12 +372,14 @@ func projectGroups(input ProjectInput) ([]projectGroup, []wf.Declaration, error)
 				group := projectGroup{identity: key}
 				if len(input.Workflows) > 0 {
 					group.metadata = input.Workflows[sourceIndex].Metadata
+					group.implementations = input.Workflows[sourceIndex].Implementations
 				}
 				groups = append(groups, group)
 			} else if len(input.Workflows) > 0 && len(groups[index].sources) > 0 && groups[index].sources[0] != sourceIndex {
 				return nil, nil, command.Fail(command.ErrUsage)
 			}
 			group := &groups[index]
+			group.originals = append(group.originals, value)
 			if len(group.sources) == 0 || group.sources[len(group.sources)-1] != sourceIndex {
 				group.sources = append(group.sources, sourceIndex)
 				group.parts = append(group.parts, wf.Declaration{})

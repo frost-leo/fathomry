@@ -36,6 +36,7 @@ func New(invocation *command.Invocation) *cobra.Command {
 	cmd := &cobra.Command{Use: "build [PROJECT]", Short: "fathomry.project_build.command", Args: cobra.MaximumNArgs(1)}
 	cmd.Flags().StringVar(&options.Output, "out", "", "fathomry.project_build.out")
 	cmd.Flags().DurationVar(&options.Timeout, "timeout", DefaultTimeout, "fathomry.project_build.timeout")
+	cmd.Flags().BoolVar(&options.DeclarationOnly, "declaration-only", false, "fathomry.project_build.declaration_only")
 	invocation.Bind(cmd, func(ctx context.Context, args []string) error {
 		if len(args) == 1 {
 			options.Directory = args[0]
@@ -92,5 +93,24 @@ func Render(writer io.Writer, result Result, language string) error {
 	fmt.Fprintf(&buffer, "  %-14s %s\n  %-14s %q\n  %-14s %d / %d\n  %-14s %q\n  %-14s %q\n\n",
 		labels[1], result.Name, labels[2], result.Target, labels[3], result.Workflows, result.Modes,
 		labels[4], result.Artifact, labels[5], result.SHA256)
+	messageID := "implementation_coverage"
+	if result.Inspection != implementationInspectionSchema {
+		messageID = "implementation_unavailable"
+	}
+	message, err := value.Render("fathomry.project_build."+messageID, nil, nil)
+	if err != nil {
+		return err
+	}
+	complete := 0
+	for _, record := range result.Implementations {
+		if record.Status == "complete" {
+			complete++
+		}
+	}
+	if result.Inspection == implementationInspectionSchema {
+		fmt.Fprintf(&buffer, "  %s: %d / %d (%s)\n", message.Text, complete, len(result.Implementations), result.Inspection)
+	} else {
+		fmt.Fprintf(&buffer, "  %s (%s)\n", message.Text, result.Inspection)
+	}
 	return writeAll(writer, buffer.Bytes())
 }
