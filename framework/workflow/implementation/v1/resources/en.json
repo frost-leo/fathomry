@@ -64,6 +64,16 @@
       }
     },
     {
+      "id": "fathomry.workflow_implementation.invocation_failed",
+      "contract": "v1",
+      "context": "Checked synchronous Activity invocation; validity is not proof of effects.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The Activity invocation did not produce valid output."
+      }
+    },
+    {
       "id": "fathomry.workflow_implementation.invalid_handle",
       "contract": "v1",
       "context": "Static Go binding and implementation coverage; no runtime or deployment qualification.",

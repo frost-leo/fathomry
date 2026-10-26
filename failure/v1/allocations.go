@@ -124,11 +124,15 @@ const (
 	FacilityZerolog Facility = 0x283
 	// FacilityTemporal owns the public Temporal orchestration capability.
 	FacilityTemporal Facility = 0x1C0
-	// FacilityWorkflow owns portable workflow declaration and comparison semantics.
-	FacilityWorkflow Facility = 0x1C1
+	// FacilityWorkflowDeclaration owns portable workflow declaration and comparison semantics.
+	FacilityWorkflowDeclaration Facility = 0x1C1
+	// FacilityWorkflow is the former name of FacilityWorkflowDeclaration.
+	//
+	// Deprecated: Use FacilityWorkflowDeclaration.
+	FacilityWorkflow = FacilityWorkflowDeclaration
 	// FacilityWorkflowCatalog owns workflow publication and stored catalog semantics.
 	FacilityWorkflowCatalog Facility = 0x1C2
-	// FacilityWorkflowImplementation owns Go Activity binding and manifest coverage.
+	// FacilityWorkflowImplementation owns Go Activity binding, manifest coverage and checked invocation.
 	FacilityWorkflowImplementation Facility = 0x1C3
 	// FacilityIceberg owns the public Iceberg table-format capability.
 	FacilityIceberg Facility = 0x320
@@ -198,7 +202,7 @@ func Allocations() []Allocation {
 		{Facility: FacilityZap, Module: "fathomry", Component: "logging_zap"},
 		{Facility: FacilityZerolog, Module: "fathomry", Component: "logging_zerolog"},
 		{Facility: FacilityTemporal, Module: "fathomry", Component: "temporal"},
-		{Facility: FacilityWorkflow, Module: "fathomry", Component: "workflow"},
+		{Facility: FacilityWorkflowDeclaration, Module: "fathomry", Component: "workflow"},
 		{Facility: FacilityWorkflowCatalog, Module: "fathomry", Component: "workflow_catalog"},
 		{Facility: FacilityWorkflowImplementation, Module: "fathomry", Component: "workflow_implementation"},
 		{Facility: FacilityDatabaseControl, Module: "fathomry", Component: "database_control"},

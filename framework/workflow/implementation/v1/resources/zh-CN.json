@@ -52,6 +52,13 @@
       }
     },
     {
+      "id": "fathomry.workflow_implementation.invocation_failed",
+      "source": "23f7d0ad01c87a9385c6a1d053cd96c4054ae97b434baaafcccc2e980d62cc5e",
+      "forms": {
+        "other": "Activity 调用未产生符合契约的输出。"
+      }
+    },
+    {
       "id": "fathomry.workflow_implementation.invalid_handle",
       "source": "9e08605faedecc63622457151c7ff0f35d107c8533ca0dfc6f2aeb9da8e493e4",
       "forms": {

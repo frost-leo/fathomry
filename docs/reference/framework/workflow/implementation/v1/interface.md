@@ -22,8 +22,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../README.md) / Public package reference
 
 **Audience:** workflow authors, offline project tooling and future host integrators.
-**Status:** static binding admission and inspection are implemented. No Activity
-executor, Worker, runtime value validation or deployment authority is provided.
+**Status:** static binding admission/inspection and an explicit checked synchronous
+Activity call are implemented. No DAG executor, Worker or deployment authority is provided.
 **Package:** `github.com/frost-leo/fathomry/framework/workflow/implementation/v1`.
 
 ## Responsibilities
@@ -51,6 +51,12 @@ marker facilities, not root Internal, command engines or the Temporal runtime.
    the original borrowed function, not an invocation wrapper or resource owner.
 5. At a data boundary, decode `Manifest` and call `ValidateManifest` against
    the verified Bundle. Decoding alone establishes neither coverage nor callables.
+
+For one actual local call, use the separate
+[`registry.Invoke` boundary](invocation.md) with bounded JSON input. It checks
+required presence and values before dispatch and validates output before delivery.
+Raw `Lookup` remains compatible but bypasses those checks. Preparation and
+inspection never invoke business code merely because this method exists.
 
 `Describe` reports required unique bindings and call sites without claiming ABI
 support. It keeps declaration-only consumers usable even for schemas outside
@@ -103,9 +109,10 @@ rejected on both T and *T. Modern and legacy/gogo protobuf markers, `json.Number
 and byte payloads also refuse. No hook, ProtoReflect method, user serializer, factory,
 handler, Boot callback or service runs during matching.
 
-Shapes are not values: ranges, enums, lengths, actual non-null values, runtime
-presence and effects still need future validation. Nil slices, pointers and actual
-outputs are not inspected. This profile does not qualify an arbitrary configured
+Shapes are not values: static matching does not inspect ranges, enum membership,
+lengths, actual nulls or outputs. `Invoke` separately checks its supported concrete
+values and raw presence; business effects remain outside that claim. Neither
+boundary qualifies an arbitrary configured
 Temporal DataConverter, history compatibility, retries or business behavior.
 
 ## Ownership, concurrency and bounds
@@ -158,6 +165,10 @@ direct completed validation failure; it does not traverse wrappers or joined
 causes. Binding indices refer to the supplied slice, not sorted manifest order.
 This consistency check does not authenticate caller-constructed diagnostic text
 or choose retries.
+
+`ErrInvocation` and `InvocationDiagnostic` own returned runtime failures; they
+cannot be extracted as completed static checks. See the
+[invocation failure/effect boundary](invocation.md#failures-and-effect-evidence).
 
 The [hierarchical consumer](../../../../../../framework/workflow/implementation/v1/testdata/consumer/README.md)
 uses one Activity per file and explicit registration beside each function.

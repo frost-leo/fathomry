@@ -21,26 +21,40 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 
 	health "example.org/binding-consumer/workflows/example/server_health/v1"
-	"example.org/binding-consumer/workflows/example/server_health/v1/nodes/sample"
 	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
+	declaration "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
+	implementation "github.com/frost-leo/fathomry/framework/workflow/implementation/v1"
 )
 
 func main() {
 	ctx := context.Background()
-	project := cli.Project{Name: "binding-consumer", Workflows: []cli.Workflow{health.Registration()}}
+	registered := health.Registration()
+	project := cli.Project{Name: "binding-consumer", Workflows: []cli.Workflow{registered}}
 	handled, err := cli.Handle(ctx, os.Args[1:], project, cli.Options{Input: os.Stdin, Output: os.Stdout, ErrorOutput: os.Stderr})
 	if !handled {
-		value, problem := sample.CPU(ctx, sample.Input{Target: "local"})
+		value, problem := invokeCPU(ctx, registered)
 		err = problem
 		if err == nil {
-			err = json.NewEncoder(os.Stdout).Encode(value)
+			_, err = os.Stdout.Write(value)
 		}
 	}
 	if err != nil {
 		os.Exit(cli.ExitCode(err))
 	}
+}
+
+func invokeCPU(ctx context.Context, registered cli.Workflow) ([]byte, error) {
+	bundle, err := declaration.Compile(ctx, registered.Declaration)
+	if err != nil {
+		return nil, err
+	}
+	bound, err := implementation.Prepare(ctx, bundle, declaration.Identity{Namespace: "example", Code: "server-health", Version: "1"}, registered.Implementations[0].Bindings)
+	if err != nil {
+		return nil, err
+	}
+	result, err := bound.Invoke(ctx, "read_cpu", []byte(`{"target":"local"}`))
+	return result.Output, err
 }

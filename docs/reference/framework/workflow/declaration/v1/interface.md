@@ -157,7 +157,9 @@ an exhaustive report. Check still fails if any omitted conflict exists.
 The CLI's `Diagnostics` associates rejected documents with zero-based input indices;
 counts cover successfully validated declarations, not unknown invalid contents.
 
-The workflow owner uses facility `0x1C1` in the orchestration capability domain:
+The declaration owner uses `FacilityWorkflowDeclaration` (`0x1C1`) in the
+orchestration capability domain. `FacilityWorkflow` is its deprecated compatible
+Go alias; numeric identities and the published `workflow` component are unchanged:
 
 | Code | Meaning |
 | --- | --- |

@@ -123,7 +123,7 @@ func TestDiagnoseIdentity(t *testing.T) {
 			t.Fatal("joined cause became direct validation")
 		}
 	}
-	future := definition(ErrHandle + 1)
+	future := definition(ErrInvocation + 1)
 	future.Identifier = "fathomry.workflow_implementation.future"
 	for _, test := range []struct {
 		name   string
