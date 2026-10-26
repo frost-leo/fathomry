@@ -27,12 +27,12 @@ import (
 
 // Stable workflow-declaration failure identities, independent of SDK/layer versions.
 const (
-	ErrInvalid     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflow)<<16 | 0x0001
-	ErrUnsupported failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflow)<<16 | 0x0002
-	ErrIntegrity   failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflow)<<16 | 0x0003
-	ErrLimit       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflow)<<16 | 0x0004
-	ErrCanceled    failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflow)<<16 | 0x0005
-	ErrHandle      failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflow)<<16 | 0x0006
+	ErrInvalid     failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflowDeclaration)<<16 | 0x0001
+	ErrUnsupported failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflowDeclaration)<<16 | 0x0002
+	ErrIntegrity   failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflowDeclaration)<<16 | 0x0003
+	ErrLimit       failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflowDeclaration)<<16 | 0x0004
+	ErrCanceled    failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflowDeclaration)<<16 | 0x0005
+	ErrHandle      failure.Code = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflowDeclaration)<<16 | 0x0006
 )
 
 // Diagnostic is a bounded safe reason and JSON Pointer, never a source value,

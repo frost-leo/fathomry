@@ -76,9 +76,20 @@ func TestAllocations(t *testing.T) {
 			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityProjectBuild, Module: "fathomry", Component: "project_build"}) {
 			t.Fatal("project build capability allocation changed")
 		}
-		if failure.FacilityWorkflow != 0x1C1 || failure.FacilityWorkflow.Domain() != failure.DomainOrchestration ||
-			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityWorkflow, Module: "fathomry", Component: "workflow"}) {
+		if failure.FacilityWorkflowDeclaration != 0x1C1 || failure.FacilityWorkflowDeclaration.Domain() != failure.DomainOrchestration ||
+			!slices.Contains(allocations, failure.Allocation{Facility: failure.FacilityWorkflowDeclaration, Module: "fathomry", Component: "workflow"}) {
 			t.Fatal("workflow declaration capability allocation changed")
+		}
+		if failure.FacilityWorkflow != failure.FacilityWorkflowDeclaration {
+			t.Fatal("legacy workflow facility alias changed")
+		}
+		const declarationCode = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflowDeclaration)<<16 | 0x0001
+		const legacyCode = failure.ErrorPrefix | failure.Code(failure.FacilityWorkflow)<<16 | 0x0001
+		if declarationCode != legacyCode {
+			t.Fatal("declaration error code changed with its Go symbol")
+		}
+		if declarationCode != 0xA1C10001 {
+			t.Fatal("declaration error code allocation changed")
 		}
 		if len(allocations) < 14 || allocations[0] != (failure.Allocation{Facility: 1, Module: "fathomry", Component: "failure"}) ||
 			allocations[1] != (failure.Allocation{Facility: 0x003, Module: "fathomry", Component: "i18n"}) ||

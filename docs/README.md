@@ -222,6 +222,9 @@ without invoking them. Project vet and v2 build inspection distinguish complete,
 absent and unchecked version coverage; explicit v1 compatibility remains declaration-only.
 Static binding completeness is not runtime-value validation, Worker registration or
 artifact/deployment authorization.
+The separate [checked invocation boundary](reference/framework/workflow/implementation/v1/invocation.md)
+admits bounded required-value JSON, calls one explicit bound function and validates
+its output. It adds no Worker/DAG execution or effect-completion guarantee.
 Internal raw acquisition, strict JSON preparation and type-admission improvements
 remain implemented. Business authors are not expected to recreate private
 assembly machinery as startup boilerplate.
@@ -441,7 +444,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`framework/v1`](reference/framework/v1/interface.md) | Public runtime composition, released-evidence reception and once-bound safe localized logging |
 | [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Strict application/business configuration acceptance, last-good Watch and explicit resource-adoption handoff |
 | [`framework/workflow/declaration/v1`](reference/framework/workflow/declaration/v1/interface.md) | Pure workflow/mode declaration compilation, canonical portable bundles and offline identity/conflict checking |
-| [`framework/workflow/implementation/v1`](reference/framework/workflow/implementation/v1/interface.md) | Explicit Activity binding, bounded static ABI checks and data-only per-version coverage manifests |
+| [`framework/workflow/implementation/v1`](reference/framework/workflow/implementation/v1/interface.md) | Explicit Activity binding, static coverage manifests and checked synchronous required-value invocation |
 | [`framework/workflow/catalog/v1`](reference/framework/workflow/catalog/v1/interface.md) | Atomic registration, truthful outcomes and bounded localized metadata/document reads |
 | [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Shared fixed CLI commands, project-root inspection and native build publication gate |
 

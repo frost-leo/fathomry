@@ -18,18 +18,26 @@
  */
 
 // Package implementation binds verified workflow declarations to explicit Go
-// Activity functions and projects bounded implementation coverage.
+// Activity functions, projects bounded implementation coverage, and provides an
+// explicit checked synchronous invocation boundary.
 //
 // Activity is inert: it retains a function and its types without calling user
 // code. Prepare validates an opted-in workflow version and owns copied metadata;
 // callable captures and receivers remain borrowed with caller-defined lifetime
-// and concurrent-use semantics. A Registry is not a resource owner or executor.
+// and concurrent-use semantics. A Registry is not a resource owner or DAG executor.
 // Concurrent metadata reads are supported; do not overwrite shared handles.
 //
 // Required value ports use the identified ordinary-JSON Go ABI. Matching validates
 // static shapes, not future values, effects, retries, codecs or business behavior.
 // No user-supplied serializer, factory, handler, Boot or service runs during preparation.
 // Unsupported optional/batch/custom-codec shapes remain valid declaration features.
+//
+// Invoke separately admits one bounded required-value JSON object before calling
+// a bound handler once. It validates output before returning detached bytes;
+// Invoked is dispatch evidence, not effect completion. Cancellation is cooperative
+// and not an atomic dispatch/return fence. Handler panics/Goexit propagate, and
+// non-cooperative handlers can block the caller. No goroutine or retry is added.
+// Raw Lookup bypasses this invocation boundary. See InvocationProfile and limits.
 //
 // Manifests are detached data, not executable authority. ValidateManifest checks
 // them against the same verified declaration; decoding one cannot reconstruct

@@ -44,4 +44,12 @@ func TestPublicBinding(t *testing.T) {
 	if err := implementation.ValidateManifest(context.Background(), bundle, manifest); err != nil {
 		t.Fatal(err)
 	}
+	result, err := bound.Invoke(context.Background(), "read_cpu", []byte(`{"target":"local"}`))
+	if err != nil || !result.Invoked || string(result.Output) != `{"value":42}` {
+		t.Fatal("checked invocation failed", err)
+	}
+	result, err = bound.Invoke(context.Background(), "read_cpu", []byte(`{}`))
+	if err == nil || result.Invoked || result.Output != nil {
+		t.Fatal("missing input was dispatched")
+	}
 }

@@ -22,7 +22,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Binding contract](../../../../../../docs/reference/framework/workflow/implementation/v1/interface.md)
 
 **Audience:** independent Go workflow authors.
-**Status:** executable offline example with three pure functions. It does not run
+**Status:** executable offline example with three pure functions and a checked
+single-Activity invocation. It does not run
 a Temporal Worker or sample real host telemetry.
 
 ## Files and identity
@@ -74,8 +75,10 @@ GOWORK=off go run . workflow vet
 ```
 
 Vet and inspection report one complete version, three unique bindings and three
-call sites. Ordinary execution directly calls the pure CPU fixture and emits
-`{"value":42}`; this is deliberately not a framework Activity executor. Build
+call sites without calling them. Ordinary execution uses the prepared Registry's
+`Invoke` boundary to check input, call the pure CPU fixture once and validate/encode
+`{"value":42}`. This is a synchronous local call, not a Temporal Worker or DAG
+executor. The independent test also verifies missing input refuses before dispatch. Build
 creates `bin/binding-consumer` only after full inspection. Generated configuration
 files are unchanged and no Boot or control database is needed for these commands.
 

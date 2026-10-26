@@ -159,8 +159,8 @@ The authoritative first-party manifest is
 | 0x282 | fathomry / logging_zap | [Public Zap logging ownership and per-output operations](../../adapters/logging/zap/v1/interface.md) |
 | 0x283 | fathomry / logging_zerolog | [Public zerolog logging, typed event recovery and file maintenance](../../adapters/logging/zerolog/v1/interface.md) |
 | 0x1C0 | fathomry / temporal | [Public Temporal orchestration, Worker lifecycle and native semantic errors](../../adapters/orchestration/temporal/v1/interface.md) |
-| 0x1C1 | fathomry / workflow | [Portable workflow declaration validation and comparison](../../framework/workflow/declaration/v1/interface.md), not workflow execution |
-| 0x1C3 | fathomry / workflow_implementation | [Static Go Activity binding and bounded implementation manifests](../../framework/workflow/implementation/v1/interface.md), not execution qualification |
+| 0x1C1 | fathomry / workflow | `FacilityWorkflowDeclaration`: [portable workflow declaration validation and comparison](../../framework/workflow/declaration/v1/interface.md), not workflow execution |
+| 0x1C3 | fathomry / workflow_implementation | [Go Activity binding, static manifests and checked local invocation](../../framework/workflow/implementation/v1/interface.md), not Worker/deployment qualification |
 | 0x2C0 | fathomry / notification_mail | [Managed Mail notification operations](../../adapters/notification/mail/v1/interface.md) |
 | 0x2C1 | fathomry / notification_lark | [Managed Lark notification and reception operations](../../adapters/notification/lark/v1/interface.md) |
 
@@ -169,6 +169,10 @@ reviewed entries in their capability range. The previous unreleased settings slo
 0x002 is no longer allocated and does not alias 0x041. Declaration admission checks the exact
 first-party owner; the `fathomry` module namespace and its dotted subnamespaces
 cannot use the extension range. This enforces consistency, not author authentication.
+
+`FacilityWorkflow` remains a deprecated Go alias of `FacilityWorkflowDeclaration`.
+The clearer Go name does not change `0x1C1`, the existing `workflow` component,
+published identifiers or serialized error codes.
 
 Declare explicit local-number constants, never `iota`:
 

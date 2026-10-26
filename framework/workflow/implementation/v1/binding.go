@@ -60,9 +60,10 @@ type VersionBindings struct {
 // Registry owns immutable metadata and copied registration slots. Callable values
 // retain their original captures; no deep copying or lifecycle authority is implied.
 type Registry struct {
-	manifest  Manifest
-	functions map[string]any
-	valid     bool
+	manifest   Manifest
+	functions  map[string]any
+	signatures map[string]invocationSignature
+	valid      bool
 }
 
 // Prepare validates bindings against one exact workflow version in a verified
@@ -76,6 +77,7 @@ func Prepare(ctx context.Context, bundle *declaration.Bundle, identity declarati
 		return nil, problem(ErrLimit, "bindings", "/bindings")
 	}
 	functions := make(map[string]any, len(bindings))
+	signatures := make(map[string]invocationSignature, len(bindings))
 	supplied := make(map[string]int, len(bindings))
 	for index, binding := range bindings {
 		if err := canceled(ctx); err != nil {
@@ -115,6 +117,9 @@ func Prepare(ctx context.Context, bundle *declaration.Bundle, identity declarati
 			return nil, err
 		}
 		functions[entry.Key] = callable.function
+		signatures[entry.Key] = invocationSignature{inputType: callable.input,
+			input:  portSchema(declared.Inputs, projection.spec.Contracts),
+			output: portSchema(declared.Outputs, projection.spec.Contracts)}
 	}
 	if err := manifestBound(projection.manifest); err != nil {
 		return nil, err
@@ -122,7 +127,7 @@ func Prepare(ctx context.Context, bundle *declaration.Bundle, identity declarati
 	if err := canceled(ctx); err != nil {
 		return nil, err
 	}
-	return &Registry{manifest: projection.manifest, functions: functions, valid: true}, nil
+	return &Registry{manifest: projection.manifest, functions: functions, signatures: signatures, valid: true}, nil
 }
 
 // ManifestCopy returns independent metadata, not a function serialization.
