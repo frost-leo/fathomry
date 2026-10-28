@@ -32,8 +32,10 @@ contracts; development guides explain tasks. Choose a reading path below.
 Framework and control-schema implementations and the old CLI leaf commands were
 withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161). The retained
 [CLI foundation](reference/cmd/fathomry/interface.md) supplies help and invocation
-mechanisms, not project generation, workflow execution or database installation.
-Replacement designs remain working material, not current APIs.
+mechanisms. The official tool's [project new](reference/cmd/fathomry/internal/command/project/create/interface.md)
+now creates a bounded offline six-file project; it does not restore workflow
+execution, configuration bootstrap or database installation. Those replacement
+designs remain working material, not current APIs.
 
 The [Mail Adapter](reference/adapters/notification/mail/v1/interface.md) provides
 managed MIME/EML/template/signing preparation, SMTP authentication and explicit
@@ -188,6 +190,8 @@ The [minimal CLI](reference/cmd/fathomry/interface.md) and its
 [public Go entry](reference/cmd/fathomry/v1/interface.md) retain help, explicit
 language/output handling, failure identity and bounded invocation/cleanup.
 No old project, workflow, configuration-host or database command is registered.
+The official-only [project group](reference/cmd/fathomry/internal/command/project/interface.md)
+owns the new creation leaf; generated project binaries retain the minimal public shell.
 Adapter Fixed/Follow fixtures now compose public Resource and operation owners
 directly; their historical fixture names do not imply an available Framework API.
 

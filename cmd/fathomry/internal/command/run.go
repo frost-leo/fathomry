@@ -113,7 +113,7 @@ func Run(ctx context.Context, args []string, options Options, catalogs Catalogs,
 	}
 	root.SetFlagErrorFunc(func(_ *cobra.Command, cause error) error { return Fail(ErrUsage, cause) })
 	root.SetHelpFunc(func(selected *cobra.Command, _ []string) {
-		if selected == root && len(selected.Flags().Args()) != 0 {
+		if (selected == root || selected.HasSubCommands()) && len(selected.Flags().Args()) != 0 {
 			if err := selected.ValidateArgs(selected.Flags().Args()); err != nil {
 				invocation.helperError = Fail(ErrUsage, err)
 				return

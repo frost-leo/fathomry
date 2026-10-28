@@ -133,7 +133,7 @@ The authoritative first-party manifest is
 | 0x005 | fathomry / operation | [Public operation ownership and evidence custody](../../adapters/v1/interface.md) |
 | 0x006 | fathomry / assembly | Public runtime composition and evidence reception (withdrawn; allocation reserved) |
 | 0x007 | fathomry / command_line | [Command invocation and terminal I/O](../../cmd/fathomry/interface.md), not a CLI-layer allocation band |
-| 0x00A | fathomry / project_creation | Project creation withdrawn; allocation reserved |
+| 0x00A | fathomry / project_creation | [Offline project creation](../../cmd/fathomry/internal/command/project/create/interface.md); the new profile uses 0x0101–0x0106, not retired command numbers |
 | 0x00B | fathomry / project_build | Project build admission withdrawn; allocation reserved |
 | 0x041 | fathomry / settings | [Typed configuration data storage/access](../../settings/v1/interface.md) |
 | 0x042 | fathomry / configuration_data | [Independent strict preparation and raw batch contract](../../adapters/configsource/v1/interface.md) |

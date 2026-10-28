@@ -17,7 +17,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Command fathomry provides the retained minimal CLI foundation.
+// Command fathomry provides offline project creation and shared CLI mechanisms.
 package main
 
 import (

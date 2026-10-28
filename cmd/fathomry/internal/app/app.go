@@ -17,19 +17,39 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package app connects the official executable to the minimal public CLI.
+// Package app composes the official tool's commands over the shared invocation foundation.
 package app
 
 import (
 	"context"
+
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
+	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project"
 	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
+	"github.com/frost-leo/fathomry/failure/v1"
+	"github.com/frost-leo/fathomry/i18n/v1"
+	"github.com/spf13/cobra"
 )
 
-// Run owns one finite CLI invocation without reading process globals.
+// Run owns one finite CLI invocation; selected handlers own their explicit effects.
 func Run(ctx context.Context, args []string, options command.Options) error {
-	return cli.Run(ctx, args, cli.Options{
-		Input: options.Input, Output: options.Output, ErrorOutput: options.ErrorOutput,
-		Language: options.Language, CleanupTimeout: options.CleanupTimeout,
+	components := append(i18n.CoreComponents(), cli.Components()...)
+	components = append(components, project.Components()...)
+	var definitions []failure.Definition
+	for _, component := range components {
+		definitions = append(definitions, component.Definitions...)
+	}
+	errors, err := failure.Prepare(definitions...)
+	if err != nil {
+		return command.Unavailable(options.ErrorOutput, err)
+	}
+	messages, err := i18n.Prepare(components...)
+	if err != nil {
+		return command.Unavailable(options.ErrorOutput, err)
+	}
+	return command.Run(ctx, args, options, command.Catalogs{Errors: errors, Messages: messages}, func(invocation *command.Invocation) *cobra.Command {
+		root := invocation.Group("fathomry", "fathomry.command_line.root")
+		root.AddCommand(project.New(invocation))
+		return root
 	})
 }

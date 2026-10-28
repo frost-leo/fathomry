@@ -85,7 +85,10 @@ The [CLI foundation](docs/reference/cmd/fathomry/interface.md) retains help,
 explicit language/output selection, bounded diagnostics and cleanup ownership.
 Framework, control-schema assets, project generation/build inspection and all old
 leaf commands were withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161).
-Replacement workflows, modes, commands and persistence are not implemented.
+The official tool now adds [offline project creation](docs/reference/cmd/fathomry/internal/command/project/create/interface.md)
+through `project new`, producing a six-file independent CLI project. Dependency
+resolution remains explicit; no configuration loader or service initialization is
+included. Replacement workflows, modes and persistence are not implemented.
 Public foundations, Adapters and Internal integrations remain available.
 
 The earlier pre-release Adapter, failure, i18n, Framework, settings and CLI
