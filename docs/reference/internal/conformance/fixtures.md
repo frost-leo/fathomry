@@ -165,80 +165,14 @@ transfer. Nacos's error-only Close is translated conservatively: an error retain
 ownership unless completion is separately established; this profile does not
 prove recovery from every terminal native cleanup error.
 
-## Live Framework configuration path
+## Withdrawn Framework configuration fixture
 
-[`configuration_service_test.go`](../../../../internal/conformance/configuration_service_test.go)
-uses the same opt-in `resource_service` build tag, but consumes public Nacos,
-Framework configuration, settings and resource contracts. Only the database
-factory reuses the existing maintainer-only Internal pgx bridge; this is not a
-public database Adapter or a production bootstrap recipe.
-
-From the repository root, first run the synthetic seed-loading and preparation
-checks without services or credentials. The seed regression shares the live
-test's input declaration and exercises Framework Load, accepted settings and
-released evidence; it does not perform a TLS handshake or contact Nacos/PostgreSQL.
-These tests require the build tag even though they run offline:
-
-```sh
-go test -race -tags=resource_service ./internal/conformance \
-  -run '^TestConfigurationService(Seed|Preparation)$' -count=1
-```
-
-For the live check, an explicitly authorized launcher must supply these process
-environment variables without putting values in shell history, logs or fixtures:
-
-| Variable suffix (all prefixed `FATHOMRY_LIVE_`) | Input |
-| --- | --- |
-| `NACOS_SERVERS` | JSON array of explicit `http_url` / `grpc_address` server objects |
-| `NACOS_NAMESPACE` | Explicit namespace; empty selects the native default |
-| `NACOS_READER_USERNAME`, `NACOS_READER_PASSWORD` | Authorized configuration reader credentials |
-| `NACOS_WRITER_USERNAME`, `NACOS_WRITER_PASSWORD` | Authorized isolated-key publisher/deleter credentials |
-| `NACOS_ALLOW_INSECURE` | JSON boolean; plaintext requires explicit development authorization |
-| `DB_ADDRESS`, `DB_PORT` | Literal PostgreSQL IP and JSON integer port |
-| `DB_USER`, `DB_PASSWORD`, `DB_DATABASE` | Authorized PostgreSQL connection with CONNECT/TEMP permissions |
-| `DB_ROOT_CA_PEM` | Literal PEM text, including newlines; explicit trust set for verified database TLS |
-| `DB_SERVER_NAME` | Literal certificate verification name for database TLS |
-| `DB_PLAINTEXT` | JSON boolean; absent defaults to false (verified TLS); true requires explicit development authorization |
-| `ALLOW_WRITES` | Exactly `1`; absent authorization skips the live test |
-
-The two database TLS inputs use raw strings, not JSON: quotes, backslashes and
-newlines are preserved exactly. An absent input leaves its seed default unchanged;
-an explicitly empty input supplies an empty string. Both defaults are empty.
-The native database profile requires a nonempty CA PEM and server name for TLS;
-empty inputs do not select ambient trust or disable verification. For explicit
-plaintext, both TLS fields must be empty. Supporting these inputs is not itself
-live TLS qualification: that requires a separately authorized verified-TLS target
-and execution of the live scenario. The write opt-in alone is not authorization.
-
-Inherited nonempty `PG*` variables are outside the explicit native connection
-profile. The initial pool size is one; a watched update changes it to four.
-Run only the named test, not the separate file-based service suite:
-
-```sh
-go test -race -tags=resource_service ./internal/conformance \
-  -run '^TestConfigurationService$' -count=1 -timeout=5m -v
-```
-
-The test loads Nacos bootstrap through Framework environment bindings, publishes
-only a random owned key after confirming absence, and loads the resulting
-application document through the public Source. The database password is absent
-from that document and enters accepted settings through a separate environment
-binding. Resource factories receive only the selected accepted database subsection,
-never captured inventory values or process-global settings.
-
-Assertions cover real temporary-table CRUD, Watch updates, unrelated-field reuse,
-malformed/invalid/missing-source last-good retention, native readiness failure,
-Fixed/Follow replacement and preserved old transaction/session state. A bounded
-Close must retain a borrowed transaction. Successful completion verifies temporary
-table removal in both original sessions, pool cleanup, released-evidence draining,
-and Nacos deletion/positive absence using a fresh cleanup owner. The evidence sink
-is in-process acknowledgement, not a durable ledger.
-
-The owner-authorized #98 development-service run passed this path with the race
-detector. This is a single-server functional check, not load, TLS/HA, credential
-rotation, production certification or deployed-artifact attestation. The Nacos
-reconciliation interval exceeds the live test deadline, so accepted updates do
-not rely on a periodic reconciliation cycle.
+The former live Framework configuration fixture was removed with its product
+APIs in [#161](https://github.com/frost-leo/fathomry/issues/161).
+Its [historical source](https://github.com/frost-leo/fathomry/blob/b39c55071a6af2949e15ffa6a02a5443ab3c9173/internal/conformance/configuration_service_test.go)
+preserves earlier evidence, not a runnable current command or replacement
+configuration-host qualification. The independent Internal resource/native
+fixtures above remain separate.
 
 ## Consuming-binary fixture
 

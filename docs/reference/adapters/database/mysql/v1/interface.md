@@ -298,8 +298,8 @@ rollback; independently reads effects; and verifies fixture absence after cleanu
 Unconfirmed creation/cleanup retains recovery responsibility. Normal tests do not
 run it. This does not qualify MySQL TCP service writes.
 
-The explicit [schema-service tests](../../../../../../schema/fathomry/session_test.go)
-exercise the retained session on isolated plaintext MySQL 8.4.11: connection identity
+The [historical schema-service tests](https://github.com/frost-leo/fathomry/blob/b39c55071a6af2949e15ffa6a02a5443ab3c9173/schema/fathomry/session_test.go)
+previously exercised the retained session on isolated plaintext MySQL 8.4.11: connection identity
 and named-lock exclusion across actual implicit-commit DDL, full-size document
 transport, cancellation, physical retirement, bounded competing reacquisition and
 server-killed-session refusal without replacement. Protocol-peer tests separately

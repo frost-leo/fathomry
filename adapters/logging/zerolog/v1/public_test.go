@@ -39,7 +39,6 @@ import (
 	zerolog "github.com/frost-leo/fathomry/adapters/logging/zerolog/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/failure/v1"
-	framework "github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
 )
 
@@ -360,8 +359,10 @@ func TestPublicSlogSafeErrorsChronologyAndCancellation(t *testing.T) {
 		}
 	}
 	original, _ := failure.New(definition, failure.Location{Operation: "business"}, errors.New("PRIVATE_CAUSE"))
-	emitted := framework.NewErrorLog(slog.New(handler), presenter).Emit(canceled, original)
-	if !emitted.Recognized {
+	presented := presenter.Present(original)
+	_, recognized := failure.Inspect(presented)
+	slog.New(handler).LogAttrs(canceled, slog.LevelError, "operation", slog.Bool("recognized", recognized), slog.Any("error", presented))
+	if !recognized {
 		t.Fatal("framework error unrecognized")
 	}
 	delivery, err = deps.Evidence.NextReleased(context.Background())

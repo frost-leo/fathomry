@@ -32,7 +32,6 @@ import (
 	duckdb "github.com/frost-leo/fathomry/adapters/sqlengine/duckdb/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -58,16 +57,28 @@ func run() error {
 	policy.Runtime.MaxWorkBytes *= 6
 	policy.Evidence.Capacity *= 6
 	policy.Evidence.MaxBytes *= 6
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer runtime.Close(context.Background())
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer closeComposition(context.Background())
 	inbox, err := adapters.NewInbox[duckdb.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := duckdb.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := duckdb.Dependencies{Runtime: runtime, Evidence: inbox}
 	type construction struct {
 		binding string
 		owner   *duckdb.Owner
@@ -79,7 +90,7 @@ func run() error {
 	releaseObsolete := sync.OnceFunc(func() { close(obsoleteGate) })
 	defer releaseObsolete()
 	bind := func(name string, policy resource.Policy) (resource.Ref[duckdb.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[duckdb.Settings, duckdb.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[duckdb.Settings, duckdb.Handle]{
 			Name: name, Policy: policy,
 			Select: func(view settings.View) (duckdb.Settings, error) {
 				snapshot, err := settings.As[duckdb.Settings](view)
@@ -140,7 +151,7 @@ func run() error {
 		if err != nil {
 			return nil, err
 		}
-		return runtime.Resources().Apply(ctx, snapshot.View())
+		return resourceScope.Apply(ctx, snapshot.View())
 	}
 	apply := func(value duckdb.Settings) error {
 		update, err := beginApply(value)
@@ -359,7 +370,7 @@ func run() error {
 	if value, err := follow.Execute(ctx, ctx, "CREATE TABLE forbidden (id BIGINT)"); !errors.Is(err, duckdb.ErrLimit) || value.HasData() {
 		return errors.New("larger replacement dispatched undercharged work")
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	for status, _ := inbox.Inspect(); status.Outstanding > 0; status, _ = inbox.Inspect() {
@@ -371,7 +382,7 @@ func run() error {
 			return err
 		}
 	}
-	usage, err := runtime.Operations().Inspect()
+	usage, err := runtime.Inspect()
 	if err != nil || usage.Active != 0 || usage.WorkBytes != 0 {
 		return errors.New("Framework cleanup retained work reservations")
 	}

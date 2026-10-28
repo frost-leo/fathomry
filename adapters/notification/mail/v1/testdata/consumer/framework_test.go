@@ -27,16 +27,15 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"io"
 	stdmail "net/mail"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	mail "github.com/frost-leo/fathomry/adapters/notification/mail/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -74,20 +73,32 @@ func TestFrameworkFixedFollowRetainsOriginalWireAndEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer runtime.Close(context.Background())
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		t.Fatal(err)
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer closeComposition(context.Background())
 	inbox, err := adapters.NewInbox[mail.Result](policy.Evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dependencies := mail.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := mail.Dependencies{Runtime: runtime, Evidence: inbox}
 	var mutex sync.Mutex
 	seen := map[uint64]int{}
 	received := make(chan adapters.Snapshot[mail.Result], 32)
-	receiver, err := framework.StartReceiver(ctx, inbox, framework.ReceiverOptions{RetryDelay: time.Millisecond}, func(_ context.Context, snapshot adapters.Snapshot[mail.Result]) error {
+	finishEvidence, stopEvidence := drainEvidence(ctx, inbox, func(_ context.Context, snapshot adapters.Snapshot[mail.Result]) error {
 		mutex.Lock()
 		seen[snapshot.Info().Sequence]++
 		attempt := seen[snapshot.Info().Sequence]
@@ -98,14 +109,11 @@ func TestFrameworkFixedFollowRetainsOriginalWireAndEvidence(t *testing.T) {
 		received <- snapshot
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer receiver.Close(context.Background())
+	defer stopEvidence(context.Background())
 	clone := func(value mail.Settings) mail.Settings { return value }
 	refused := errors.New("partial construction control")
 	bind := func(name string, mode resource.Policy) resource.Ref[mail.Handle] {
-		ref, err := resource.Bind(runtime.Resources(), resource.Binding[mail.Settings, mail.Handle]{Name: name, Policy: mode,
+		ref, err := resource.Bind(resourceScope, resource.Binding[mail.Settings, mail.Handle]{Name: name, Policy: mode,
 			Select: func(view settings.View) (mail.Settings, error) {
 				snapshot, err := settings.As[mail.Settings](view)
 				if err != nil {
@@ -149,7 +157,7 @@ func TestFrameworkFixedFollowRetainsOriginalWireAndEvidence(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, view)
+		update, err := resourceScope.Apply(ctx, view)
 		if err != nil {
 			return err
 		}
@@ -227,10 +235,10 @@ func TestFrameworkFixedFollowRetainsOriginalWireAndEvidence(t *testing.T) {
 	if err = apply(partial); !errors.Is(err, refused) {
 		t.Fatal("partial construction cause lost", err)
 	}
-	if err = runtime.Close(ctx); err != nil {
+	if err = closeComposition(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err = receiver.Finish(ctx); err != nil {
+	if err = finishEvidence(ctx); err != nil {
 		t.Fatal(err)
 	}
 	a, _ = first.snapshot()
@@ -245,4 +253,67 @@ func TestFrameworkFixedFollowRetainsOriginalWireAndEvidence(t *testing.T) {
 			t.Fatal("required evidence was not independently redelivered")
 		}
 	}
+}
+
+func drainEvidence(ctx context.Context, inbox *adapters.Inbox[mail.Result], sink func(context.Context, adapters.Snapshot[mail.Result]) error) (finish, stop func(context.Context) error) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	var result error
+	go func() {
+		defer close(done)
+		defer cancel()
+		for {
+			delivery, err := inbox.NextReleased(ctx)
+			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+				return
+			}
+			if err != nil {
+				result = err
+				return
+			}
+			receipt, err := delivery.Receipt()
+			if err != nil {
+				result = errors.Join(err, delivery.Retry())
+				return
+			}
+			snapshot, _ := receipt.Snapshot()
+			if err := sink(ctx, snapshot); err != nil {
+				if retry := delivery.Retry(); retry != nil {
+					result = errors.Join(err, retry)
+					return
+				}
+				continue
+			}
+			if err := delivery.Ack(); err != nil {
+				result = err
+				return
+			}
+		}
+	}()
+	wait := func(ctx context.Context) error {
+		select {
+		case <-done:
+			return result
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	finish = func(ctx context.Context) error {
+		if err := inbox.Seal(); err != nil {
+			return err
+		}
+		if err := wait(ctx); err != nil {
+			return err
+		}
+		status, err := inbox.Inspect()
+		if err != nil {
+			return err
+		}
+		if status.Outstanding != 0 {
+			return errors.New("undelivered fixture evidence")
+		}
+		return nil
+	}
+	stop = func(ctx context.Context) error { cancel(); return wait(ctx) }
+	return
 }

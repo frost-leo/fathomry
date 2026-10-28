@@ -131,15 +131,15 @@ The authoritative first-party manifest is
 | 0x003 | fathomry / i18n | [Resource atlas and error presentation](../../i18n/v1/interface.md) |
 | 0x004 | fathomry / resource | [Runtime instance ownership and configuration adoption](../../resource/v1/interface.md) |
 | 0x005 | fathomry / operation | [Public operation ownership and evidence custody](../../adapters/v1/interface.md) |
-| 0x006 | fathomry / assembly | [Public runtime composition and evidence reception](../../framework/v1/interface.md) |
+| 0x006 | fathomry / assembly | Public runtime composition and evidence reception (withdrawn; allocation reserved) |
 | 0x007 | fathomry / command_line | [Command invocation and terminal I/O](../../cmd/fathomry/interface.md), not a CLI-layer allocation band |
-| 0x00A | fathomry / project_creation | [Dependency admission and exclusive project creation](../../cmd/fathomry/interface.md#create-an-independent-project) |
-| 0x00B | fathomry / project_build | [Native project build admission and publication](../../cmd/fathomry/v1/interface.md) |
+| 0x00A | fathomry / project_creation | Project creation withdrawn; allocation reserved |
+| 0x00B | fathomry / project_build | Project build admission withdrawn; allocation reserved |
 | 0x041 | fathomry / settings | [Typed configuration data storage/access](../../settings/v1/interface.md) |
 | 0x042 | fathomry / configuration_data | [Independent strict preparation and raw batch contract](../../adapters/configsource/v1/interface.md) |
 | 0x043 | fathomry / configsource_viper | [Public Viper configuration capability](../../adapters/configsource/viper/v1/interface.md) |
 | 0x044 | fathomry / configsource_nacos | [Public Nacos configuration capability](../../adapters/configsource/nacos/v1/interface.md) |
-| 0x045 | fathomry / configuration | [Typed configuration acceptance and publication](../../framework/configuration/v1/interface.md) |
+| 0x045 | fathomry / configuration | Typed configuration acceptance and publication (withdrawn; allocation reserved) |
 | 0x080 | fathomry / database_postgres | [Public PostgreSQL SQL and ownership](../../adapters/database/postgres/v1/interface.md) |
 | 0x081 | fathomry / database_mysql | [Public MySQL SQL and ownership](../../adapters/database/mysql/v1/interface.md) |
 | 0x082 | fathomry / database_duckdb | [Public embedded DuckDB SQL and ownership](../../adapters/sqlengine/duckdb/v1/interface.md) |
@@ -159,8 +159,8 @@ The authoritative first-party manifest is
 | 0x282 | fathomry / logging_zap | [Public Zap logging ownership and per-output operations](../../adapters/logging/zap/v1/interface.md) |
 | 0x283 | fathomry / logging_zerolog | [Public zerolog logging, typed event recovery and file maintenance](../../adapters/logging/zerolog/v1/interface.md) |
 | 0x1C0 | fathomry / temporal | [Public Temporal orchestration, Worker lifecycle and native semantic errors](../../adapters/orchestration/temporal/v1/interface.md) |
-| 0x1C1 | fathomry / workflow | `FacilityWorkflowDeclaration`: [portable workflow declaration validation and comparison](../../framework/workflow/declaration/v1/interface.md), not workflow execution |
-| 0x1C3 | fathomry / workflow_implementation | [Go Activity binding, static manifests and checked local invocation](../../framework/workflow/implementation/v1/interface.md), not Worker/deployment qualification |
+| 0x1C1 | fathomry / workflow | `FacilityWorkflowDeclaration`: portable workflow declaration validation and comparison (withdrawn; allocation reserved), not workflow execution |
+| 0x1C3 | fathomry / workflow_implementation | Go Activity binding, static manifests and checked local invocation (withdrawn; allocation reserved), not Worker/deployment qualification |
 | 0x2C0 | fathomry / notification_mail | [Managed Mail notification operations](../../adapters/notification/mail/v1/interface.md) |
 | 0x2C1 | fathomry / notification_lark | [Managed Lark notification and reception operations](../../adapters/notification/lark/v1/interface.md) |
 

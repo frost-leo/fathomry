@@ -89,7 +89,6 @@ the parent module ZIP and a dependency's root replacements are not sufficient.
 - [Managed export and old-generation peers](../../../../../../adapters/telemetry/otel/v1/exportloop_integration_test.go).
 - [Native/wire integer controls](../../../../../../internal/telemetry/otel/v1/metrics_precision_test.go).
 - [Native consuming-graph qualification](../../../../../../internal/telemetry/otel/v1/native_compatibility_test.go).
-- [Cold CLI and generated project checks](../../../../../../cmd/fathomry/internal/command/project/new/integration_test.go).
 
 Historical backend experiments do not qualify this source upgrade. Change
 acceptance requires the focused controls, normal full gates, fresh review,

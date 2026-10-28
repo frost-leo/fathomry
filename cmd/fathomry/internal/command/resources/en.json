@@ -44,16 +44,6 @@
       }
     },
     {
-      "id": "fathomry.command_line.not_found",
-      "contract": "v1",
-      "context": "Command interface: not_found.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "The requested catalog entry is not registered."
-      }
-    },
-    {
       "id": "fathomry.command_line.execution_failed",
       "contract": "v1",
       "context": "Command interface: execution_failed.",
@@ -191,26 +181,6 @@
       "cardinal": false,
       "forms": {
         "other": "Options:"
-      }
-    },
-    {
-      "id": "fathomry.command_line.selection_missing",
-      "contract": "v1",
-      "context": "Offline project workflow selection and validation; no configuration or service access.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "No declared workflow, version or mode matches the selection."
-      }
-    },
-    {
-      "id": "fathomry.command_line.selection_ambiguous",
-      "contract": "v1",
-      "context": "Offline project workflow selection and validation; no configuration or service access.",
-      "args": {},
-      "cardinal": false,
-      "forms": {
-        "other": "The workflow selection matches more than one Namespace. Specify --namespace."
       }
     }
   ]

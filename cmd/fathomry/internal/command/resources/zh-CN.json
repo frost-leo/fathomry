@@ -38,13 +38,6 @@
       }
     },
     {
-      "id": "fathomry.command_line.not_found",
-      "source": "c2736fcf7a30175244b45588797f7a5ab0e7b417e3fa8eb39a7dc1f039442a62",
-      "forms": {
-        "other": "请求的图鉴条目未注册。"
-      }
-    },
-    {
       "id": "fathomry.command_line.execution_failed",
       "source": "2034b362e3476ffe1b12fb397b98390b6869c0e8a8d0a7634b7979e800acc2bf",
       "forms": {
@@ -140,20 +133,6 @@
       "source": "0c2d9b2002a82bd3b9f5b5261d3ceb660be4bcef1a45ebe617d5fc102d17a48f",
       "forms": {
         "other": "选项："
-      }
-    },
-    {
-      "id": "fathomry.command_line.selection_missing",
-      "source": "08dde7782b479bf04216bc0aa0fbec844aa1feb2f50519324f972f55d5cbfe47",
-      "forms": {
-        "other": "没有与选择条件匹配的已声明工作流、版本或模式。"
-      }
-    },
-    {
-      "id": "fathomry.command_line.selection_ambiguous",
-      "source": "9a4f86fe04b12adcdffc486a514423db2f3ef96fb7f5064797d4b4d61901c764",
-      "forms": {
-        "other": "工作流选择匹配了多个命名空间，请指定 --namespace。"
       }
     }
   ]

@@ -112,7 +112,15 @@ func Run(ctx context.Context, args []string, options Options, catalogs Catalogs,
 		return nil
 	}
 	root.SetFlagErrorFunc(func(_ *cobra.Command, cause error) error { return Fail(ErrUsage, cause) })
-	root.SetHelpFunc(func(selected *cobra.Command, _ []string) { invocation.helperError = invocation.Help(selected) })
+	root.SetHelpFunc(func(selected *cobra.Command, _ []string) {
+		if selected == root && len(selected.Flags().Args()) != 0 {
+			if err := selected.ValidateArgs(selected.Flags().Args()); err != nil {
+				invocation.helperError = Fail(ErrUsage, err)
+				return
+			}
+		}
+		invocation.helperError = invocation.Help(selected)
+	})
 	root.SetUsageFunc(func(selected *cobra.Command) error { return invocation.Help(selected) })
 	root.PersistentFlags().StringVar(&invocation.language, "lang", "en", "fathomry.command_line.flag_language")
 	root.PersistentFlags().StringVar(&invocation.format, "output", "text", "fathomry.command_line.flag_output")
@@ -128,6 +136,8 @@ func Run(ctx context.Context, args []string, options Options, catalogs Catalogs,
 		return invocation.Help(selected)
 	})
 	help.Flags().BoolP("help", "h", false, "fathomry.command_line.flag_help")
+	// Cobra otherwise omits the help command from a root without subcommands.
+	root.AddCommand(help)
 	root.SetHelpCommand(help)
 	err = root.ExecuteContext(ctx)
 	if invocation.helperError != nil {
@@ -299,7 +309,7 @@ func ExitCode(err error) int {
 		return 0
 	case errors.Is(err, ErrOutput), errors.Is(err, ErrCleanup), errors.Is(err, ErrOptions), errors.Is(err, ErrExecution):
 		return 1
-	case errors.Is(err, ErrUsage), errors.Is(err, ErrLimit), errors.Is(err, ErrSelectionMissing), errors.Is(err, ErrSelectionAmbiguous):
+	case errors.Is(err, ErrUsage), errors.Is(err, ErrLimit):
 		return 2
 	case errors.Is(err, ErrCanceled), errors.Is(err, context.Canceled):
 		return 130

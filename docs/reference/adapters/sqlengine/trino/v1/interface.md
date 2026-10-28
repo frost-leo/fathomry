@@ -36,7 +36,7 @@ The Adapter exposes the supported Trino integration through independent public
 Query, full admitted Execute, one-physical-statement Insert and owned incremental
 Read. It does not return a driver, SQL connection, private assembly, arbitrary
 transport or producer authority. The same capability works directly and through
-[Framework](../../../../framework/v1/interface.md) Fixed/Follow bindings.
+[Resource](../../../../resource/v1/interface.md) Fixed/Follow bindings.
 Its own [SQL-engine metadata and budgets](../../v1/interface.md) are data contracts,
 not a universal SQL or transaction API.
 

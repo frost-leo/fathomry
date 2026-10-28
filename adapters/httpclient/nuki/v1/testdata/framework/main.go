@@ -37,7 +37,6 @@ import (
 	"github.com/frost-leo/fathomry/adapters/configsource/v1"
 	nuki "github.com/frost-leo/fathomry/adapters/httpclient/nuki/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 	nativehttp "github.com/nukilabs/http"
@@ -117,16 +116,28 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer cleanup(runtime.Close)
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer cleanup(closeComposition)
 	inbox, err := adapters.NewInbox[nuki.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := nuki.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := nuki.Dependencies{Runtime: runtime, Evidence: inbox}
 	built := make(chan constructed, 16)
 	released := make(chan *nuki.Owner, 16)
 	obsoleteGate := make(chan struct{})
@@ -134,7 +145,7 @@ func run(ctx context.Context) error {
 	defer unblockObsolete()
 	refused := errors.New("fixture candidate refused")
 	bind := func(name string, mode resource.Policy) (resource.Ref[nuki.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[nuki.Settings, nuki.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[nuki.Settings, nuki.Handle]{
 			Name: name, Policy: mode, Clone: clone, Equal: func(left, right nuki.Settings) bool { return reflect.DeepEqual(left, right) },
 			Select: func(view settings.View) (nuki.Settings, error) {
 				snapshot, err := settings.As[nuki.Settings](view)
@@ -197,7 +208,7 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return nil, err
 		}
-		return runtime.Resources().Apply(ctx, snapshot.View())
+		return resourceScope.Apply(ctx, snapshot.View())
 	}
 	next := func() (constructed, error) {
 		select {
@@ -376,7 +387,7 @@ func run(ctx context.Context) error {
 	if err != nil || string(value.DataCopy()) != "latest" {
 		return errors.Join(err, errors.New("latest generation not usable"))
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	if !fixedOwner.owner.ShutdownComplete() || !latest.owner.ShutdownComplete() {
@@ -385,7 +396,7 @@ func run(ctx context.Context) error {
 	if err := drain(ctx, inbox); err != nil {
 		return err
 	}
-	operations, err := runtime.Operations().Inspect()
+	operations, err := runtime.Inspect()
 	if err != nil || operations.Active != 0 || operations.WorkBytes != 0 {
 		return errors.Join(err, errors.New("Framework operations remain live"))
 	}

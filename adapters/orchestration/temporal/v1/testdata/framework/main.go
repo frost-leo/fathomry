@@ -23,11 +23,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+
 	temporal "github.com/frost-leo/fathomry/adapters/orchestration/temporal/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
+	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
-	"os"
 )
 
 func main() {
@@ -67,16 +68,28 @@ func run() error {
 	policy.Runtime.MaxWorkBytes *= 2
 	policy.Evidence.Capacity *= 2
 	policy.Evidence.MaxBytes *= 2
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer runtime.Close(context.Background())
-	deps, err := dependencies(runtime.Operations(), policy)
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer closeComposition(context.Background())
+	deps, err := dependencies(runtime, policy)
 	if err != nil {
 		return err
 	}
-	ref, err := resource.Bind(runtime.Resources(), resource.Binding[int, temporal.Handle]{Name: "temporal", Policy: resource.Follow,
+	ref, err := resource.Bind(resourceScope, resource.Binding[int, temporal.Handle]{Name: "temporal", Policy: resource.Follow,
 		Select: func(view settings.View) (int, error) {
 			snapshot, err := settings.As[int](view)
 			if err != nil {
@@ -104,7 +117,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		update, err := resourceScope.Apply(ctx, snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -153,10 +166,10 @@ func run() error {
 	if err := current.Close(ctx); err != nil {
 		return err
 	}
-	if err := runtime.Resources().Close(ctx); err != nil {
+	if err := resourceScope.Close(ctx); err != nil {
 		return err
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	for {

@@ -30,7 +30,6 @@ import (
 	"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1"
 	"github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -47,16 +46,28 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	host, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	host, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer host.Close(context.Background())
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, host.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(host.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer closeComposition(context.Background())
 	inbox, err := adapters.NewInbox[minio.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := minio.Dependencies{Runtime: host.Operations(), Evidence: inbox}
+	dependencies := minio.Dependencies{Runtime: host, Evidence: inbox}
 	owner, err := minio.Open(ctx, value, dependencies)
 	if owner != nil {
 		defer owner.Close(context.Background())
@@ -83,7 +94,7 @@ func run() error {
 	if metadata.Revision == "" {
 		return errors.New("source evidence missing")
 	}
-	ref, err := resource.Bind(host.Resources(), resource.Binding[minio.Settings, minio.Handle]{
+	ref, err := resource.Bind(resourceScope, resource.Binding[minio.Settings, minio.Handle]{
 		Name: "fixed", Policy: resource.Fixed,
 		Select: func(view settings.View) (minio.Settings, error) {
 			snapshot, err := settings.As[minio.Settings](view)
@@ -108,7 +119,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	update, err := host.Resources().Apply(ctx, snapshot.View())
+	update, err := resourceScope.Apply(ctx, snapshot.View())
 	if err != nil {
 		return err
 	}
@@ -130,7 +141,7 @@ func run() error {
 	if err := owner.Close(ctx); err != nil {
 		return err
 	}
-	if err := host.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	for state, _ := inbox.Inspect(); state.Outstanding > 0; state, _ = inbox.Inspect() {

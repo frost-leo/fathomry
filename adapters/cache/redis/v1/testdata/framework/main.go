@@ -26,16 +26,14 @@ import (
 	"github.com/frost-leo/fathomry/adapters/cache/redis/v1"
 	"github.com/frost-leo/fathomry/adapters/configsource/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"io"
-	"os"
-	"time"
-
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
+	"io"
 	"maps"
+	"os"
 	"reflect"
 	"slices"
+	"time"
 )
 
 func main() {
@@ -70,26 +68,37 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer runtime.Close(context.Background())
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer closeComposition(context.Background())
 	inbox, err := adapters.NewInbox[redis.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	receiver, err := framework.StartReceiver(ctx, inbox, framework.ReceiverOptions{}, func(_ context.Context, snapshot adapters.Snapshot[redis.Result]) error {
+	delivered := 0
+	finishEvidence, stopEvidence := drainEvidence(ctx, inbox, func(_ context.Context, snapshot adapters.Snapshot[redis.Result]) error {
+		delivered++
 		if !snapshot.Info().Released {
 			return errors.New("unreleased evidence")
 		}
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-	defer receiver.Close(context.Background())
-	deps := redis.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	defer stopEvidence(context.Background())
+	deps := redis.Dependencies{Runtime: runtime, Evidence: inbox}
 	clone := func(value redis.Settings) redis.Settings {
 		value.Addrs = slices.Clone(value.Addrs)
 		value.AllowedAddrs = slices.Clone(value.AllowedAddrs)
@@ -103,7 +112,7 @@ func run() error {
 		return value
 	}
 	bind := func(name string, mode resource.Policy) (resource.Ref[redis.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[redis.Settings, redis.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[redis.Settings, redis.Handle]{
 			Name: name, Policy: mode, Clone: clone, Equal: func(a, b redis.Settings) bool { return reflect.DeepEqual(a, b) },
 			Select: func(view settings.View) (redis.Settings, error) {
 				snapshot, err := settings.As[redis.Settings](view)
@@ -134,7 +143,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		update, err := resourceScope.Apply(ctx, snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -172,18 +181,78 @@ func run() error {
 			return errors.New("generation attribution")
 		}
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
-	if err := receiver.Finish(ctx); err != nil {
+	if err := finishEvidence(ctx); err != nil {
 		return err
 	}
-	status, err := receiver.Status()
-	if err != nil {
-		return err
-	}
-	if status.Delivered < 5 || status.Failures != 0 {
+	if delivered < 5 {
 		return errors.New("receiver incomplete")
 	}
 	return nil
+}
+
+func drainEvidence(ctx context.Context, inbox *adapters.Inbox[redis.Result], sink func(context.Context, adapters.Snapshot[redis.Result]) error) (finish, stop func(context.Context) error) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	var result error
+	go func() {
+		defer close(done)
+		defer cancel()
+		for {
+			delivery, err := inbox.NextReleased(ctx)
+			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+				return
+			}
+			if err != nil {
+				result = err
+				return
+			}
+			receipt, err := delivery.Receipt()
+			if err != nil {
+				result = errors.Join(err, delivery.Retry())
+				return
+			}
+			snapshot, _ := receipt.Snapshot()
+			if err := sink(ctx, snapshot); err != nil {
+				if retry := delivery.Retry(); retry != nil {
+					result = errors.Join(err, retry)
+					return
+				}
+				result = err
+				return
+			}
+			if err := delivery.Ack(); err != nil {
+				result = err
+				return
+			}
+		}
+	}()
+	wait := func(ctx context.Context) error {
+		select {
+		case <-done:
+			return result
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	finish = func(ctx context.Context) error {
+		if err := inbox.Seal(); err != nil {
+			return err
+		}
+		if err := wait(ctx); err != nil {
+			return err
+		}
+		status, err := inbox.Inspect()
+		if err != nil {
+			return err
+		}
+		if status.Outstanding != 0 {
+			return errors.New("undelivered fixture evidence")
+		}
+		return nil
+	}
+	stop = func(ctx context.Context) error { cancel(); return wait(ctx) }
+	return
 }

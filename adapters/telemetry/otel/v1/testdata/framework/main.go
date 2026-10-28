@@ -32,7 +32,6 @@ import (
 
 	otel "github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
@@ -119,23 +118,35 @@ func run(ctx context.Context) (result error) {
 	if err != nil {
 		return err
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
+	}
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
 	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		result = errors.Join(result, runtime.Close(cleanup))
+		result = errors.Join(result, closeComposition(cleanup))
 	}()
 	inbox, err := adapters.NewInbox[otel.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := otel.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := otel.Dependencies{Runtime: runtime, Evidence: inbox}
 	var mu sync.Mutex
 	seen := map[uint64]adapters.Info{}
-	receiver, err := framework.StartReceiver(context.Background(), inbox, framework.ReceiverOptions{}, func(_ context.Context, snapshot adapters.Snapshot[otel.Result]) error {
+	finishEvidence, stopEvidence := drainEvidence(context.Background(), inbox, func(_ context.Context, snapshot adapters.Snapshot[otel.Result]) error {
 		mu.Lock()
 		defer mu.Unlock()
 		info := snapshot.Info()
@@ -145,17 +156,14 @@ func run(ctx context.Context) (result error) {
 		seen[info.Sequence] = info
 		return nil
 	})
-	if err != nil {
-		return err
-	}
 	defer func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		result = errors.Join(result, receiver.Close(cleanup))
+		result = errors.Join(result, stopEvidence(cleanup))
 	}()
 	sources := map[string][]adopted{}
 	bind := func(name string, mode resource.Policy) (resource.Ref[otel.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[int, otel.Handle]{Name: name, Policy: mode,
+		return resource.Bind(resourceScope, resource.Binding[int, otel.Handle]{Name: name, Policy: mode,
 			Select: func(view settings.View) (int, error) {
 				snapshot, err := settings.As[int](view)
 				if err != nil {
@@ -198,7 +206,7 @@ func run(ctx context.Context) (result error) {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		update, err := resourceScope.Apply(ctx, snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -300,17 +308,16 @@ func run(ctx context.Context) (result error) {
 	}
 	// Stop producers first; release sources while operation admission and the
 	// independent evidence receiver remain available for final export/cleanup.
-	if err := runtime.Resources().Close(ctx); err != nil {
+	if err := resourceScope.Close(ctx); err != nil {
 		return err
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
-	if err := receiver.Finish(ctx); err != nil {
+	if err := finishEvidence(ctx); err != nil {
 		return err
 	}
-	status, err := receiver.Status()
-	if err != nil || status.Failures != 0 || status.Delivered < 7 {
+	if len(seen) < 7 {
 		return errors.New("independent custody did not finish")
 	}
 	mu.Lock()
@@ -327,4 +334,68 @@ func run(ctx context.Context) (result error) {
 		return errors.New("unexpected physical generation count")
 	}
 	return nil
+}
+
+func drainEvidence(ctx context.Context, inbox *adapters.Inbox[otel.Result], sink func(context.Context, adapters.Snapshot[otel.Result]) error) (finish, stop func(context.Context) error) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	var result error
+	go func() {
+		defer close(done)
+		defer cancel()
+		for {
+			delivery, err := inbox.NextReleased(ctx)
+			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+				return
+			}
+			if err != nil {
+				result = err
+				return
+			}
+			receipt, err := delivery.Receipt()
+			if err != nil {
+				result = errors.Join(err, delivery.Retry())
+				return
+			}
+			snapshot, _ := receipt.Snapshot()
+			if err := sink(ctx, snapshot); err != nil {
+				if retry := delivery.Retry(); retry != nil {
+					result = errors.Join(err, retry)
+					return
+				}
+				result = err
+				return
+			}
+			if err := delivery.Ack(); err != nil {
+				result = err
+				return
+			}
+		}
+	}()
+	wait := func(ctx context.Context) error {
+		select {
+		case <-done:
+			return result
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	finish = func(ctx context.Context) error {
+		if err := inbox.Seal(); err != nil {
+			return err
+		}
+		if err := wait(ctx); err != nil {
+			return err
+		}
+		status, err := inbox.Inspect()
+		if err != nil {
+			return err
+		}
+		if status.Outstanding != 0 {
+			return errors.New("undelivered fixture evidence")
+		}
+		return nil
+	}
+	stop = func(ctx context.Context) error { cancel(); return wait(ctx) }
+	return
 }

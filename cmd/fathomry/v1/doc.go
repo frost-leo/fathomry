@@ -17,26 +17,14 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package cli exposes the fixed Fathomry command set to the official executable
-// and independent projects. Run uses the existing internal command engine; Handle
-// lets a project keep its application startup path while handling the same commands
-// and the offline inspection protocol before configuration Boot.
-// Project vet defaults to all registered workflows and can select an exact
-// Namespace/code/version/mode/revision. Build inspection always checks the full
-// registration set, including supplied catalog metadata. Explicit Bundle input
-// retains the existing offline workflow-vet contract.
+// Package cli exposes the retained minimal Fathomry CLI foundation.
+// Run supports help, explicit language/output selection, bounded diagnostics,
+// cancellation and resource-cleanup ownership. It constructs no service clients.
 //
-// This is not a command-registration or plugin SDK. Projects supply data-only
-// workflow declarations, not callbacks to the builder. No concrete Adapter catalog
-// is imported here. A nil Errors/Messages pair selects the core and CLI catalogs;
-// the official executable can supply its explicitly prepared wider catalog.
+// Framework, project generation/build inspection, workflow, database/schema and
+// catalog-query commands are withdrawn. This package has no project registration,
+// application Boot, command plugin or replacement execution protocol.
 //
-// Contexts, streams, project data and prepared catalogs are borrowed. Do not mutate
-// inputs during a call; synchronize shared writers. No process globals, application
-// settings, service clients, or runtime are initialized by command assembly.
-// Project.Control is a lazy DatabaseResolver returning DatabaseConfiguration for explicit online schema
-// commands. Those commands own Framework resources through the invocation scope.
-// ExecutionError retains mutation facts and unfinished cleanup on failure.
-// Private control.go composes this ownership and injects lazy database operations into the
-// leaf commands; it is neither another command group nor an exported plugin hook.
+// Contexts, streams and optional prepared catalogs are borrowed for one invocation.
+// Callers must synchronize shared writers. No settings or process globals are set.
 package cli

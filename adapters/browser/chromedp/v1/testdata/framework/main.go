@@ -33,7 +33,6 @@ import (
 	cdpruntime "github.com/chromedp/cdproto/runtime"
 	browser "github.com/frost-leo/fathomry/adapters/browser/chromedp/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -86,17 +85,29 @@ func exercise(selection resource.Policy) (result error) {
 	policy.Runtime.MaxWorkBytes *= 2
 	policy.Evidence.Capacity *= 2
 	policy.Evidence.MaxBytes *= 2
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer func() { result = errors.Join(result, runtime.Close(context.Background())) }()
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer func() { result = errors.Join(result, closeComposition(context.Background())) }()
 	inbox, err := adapters.NewInbox[browser.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := browser.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
-	ref, err := resource.Bind(runtime.Resources(), resource.Binding[int, browser.Handle]{
+	dependencies := browser.Dependencies{Runtime: runtime, Evidence: inbox}
+	ref, err := resource.Bind(resourceScope, resource.Binding[int, browser.Handle]{
 		Name: "browser", Policy: selection,
 		Select: func(view settings.View) (int, error) {
 			snapshot, err := settings.As[int](view)
@@ -124,7 +135,7 @@ func exercise(selection resource.Policy) (result error) {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		update, err := resourceScope.Apply(ctx, snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -237,7 +248,7 @@ func exercise(selection resource.Policy) (result error) {
 			return err
 		}
 	}
-	if err := runtime.Resources().Close(ctx); err != nil {
+	if err := resourceScope.Close(ctx); err != nil {
 		return err
 	}
 	for {

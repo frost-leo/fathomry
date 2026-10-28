@@ -39,7 +39,6 @@ import (
 	zap "github.com/frost-leo/fathomry/adapters/logging/zap/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/failure/v1"
-	framework "github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
 	sdk "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -364,8 +363,10 @@ func TestSafeSlogChronologyTimePCAndFrameworkErrors(t *testing.T) {
 		}
 	}
 	original, _ := failure.New(def, failure.Location{Operation: "business"}, errors.New("PRIVATE_CAUSE"))
-	emitted := framework.NewErrorLog(slog.New(handler), presenter).Emit(context.Background(), original)
-	if !emitted.Recognized {
+	presented := presenter.Present(original)
+	_, recognized := failure.Inspect(presented)
+	slog.New(handler).LogAttrs(context.Background(), slog.LevelError, "operation", slog.Bool("recognized", recognized), slog.Any("error", presented))
+	if !recognized {
 		t.Fatal("framework presentation")
 	}
 	delivery, err = deps.Evidence.NextReleased(context.Background())

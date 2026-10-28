@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 	"github.com/twmb/franz-go/pkg/kmsg"
@@ -145,21 +144,33 @@ func TestFrameworkFixedFollowRetainsNativeGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := framework.New(context.Background(), framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(context.Background())
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		t.Fatal(err)
+	}
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		t.Fatal(err)
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
 	}
 	inbox, err := adapters.NewInbox[Result](policy.Evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deps := Dependencies{Runtime: runtime.Operations(), Evidence: inbox, Transactions: &TransactionIDs{}}
+	deps := Dependencies{Runtime: runtime, Evidence: inbox, Transactions: &TransactionIDs{}}
 	var mutex sync.Mutex
 	owners := map[string][]*Owner{}
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		if err := runtime.Close(ctx); err != nil {
+		if err := closeComposition(ctx); err != nil {
 			t.Error(err)
 		}
 		mutex.Lock()
@@ -180,7 +191,7 @@ func TestFrameworkFixedFollowRetainsNativeGeneration(t *testing.T) {
 	}
 	refusal := errors.New("synthetic candidate refusal")
 	bind := func(name string, mode resource.Policy) resource.Ref[Handle] {
-		ref, err := resource.Bind(runtime.Resources(), resource.Binding[Settings, Handle]{
+		ref, err := resource.Bind(resourceScope, resource.Binding[Settings, Handle]{
 			Name: name, Policy: mode, Clone: clone, Equal: func(left, right Settings) bool { return reflect.DeepEqual(left, right) },
 			Select: func(view settings.View) (Settings, error) {
 				snapshot, err := settings.As[Settings](view)
@@ -214,7 +225,7 @@ func TestFrameworkFixedFollowRetainsNativeGeneration(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(testContext(t), snapshot.View())
+		update, err := resourceScope.Apply(testContext(t), snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -435,24 +446,14 @@ func TestLatePromiseAndEvidenceRetryNeverResends(t *testing.T) {
 	}
 	unblock()
 	value := await(t, receipt, nil)
-	refusal := errors.New("synthetic receiver failure")
-	failed := make(chan struct{}, 1)
-	receiver, err := framework.StartReceiver(testContext(t), inbox, framework.ReceiverOptions{RetryDelay: time.Minute}, func(context.Context, adapters.Snapshot[Result]) error { failed <- struct{}{}; return refusal })
+	delivery, err := inbox.NextReleased(testContext(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-failed:
-	case <-testContext(t).Done():
-		t.Fatal("receiver did not receive finite evidence")
-	}
-	if err := receiver.Close(testContext(t)); err != nil {
+	if err := delivery.Retry(); err != nil {
 		t.Fatal(err)
 	}
-	if status, err := receiver.Status(); err != nil || !errors.Is(status.LastError, refusal) {
-		t.Fatal("receiver failure lost", err)
-	}
-	delivery, err := inbox.NextReleased(testContext(t))
+	delivery, err = inbox.NextReleased(testContext(t))
 	if err != nil {
 		t.Fatal(err)
 	}

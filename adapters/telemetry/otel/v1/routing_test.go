@@ -27,7 +27,6 @@ import (
 
 	otel "github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -49,10 +48,8 @@ func TestStableDestinationIsRoutingNotReadinessOrOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	receiver, err := framework.StartReceiver(context.Background(), inbox, framework.ReceiverOptions{}, func(context.Context, adapters.Snapshot[otel.Result]) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
+	finishEvidence, stopEvidence := drainEvidence(context.Background(), inbox, func(context.Context, adapters.Snapshot[otel.Result]) error { return nil })
+	t.Cleanup(func() { _ = stopEvidence(context.Background()) })
 	deps := otel.Dependencies{Runtime: runtime, Evidence: inbox}
 	owner, err := prepared.Open(context.Background(), deps)
 	if err != nil {
@@ -65,7 +62,7 @@ func TestStableDestinationIsRoutingNotReadinessOrOwnership(t *testing.T) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		for _, close := range []func(context.Context) error{scope.Close, owner.Close, runtime.Close, receiver.Finish} {
+		for _, close := range []func(context.Context) error{scope.Close, owner.Close, runtime.Close, finishEvidence} {
 			if err := close(ctx); err != nil {
 				t.Error(err)
 			}

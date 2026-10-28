@@ -120,11 +120,38 @@ func TestPublicLeaveFailureRemainsInIndependentRootEvidence(t *testing.T) {
 	options := peerSettings(peer)
 	deps, inbox := testDependencies(t, options)
 	owner := testOpen(t, options, deps)
+	send(t, owner.Client(), Message{Topic: "records", Partition: 0, Value: []byte("leave-barrier")})
+	ack(t, inbox)
+	initialOffsetsRequested := make(chan struct{}, 1)
+	peer.ControlKey(int16(kmsg.OffsetFetch), func(kmsg.Request) (kmsg.Response, error, bool) {
+		select {
+		case initialOffsetsRequested <- struct{}{}:
+		default:
+		}
+		return nil, nil, false
+	})
 	group, err := owner.Client().ConsumeGroup(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitAssignment(t, group, inbox, 2)
+	// Assignment precedes native OffsetFetch. A later commit on the same
+	// membership client's coordinator connection fences its response read.
+	select {
+	case <-initialOffsetsRequested:
+	case <-testContext(t).Done():
+		t.Fatal("native initial OffsetFetch was not dispatched")
+	}
+	page, err := group.Next(testContext(t))
+	if err != nil || len(page.GroupBatch().Page().RecordsCopy()) != 1 {
+		t.Fatal("leave barrier could not read its record", err)
+	}
+	ack(t, inbox)
+	committed, err := group.CommitBatch(testContext(t), page.GroupBatch())
+	if checkpoints := committed.CheckpointsCopy(); err != nil || len(checkpoints) != 1 || checkpoints[0].State != CheckpointCommitted {
+		t.Fatal("leave barrier commit did not complete", err)
+	}
+	ack(t, inbox)
 	peer.ControlKey(int16(kmsg.LeaveGroup), func(request kmsg.Request) (kmsg.Response, error, bool) {
 		response := request.ResponseKind().(*kmsg.LeaveGroupResponse)
 		response.ErrorCode = kerr.GroupAuthorizationFailed.Code

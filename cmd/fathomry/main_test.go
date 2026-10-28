@@ -68,15 +68,14 @@ func TestExecutable(t *testing.T) {
 		args     []string
 		language string
 		code     int
-		report   bool
 	}{
-		{"help", []string{"--help"}, "zh-CN", 0, false},
-		{"explain", []string{"error", "explain", "0xA0450001", "--lang", "en", "--output", "json"}, "private-invalid-locale", 0, false},
-		{"missing", []string{"error", "explain", "0xA7FFFFFF", "--output", "json"}, "en", 1, false},
-		{"version_deferred", []string{"--version"}, "en", 2, false},
-		{"strict_missing", []string{"--output", "json", "i18n", "coverage", "fr", "--strict"}, "zh-CN", 1, true},
-		{"strict_complete", []string{"--output", "json", "i18n", "coverage", "zh-CN", "--strict"}, "en", 0, false},
-		{"render", []string{"--output", "json", "i18n", "render", "fathomry.failure.invalid_code", "--locale", "zh-CN"}, "en", 0, false},
+		{"help", []string{"--help"}, "zh-CN", 0},
+		{"explicit_locale", []string{"--lang", "en", "help", "--output", "json"}, "private-invalid-locale", 0},
+		{"removed_workflow", []string{"workflow", "register", "--output", "json"}, "en", 2},
+		{"removed_schema", []string{"schema", "apply"}, "en", 2},
+		{"removed_project", []string{"new", "example"}, "en", 2},
+		{"removed_inspection", []string{"--fathomry-project=v2"}, "en", 2},
+		{"version_deferred", []string{"--version"}, "en", 2},
 	} {
 		t.Run(item.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -108,19 +107,8 @@ func TestExecutable(t *testing.T) {
 				if item.name == "help" && !strings.Contains(output.String(), "用法") {
 					t.Fatal("entry did not capture environment preference")
 				}
-				if item.name == "explain" && !json.Valid(output.Bytes()) {
+				if item.name == "explicit_locale" && !json.Valid(output.Bytes()) {
 					t.Fatal("machine result malformed")
-				}
-			} else if item.report {
-				var report struct {
-					Data struct {
-						Complete bool `json:"complete"`
-						Missing  int  `json:"missing"`
-					} `json:"data"`
-				}
-				if json.Unmarshal(output.Bytes(), &report) != nil || report.Data.Complete || report.Data.Missing == 0 ||
-					!json.Valid(diagnostic.Bytes()) || !strings.Contains(diagnostic.String(), "fathomry.command_line.check_failed") {
-					t.Fatal("failed process check lost its complete report or diagnostic")
 				}
 			} else if output.Len() != 0 || diagnostic.Len() == 0 {
 				t.Fatal("failed command streams mixed")

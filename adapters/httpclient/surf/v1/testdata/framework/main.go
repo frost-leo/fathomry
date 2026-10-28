@@ -44,7 +44,6 @@ import (
 	"github.com/frost-leo/fathomry/adapters/configsource/v1"
 	surf "github.com/frost-leo/fathomry/adapters/httpclient/surf/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 	"github.com/quic-go/quic-go"
@@ -382,16 +381,28 @@ func fixedFollow(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer cleanup(runtime.Close)
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer cleanup(closeComposition)
 	inbox, err := adapters.NewInbox[surf.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := surf.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := surf.Dependencies{Runtime: runtime, Evidence: inbox}
 	ledger := newLedger(inbox)
 	constructed := make(chan constructedSource, 16)
 	released := make(chan *surf.Owner, 16)
@@ -402,7 +413,7 @@ func fixedFollow(ctx context.Context) error {
 	var ownersMu sync.Mutex
 	var owners []constructedSource
 	bind := func(name string, mode resource.Policy) (resource.Ref[surf.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[surf.Settings, surf.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[surf.Settings, surf.Handle]{
 			Name: name, Policy: mode,
 			Select: func(view settings.View) (surf.Settings, error) {
 				snapshot, err := settings.As[surf.Settings](view)
@@ -469,7 +480,7 @@ func fixedFollow(ctx context.Context) error {
 		if err != nil {
 			return nil, err
 		}
-		return runtime.Resources().Apply(ctx, snapshot.View())
+		return resourceScope.Apply(ctx, snapshot.View())
 	}
 	apply := func(value surf.Settings) error {
 		update, err := beginApply(value)
@@ -755,7 +766,7 @@ func fixedFollow(ctx context.Context) error {
 	if err := requestResult(fixed, "still-fixed", "first", fixedStatus.Generation); err != nil {
 		return err
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	if err := awaitReleased(fixedOwner.owner, latest.owner); err != nil {
@@ -774,7 +785,7 @@ func fixedFollow(ctx context.Context) error {
 			return fmt.Errorf("source %s/%s retained authority or sockets", source.binding, source.name)
 		}
 	}
-	usage, err := runtime.Operations().Inspect()
+	usage, err := runtime.Inspect()
 	if err != nil || usage.Active != 0 || usage.WorkBytes != 0 {
 		return errors.New("Framework cleanup retained public work reservations")
 	}
@@ -1078,20 +1089,32 @@ func dynamicFollow(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer cleanup(runtime.Close)
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer cleanup(closeComposition)
 	inbox, err := adapters.NewInbox[surf.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := surf.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := surf.Dependencies{Runtime: runtime, Evidence: inbox}
 	ledger := newLedger(inbox)
 	created := make(chan constructedSource, 4)
 	bind := func(name string, mode resource.Policy) (resource.Ref[surf.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[surf.Settings, surf.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[surf.Settings, surf.Handle]{
 			Name: name, Policy: mode, Clone: cloneSettings, Equal: func(a, b surf.Settings) bool { return reflect.DeepEqual(a, b) },
 			Select: func(view settings.View) (surf.Settings, error) {
 				snapshot, err := settings.As[surf.Settings](view)
@@ -1133,7 +1156,7 @@ func dynamicFollow(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		update, err := resourceScope.Apply(ctx, snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -1222,13 +1245,13 @@ func dynamicFollow(ctx context.Context) error {
 	if !result.Complete() || result.TrailersCopy().Get("X-Qpack") != oldValue || result.Attribution().Source.Generation != oldStatus.Generation {
 		return errors.New("retired dynamic table or generation was lost")
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	if err := ledger.drain(ctx); err != nil {
 		return err
 	}
-	status, _ := runtime.Operations().Inspect()
+	status, _ := runtime.Inspect()
 	if status.Active != 0 || status.WorkBytes != 0 || !old.ShutdownComplete() {
 		return errors.New("dynamic Framework source was not released")
 	}

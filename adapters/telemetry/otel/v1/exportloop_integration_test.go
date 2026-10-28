@@ -31,7 +31,6 @@ import (
 
 	otel "github.com/frost-leo/fathomry/adapters/telemetry/otel/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
@@ -91,7 +90,7 @@ func managedPeer(t *testing.T, endpoint string, records chan<- managedRecord) *h
 	return server
 }
 
-func managedRuntime(t *testing.T, policy otel.Policy) (*adapters.Runtime, otel.Dependencies, *framework.Receiver[otel.Result]) {
+func managedRuntime(t *testing.T, policy otel.Policy) (*adapters.Runtime, otel.Dependencies, func(context.Context) error) {
 	t.Helper()
 	runtime, err := adapters.New(context.Background(), policy.Runtime)
 	if err != nil {
@@ -101,22 +100,19 @@ func managedRuntime(t *testing.T, policy otel.Policy) (*adapters.Runtime, otel.D
 	if err != nil {
 		t.Fatal(err)
 	}
-	receiver, err := framework.StartReceiver(context.Background(), inbox, framework.ReceiverOptions{},
-		func(context.Context, adapters.Snapshot[otel.Result]) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
+	finishEvidence, stopEvidence := drainEvidence(context.Background(), inbox, func(context.Context, adapters.Snapshot[otel.Result]) error { return nil })
+	t.Cleanup(func() { _ = stopEvidence(context.Background()) })
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		if err := runtime.Close(ctx); err != nil {
 			t.Error(err)
 		}
-		if err := receiver.Finish(ctx); err != nil {
+		if err := finishEvidence(ctx); err != nil {
 			t.Error(err)
 		}
 	})
-	return runtime, otel.Dependencies{Runtime: runtime, Evidence: inbox}, receiver
+	return runtime, otel.Dependencies{Runtime: runtime, Evidence: inbox}, finishEvidence
 }
 
 func managedWait(t *testing.T, receipt *adapters.Receipt[otel.Result], err error) {
@@ -568,4 +564,68 @@ func TestManagedExportConcurrentStartsCannotOutliveOwnerClose(t *testing.T) {
 	if accepted > 1 {
 		t.Fatal("concurrent starts multiplied source scheduling", accepted)
 	}
+}
+
+func drainEvidence(ctx context.Context, inbox *adapters.Inbox[otel.Result], sink func(context.Context, adapters.Snapshot[otel.Result]) error) (finish, stop func(context.Context) error) {
+	ctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	var result error
+	go func() {
+		defer close(done)
+		defer cancel()
+		for {
+			delivery, err := inbox.NextReleased(ctx)
+			if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+				return
+			}
+			if err != nil {
+				result = err
+				return
+			}
+			receipt, err := delivery.Receipt()
+			if err != nil {
+				result = errors.Join(err, delivery.Retry())
+				return
+			}
+			snapshot, _ := receipt.Snapshot()
+			if err := sink(ctx, snapshot); err != nil {
+				if retry := delivery.Retry(); retry != nil {
+					result = errors.Join(err, retry)
+					return
+				}
+				result = err
+				return
+			}
+			if err := delivery.Ack(); err != nil {
+				result = err
+				return
+			}
+		}
+	}()
+	wait := func(ctx context.Context) error {
+		select {
+		case <-done:
+			return result
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	finish = func(ctx context.Context) error {
+		if err := inbox.Seal(); err != nil {
+			return err
+		}
+		if err := wait(ctx); err != nil {
+			return err
+		}
+		status, err := inbox.Inspect()
+		if err != nil {
+			return err
+		}
+		if status.Outstanding != 0 {
+			return errors.New("undelivered fixture evidence")
+		}
+		return nil
+	}
+	stop = func(ctx context.Context) error { cancel(); return wait(ctx) }
+	return
 }

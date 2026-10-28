@@ -17,25 +17,19 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package app assembles the official executable's commands, not a project host.
+// Package app connects the official executable to the minimal public CLI.
 package app
 
 import (
 	"context"
-
 	"github.com/frost-leo/fathomry/cmd/fathomry/internal/command"
 	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
 )
 
-// Run owns one finite CLI invocation; it does not read process globals.
+// Run owns one finite CLI invocation without reading process globals.
 func Run(ctx context.Context, args []string, options command.Options) error {
-	catalogs, err := catalogs()
-	if err != nil {
-		return command.Unavailable(options.ErrorOutput, err)
-	}
 	return cli.Run(ctx, args, cli.Options{
 		Input: options.Input, Output: options.Output, ErrorOutput: options.ErrorOutput,
 		Language: options.Language, CleanupTimeout: options.CleanupTimeout,
-		Errors: catalogs.Errors, Messages: catalogs.Messages,
 	})
 }

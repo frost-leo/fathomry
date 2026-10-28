@@ -31,7 +31,6 @@ import (
 	trino "github.com/frost-leo/fathomry/adapters/sqlengine/trino/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -66,15 +65,27 @@ func TestFrameworkFixedFollowAndCandidateOwnership(t *testing.T) {
 	policy.Runtime.MaxWorkBytes *= 8
 	policy.Evidence.Capacity *= 32
 	policy.Evidence.MaxBytes *= 32
-	runtime, err := framework.New(context.Background(), framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(context.Background())
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		t.Fatal(err)
+	}
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		t.Fatal(err)
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
 	}
 	inbox, err := adapters.NewInbox[trino.Result](policy.Evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dependencies := trino.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := trino.Dependencies{Runtime: runtime, Evidence: inbox}
 	type builtSource struct {
 		binding string
 		name    string
@@ -86,7 +97,7 @@ func TestFrameworkFixedFollowAndCandidateOwnership(t *testing.T) {
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := runtime.Close(ctx); err != nil {
+		if err := closeComposition(ctx); err != nil {
 			t.Error("Framework cleanup", err)
 		}
 		ownersMu.Lock()
@@ -112,7 +123,7 @@ func TestFrameworkFixedFollowAndCandidateOwnership(t *testing.T) {
 		Database trino.Settings `json:"database"`
 	}
 	bind := func(name string, behavior resource.Policy) resource.Ref[trino.Handle] {
-		ref, err := resource.Bind(runtime.Resources(), resource.Binding[trino.Settings, trino.Handle]{
+		ref, err := resource.Bind(resourceScope, resource.Binding[trino.Settings, trino.Handle]{
 			Name: name, Policy: behavior,
 			Select: func(view settings.View) (trino.Settings, error) {
 				snapshot, err := settings.As[applicationSettings](view)
@@ -155,7 +166,7 @@ func TestFrameworkFixedFollowAndCandidateOwnership(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		update, err := runtime.Resources().Apply(boundedContext(t), snapshot.View())
+		update, err := resourceScope.Apply(boundedContext(t), snapshot.View())
 		if err != nil {
 			t.Fatal(err)
 		}

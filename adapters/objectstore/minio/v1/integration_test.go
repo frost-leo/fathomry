@@ -45,7 +45,6 @@ import (
 
 	"github.com/frost-leo/fathomry/adapters/objectstore/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/internal/fault"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
@@ -208,20 +207,32 @@ func TestFrameworkFixedFollowAndRetainedGeneration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := framework.New(context.Background(), framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(context.Background())
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		t.Fatal(err)
+	}
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		t.Fatal(err)
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
 	}
 	inbox, err := adapters.NewInbox[Result](policy.Evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dependencies := Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := Dependencies{Runtime: runtime, Evidence: inbox}
 	var ownersMu sync.Mutex
 	var owners []*Owner
 	released := make(chan *Owner, 8)
 	t.Cleanup(func() {
-		if err := runtime.Close(testContext(t)); err != nil {
+		if err := closeComposition(testContext(t)); err != nil {
 			t.Error(err)
 		}
 		ownersMu.Lock()
@@ -235,7 +246,7 @@ func TestFrameworkFixedFollowAndRetainedGeneration(t *testing.T) {
 	})
 	refusal := errors.New("candidate-refused")
 	bind := func(name string, policy resource.Policy) resource.Ref[Handle] {
-		ref, err := resource.Bind(runtime.Resources(), resource.Binding[Settings, Handle]{
+		ref, err := resource.Bind(resourceScope, resource.Binding[Settings, Handle]{
 			Name: name, Policy: policy, MaxGenerations: 3,
 			Select: func(view settings.View) (Settings, error) {
 				snapshot, err := settings.As[Settings](view)
@@ -278,7 +289,7 @@ func TestFrameworkFixedFollowAndRetainedGeneration(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(testContext(t), snapshot.View())
+		update, err := resourceScope.Apply(testContext(t), snapshot.View())
 		if err != nil {
 			return err
 		}

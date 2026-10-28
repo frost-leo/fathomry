@@ -52,7 +52,6 @@ import (
 
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/failure/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
@@ -250,20 +249,32 @@ func TestResourceFrameworkComposition(t *testing.T) {
 	policy.Runtime.MaxWorkBytes *= 4
 	policy.Evidence.Capacity *= 4
 	policy.Evidence.MaxBytes *= 4
-	runtime, err := framework.New(context.Background(), framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(context.Background())
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		t.Fatal(err)
+	}
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		t.Fatal(err)
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
 	}
 	inbox, err := adapters.NewInbox[Result](policy.Evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	dependencies := Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := Dependencies{Runtime: runtime, Evidence: inbox}
 	var owners []*Owner
 	t.Cleanup(func() {
 		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if err := runtime.Close(cleanup); err != nil {
+		if err := closeComposition(cleanup); err != nil {
 			t.Error("Framework shutdown", err)
 		}
 		for _, owner := range owners {
@@ -291,7 +302,7 @@ func TestResourceFrameworkComposition(t *testing.T) {
 	released := make(chan *Owner, 8)
 	refusal := errors.New("candidate-refused")
 	bind := func(name string, policy resource.Policy) resource.Ref[Handle] {
-		ref, err := resource.Bind(runtime.Resources(), resource.Binding[Settings, Handle]{
+		ref, err := resource.Bind(resourceScope, resource.Binding[Settings, Handle]{
 			Name: name, Policy: policy,
 			Select: func(view settings.View) (Settings, error) {
 				snapshot, err := settings.As[Settings](view)
@@ -334,7 +345,7 @@ func TestResourceFrameworkComposition(t *testing.T) {
 			t.Fatal(err)
 		}
 		setup, cancel := context.WithCancel(context.Background())
-		update, err := runtime.Resources().Apply(setup, snapshot.View())
+		update, err := resourceScope.Apply(setup, snapshot.View())
 		if err != nil {
 			cancel()
 			return err
@@ -476,12 +487,14 @@ func TestResourceFrameworkComposition(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output strings.Builder
-	emission := framework.NewErrorLog(slog.New(slog.NewJSONHandler(&output, nil)), presenter).Emit(context.Background(), operationErr)
-	if !emission.Recognized || emission.Issue != nil || !errors.Is(emission.Presented, operationErr) || strings.Contains(output.String(), "canary") {
+	presented := presenter.Present(operationErr)
+	_, recognized := failure.Inspect(presented)
+	slog.New(slog.NewJSONHandler(&output, nil)).Error("operation", "error", presented)
+	if !recognized || !errors.Is(presented, operationErr) || strings.Contains(output.String(), "canary") {
 		t.Fatal("Framework presentation erased semantic evidence or exposed native text")
 	}
 	originalServer, originalFound := InspectError(operationErr)
-	presentedServer, presentedFound := InspectError(emission.Presented)
+	presentedServer, presentedFound := InspectError(presented)
 	if !originalFound || !presentedFound || originalServer != presentedServer {
 		t.Fatal("Framework presentation replaced native cause")
 	}

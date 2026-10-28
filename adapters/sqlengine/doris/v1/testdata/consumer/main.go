@@ -33,7 +33,6 @@ import (
 	doris "github.com/frost-leo/fathomry/adapters/sqlengine/doris/v1"
 	"github.com/frost-leo/fathomry/adapters/sqlengine/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -220,20 +219,32 @@ func composed(ctx context.Context, first, second doris.Settings) error {
 	policy.Runtime.MaxWorkBytes *= 6
 	policy.Evidence.Capacity *= 6
 	policy.Evidence.MaxBytes *= 6
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer runtime.Close(context.Background())
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer closeComposition(context.Background())
 	inbox, err := adapters.NewInbox[doris.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := doris.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := doris.Dependencies{Runtime: runtime, Evidence: inbox}
 	refusal := errors.New("candidate-refused")
 	partialReleased := make(chan struct{}, 1)
 	bind := func(name string, mode resource.Policy) (resource.Ref[doris.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[doris.Settings, doris.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[doris.Settings, doris.Handle]{
 			Name: name, Policy: mode, MaxGenerations: 3,
 			Select: func(view settings.View) (doris.Settings, error) {
 				snapshot, err := settings.As[doris.Settings](view)
@@ -278,7 +289,7 @@ func composed(ctx context.Context, first, second doris.Settings) error {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		update, err := resourceScope.Apply(ctx, snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -374,7 +385,7 @@ func composed(ctx context.Context, first, second doris.Settings) error {
 	if !errors.Is(err, doris.ErrLimit) {
 		return errors.New("oversized replacement undercharged")
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	return drain(ctx, inbox)
