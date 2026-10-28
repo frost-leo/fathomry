@@ -1,0 +1,227 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "project_creation",
+  "locale": "en",
+  "messages": [
+    {
+      "id": "fathomry.project_creation.invalid_input",
+      "contract": "v1",
+      "context": "Offline project creation: invalid_input.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Project creation inputs do not match the supported profile."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.target_exists",
+      "contract": "v1",
+      "context": "Offline project creation: target_exists.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The target already exists; no existing entry was adopted or overwritten."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.creation_failed",
+      "contract": "v1",
+      "context": "Offline project creation: creation_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Project creation or handle closing failed. Inspect the retained creation report."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.render_failed",
+      "contract": "v1",
+      "context": "Offline project creation: render_failed.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "The project template could not be prepared before creation."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.canceled",
+      "contract": "v1",
+      "context": "Offline project creation: canceled.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Project creation was canceled; acknowledged filesystem effects remain."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.unsupported_platform",
+      "contract": "v1",
+      "context": "Offline project creation: unsupported_platform.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Project creation is supported on Linux local filesystems only."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.new",
+      "contract": "v1",
+      "context": "Offline project creation: new.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Create an offline independent Go project in an absent cwd child."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.flag_name",
+      "contract": "v1",
+      "context": "Offline project creation: flag_name.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Required project directory and command name (1–63 lowercase ASCII bytes)."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.flag_module",
+      "contract": "v1",
+      "context": "Offline project creation: flag_module.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Required domain-qualified Go module path."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.flag_version",
+      "contract": "v1",
+      "context": "Offline project creation: flag_version.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Required exact supported Fathomry version: v0.0.0-20261028081050-b28e37d55e53."
+      }
+    },
+    {
+      "id": "fathomry.project_creation.target",
+      "contract": "v1",
+      "context": "Offline project creation: target.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Target"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.module",
+      "contract": "v1",
+      "context": "Offline project creation: module.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Module"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state",
+      "contract": "v1",
+      "context": "Offline project creation: state.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Filesystem state"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.directory",
+      "contract": "v1",
+      "context": "Offline project creation: directory.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Created directory"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.file",
+      "contract": "v1",
+      "context": "Offline project creation: file.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Created file"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.bytes",
+      "contract": "v1",
+      "context": "Offline project creation: bytes.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "written bytes"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.complete",
+      "contract": "v1",
+      "context": "Offline project creation: complete.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "complete"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state_not_started",
+      "contract": "v1",
+      "context": "Offline project creation: state_not_started.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "No creation acknowledged"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state_partial",
+      "contract": "v1",
+      "context": "Offline project creation: state_partial.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "Partial creation; retained for inspection"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state_complete",
+      "contract": "v1",
+      "context": "Offline project creation: state_complete.",
+      "args": {},
+      "cardinal": false,
+      "forms": {
+        "other": "File writes and closes completed"
+      }
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "project_creation",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.project_creation.invalid_input",
+      "source": "596ac1e0a97d1eb8d960fc3f81e513421d4d551858607ef2e7995c7d7245dd7f",
+      "forms": {
+        "other": "项目创建参数不符合当前支持范围。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.target_exists",
+      "source": "3a433cbce89486319b62b05b4ec5b1135e43aa0adee3e97335e7da9fe32d73b0",
+      "forms": {
+        "other": "目标已经存在；未接管或覆盖任何已有条目。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.creation_failed",
+      "source": "41c4479c64c709a5d06551ac97a76160d9b964c08679d0c630f4fe12c55c593a",
+      "forms": {
+        "other": "项目创建或句柄关闭失败，请检查保留的创建报告。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.render_failed",
+      "source": "c7c3e73f2ace4db64ecfaf5de462f177837e6bdd9921a13ddb93f1d336ce0916",
+      "forms": {
+        "other": "项目模板未能在创建前完成准备。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.canceled",
+      "source": "421f8deaedb1f3f1c73d9492ba14abf1cd07d2f00d862ba46330c18c4965a2b7",
+      "forms": {
+        "other": "项目创建已取消，已确认的文件系统变更仍然保留。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.unsupported_platform",
+      "source": "fa64e09d7186788f0068538a8d2437007358464edf4e09faf7f8641071c8d67b",
+      "forms": {
+        "other": "项目创建目前仅支持 Linux 本地文件系统。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.new",
+      "source": "7d1f2685a7d86a9567bb24c413349c9a46c5470951e2b0e6feba3962dbdf2e27",
+      "forms": {
+        "other": "在当前目录下创建离线、独立的 Go 项目，目标必须不存在。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.flag_name",
+      "source": "4a22b4d8147a1ad6abb561dae4f4f27e4322c65c0bb7e0898e265baa10a61684",
+      "forms": {
+        "other": "必填项目目录和命令名称（1–63 个小写 ASCII 字节）。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.flag_module",
+      "source": "dbb452a80a4474a8a958ad594c7766c67b0efa1365f2f17c81fd14ebc35e240c",
+      "forms": {
+        "other": "必填包含域名的 Go 模块路径。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.flag_version",
+      "source": "fb01374f825641b1938480792ac6b11cef5a277d4257f178d24a0cb0f697224d",
+      "forms": {
+        "other": "必填且仅支持 Fathomry 版本：v0.0.0-20261028081050-b28e37d55e53。"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.target",
+      "source": "1bd7a7e1fcb6f1495c1873387fa213286507f9c8191b8dae7b60fb027de32b6e",
+      "forms": {
+        "other": "目标"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.module",
+      "source": "100619a43b16097edd203e6e81af61246f36f3060cb44e5302f7fec880389f19",
+      "forms": {
+        "other": "模块"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state",
+      "source": "cd07c71eca20f439a3324f3d72d3f51b84360d16852767f9071dbb8e8f4a1d35",
+      "forms": {
+        "other": "文件系统状态"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.directory",
+      "source": "c8ab2a553360a10b47ac2fd27904bcc65b4fbb9a1069d91831018bd233b09b57",
+      "forms": {
+        "other": "已创建目录"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.file",
+      "source": "7ce2e8d4868bbf7586122104aa34c1c4206a4dfa3a32ec1bcc56246e48c52078",
+      "forms": {
+        "other": "已创建文件"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.bytes",
+      "source": "a9e746e9c8d23e7e15be83b0201e102be654c716e55483eadfd69759635eedbd",
+      "forms": {
+        "other": "已写入字节"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.complete",
+      "source": "4b7c055045a89a4f9a6c69d89682aa76c917e4f38d330045562b83f433ef95f2",
+      "forms": {
+        "other": "完整"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state_not_started",
+      "source": "0b2adf1a2a6671219b516f6e76af42a8a8475a98f4fbf05638962392fb1b9dfc",
+      "forms": {
+        "other": "尚未确认创建任何条目"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state_partial",
+      "source": "3075027f398aadd6db1239d2248a4f999e9d29e8d1e81d81abc0393716add79f",
+      "forms": {
+        "other": "部分创建，已保留供检查"
+      }
+    },
+    {
+      "id": "fathomry.project_creation.state_complete",
+      "source": "0d74eb60f70e20d0e8f19600d8a4ecf870c2e6f76e3722d077d90e4a52141dee",
+      "forms": {
+        "other": "文件写入和关闭已完成"
+      }
+    }
+  ]
+}

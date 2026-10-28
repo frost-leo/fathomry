@@ -22,15 +22,17 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../README.md) / Command-line reference
 
 **Audience:** users and maintainers of the official executable.
-**Status:** minimal CLI foundation; all former leaf commands and project inspection
-protocols are withdrawn under [#161](https://github.com/frost-leo/fathomry/issues/161).
+**Status:** shared CLI foundation and bounded offline `project new`; former leaf
+commands and project inspection protocols remain withdrawn under
+[#161](https://github.com/frost-leo/fathomry/issues/161).
 **Source:** [cmd/fathomry](../../../../cmd/fathomry/main.go).
 
 ## Available behavior
 
 The executable supports root help, `help`, `--help`, `--lang` and
-`--output text|json`. With no arguments it shows root help. It does not load
-project configuration, start services, create files or install database assets.
+`--output text|json`, plus explicit [project creation](internal/command/project/create/interface.md).
+With no arguments it shows root help. Help and invalid invocations create no files.
+It does not load project configuration, start services or install database assets.
 The entry captures `FATHOMRY_LANG`; an explicit `--lang` overrides it.
 
 ```sh
@@ -39,8 +41,10 @@ go run ./cmd/fathomry --lang zh-CN --output json help
 ```
 
 The old `new`, `build`, workflow, schema, database, error-catalog and
-translation-query commands reject with a usage error. No replacement commands
-are registered. The former `--fathomry-project=v1|v2` protocol also rejects.
+translation-query commands reject with a usage error. The only new leaf is
+`project new`, with three required name/module/exact-version flags; `project
+check/init` are not placeholders. The former `--fathomry-project=v1|v2` protocol
+also rejects. See the creation contract for the exact six-file/partial-effect profile.
 
 ## Invocation and cleanup
 
@@ -57,8 +61,10 @@ through the output-error policy rather than terminating on SIGPIPE.
 
 ## Go entry and evidence
 
-The [public entry contract](v1/interface.md) describes `Run` and its explicit
-dependencies. It is not a plugin or application-host SDK.
+The [public entry contract](v1/interface.md) describes the minimal project shell's
+`Run` and explicit dependencies. The official app composes its private generator
+separately; the public entry does not expose `project new`. Neither is a plugin
+or application-host SDK.
 [Process tests](../../../../cmd/fathomry/main_test.go) cover executable behavior,
 signals, cleanup and closed stdout. The
 [private mechanism tests](../../../../cmd/fathomry/internal/command/run_test.go)

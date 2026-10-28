@@ -27,8 +27,10 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 ## Contract
 
-`Run(ctx, args, options)` handles only the minimal
-[official CLI](../interface.md). Supply non-nil input, output and error-output
+`Run(ctx, args, options)` handles only the minimal shared command shell. The
+[official CLI](../interface.md) separately composes its private `project new`
+command; this public entry does not import or expose the generator.
+Supply non-nil input, output and error-output
 streams and a caller-owned context. Callers synchronize shared writers.
 An empty language selects English; a zero cleanup timeout selects five seconds.
 
@@ -45,8 +47,9 @@ from the generic engine; it is not a durable outcome or database API.
 
 `Project`, `Workflow`, `Handle`, database configuration/resolver types,
 generated project registration and build inspection are removed. This is an
-explicit pre-release breaking withdrawal, not a compatibility shim. Old commands
-and inspection arguments fail closed. Rebuilding them requires separate work.
+explicit pre-release breaking withdrawal, not a compatibility shim. Old commands,
+inspection arguments and the developer-only `project new` fail closed here.
+Rebuilding project-bound capabilities requires separate work.
 
 ## Verification
 

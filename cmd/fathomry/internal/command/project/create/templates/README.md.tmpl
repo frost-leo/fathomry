@@ -1,0 +1,69 @@
+<!--
+fathomry
+Copyright (C) 2026  Frost Leo
+SPDX-License-Identifier: GPL-3.0-or-later
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <http://www.gnu.org/licenses/>.
+-->
+
+# {{.Name}}
+
+This independent Go module is {{.Module}}. It requires Go {{.GoVersion}} or later
+and pins Fathomry to {{.FrameworkVersion}}. The selected template uses the existing
+public CLI shell; shared usage text still says fathomry. It is not a Worker,
+workflow executor, configuration loader or initialized deployment.
+
+## Resolve dependencies explicitly
+
+Generation did not run Go, Git or service checks. Resolve dependencies yourself:
+
+```sh
+GOWORK=off go mod tidy
+GOWORK=off go test ./...
+GOWORK=off go run ./cmd/{{.Name}} --help
+```
+
+Go creates go.sum and may add indirect requirements. Keep those files with your
+project. No local replacement, parent workspace or copied SDK tree is required
+for this qualified CLI profile. This does not qualify every future Adapter.
+
+## Build and run
+
+Set BUILD_OUTPUT to an existing directory you own. Use a temporary-build area for
+disposable experiments and a permanent artifact location for retained binaries.
+
+```sh
+test -n "$BUILD_OUTPUT" && test -d "$BUILD_OUTPUT" &&
+  GOWORK=off go build -o "$BUILD_OUTPUT/{{.Name}}" ./cmd/{{.Name}}
+"$BUILD_OUTPUT/{{.Name}}" --help
+```
+
+The binary embeds the CLI; it does not invoke a globally installed fathomry or
+require Go/the original source directory at runtime. The binary owns application
+exit codes; go run can wrap a failed program's exit status.
+
+## Ownership and current limits
+
+The generated files are project-owned and may be edited. Future template changes
+do not overwrite them. No automatic updater, service discovery, registration,
+database migration, workflow/Mode definition or deployment was generated.
+The config directory currently contains documentation only.
+
+The developer-only project-new command is not part of this project's public CLI
+shell. Build the official developer CLI from its supported source checkout;
+versioned go install of the supplying Fathomry module currently rejects its local
+replacement directives. Do not copy that replacement graph into this module.
+
+Template notices describe the supplied source. No business-owner identity or
+project-wide business license was selected on your behalf.

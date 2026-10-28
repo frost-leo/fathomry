@@ -73,6 +73,8 @@ may know selected concrete implementations. All dependencies must remain acyclic
 The former Framework, control-schema assets and business commands are withdrawn.
 The public `cmd/fathomry/v1` entry composes only the minimal command invocation
 foundation. It has no project registry, configuration Boot or database wiring.
+The official app separately composes the private project group and its create
+subpackage for offline `project new`; generated programs do not import that leaf.
 Existing Adapter composition fixtures use `resource/v1` and `adapters/v1`
 directly. A replacement Framework must be implemented through separately approved
 work; these architectural roles are not a claim of present runtime availability.
@@ -327,8 +329,9 @@ instance ownership without restoring private assembly facades. Public operation
 mechanisms and concrete configsource Adapters now use those public foundations;
 strict public preparation is independent of Internal's engine. The former Framework
 composition and configuration scenarios are withdrawn. The official
-[CLI](../reference/cmd/fathomry/interface.md) retains only help and invocation
-mechanisms through the public command entry. No complete application/Worker
+[CLI](../reference/cmd/fathomry/interface.md) combines shared invocation mechanisms
+with an official-only offline project creator. The public command entry remains
+the minimal shell, without the generator. No complete application/Worker
 runtime or compatibility with withdrawn outer APIs is implied.
 
 ## Technical facts and future public meaning

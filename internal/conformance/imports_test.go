@@ -129,10 +129,12 @@ var _ = nacos.Settings{}
 		t.Fatal("package inventory could not be inspected")
 	}
 	cliPackages := map[string]bool{
-		"github.com/frost-leo/fathomry/cmd/fathomry":                  true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/v1":               true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":     true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command": true,
+		"github.com/frost-leo/fathomry/cmd/fathomry":                                 true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/v1":                              true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":                    true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command":                true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project":        true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/create": true,
 	}
 	for _, path := range strings.Fields(string(output)) {
 		if cliPackages[path] {
