@@ -41,7 +41,6 @@ import (
 	"github.com/frost-leo/fathomry/adapters/configsource/v1"
 	tlsclient "github.com/frost-leo/fathomry/adapters/httpclient/tlsclient/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -365,16 +364,28 @@ func fixedFollow(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer cleanup(runtime.Close)
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer cleanup(closeComposition)
 	inbox, err := adapters.NewInbox[tlsclient.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := tlsclient.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := tlsclient.Dependencies{Runtime: runtime, Evidence: inbox}
 	ledger := newLedger(inbox)
 	constructed := make(chan constructedSource, 16)
 	released := make(chan *tlsclient.Owner, 16)
@@ -385,7 +396,7 @@ func fixedFollow(ctx context.Context) error {
 	var ownersMu sync.Mutex
 	var owners []constructedSource
 	bind := func(name string, mode resource.Policy) (resource.Ref[tlsclient.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[tlsclient.Settings, tlsclient.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[tlsclient.Settings, tlsclient.Handle]{
 			Name: name, Policy: mode,
 			Select: func(view settings.View) (tlsclient.Settings, error) {
 				snapshot, err := settings.As[tlsclient.Settings](view)
@@ -452,7 +463,7 @@ func fixedFollow(ctx context.Context) error {
 		if err != nil {
 			return nil, err
 		}
-		return runtime.Resources().Apply(ctx, snapshot.View())
+		return resourceScope.Apply(ctx, snapshot.View())
 	}
 	apply := func(value tlsclient.Settings) error {
 		update, err := beginApply(value)
@@ -679,7 +690,7 @@ func fixedFollow(ctx context.Context) error {
 	if err := requestResult(fixed, "still-fixed", "first", fixedStatus.Generation); err != nil {
 		return err
 	}
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
 	if err := awaitReleased(fixedOwner.owner, latest.owner); err != nil {
@@ -698,7 +709,7 @@ func fixedFollow(ctx context.Context) error {
 			return fmt.Errorf("source %s/%s retained authority or sockets", source.binding, source.name)
 		}
 	}
-	usage, err := runtime.Operations().Inspect()
+	usage, err := runtime.Inspect()
 	if err != nil || usage.Active != 0 || usage.WorkBytes != 0 {
 		return errors.New("Framework cleanup retained public work reservations")
 	}

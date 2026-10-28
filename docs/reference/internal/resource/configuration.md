@@ -97,8 +97,8 @@ layer distinctions and invoke the existing preparation/merge once, not silently
 apply a competing precedence or null policy. Internal callers can prepare raw
 local/Nacos observations through `PrepareData`. The independent
 [public preparation contract](../../adapters/configsource/v1/interface.md) does not
-wrap this engine. [Framework configuration](../../framework/configuration/v1/interface.md)
-consumes that public contract and public source ownership, not this private seam.
+wrap this engine. Public callers use that contract and public source ownership,
+not this private seam. The former Framework configuration host is withdrawn.
 [Viper documentation](https://github.com/spf13/viper/tree/v1.21.0),
 [merge/lookup implementation](https://github.com/spf13/viper/blob/v1.21.0/viper.go).
 

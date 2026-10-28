@@ -26,10 +26,8 @@ import (
 	"reflect"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -53,32 +51,21 @@ func cloneSettings(value Settings) Settings {
 	return value
 }
 
-func TestFrameworkReceiverFailureRetainsRedisEvidence(t *testing.T) {
+func TestRetryRetainsRedisEvidence(t *testing.T) {
 	address := peer(t, func(_ net.Conn, _ []string) string { return "+OK\r\n" })
 	owner, deps := openTest(t, testSettings(address))
 	original, err := owner.Client().Cache().Execute(testContext(t), command(t, Cache, "SET", "owned", "effect"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	refusal := errors.New("synthetic receiver failure")
-	failed := make(chan struct{}, 1)
-	receiver, err := framework.StartReceiver(testContext(t), deps.Evidence, framework.ReceiverOptions{RetryDelay: time.Minute}, func(context.Context, adapters.Snapshot[Result]) error { failed <- struct{}{}; return refusal })
+	delivery, err := deps.Evidence.NextReleased(testContext(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case <-failed:
-	case <-testContext(t).Done():
-		t.Fatal("receiver did not get released command")
-	}
-	if err := receiver.Close(testContext(t)); err != nil {
+	if err := delivery.Retry(); err != nil {
 		t.Fatal(err)
 	}
-	status, err := receiver.Status()
-	if err != nil || !errors.Is(status.LastError, refusal) {
-		t.Fatal("sink error lost")
-	}
-	delivery, err := deps.Evidence.NextReleased(testContext(t))
+	delivery, err = deps.Evidence.NextReleased(testContext(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,19 +98,31 @@ func TestFrameworkFixedFollowRetainsCallbackGenerationAndLargerBudget(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	runtime, err := framework.New(context.Background(), framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(context.Background())
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		t.Fatal(err)
+	}
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		t.Fatal(err)
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
 	}
 	inbox, err := adapters.NewInbox[Result](policy.Evidence)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deps := Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	deps := Dependencies{Runtime: runtime, Evidence: inbox}
 	var mutex sync.Mutex
 	var owners []*Owner
 	t.Cleanup(func() {
-		if err := runtime.Close(testContext(t)); err != nil {
+		if err := closeComposition(testContext(t)); err != nil {
 			t.Error(err)
 		}
 		mutex.Lock()
@@ -138,7 +137,7 @@ func TestFrameworkFixedFollowRetainsCallbackGenerationAndLargerBudget(t *testing
 	})
 	refusal := errors.New("synthetic candidate refusal")
 	bind := func(name string, mode resource.Policy) resource.Ref[Handle] {
-		ref, err := resource.Bind(runtime.Resources(), resource.Binding[Settings, Handle]{
+		ref, err := resource.Bind(resourceScope, resource.Binding[Settings, Handle]{
 			Name: name, Policy: mode, Clone: cloneSettings, Equal: func(left, right Settings) bool { return reflect.DeepEqual(left, right) },
 			Select: func(view settings.View) (Settings, error) {
 				snapshot, err := settings.As[Settings](view)
@@ -173,7 +172,7 @@ func TestFrameworkFixedFollowRetainsCallbackGenerationAndLargerBudget(t *testing
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(testContext(t), snapshot.View())
+		update, err := resourceScope.Apply(testContext(t), snapshot.View())
 		if err != nil {
 			return err
 		}

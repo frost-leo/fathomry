@@ -25,6 +25,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -38,7 +39,6 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/array"
 	iceberg "github.com/frost-leo/fathomry/adapters/tableformat/iceberg/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 )
@@ -165,16 +165,28 @@ func run() error {
 	policy.Runtime.MaxWorkBytes *= 4
 	policy.Evidence.Capacity *= 4
 	policy.Evidence.MaxBytes *= 4
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
 	}
-	defer runtime.Close(context.Background())
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
+	}
+	defer closeComposition(context.Background())
 	inbox, err := adapters.NewInbox[iceberg.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	deps := iceberg.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	deps := iceberg.Dependencies{Runtime: runtime, Evidence: inbox}
 	direct, err := iceberg.Open(ctx, one, deps)
 	if err != nil {
 		return err
@@ -204,7 +216,7 @@ func run() error {
 		policy resource.Policy
 		target *resource.Ref[iceberg.Handle]
 	}{{"follow", resource.Follow, &follow}, {"fixed", resource.Fixed, &fixed}} {
-		ref, err := resource.Bind(runtime.Resources(), resource.Binding[int, iceberg.Handle]{Name: entry.name, Policy: entry.policy,
+		ref, err := resource.Bind(resourceScope, resource.Binding[int, iceberg.Handle]{Name: entry.name, Policy: entry.policy,
 			Select: func(view settings.View) (int, error) {
 				s, err := settings.As[int](view)
 				if err != nil {
@@ -234,7 +246,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		update, err := runtime.Resources().Apply(ctx, snapshot.View())
+		update, err := resourceScope.Apply(ctx, snapshot.View())
 		if err != nil {
 			return err
 		}
@@ -291,7 +303,7 @@ func run() error {
 			return err
 		}
 	}
-	if err = runtime.Close(ctx); err != nil {
+	if err = closeComposition(ctx); err != nil {
 		return err
 	}
 	for state, _ := inbox.Inspect(); state.Outstanding > 0; state, _ = inbox.Inspect() {

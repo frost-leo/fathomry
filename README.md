@@ -81,21 +81,12 @@ explicit checkpoints, with the same direct/Framework ownership paths.
 [Broker contracts](docs/reference/adapters/broker/v1/interface.md) contain shared
 budget and attribution data, not a universal native client. Deployed TLS/SASL and
 failover qualification remain separate from isolated plaintext service checks.
-[Framework common composition](docs/reference/framework/v1/interface.md) coordinates
-public operation/resource shutdown, released-evidence reception and once-bound
-safe localized logs. [Framework configuration](docs/reference/framework/configuration/v1/interface.md)
-loads and watches project-owned application settings and independent business
-values, preserving last-good data and separating publication from instance adoption.
-The official [CLI](docs/reference/cmd/fathomry/interface.md) supplies offline help,
-error explanations and translation-resource/coverage queries with shared failure
-identity, explicit language selection and bounded invocation/cleanup behavior.
-`fathomry new <project>` now generates an independent typed configuration project:
-local or remote acquisition and YAML or TOML. Project Boot declares inputs,
-settings and the selected Framework provider, without Adapter imports. Framework
-owns acquisition, Load/Watch, released evidence and source cleanup; input lookup
-and source selection remain explicit.
-The generated executable validates configuration and exits; it is not a Worker or
-a complete application runtime. There is no version command yet.
+The [CLI foundation](docs/reference/cmd/fathomry/interface.md) retains help,
+explicit language/output selection, bounded diagnostics and cleanup ownership.
+Framework, control-schema assets, project generation/build inspection and all old
+leaf commands were withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161).
+Replacement workflows, modes, commands and persistence are not implemented.
+Public foundations, Adapters and Internal integrations remain available.
 
 The earlier pre-release Adapter, failure, i18n, Framework, settings and CLI
 surfaces were withdrawn for redesign; failure/v1, settings/v1 and i18n/v1 are rebuilt,

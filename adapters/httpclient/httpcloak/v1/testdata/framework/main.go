@@ -39,7 +39,6 @@ import (
 	"github.com/frost-leo/fathomry/adapters/configsource/v1"
 	p "github.com/frost-leo/fathomry/adapters/httpclient/httpcloak/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
 	nativehttp "github.com/sardanioss/http"
@@ -215,9 +214,21 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	runtime, err := framework.New(ctx, framework.Options{Operations: policy.Runtime})
+	compositionContext, stopComposition := context.WithCancel(ctx)
+	defer stopComposition()
+	runtime, err := adapters.New(compositionContext, policy.Runtime)
 	if err != nil {
 		return err
+	}
+	resourceScope, err := resource.New(compositionContext, resource.Options{})
+	if err != nil {
+		stopComposition()
+		err = errors.Join(err, runtime.Close(context.Background()))
+		return err
+	}
+	closeComposition := func(cleanup context.Context) error {
+		stopComposition()
+		return errors.Join(runtime.Close(cleanup), resourceScope.Close(cleanup))
 	}
 	defer func() {
 		releaseStream()
@@ -225,13 +236,13 @@ func run(ctx context.Context) error {
 		releaseObsolete()
 		cleanup, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		_ = runtime.Close(cleanup)
+		_ = closeComposition(cleanup)
 	}()
 	inbox, err := adapters.NewInbox[p.Result](policy.Evidence)
 	if err != nil {
 		return err
 	}
-	dependencies := p.Dependencies{Runtime: runtime.Operations(), Evidence: inbox}
+	dependencies := p.Dependencies{Runtime: runtime, Evidence: inbox}
 	records := &ledger{inbox: inbox, expected: make(map[uint64]*adapters.Receipt[p.Result]), received: make(map[uint64]bool)}
 	constructed := make(chan source, 16)
 	released := make(chan *p.Owner, 16)
@@ -239,7 +250,7 @@ func run(ctx context.Context) error {
 	var ownersMu sync.Mutex
 	var owners []*p.Owner
 	bind := func(name string, mode resource.Policy) (resource.Ref[p.Handle], error) {
-		return resource.Bind(runtime.Resources(), resource.Binding[p.Settings, p.Handle]{
+		return resource.Bind(resourceScope, resource.Binding[p.Settings, p.Handle]{
 			Name: name, Policy: mode,
 			Select: func(view settings.View) (p.Settings, error) {
 				snapshot, err := settings.As[p.Settings](view)
@@ -314,7 +325,7 @@ func run(ctx context.Context) error {
 		if err != nil {
 			return nil, err
 		}
-		return runtime.Resources().Apply(ctx, snapshot.View())
+		return resourceScope.Apply(ctx, snapshot.View())
 	}
 	apply := func(value p.Settings) error {
 		update, err := begin(value)
@@ -524,7 +535,7 @@ func run(ctx context.Context) error {
 	if err != nil || final.Source().Name != "third" {
 		return errors.New("obsolete candidate was used")
 	}
-	if err := runtime.Resources().Close(ctx); err != nil {
+	if err := resourceScope.Close(ctx); err != nil {
 		return err
 	}
 	if err := records.drain(ctx); err != nil {
@@ -538,10 +549,10 @@ func run(ctx context.Context) error {
 		}
 	}
 	ownersMu.Unlock()
-	if err := runtime.Close(ctx); err != nil {
+	if err := closeComposition(ctx); err != nil {
 		return err
 	}
-	state, err := runtime.Operations().Inspect()
+	state, err := runtime.Inspect()
 	if err != nil || state.Active != 0 || state.WorkBytes != 0 {
 		return errors.New("Framework retained operations")
 	}

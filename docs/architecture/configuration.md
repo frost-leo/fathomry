@@ -66,10 +66,9 @@ retain the actual selected identity. User metadata cannot overwrite these facts.
 Background tasks without a business Run must not manufacture one for correlation.
 
 Including a Provider in a build, constructing instances at startup, and choosing
-an available source for a call are different decisions. Project composition explicitly
-selects an immutable provider descriptor; Framework Load/Watch constructs and
-owns the selected Adapter source for that scenario. No provider registry, name-based discovery or mode-based fallback is
-implied.
+an available source for a call are different decisions. Callers explicitly select
+and own the Adapter source. The former Framework Load/Watch composition is
+withdrawn; no provider registry, name-based discovery or mode-based fallback is implied.
 
 Framework control persistence and business database access are separate uses of
 a technical database capability. Control Adapters own control-schema operations;
@@ -82,40 +81,14 @@ must not acquire an implied cross-source transaction guarantee.
 
 ## Finite project bootstrap
 
-Project Boot is the application choice boundary, not another configuration engine.
-It supplies the project data/defaults/validation and explicitly selects Framework
-dependencies. Generated project code imports no Adapter or Internal package.
-Framework owns the selected source, operation/evidence mechanisms and cleanup.
+The former generated Boot, provider descriptors and Framework Load/Watch API are
+withdrawn. They are not a compatibility requirement for the replacement design.
+Public Viper/Nacos acquisition, strict preparation, settings publication and
+Resource adoption remain separate independently usable capabilities.
 
-Keep mode (local/remote), implementation (Viper/Nacos), document encoding and project
-Go type separate. The [CLI](../reference/cmd/fathomry/interface.md) selects a supported
-project profile; runtime inputs do not silently switch implementations. A descriptor
-contains no live client. Framework's built-in package has both provider dependencies
-in its build closure, but constructs only the selected source.
-
-Declaration contains Schema and captured Variables. Each source document combines
-its location, format, layer kind and optionality. This removes the positional
-coupling of independently assembled document and policy slices. Dependencies
-contains an explicit Provider and an optional borrowed resource-adoption scope.
-
-Framework ReadInputs implements declared argument/lookup/dotenv/default precedence,
-using the public Viper Adapter for file acquisition and configsource for literal
-preparation. The project owns authorized names/defaults; Framework never reads the
-process environment implicitly. PrepareNacos implements the supported deployment
-profile using a typed Load of an explicit local file; its accepted connection and
-environment-to-key declarations select the Nacos application source. Namespace is not inferred from the environment name.
-Failure never authorizes a different source or local fallback.
-
-The same generated Boot implementation serves both modes; mode-specific options
-only declare inputs and dependencies. Load returns accepted State and released
-records, retaining acceptance when cleanup alone fails. Watch uses the same policy,
-owns the actual producer and preserves last-good data. A timed-out Close retains
-that owner. Boot has no parser, merge loop, receiver or resource state machine.
-
-Records transfer in-process custody to the caller, not to an imaginary durable sink.
-Configuration does not install settings.Default, start a Worker or become an
-application host. Separate framework.Runtime instances are advanced assembly
-helpers, not implicit owners of these independently scoped configuration scenarios.
+A future project bootstrap must preserve explicit source selection, caller-owned
+inputs, last-good data, bounded lifetimes and truthful cleanup/effect evidence.
+The minimal CLI does not currently generate or launch that bootstrap.
 
 ## Configuration ownership and revisions
 
@@ -126,9 +99,9 @@ SDK clients. Producers validate and order updates before publishing; component
 consumers copy only their own typed sections. An explicitly installed application
 reader and independent business readers use the same storage mechanism without
 sharing default-selection or source ownership.
-[Framework configuration](../reference/framework/configuration/v1/interface.md)
-now provides application and independent-business Load/Watch. Stored data is not a
-claim of client readiness. [I18n presentation](../reference/i18n/v1/interface.md)
+The former Framework Load/Watch host is withdrawn. The public configuration
+Adapters and preparation contracts remain independently available. Stored data
+is not a claim of client readiness. [I18n presentation](../reference/i18n/v1/interface.md)
 reads the default's language preference without adding a locale parameter to every
 operation. Internal Providers
 still receive resolved explicit inputs rather than consulting that process default.
@@ -203,8 +176,8 @@ list/null/empty/duplicate/unknown-key rules, revision identity and freezing beha
 The [Viper v1 technical integration](../reference/internal/configsource/viper/v1/interface.md)
 implements a bounded local acquisition profile with explicitly bound live environment
 queries. It is not an assembled business-resource Provider or frozen preparation.
-Public strict preparation and Framework configuration now implement typed loading
-and last-good observation. Explicit resource adoption remains distinct from
+Public strict preparation remains implemented; Framework-owned typed loading
+and last-good observation are withdrawn. Explicit resource adoption remains distinct from
 publication; arbitrary SDK/session/database migration is not implemented.
 A replacement or reload
 must not retroactively relabel settings

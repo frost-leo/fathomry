@@ -140,8 +140,9 @@ not a prerequisite for constructing an error.
 emits stable code/identifier, frozen message, actual/requested locale, fallback
 and a separate presentation-issue code. Plain logging of the original error does
 not automatically translate it. Concrete providers return semantic occurrences;
-foreign errors are not automatically sanitized. [Framework ErrorLog](../../framework/v1/interface.md)
-provides an explicit safe logging boundary. The [public operation integration](../../../../adapters/v1/integration_test.go)
+foreign errors are not automatically sanitized. Callers must inspect the error
+identity before choosing safe attributes; the former Framework ErrorLog helper
+is withdrawn. The [public operation integration](../../../../adapters/v1/integration_test.go)
 exercises this logging path without coupling operation execution to i18n.
 
 Render selects an ordinary message and requires successful preference/argument

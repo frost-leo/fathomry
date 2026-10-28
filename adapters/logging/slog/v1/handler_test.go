@@ -36,7 +36,6 @@ import (
 	ingress "github.com/frost-leo/fathomry/adapters/logging/slog/v1"
 	logging "github.com/frost-leo/fathomry/adapters/logging/v1"
 	"github.com/frost-leo/fathomry/failure/v1"
-	"github.com/frost-leo/fathomry/framework/v1"
 	"github.com/frost-leo/fathomry/i18n/v1"
 	"github.com/frost-leo/fathomry/resource/v1"
 )
@@ -347,7 +346,7 @@ func TestIncompleteReleaseStatusAndLaterJoin(t *testing.T) {
 	}
 }
 
-func TestFrameworkSafeLocalizedAndJoinedErrors(t *testing.T) {
+func TestSafeLocalizedAndJoinedErrors(t *testing.T) {
 	catalog, err := i18n.Prepare(i18n.Component{Module: "fathomry", Name: "logging", BaseLocale: "en", Resources: logging.Resources(), Directory: "resources", Definitions: logging.Definitions()})
 	if err != nil {
 		t.Fatal(err)
@@ -366,7 +365,10 @@ func TestFrameworkSafeLocalizedAndJoinedErrors(t *testing.T) {
 		return ingress.Attempt{Admitted: true}
 	}})
 	logger := stdslog.New(handler)
-	if emission := framework.NewErrorLog(logger, presenter).Emit(context.Background(), known(t)); !emission.Recognized {
+	presented := presenter.Present(known(t))
+	_, recognized := failure.Inspect(presented)
+	logger.LogAttrs(context.Background(), stdslog.LevelError, "operation", stdslog.Bool("recognized", recognized), stdslog.Any("error", presented))
+	if !recognized {
 		t.Fatal("Framework failure not recognized")
 	}
 	logger.Error("joined", "presentation_issue", errors.Join(known(t), known(t)))

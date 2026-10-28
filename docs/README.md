@@ -29,22 +29,11 @@ contracts; development guides explain tasks. Choose a reading path below.
 
 ## What is implemented
 
-The Fathomry [control-schema assets](architecture/control-schema-assets.md) provide
-read-only, checksummed PostgreSQL/MySQL SQL with one file per table and complete
-English/Chinese table and column comments. Isolated public-Adapter tests verify
-their metadata and SQL constraints. The [private schema commands](reference/cmd/fathomry/internal/command/schema/interface.md)
-adds read-only status/plan, explicit installation, history/structure checks and
-truthful uncertain effects. The [creation command](reference/cmd/fathomry/internal/command/database/create/interface.md)
-and [project CLI](reference/cmd/fathomry/v1/interface.md) use project-owned runtime
-configuration and Resource-backed Adapter clients, retaining cleanup/effect reports.
-The [catalog registration boundary](reference/framework/workflow/catalog/v1/interface.md)
-validates declarations plus owner-addressed metadata offline, then creates/compares
-one aggregate through a Resource-backed transaction with current-schema admission.
-Public results and project workflow register commands preserve commit uncertainty,
-partial batches and cleanup/output failures. Bounded localized metadata/document
-reads and list/show/compare commands are implemented. Comparison validates actual
-stored canonical bytes and selected English/context without changing operator state.
-This is not a qualified Kubernetes Worker runtime.
+Framework and control-schema implementations and the old CLI leaf commands were
+withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161). The retained
+[CLI foundation](reference/cmd/fathomry/interface.md) supplies help and invocation
+mechanisms, not project generation, workflow execution or database installation.
+Replacement designs remain working material, not current APIs.
 
 The [Mail Adapter](reference/adapters/notification/mail/v1/interface.md) provides
 managed MIME/EML/template/signing preparation, SMTP authentication and explicit
@@ -195,36 +184,13 @@ subscriptions and experimental caching/batching. Cache and messaging retain
 separate error owners while sharing source authority and public ownership.
 [Shared cache contracts](reference/adapters/cache/v1/interface.md) contain only
 budget and attribution vocabulary. Service and deployment limits remain explicit.
-[Framework common composition](reference/framework/v1/interface.md) now supplies
-explicit runtime coordination, released-evidence reception and a safe logging
-boundary. [Framework configuration](reference/framework/configuration/v1/interface.md)
-adds explicit argument/lookup/dotenv binding and YAML/TOML Load/Watch over selected
-provider descriptors, atomic data domains and optional borrowed resource adoption.
-Project Boot supplies choices and settings without importing Adapters; Framework
-owns source/operation/evidence lifecycle and performs no ambient environment lookup. The official
-[CLI](reference/cmd/fathomry/interface.md) now provides offline help, error and
-translation catalogs, `new` project generation, offline `workflow vet`, project
-`workflow register`, and native
-`build` with declaration and explicitly supplied Go binding admission before artifact publication. The
-[fixed public CLI entry](reference/cmd/fathomry/v1/interface.md) supports the same
-commands from a generated root `main.go`; no generic command/plugin SDK is exposed.
-Its private entry composition supplies lazy control-database ownership to separate
-`schema status|plan|apply` leaves; there is no `control` command group.
-Generated projects share one Boot/Watch flow with mode-specific dependency declarations.
-There is no production-qualified application runtime or Run/Item execution model.
-The [workflow declaration package](reference/framework/workflow/declaration/v1/interface.md)
-adds shared static compilation, self-contained bundle export and canonical local
-comparison. An independent Go helper supplies declarations without Boot or project
-launching by the CLI; checking does not establish source freshness or execution readiness.
-The [implementation binding package](reference/framework/workflow/implementation/v1/interface.md)
-checks explicitly supplied Activity functions against a narrow required-value Go ABI,
-without invoking them. Project vet and v2 build inspection distinguish complete,
-absent and unchecked version coverage; explicit v1 compatibility remains declaration-only.
-Static binding completeness is not runtime-value validation, Worker registration or
-artifact/deployment authorization.
-The separate [checked invocation boundary](reference/framework/workflow/implementation/v1/invocation.md)
-admits bounded required-value JSON, calls one explicit bound function and validates
-its output. It adds no Worker/DAG execution or effect-completion guarantee.
+The [minimal CLI](reference/cmd/fathomry/interface.md) and its
+[public Go entry](reference/cmd/fathomry/v1/interface.md) retain help, explicit
+language/output handling, failure identity and bounded invocation/cleanup.
+No old project, workflow, configuration-host or database command is registered.
+Adapter Fixed/Follow fixtures now compose public Resource and operation owners
+directly; their historical fixture names do not imply an available Framework API.
+
 Internal raw acquisition, strict JSON preparation and type-admission improvements
 remain implemented. Business authors are not expected to recreate private
 assembly machinery as startup boilerplate.
@@ -441,12 +407,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Complete raw batch/source contracts and independent strict layered preparation |
 | [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Explicit local acquisition, native live/captured queries, weak Decode and owned file Watch |
 | [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Complete supported remote reads/observations/management/search, effect evidence and resource-backed borrowing |
-| [`framework/v1`](reference/framework/v1/interface.md) | Public runtime composition, released-evidence reception and once-bound safe localized logging |
-| [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Strict application/business configuration acceptance, last-good Watch and explicit resource-adoption handoff |
-| [`framework/workflow/declaration/v1`](reference/framework/workflow/declaration/v1/interface.md) | Pure workflow/mode declaration compilation, canonical portable bundles and offline identity/conflict checking |
-| [`framework/workflow/implementation/v1`](reference/framework/workflow/implementation/v1/interface.md) | Explicit Activity binding, static coverage manifests and checked synchronous required-value invocation |
-| [`framework/workflow/catalog/v1`](reference/framework/workflow/catalog/v1/interface.md) | Atomic registration, truthful outcomes and bounded localized metadata/document reads |
-| [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Shared fixed CLI commands, project-root inspection and native build publication gate |
+| [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Minimal CLI entry with explicit streams, locale, diagnostics and cleanup |
 
 ## Internal package reference
 
@@ -460,7 +421,7 @@ a Go interface declaration. These are in-module contracts, not an external SDK.
 | [`internal/invocation`](reference/internal/invocation/interface.md) | [Budgets](reference/internal/invocation/budgets.md), [completion](reference/internal/invocation/completion.md), [evidence](reference/internal/invocation/evidence.md), [observation](reference/internal/invocation/observation.md) |
 | [`internal/fault`](reference/internal/fault/interface.md) | [Diagnostics and inspection boundaries](reference/internal/fault/diagnostics.md) |
 | [`internal/compatibility`](reference/internal/compatibility/interface.md) | [Build facts](reference/internal/compatibility/build-info.md), [assessment and policy](reference/internal/compatibility/assessment.md) |
-| [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md), [configuration live-fixture inputs](reference/internal/conformance/fixtures.md#live-framework-configuration-path) |
+| [`internal/conformance`](reference/internal/conformance/interface.md) | [Diagnostic probes](reference/internal/conformance/diagnostics.md), [fixtures and evidence classes](reference/internal/conformance/fixtures.md) |
 | [`internal/configsource/viper/v1`](reference/internal/configsource/viper/v1/interface.md) | Native local profile, OptionsV1, raw handoff, ownership, bounds and version evidence |
 | [`internal/configsource/nacos/v2`](reference/internal/configsource/nacos/v2/interface.md) | Native protocol-component profile, OptionsV1, authentication, raw handoff, observation and owned sessions |
 | [`internal/database/pgx/v5`](reference/internal/database/pgx/v5/interface.md) | Native pool lifecycle/statistics, ordinary SQL, reusable preparation, bounded results, transactions/savepoints and independent evidence |

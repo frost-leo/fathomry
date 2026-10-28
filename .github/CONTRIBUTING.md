@@ -164,32 +164,14 @@ CI restores Go module/build caches by runner OS/architecture, Go version and
 artifacts. Separate restore/save steps retain available cache data even when a
 check fails; canceled jobs do not save, and existing exact keys are not overwritten.
 Cache hits are an optimization, not an acceptance prerequisite or a reason to skip
-checks. A cache save never changes a failed check's result. CI runs the cold
-project/consumer package alone with `-p=1`, then the remaining packages with bounded
-`-p=2` concurrency. The package list comes from `go list ./...`; every package and
-test remains included. This isolates nested cold compilation without serializing
-all unrelated work against the job-wide guard. Race tests keep
-`-count=1` so previous test results cannot replace execution. Independent-consumer fixtures
-first prepare their own module graph using the configured Go proxy/checksum policy,
-then enforce offline tidy-diff, readonly execution and import-boundary checks.
-Cold module caches must work; a developer's previously downloaded dependency-test
-versions are not fixture inputs.
-
-The versioned CLI fixture starts with an empty module cache. Its dependency-closure
-acquisition and first-build HTTP consumer race compilation have three-minute
-test guards. Readonly offline CLI race compilation has a five-minute guard for
-the complete Arrow/AWS/Iceberg graph; other consumer commands retain their 90-second
-guard. These separate
-budgets cover network acquisition and relocated cold compilation, not a product
-startup SLA. Phase timings and context causes remain in test diagnostics. No
-checksum, replacement-graph, generated-project or public-consumer assertion is
-skipped when acquisition is slow.
-The Iceberg consumer also has a separate three-minute initial acquisition guard
-for its native SDK's dependency-test closure, which CLI runtime dependency
-loading does not fetch. Its later tidy-diff, readonly race build and execution
-use the isolated cache offline. CLI and consumers use the same race build mode,
-so that one isolated graph is not compiled in both ordinary and race modes.
-The package-wide ten-minute guard is unchanged.
+checks. A cache save never changes a failed check's result. CI runs all remaining
+root packages with bounded `-p=2` concurrency and `-race -count=1`.
+The old cold project-generator/CLI fixture was withdrawn with its product surface;
+retained Adapter independent-consumer checks remain part of their package tests.
+Those fixtures prepare their module graph with the configured proxy/checksum
+policy, then enforce offline readonly execution and import-boundary checks.
+A warm developer cache is not a substitute for a fixture's dependency acquisition.
+The package-wide ten-minute guard remains unchanged.
 
 ## Engineering expectations
 

@@ -22,7 +22,6 @@ package conformance_test
 import (
 	"context"
 	"fmt"
-	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -53,52 +52,28 @@ func TestIndependentModuleRejectsInternalAndWithdrawnPackages(t *testing.T) {
 		t.Fatal(err)
 	}
 	notice := "/**\n * " + strings.ReplaceAll(strings.TrimSpace(string(header)), "\n", "\n * ") + "\n */\n"
-	write("schema.go", []byte(notice+`package consumer
+	write("consumer.go", []byte(notice+`package consumer
 import (
- "io/fs"
  cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
- catalog "github.com/frost-leo/fathomry/framework/workflow/catalog/v1"
- mysql "github.com/frost-leo/fathomry/schema/fathomry/mysql/v1"
- postgresql "github.com/frost-leo/fathomry/schema/fathomry/postgresql/v1"
+ failure "github.com/frost-leo/fathomry/failure/v1"
+ settings "github.com/frost-leo/fathomry/settings/v1"
+ i18n "github.com/frost-leo/fathomry/i18n/v1"
+ resource "github.com/frost-leo/fathomry/resource/v1"
+ adapters "github.com/frost-leo/fathomry/adapters/v1"
+ configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+ viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
+ nacos "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1"
 )
-var _ fs.FS = mysql.Assets()
-var _ fs.FS = postgresql.Assets()
-var _ = cli.DatabaseConfiguration{}
-var _ = catalog.Registration{}
-var _ = catalog.Prepare
+var _ = cli.Run
+var _ error = failure.ErrCode
+var _ = settings.NewStore[int]()
+var _ = i18n.CoreComponents()
+var _ = resource.Fixed
+var _ = adapters.ErrOptions
+var _ = configsource.ErrDecode
+var _ = viper.Settings{}
+var _ = nacos.Settings{}
 `))
-	write("catalog_test.go", []byte(notice+`package consumer
-import (
- "context"
- "errors"
- "testing"
- postgres "github.com/frost-leo/fathomry/adapters/database/postgres/v1"
- catalog "github.com/frost-leo/fathomry/framework/workflow/catalog/v1"
- declaration "github.com/frost-leo/fathomry/framework/workflow/declaration/v1"
- "github.com/frost-leo/fathomry/framework/workflow/declaration/v1/testdata/health"
-)
-func TestCatalogPublicationUsesPublicContracts(t *testing.T) {
- bundle,err:=declaration.Compile(context.Background(),health.Declarations())
- if err!=nil {t.Fatal(err)}
- prepared,err:=catalog.Prepare(context.Background(),catalog.Registration{Bundle:bundle,Resources:[]catalog.Resource{
-  {Target:catalog.Target{Kind:catalog.Definition},Field:catalog.Name,Text:catalog.Text{English:"Server health"}},
-  {Target:catalog.Target{Kind:catalog.Mode,Version:"1",Mode:"standard"},Field:catalog.Name,Text:catalog.Text{English:"Standard"}},
-  {Target:catalog.Target{Kind:catalog.Mode,Version:"1",Mode:"patient"},Field:catalog.Name,Text:catalog.Text{English:"Patient"}},
- }})
- if err!=nil {t.Fatal(err)}
- info,err:=prepared.Inspect()
- if err!=nil||info.Versions!=1||info.Modes!=2||info.Revisions!=2 {t.Fatal(info,err)}
- store,err:=catalog.PostgreSQL(new(postgres.Client),"catalog",catalog.Options{})
- if err!=nil||!store.Released(){t.Fatal("offline public construction failed",err)}
- ctx,cancel:=context.WithCancel(context.Background());cancel()
- publication,err:=store.Register(ctx,prepared)
- if !errors.Is(err,context.Canceled)||publication.Effect!=catalog.NotStarted||!publication.CleanupComplete{t.Fatal("public admission semantics differ",err)}
- comparison,err:=store.Compare(ctx,prepared)
- if !errors.Is(err,context.Canceled)||comparison.Complete{t.Fatal("public comparison admission differs",err)}
- if err:=store.Close(context.Background());err!=nil{t.Fatal(err)}
-}
-`))
-	write("consumer.go", []byte(notice+"package consumer\nimport (\n failure \"github.com/frost-leo/fathomry/failure/v1\"\n settings \"github.com/frost-leo/fathomry/settings/v1\"\n i18n \"github.com/frost-leo/fathomry/i18n/v1\"\n resource \"github.com/frost-leo/fathomry/resource/v1\"\n adapters \"github.com/frost-leo/fathomry/adapters/v1\"\n configsource \"github.com/frost-leo/fathomry/adapters/configsource/v1\"\n viper \"github.com/frost-leo/fathomry/adapters/configsource/viper/v1\"\n nacos \"github.com/frost-leo/fathomry/adapters/configsource/nacos/v1\"\n framework \"github.com/frost-leo/fathomry/framework/v1\"\n configuration \"github.com/frost-leo/fathomry/framework/configuration/v1\"\n)\nvar _ error = failure.ErrCode\nvar _ = settings.NewStore[int]()\nvar _ = i18n.CoreComponents()\nvar _ = resource.Fixed\nvar _ = adapters.ErrOptions\nvar _ = configsource.ErrDecode\nvar _ = viper.Settings{}\nvar _ = nacos.Settings{}\nvar _ = framework.Options{}\nvar _ = configuration.ErrDeclaration\n"))
 	run := func(workdir string, args ...string) ([]byte, error) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -129,7 +104,8 @@ func TestCatalogPublicationUsesPublicContracts(t *testing.T) {
 	}
 	for _, name := range []string{
 		"source", "operation", "compatibility", "failure",
-		"cli", "adapters/database/doris/v1", "database/v1", "cmd/fathomry/internal/database", "framework/schema/v1",
+		"cli", "adapters/database/doris/v1", "database/v1", "cmd/fathomry/internal/database", "framework/schema/v1", "framework/v1", "framework/configuration/v1", "framework/workflow/declaration/v1", "framework/workflow/implementation/v1", "framework/workflow/catalog/v1", "schema/fathomry/mysql/v1", "schema/fathomry/postgresql/v1",
+		"cmd/fathomry/internal/command/project/new", "cmd/fathomry/internal/command/project/build", "cmd/fathomry/internal/command/workflow", "cmd/fathomry/internal/command/schema", "cmd/fathomry/internal/command/database/create",
 	} {
 		t.Run("withdrawn-"+name, func(t *testing.T) {
 			path := "github.com/frost-leo/fathomry/" + name
@@ -137,16 +113,6 @@ func TestCatalogPublicationUsesPublicContracts(t *testing.T) {
 			output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
 			if err == nil || !strings.Contains(string(output), path) || !strings.Contains(string(output), "does not contain package") {
 				t.Fatalf("withdrawn package was not rejected as absent: %v\n%s", err, output)
-			}
-		})
-	}
-	for _, name := range []string{"schema", "database/create"} {
-		t.Run("reject-cli-operation-"+name, func(t *testing.T) {
-			path := "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/" + name
-			write("forbidden.go", []byte(notice+"package consumer\nimport _ "+strconv.Quote(path)+"\n"))
-			output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
-			if err == nil || !strings.Contains(string(output), "use of internal package "+path+" not allowed") {
-				t.Fatalf("private command implementation escaped: %v\n%s", err, output)
 			}
 		})
 	}
@@ -163,27 +129,10 @@ func TestCatalogPublicationUsesPublicContracts(t *testing.T) {
 		t.Fatal("package inventory could not be inspected")
 	}
 	cliPackages := map[string]bool{
-		"github.com/frost-leo/fathomry/cmd/fathomry":                                    true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/v1":                                 true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":                       true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command":                   true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/errorcatalog":      true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/messages":          true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project":           true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/new":       true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/build":     true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow":          true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow/vet":      true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow/register": true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow/list":     true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow/show":     true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/workflow/compare":  true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/schema":            true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/schema/status":     true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/schema/plan":       true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/schema/apply":      true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/database":          true,
-		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/database/create":   true,
+		"github.com/frost-leo/fathomry/cmd/fathomry":                  true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/v1":               true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":     true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command": true,
 	}
 	for _, path := range strings.Fields(string(output)) {
 		if cliPackages[path] {
@@ -191,22 +140,6 @@ func TestCatalogPublicationUsesPublicContracts(t *testing.T) {
 		}
 		if path == "github.com/frost-leo/fathomry/adapters/internal/errorbridge" {
 			continue // Private integration helper, not another public capability.
-		}
-		if path == "github.com/frost-leo/fathomry/framework/workflow/declaration/v1" {
-			continue // Pure declaration admission, not a Workflow host.
-		}
-		if path == "github.com/frost-leo/fathomry/framework/workflow/catalog/v1" {
-			continue // Catalog publication admission, not database resource ownership.
-		}
-		if path == "github.com/frost-leo/fathomry/framework/workflow/implementation/v1" {
-			continue // Static callable binding, not an Activity executor or Worker.
-		}
-		switch path {
-		case "github.com/frost-leo/fathomry/schema/fathomry":
-			continue // Test-only dialect parity and service qualification harness.
-		case "github.com/frost-leo/fathomry/schema/fathomry/mysql/v1",
-			"github.com/frost-leo/fathomry/schema/fathomry/postgresql/v1":
-			continue // Read-only, standard-library-only schema assets.
 		}
 		switch path {
 		case "github.com/frost-leo/fathomry/adapters/broker/v1",
@@ -247,7 +180,7 @@ func TestCatalogPublicationUsesPublicContracts(t *testing.T) {
 			"github.com/frost-leo/fathomry/adapters/objectstore/minio/v1":
 			continue
 		}
-		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") && path != "github.com/frost-leo/fathomry/failure/v1" && path != "github.com/frost-leo/fathomry/settings/v1" && path != "github.com/frost-leo/fathomry/i18n/v1" && path != "github.com/frost-leo/fathomry/resource/v1" && path != "github.com/frost-leo/fathomry/adapters/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/viper/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1" && path != "github.com/frost-leo/fathomry/framework/v1" && path != "github.com/frost-leo/fathomry/framework/configuration/v1" {
+		if !strings.HasPrefix(path, "github.com/frost-leo/fathomry/internal/") && path != "github.com/frost-leo/fathomry/failure/v1" && path != "github.com/frost-leo/fathomry/settings/v1" && path != "github.com/frost-leo/fathomry/i18n/v1" && path != "github.com/frost-leo/fathomry/resource/v1" && path != "github.com/frost-leo/fathomry/adapters/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/viper/v1" && path != "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1" {
 			t.Errorf("unexpected public package: %s", path)
 		}
 	}
@@ -289,84 +222,9 @@ func TestCLIConsumesPublicCapabilities(t *testing.T) {
 			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/internal/") {
 				t.Errorf("CLI bypasses public capabilities: %s: %s", path, imported)
 			}
-			if imported == "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/schema" || imported == "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/database/create" || imported == "github.com/frost-leo/fathomry/cmd/fathomry/internal/command/database" {
-				relative, err := filepath.Rel(root, path)
-				if err != nil {
-					return err
-				}
-				if !cliControlUseAllowed(filepath.ToSlash(relative), imported, item, file) {
-					t.Errorf("CLI command crossed its operation boundary: %s: %s", path, imported)
-				}
-			}
-			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/framework/") {
-				relative, err := filepath.Rel(root, path)
-				if err != nil {
-					return err
-				}
-				if cliWorkflowDeclarationUseAllowed(filepath.ToSlash(relative), imported, item, file) ||
-					cliControlUseAllowed(filepath.ToSlash(relative), imported, item, file) {
-					continue
-				}
-				if filepath.ToSlash(relative) != "internal/app/catalog.go" || item.Name == nil || item.Name.Name == "." || item.Name.Name == "_" {
-					t.Errorf("CLI execution depends on Framework: %s: %s", path, imported)
-					continue
-				}
-				name := item.Name.Name
-				ast.Inspect(file, func(node ast.Node) bool {
-					selector, ok := node.(*ast.SelectorExpr)
-					if !ok {
-						return true
-					}
-					owner, ok := selector.X.(*ast.Ident)
-					if ok && owner.Name == name && selector.Sel.Name != "Components" && selector.Sel.Name != "Definitions" && selector.Sel.Name != "Resources" {
-						t.Errorf("metadata composition calls Framework runtime: %s: %s", path, selector.Sel.Name)
-					}
-					return true
-				})
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestFrameworkHasNoDirectInternalImports(t *testing.T) {
-	root, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = filepath.WalkDir(filepath.Join(root, "framework"), func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
-		if err != nil {
-			return err
-		}
-		for _, item := range file.Imports {
-			imported, err := strconv.Unquote(item.Path.Value)
-			if err != nil {
-				return err
-			}
-			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/internal/") {
-				t.Errorf("Framework bypasses public Adapters: %s: %s", path, imported)
-			}
-			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/cmd/") {
-				relative, err := filepath.Rel(root, path)
-				if err != nil {
-					return err
-				}
-				if imported == "github.com/frost-leo/fathomry/cmd/fathomry/v1" &&
-					(filepath.ToSlash(relative) == "framework/workflow/implementation/v1/testdata/consumer/main.go" ||
-						filepath.ToSlash(relative) == "framework/workflow/implementation/v1/testdata/consumer/workflows/example/server_health/v1/workflow.go") {
-					continue // Independent module assembly, never imported by Framework.
-				}
-				t.Errorf("Framework depends on command tools: %s: %s", path, imported)
+			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/framework/") ||
+				strings.HasPrefix(imported, "github.com/frost-leo/fathomry/schema/") {
+				t.Errorf("CLI imports withdrawn surface: %s: %s", path, imported)
 			}
 		}
 		return nil

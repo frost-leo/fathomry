@@ -70,25 +70,12 @@ technical contracts/shared foundations, not public framework attribution, concre
 Adapters or business implementations. Composition
 may know selected concrete implementations. All dependencies must remain acyclic.
 
-The [control-schema packages](control-schema-assets.md) at
-`schema/fathomry/{postgresql,mysql}/v1` are pure read-only SQL/manifest assets.
-They depend only on the standard library, not Framework, Adapters or database
-SDKs. Their `schema/fathomry` parent is a test-only parity/qualification harness,
-not a forwarding production package or a migration runtime.
-
-The public `cmd/fathomry/v1` entry owns fixed command-tree composition. Its private
-`control.go` supplies project configuration and resource-scope wiring through the
-existing Resource and Adapter APIs; leaf presentation receives lazy operation
-callbacks, not a configuration loader or connection-pool shutdown authority.
-Schema helpers stay in the private command family; creation stays in its leaf.
-Neither is a public Framework capability or a replacement for workflow catalog
-business rules. Leaves never import the entry back.
-
-The generated project is the application host, with Fathomry compiled into the
-same executable as a library. Its own database settings declare deployment roles.
-Only that data declaration may name public provider Settings and offline Validate;
-resource construction stays in shared entry composition. Commands do not start
-the business host or manufacture a second application's database configuration.
+The former Framework, control-schema assets and business commands are withdrawn.
+The public `cmd/fathomry/v1` entry composes only the minimal command invocation
+foundation. It has no project registry, configuration Boot or database wiring.
+Existing Adapter composition fixtures use `resource/v1` and `adapters/v1`
+directly. A replacement Framework must be implemented through separately approved
+work; these architectural roles are not a claim of present runtime availability.
 
 The HTTP capability vocabulary in `adapters/httpclient/v1` shares declared
 accounting and attribution only. The nethttp provider retains native request,
@@ -100,17 +87,10 @@ accounting, provenance and distinct observations. Mail owns MIME/SMTP/process
 semantics through its selected Internal integration. Relay acceptance, process
 exit, platform acknowledgement and recipient reading are not one Delivered flag;
 no notification-specific runtime or business report model is introduced.
-Fathomry, not each independent business project, supplies composition. Business
-authors declare configuration, choose permitted capabilities/named sources and
-write workflow/node logic. The generated project Boot declares those choices through Framework scenario
-APIs, without Adapter imports. Framework assembles public Adapters and owns its
-scenario lifetimes; projects do not reimplement lease/admission accounting,
-source protocols or evidence-reception loops. Public
-contracts expose behavior, errors, results and diagnostics, not these authorities.
-The entry is obtain CLI → `fathomry new <project>` → configuration and business
-code. Project generation and finite configuration startup are implemented; unified
-execution/query/control remains future work. No generic third-party Provider SDK
-is implied.
+The intended Framework composition boundary will own supported application
+scenarios. That direction does not preserve the withdrawn Boot or generated
+project API. Until replacement work is approved and implemented, independent
+callers explicitly own their selected public resources, operations and evidence.
 
 Go's `internal` boundary protects implementation visibility; it is not a security
 sandbox or a reason to hide contracts external consumers require.
@@ -275,9 +255,7 @@ Earlier candidate names and layouts are not approved by satisfying this section.
 | `adapters/database/{postgres,mysql}/v1` | Complete supported native SQL/preparation/transaction translation, source and retained-generation ownership, independent evidence and provider-specific results |
 | `adapters/broker/v1` | Shared public broker budget and attribution data; no native engine or universal client |
 | `adapters/broker/kafka/v1` | Kafka-specific production, exact/direct/group consumption, checkpoints and retained source/evidence ownership |
-| `framework/v1` | Composition of public runtime owners, released-evidence reception and bound presentation/logging; no SDK or Internal engine |
-| `framework/configuration/v1` | Explicit input binding and provider-owned typed Load/Watch; source/policy association, fenced publication, released facts and opt-in borrowed resource adoption |
-| `cmd/fathomry` | Official offline catalogs and exclusive project generation; private command implementation, not a public extension SDK |
+| `cmd/fathomry` | Minimal help and invocation foundation; private command mechanisms, not a public extension SDK |
 | `internal/fault` | Technical kinds, frozen context, multi-cause inspection and safe presentation |
 | `internal/resource` | Configuration preparation, source identity/provenance, assembly, authoritative ownership, limits, admission and leases |
 | `internal/invocation` | Requests/budgets, producers, outcomes/results, concrete read-only receipts, scopes/guards, required evidence delivery and optional observation |
@@ -294,8 +272,6 @@ adapters/configsource/v1 -> failure/v1, settings/v1, YAML/TOML, standard library
 concrete configsource    -> public foundations, selected Internal configsource
 adapters/database/v1     -> public adapters/v1, standard library
 concrete database        -> public database/resource/operation/failure contracts, selected Internal database
-framework/v1             -> public failure/settings/i18n/resource/adapters
-framework/configuration  -> public configsource preparation, selected Adapter implementations and shared foundations
 internal/fault            -> standard library
 internal/resource         -> internal/fault, existing YAML
 internal/invocation       -> internal/resource, internal/fault
@@ -306,8 +282,8 @@ internal/conformance      -> internal mechanisms, testing (test support only)
 The Internal production mechanisms retain no public error dependency or all-SDK
 aggregator. Failure imports only the standard library. Compatibility assessment accepts the authoritative
 `*internal/resource.Access`; it does not introduce a public snapshot-assessment API.
-The generated project owns project choices and data; it imports Framework
-configuration and ordinary data foundations, not Adapters or Internal.
+The withdrawn generator supplies no current project API. A future host must keep
+project choices and data separate from capability/resource ownership.
 Framework Viper/Nacos declarations explicitly select the source implementation.
 Load/Watch constructs and owns that scenario's operation/evidence/source machinery.
 There is no provider-name registry, ambient inference, global service locator or
@@ -349,13 +325,11 @@ supplies resource catalogs and error presentation separately.
 [Resource](../reference/resource/v1/interface.md) now supplies independent public
 instance ownership without restoring private assembly facades. Public operation
 mechanisms and concrete configsource Adapters now use those public foundations;
-strict public preparation is independent of Internal's engine. Framework common
-composition and configuration scenarios now reuse those public owners. The official
-[CLI](../reference/cmd/fathomry/interface.md) provides offline catalogs and project generation through
-the fixed public `cmd/fathomry/v1` entry and private command packages. The former
-standalone `cli` package remains withdrawn. No complete
-application/Worker runtime is implied. No compatibility
-with the unreleased outer interfaces or earlier uint64 code draft is implied.
+strict public preparation is independent of Internal's engine. The former Framework
+composition and configuration scenarios are withdrawn. The official
+[CLI](../reference/cmd/fathomry/interface.md) retains only help and invocation
+mechanisms through the public command entry. No complete application/Worker
+runtime or compatibility with withdrawn outer APIs is implied.
 
 ## Technical facts and future public meaning
 

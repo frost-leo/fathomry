@@ -39,7 +39,8 @@ for current availability and package contracts.
 Public capabilities share the [failure/v1 contract](../reference/failure/v1/interface.md),
 not competing error systems per layer. Its numeric Code, readable Identifier,
 component-owned data and explicit definition atlas are implemented. Shared public
-operation mechanisms, configsource Adapters and Framework configuration now exist.
+operation mechanisms and configsource Adapters exist. The former Framework
+configuration and safe-logging composition helpers are withdrawn.
 Other concrete service scenarios remain incremental. Internal SDK mechanisms do not
 depend on those public semantics. The private
 `internal/fault` foundation retains technical kinds, bounded context and original
