@@ -91,6 +91,12 @@ resolution remains explicit; no configuration loader or service initialization i
 included. Replacement workflows, modes and persistence are not implemented.
 Public foundations, Adapters and Internal integrations remain available.
 
+The library now adds [thin Framework metadata preparation](docs/reference/framework/v1/interface.md)
+and [typed configuration loading](docs/reference/framework/configuration/v1/interface.md).
+Independent projects provide their own settings and validation; explicit local/Viper
+or remote/Nacos sessions publish accepted snapshots and optionally observe changes.
+These APIs do not restore application Boot, alter generated projects or add commands.
+
 The earlier pre-release Adapter, failure, i18n, Framework, settings and CLI
 surfaces were withdrawn for redesign; failure/v1, settings/v1 and i18n/v1 are rebuilt,
 resource/v1 supplies public instance ownership, and adapters/v1 supplies shared

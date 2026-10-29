@@ -76,8 +76,13 @@ foundation. It has no project registry, configuration Boot or database wiring.
 The official app separately composes the private project group and its create
 subpackage for offline `project new`; generated programs do not import that leaf.
 Existing Adapter composition fixtures use `resource/v1` and `adapters/v1`
-directly. A replacement Framework must be implemented through separately approved
-work; these architectural roles are not a claim of present runtime availability.
+directly. The rebuilt `framework/v1` now provides only explicit offline metadata
+composition. `framework/configuration/v1` composes existing public configuration
+Sources, strict preparation and settings publication with its own bounded session
+lifetime. It owns neither borrowed Runtime/Inbox resources nor business resource
+adoption. Project settings/validators remain project-owned. See the
+[configuration contract](../reference/framework/configuration/v1/interface.md).
+This is not restoration of the former application runtime or other Framework roles.
 
 The HTTP capability vocabulary in `adapters/httpclient/v1` shares declared
 accounting and attribution only. The nethttp provider retains native request,
