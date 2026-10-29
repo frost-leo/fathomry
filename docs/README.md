@@ -34,8 +34,11 @@ withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161). The retai
 [CLI foundation](reference/cmd/fathomry/interface.md) supplies help and invocation
 mechanisms. The official tool's [project new](reference/cmd/fathomry/internal/command/project/create/interface.md)
 now creates a bounded offline six-file project; it does not restore workflow
-execution, configuration bootstrap or database installation. Those replacement
-designs remain working material, not current APIs.
+execution, configuration bootstrap or database installation through the CLI.
+The library separately provides [thin Framework metadata preparation](reference/framework/v1/interface.md)
+and [typed local/Nacos configuration](reference/framework/configuration/v1/interface.md),
+without an application host or generator changes. Workflow/control-schema
+reconstruction remains working material, not current APIs.
 
 The [Mail Adapter](reference/adapters/notification/mail/v1/interface.md) provides
 managed MIME/EML/template/signing preparation, SMTP authentication and explicit
@@ -371,6 +374,8 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 
 | Package contract | Responsibility |
 | --- | --- |
+| [`framework/v1`](reference/framework/v1/interface.md) | Explicit paired failure/localization catalogs, without an application host or global registry |
+| [`framework/configuration/v1`](reference/framework/configuration/v1/interface.md) | Explicit bootstrap, project-owned validation, local/Nacos acquisition, accepted settings publication and owned Watch |
 | [`failure/v1`](reference/failure/v1/interface.md) | Numeric/symbolic identities, component-owned extensible occurrences, native causes and explicit definition atlas |
 | [`settings/v1`](reference/settings/v1/interface.md) | Project-owned typed snapshots, atomic data publication, section reads and an explicit application default |
 | [`i18n/v1`](reference/i18n/v1/interface.md) | Component resources/coverage, explicit code explanations and settings-backed safe error presentation |

@@ -63,6 +63,8 @@ import (
  configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
  viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
  nacos "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1"
+ framework "github.com/frost-leo/fathomry/framework/v1"
+ configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
 )
 var _ = cli.Run
 var _ error = failure.ErrCode
@@ -73,6 +75,8 @@ var _ = adapters.ErrOptions
 var _ = configsource.ErrDecode
 var _ = viper.Settings{}
 var _ = nacos.Settings{}
+var _ = framework.Prepare
+var _ = configuration.LoadBootstrap
 `))
 	run := func(workdir string, args ...string) ([]byte, error) {
 		t.Helper()
@@ -104,7 +108,7 @@ var _ = nacos.Settings{}
 	}
 	for _, name := range []string{
 		"source", "operation", "compatibility", "failure",
-		"cli", "adapters/database/doris/v1", "database/v1", "cmd/fathomry/internal/database", "framework/schema/v1", "framework/v1", "framework/configuration/v1", "framework/workflow/declaration/v1", "framework/workflow/implementation/v1", "framework/workflow/catalog/v1", "schema/fathomry/mysql/v1", "schema/fathomry/postgresql/v1",
+		"cli", "adapters/database/doris/v1", "database/v1", "cmd/fathomry/internal/database", "framework/schema/v1", "framework/workflow/declaration/v1", "framework/workflow/implementation/v1", "framework/workflow/catalog/v1", "schema/fathomry/mysql/v1", "schema/fathomry/postgresql/v1",
 		"cmd/fathomry/internal/command/project/new", "cmd/fathomry/internal/command/project/build", "cmd/fathomry/internal/command/workflow", "cmd/fathomry/internal/command/schema", "cmd/fathomry/internal/command/database/create",
 	} {
 		t.Run("withdrawn-"+name, func(t *testing.T) {
@@ -113,6 +117,18 @@ var _ = nacos.Settings{}
 			output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
 			if err == nil || !strings.Contains(string(output), path) || !strings.Contains(string(output), "does not contain package") {
 				t.Fatalf("withdrawn package was not rejected as absent: %v\n%s", err, output)
+			}
+		})
+	}
+	for _, retired := range []struct{ path, symbol string }{
+		{"framework/v1", "New"}, {"framework/configuration/v1", "Load"},
+	} {
+		t.Run("retired-api-"+retired.path, func(t *testing.T) {
+			path := "github.com/frost-leo/fathomry/" + retired.path
+			write("forbidden.go", []byte(notice+"package consumer\nimport legacy "+strconv.Quote(path)+"\nvar _ = legacy."+retired.symbol+"\n"))
+			output, err := run(directory, "test", "-mod=mod", "-count=1", "./...")
+			if err == nil || !strings.Contains(string(output), "undefined: legacy."+retired.symbol) {
+				t.Fatalf("retired API was restored or rejected for another reason: %v\n%s", err, output)
 			}
 		})
 	}
@@ -144,7 +160,9 @@ var _ = nacos.Settings{}
 			continue // Private integration helper, not another public capability.
 		}
 		switch path {
-		case "github.com/frost-leo/fathomry/adapters/broker/v1",
+		case "github.com/frost-leo/fathomry/framework/v1",
+			"github.com/frost-leo/fathomry/framework/configuration/v1",
+			"github.com/frost-leo/fathomry/adapters/broker/v1",
 			"github.com/frost-leo/fathomry/adapters/notification/v1",
 			"github.com/frost-leo/fathomry/adapters/notification/mail/v1",
 			"github.com/frost-leo/fathomry/adapters/notification/lark/v1",
@@ -226,7 +244,7 @@ func TestCLIConsumesPublicCapabilities(t *testing.T) {
 			}
 			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/framework/") ||
 				strings.HasPrefix(imported, "github.com/frost-leo/fathomry/schema/") {
-				t.Errorf("CLI imports withdrawn surface: %s: %s", path, imported)
+				t.Errorf("CLI imports out-of-scope Framework/schema surface: %s: %s", path, imported)
 			}
 		}
 		return nil
