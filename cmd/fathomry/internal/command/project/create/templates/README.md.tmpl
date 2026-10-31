@@ -20,9 +20,53 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 # {{.Name}}
 
 This independent Go module is {{.Module}}. It requires Go {{.GoVersion}} or later
-and pins Fathomry to {{.FrameworkVersion}}. The selected template uses the existing
-public CLI shell; shared usage text still says fathomry. It is not a Worker,
-workflow executor, configuration loader or initialized deployment.
+and pins Fathomry to {{.FrameworkVersion}}. The project and Fathomry compile into
+one application named fathomry; there is no separate CLI proxy. The project name
+identifies the application, not a different executable or command implementation.
+This profile implements configuration checking, not a Worker or workflow executor.
+
+The pinned framework revision provides RunProject and the application
+configuration APIs. Changing it requires requalifying the template/API pair;
+no arbitrary-version compatibility is promised.
+
+## Project structure
+
+| Location | Responsibility |
+| --- | --- |
+| main.go | Process signals, standard streams and exit status |
+| internal/bootstrap | Connect project declarations to the shared Fathomry commands |
+| internal/setting | Complete Config, Application, typed defaults and pure validation |
+| .env | Bootstrap selection and startup budgets; ignored by Git |
+| .env.example | Non-secret bootstrap example, also used by project tests |
+| config/base.yaml | Shared application values |
+| config/environment/ | Explicit environment overrides; only the selected file is loaded |
+
+Add database.go, cache.go or other configuration sections under internal/setting
+when the project uses those capabilities, and include them in Config. Keep clients,
+file/network access and lifecycle ownership out of configuration structs.
+
+setting.Schema returns the Framework-owned configuration.Schema[Config].
+Bootstrap only supplies declarations and explicitly captured startup facts to the
+shared command entry. It does not call configsource preparation or construct
+configuration-center clients. The framework owns that translation and loading.
+
+Application groups Build, Deployment and Instance alongside name, display_name,
+description, business namespace, timezone and existing i18n preferences. Build
+contains version/revision/built_at; Deployment contains environment/region/zone/cluster.
+An unspecified location stays empty instead of inventing a production region.
+Application namespace is not a Kubernetes namespace or tenant authorization.
+
+The project schema factory runs once after bootstrap admission. It supplies the
+selected environment and captures FATHOMRY_INSTANCE_ID from the process; absence
+creates a random startup ID, while explicit empty rejects. This is a declared
+project input, not another permitted dotenv key. Build metadata is compiled into
+internal/bootstrap (version defaults to devel; revision/builtAt are unknown).
+Application files cannot override these startup-owned fields.
+
+To stamp an artifact, supply actual CI values through -ldflags -X for
+{{.Module}}/internal/bootstrap.version, .revision and .builtAt (using the full
+package prefix for each). A nonempty builtAt must be a UTC RFC3339 timestamp.
+Do not confuse application version with the Fathomry dependency or schema version.
 
 ## Resolve dependencies explicitly
 
@@ -31,12 +75,62 @@ Generation did not run Go, Git or service checks. Resolve dependencies yourself:
 ```sh
 GOWORK=off go mod tidy
 GOWORK=off go test ./...
-GOWORK=off go run ./cmd/{{.Name}} --help
+GOWORK=off go run . --help
+GOWORK=off go run . config check --output=json
 ```
 
 Go creates go.sum and may add indirect requirements. Keep those files with your
-project. No local replacement, parent workspace or copied SDK tree is required
-for this qualified CLI profile. This does not qualify every future Adapter.
+project. Creation writes a non-secret .env; after cloning, copy .env.example to
+.env yourself. Tests use .env.example, not a developer's private .env. Do not commit
+credentials or copy Fathomry's local SDK replacement graph into this module.
+
+## Configuration and startup
+
+Help and invalid syntax do not load configuration. A configuration check:
+
+1. Captures only declared bootstrap variables and reads the selected dotenv file
+   under a finite early budget.
+2. Admits the complete bootstrap before opening application configuration sources.
+3. Loads, validates and accepts one complete application snapshot.
+4. Closes owned sessions/resources and emits a bounded safe report on success.
+
+The required bootstrap file defaults to ./.env relative to the working directory.
+Use --bootstrap for an explicit path and --env for an environment override:
+
+```sh
+GOWORK=off go run . config check --env production
+"$BUILD_OUTPUT/fathomry" config check --bootstrap /run/application/.env --output=json
+```
+
+Precedence is explicit flags, captured process variables, dotenv, then documented
+defaults. Empty values are present, not absent. All supplied values are checked,
+including shadowed values. Unknown dotenv keys reject. Dotenv is literal: no shell,
+export, interpolation or process-environment mutation, and no Docker Compose syntax
+compatibility promise. See Fathomry's configuration bootstrap reference for the
+complete key inventory, remote Nacos profile and bounds.
+
+The example explicitly selects development, local/Viper and Watch=false. Local
+mode requires config/base.yaml and config/environment/<environment>.yaml relative
+to the dotenv parent. Neither a missing file nor a rejected candidate falls back
+to another environment/provider. The empty environment files contain valid YAML
+mappings, not empty bytes. Application defaults and validation belong to setting.Schema.
+The setting tests exercise pure data rules; bootstrap tests exercise actual
+source-layer merging, rejected overrides and the independent config-check command.
+Timezone defaults to UTC; validation checks bounded IANA-style identifier syntax
+without consulting host files. A future time-consuming capability must resolve
+that identifier against its chosen timezone catalog before use and reject unknown
+names. This check does not certify timezone catalog availability or scheduling.
+Do not mutate time.Local or reinterpret already-frozen task times.
+
+Before reading dotenv, bootstrap acquisition and failure cleanup each default to
+5s. Accepted bootstrap selects startup/candidate/shutdown budgets of 30s/5s/10s unless
+overridden. Budgets are cooperative, not a way to kill blocked callbacks. The
+configuration check remains finite with Watch=true: it accepts the observer's first
+valid snapshot, then closes. It does not leave a watcher or certify service readiness.
+
+Further commands must construct required capabilities only after configuration
+acceptance and admit business work only after those capabilities are ready. No
+database, cache, migration, registration or Worker startup is implied by this check.
 
 ## Build and run
 
@@ -45,23 +139,40 @@ disposable experiments and a permanent artifact location for retained binaries.
 
 ```sh
 test -n "$BUILD_OUTPUT" && test -d "$BUILD_OUTPUT" &&
-  GOWORK=off go build -o "$BUILD_OUTPUT/{{.Name}}" ./cmd/{{.Name}}
-"$BUILD_OUTPUT/{{.Name}}" --help
+  GOWORK=off go build -o "$BUILD_OUTPUT/fathomry" .
+"$BUILD_OUTPUT/fathomry" --help
 ```
 
 The binary embeds the CLI; it does not invoke a globally installed fathomry or
 require Go/the original source directory at runtime. The binary owns application
 exit codes; go run can wrap a failed program's exit status.
+Install this application's binary on its deployment PATH to use fathomry directly.
+Do not overwrite another application's same-named binary in a shared installation.
+
+Debug the root package, not an individual file list. In GoLand, select a
+Directory/Package run configuration at the project root. In VS Code Go, set
+program and cwd to ${workspaceFolder}; pass config check as arguments. Running
+go run . keeps future root-package files in the build, unlike go run main.go.
+
+Build one binary/image and promote the same artifact across environments. Mount
+versioned bootstrap/application files and inject Secrets explicitly at runtime;
+exclude .env from the image build context. Use exec-form startup, standard streams,
+non-root execution and explicit writable temporary storage with a read-only root.
+Fathomry's project-deployment guide supplies container and configuration-check Job
+examples; it does not provision infrastructure or qualify a real Kubernetes cluster.
+
+Treat configuration checks as finite validation tasks, not liveness/readiness
+probes. Bootstrap selection is not hot-reloaded. Watch updates preserve last-good
+data but do not provide a multi-file transaction or automatic client rotation.
 
 ## Ownership and current limits
 
 The generated files are project-owned and may be edited. Future template changes
 do not overwrite them. No automatic updater, service discovery, registration,
 database migration, workflow/Mode definition or deployment was generated.
-The config directory currently contains documentation only.
 
-The developer-only project-new command is not part of this project's public CLI
-shell. Build the official developer CLI from its supported source checkout;
+The developer-only project-new command is not part of this project's command
+profile. Build the official developer CLI from its supported source checkout;
 versioned go install of the supplying Fathomry module currently rejects its local
 replacement directives. Do not copy that replacement graph into this module.
 

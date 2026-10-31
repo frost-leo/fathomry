@@ -1,0 +1,96 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package setting
+
+import (
+	"context"
+	"strings"
+	"testing"
+)
+
+func TestProjectSchema(t *testing.T) {
+	schema := Schema(Build{Version: "devel"}, "development", Instance{ID: "test-instance"})
+	if err := schema.Validate(context.Background(), schema.Defaults); err != nil {
+		t.Fatal(err)
+	}
+	changed := schema.Defaults
+	changed.Application.Name = "different-" + ApplicationName
+	if schema.Validate(context.Background(), changed) == nil {
+		t.Fatal("project identity change admitted")
+	}
+	changed = schema.Defaults
+	changed.Application.I18n.Locale = ""
+	if schema.Validate(context.Background(), changed) == nil {
+		t.Fatal("empty locale admitted")
+	}
+}
+
+func TestApplicationProfile(t *testing.T) {
+	schema := Schema(Build{Version: "1.2.3", Revision: "abcdef1", BuiltAt: "2026-10-30T00:00:00Z"},
+		"production", Instance{ID: "test-instance"})
+	value := schema.Defaults
+	value.Application.DisplayName = "Order synchronization"
+	value.Application.Description = "Synchronize upstream orders"
+	value.Application.Namespace = "commerce"
+	value.Application.Deployment.Region = "region-a"
+	value.Application.Deployment.Zone = "zone-b"
+	value.Application.Deployment.Cluster = "cluster-c"
+	value.Application.Timezone = "Asia/Shanghai"
+	if err := schema.Validate(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+	for _, mutate := range []func(*Config){
+		func(value *Config) { value.Application.Build.Version = "forged" },
+		func(value *Config) { value.Application.Build.Revision = "forged" },
+		func(value *Config) { value.Application.Build.BuiltAt = "2025-01-01T00:00:00Z" },
+		func(value *Config) { value.Application.Deployment.Environment = "other" },
+		func(value *Config) { value.Application.Instance.ID = "shared" },
+		func(value *Config) { value.Application.Timezone = "Local" },
+		func(value *Config) { value.Application.Timezone = "" },
+		func(value *Config) { value.Application.Timezone = "../UTC" },
+		func(value *Config) { value.Application.Timezone = "Asia//Shanghai" },
+		func(value *Config) { value.Application.Deployment.Zone = "zone-only" },
+		func(value *Config) { value.Application.DisplayName = "" },
+		func(value *Config) { value.Application.Namespace = "invalid namespace" },
+		func(value *Config) { value.Application.Name = "other" },
+		func(value *Config) { value.Application.Description = strings.Repeat("x", 1025) },
+	} {
+		invalid := schema.Defaults
+		mutate(&invalid)
+		if err := schema.Validate(context.Background(), invalid); err == nil {
+			t.Fatal("invalid application configuration admitted")
+		}
+	}
+}
+
+func TestEnvironmentMatchesBootstrap(t *testing.T) {
+	for _, environment := range []string{"development", ".", "..", strings.Repeat("e", 64)} {
+		schema := Schema(Build{Version: "devel"}, environment, Instance{ID: "test-instance"})
+		if err := schema.Validate(context.Background(), schema.Defaults); err != nil {
+			t.Fatal("valid bootstrap environment refused", err)
+		}
+	}
+	for _, environment := range []string{"", "not an environment", "dev+local", strings.Repeat("e", 65)} {
+		schema := Schema(Build{Version: "devel"}, environment, Instance{ID: "test-instance"})
+		if err := schema.Validate(context.Background(), schema.Defaults); err == nil {
+			t.Fatal("invalid environment admitted")
+		}
+	}
+}

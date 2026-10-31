@@ -55,7 +55,7 @@ setting code therefore do not import adapters/configsource.
 
 Provider-specific settings and borrowed Dependencies remain explicit Adapter
 contracts for advanced integration. They are not copied into a second set of
-Framework SDK settings, nor are they required in an application declaration.
+Framework SDK settings, nor are they required in the generated project declaration.
 
 ## Call sequence
 

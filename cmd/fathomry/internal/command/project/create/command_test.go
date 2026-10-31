@@ -98,6 +98,42 @@ func TestCreationResourceCoverage(t *testing.T) {
 	}
 }
 
+func TestModuleIdentityRejectionHasNoEffects(t *testing.T) {
+	for _, modulePath := range []string{
+		"google.golang.org/grpc/codes", "golang.org/x/text/language", "golang.org/x/text/date",
+		"golang.org/x/sys/windows", "golang.org/x/sys/windows/registry",
+		"github.com/frost-leo/fathomry/internal/conformance", "github.com/spf13/cobra",
+		"example.com/vendor", "example.com/vendor/app", "example.com/app/vendor/child",
+	} {
+		t.Run(modulePath, func(t *testing.T) {
+			parent := t.TempDir()
+			t.Chdir(parent)
+			t.Setenv("PATH", "")
+			var output, diagnostic bytes.Buffer
+			err := command.Run(t.Context(), []string{"--output=json", "project", "new", "--name=demo",
+				"--module=" + modulePath, "--framework-version=" + frameworkVersion},
+				command.Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic}, catalogs(t),
+				func(inv *command.Invocation) *cobra.Command {
+					root := inv.Group("fathomry", "fathomry.command_line.root")
+					group := inv.Group("project", "fathomry.command_line.root")
+					group.AddCommand(New(inv))
+					root.AddCommand(group)
+					return root
+				})
+			if !errors.Is(err, ErrInput) || command.ExitCode(err) != 2 || output.Len() != 0 || diagnostic.Len() == 0 {
+				t.Fatal("invalid module did not fail admission", err, output.String(), diagnostic.String())
+			}
+			if strings.Contains(diagnostic.String(), modulePath) {
+				t.Fatal("rejected module leaked into diagnostics")
+			}
+			entries, err := os.ReadDir(parent)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("rejected module changed filesystem", entries, err)
+			}
+		})
+	}
+}
+
 type rejectedWriter struct{ err error }
 
 func (writer rejectedWriter) Write([]byte) (int, error) { return 0, writer.err }
@@ -147,7 +183,7 @@ func TestMutationReportSurvivesFailureAndOutputLoss(t *testing.T) {
 				Data report `json:"data"`
 			}
 			if json.Unmarshal(execution.ReportCopy(), &envelope) != nil || envelope.Data.State != "partial" ||
-				len(envelope.Data.Directories) != 4 || len(envelope.Data.Files) != 1 ||
+				len(envelope.Data.Directories) != len(projectDirectories)+1 || len(envelope.Data.Files) != 1 ||
 				envelope.Data.Files[0].BytesWritten != 7 || envelope.Data.Files[0].Complete {
 				t.Fatal("partial report lost", string(execution.ReportCopy()))
 			}
@@ -182,7 +218,7 @@ func TestCompleteEffectsSurviveCanceledReturn(t *testing.T) {
 						return nil, err
 					}
 					count++
-					if count == 6 {
+					if count == len(templateFiles) {
 						return &faultyFile{WriteCloser: file, afterClose: cancel}, nil
 					}
 					return file, nil
@@ -212,7 +248,7 @@ func TestDeadlineCancellationExitPolicy(t *testing.T) {
 			return nil, err
 		}
 		count++
-		if count == 6 {
+		if count == len(templateFiles) {
 			return &faultyFile{WriteCloser: file, afterClose: func() { <-ctx.Done() }}, nil
 		}
 		return file, nil
@@ -255,7 +291,7 @@ func TestDeadlineCancellationExitPolicy(t *testing.T) {
 			t.Fatal("output failure precedence lost", late)
 		}
 		var envelope struct{ Data report }
-		if json.Unmarshal(retained.ReportCopy(), &envelope) != nil || envelope.Data.State != "complete" || len(envelope.Data.Files) != 6 {
+		if json.Unmarshal(retained.ReportCopy(), &envelope) != nil || envelope.Data.State != "complete" || len(envelope.Data.Files) != len(templateFiles) {
 			t.Fatal("late deadline erased complete effects")
 		}
 	}

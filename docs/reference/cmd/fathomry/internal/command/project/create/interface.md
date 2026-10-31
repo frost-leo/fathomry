@@ -22,15 +22,20 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 [Documentation](../../../../../../../README.md) / [Project commands](../interface.md)
 
 **Audience:** developers creating projects and maintainers of the official CLI.
-**Status:** implemented first profile; no configuration or workflow runtime.
+**Status:** implemented root-entry template with configuration checking, qualified
+against the exact published API revision below. No workflow runtime.
 **Package:** `github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/create`.
 
 ## Invocation and supported profile
 
+The following creates files offline. The dependency pin is the actual API-first
+merge revision, which supplies RunProject and the application configuration APIs.
+Changing the pin requires requalifying the generated consumer without replacement.
+
 ```sh
 fathomry project new --name ordersync \
   --module example.com/acme/ordersync \
-  --framework-version v0.0.0-20261028081050-b28e37d55e53
+  --framework-version v0.0.0-20261031064010-94997fff92da
 ```
 
 All three flags are required. There are no positional arguments, inferred versions,
@@ -42,11 +47,19 @@ import-path component restrictions. Module is at most 1,024 bytes and passes
 the pinned x/mod `module.CheckPath` domain-qualified profile. Do not confuse the
 module path with the directory name or require a new business repository to exist.
 
-The module must not equal Fathomry, Cobra, pflag, mousetrap or x/text's exact
-module identity. These collisions shadow dependencies; shared prefixes alone are
-not refused. Framework version must equal the explicit supported pin above, with
-Go floor 1.27.0. This is one qualified template/library pair, not arbitrary-version
-compatibility. The command rejects non-Linux operating systems before mutation.
+The module must not equal a dependency module identity, and none of its generated
+package identities may collide with a Go-source directory in those dependencies.
+The offline inventory includes test-only and platform-specific source directories:
+Go's ambiguous-import check does not filter them by build tags. Shared prefixes
+alone are not refused. Exact `vendor` path components are also refused because
+Go would reject the generated self-imports; `internal` and `testdata` are allowed.
+The bounded inventories live in `dependencies.go` and `dependency_packages.txt`.
+`TestDependencyIdentities` checks them against the rendered source's imports and
+the selected dependency sources; template or dependency updates require this
+check and actual generated-consumer qualification, not a runtime Go/network call.
+Framework version
+must equal the explicit pin above, with Go floor 1.27.0. No arbitrary-version
+compatibility is promised. The command rejects non-Linux systems before mutation.
 
 ## Exact output and template ownership
 
@@ -57,25 +70,41 @@ The target is exactly ./<name> under the caller's existing cwd:
   go.mod
   README.md
   .gitignore
-  cmd/<name>/
-    main.go
-    main_test.go
+  main.go
+  main_test.go
+  .env
+  .env.example
   config/
-    README.md
+    base.yaml
+    environment/
+      development.yaml
+      production.yaml
+  internal/
+    bootstrap/
+      bootstrap.go
+      bootstrap_test.go
+    setting/
+      config.go
+      application.go
+      config_test.go
 ```
 
 No go.sum initially: resolve dependencies explicitly with Go afterward. No Go/Git
 process, network call, Git initialization, parent workspace change, configuration
 load, service probe, registration or Worker startup occurs during generation.
-The config README documents the absence of a loader/schema/profile.
+Root main owns signals/streams/exit and delegates to internal/bootstrap, which uses
+public cli.RunProject. internal/setting owns the complete typed schema and nested
+[Application profile](application.md). The directory/application identity use the
+project name; the documented executable is fathomry. Generated source is project-owned and future
+templates do not overwrite it. Use go run . or a root-package IDE configuration,
+not a cmd/<name> path or the file-list go run main.go form.
 
-The main uses existing public cli.Run/ExitCode. The executable/directory use the
-project name; shared help still says fathomry. No display-name API or public project
-registry is added. Generated source is project-owned and future templates do not
-overwrite it.
+The .env template is non-secret, selects local/Viper development and is ignored
+by generated Git rules. Tests use .env.example, so they do not depend on a private
+file absent from fresh clones. Both environment files contain valid empty mappings.
 
-Templates mirror target directories, with PROJECT_NAME as the fixed cmd component
-and .tmpl suffixes. Explicit embed paths and a six-file manifest—not a recursive
+Templates mirror target directories with .tmpl suffixes. Explicit embed paths
+and a 15-file manifest—not a recursive
 runtime copy—select output. Go source is formatted and go.mod identities are checked
 before mutation. Total rendered content is bounded to 1 MiB.
 
@@ -96,7 +125,7 @@ not an atomic identity claim against hostile namespace mutation.
 Competing creators that only attempt the same exclusive target are supported:
 one may proceed; losers never open/adopt the existing target. Every expected
 directory uses exclusive Mkdir (0755 requested), and every file uses
-O_CREATE|O_EXCL|O_WRONLY (0644 requested), subject to umask. Existing directories,
+O_CREATE|O_EXCL|O_WRONLY (0600 for .env, 0644 otherwise), subject to umask. Existing directories,
 files, links and partial targets are never overwritten, chmodded or recursively
 removed. There is no rollback, publication transaction, fsync or crash guarantee.
 
@@ -114,9 +143,9 @@ successful and failed creation attempts. The JSON envelope operation is
 directories, files, state and an optional failed_path.
 
 - target is intended relative to cwd, not an immutable locator after external rename.
-- directories contains at most four target-relative acknowledged creations:
-  ., cmd, cmd/<name>, config.
-- files contains at most six exclusive creations, each with path, bytes_written
+- directories contains at most six target-relative acknowledged creations:
+  ., config, config/environment, internal, internal/bootstrap, internal/setting.
+- files contains at most 15 exclusive creations, each with path, bytes_written
   and complete. A file is complete only after its full write and successful Close.
   Empty/partial files remain in the report.
 - Lists are empty arrays, not null. The input and fixed manifest bound the encoded
@@ -142,12 +171,18 @@ native causes deliberately inspectable.
 Maintained render/input/filesystem/report tests cover exact template inventory,
 pinning, aliases, collisions, exclusive claims, partial writes, close/cancel/output
 failures, umask and concurrent creation. Actual-command consumer tests generate
-without Go/Git, then resolve from a fresh external module cache, run readonly
-vet/race/build, compare successful source/binary help and relocate source/cache
-before standalone launch. The Go launcher's failure exit is not the binary's policy.
+without Go/Git, run explicit tidy followed by offline readonly vet/race/build,
+change the project's validator, compare source/binary checks, relocate inputs,
+exercise SIGTERM during remote startup and validate projected Job inputs.
+Candidate-source replacement and cold published no-replace consumers are separate
+passing gates. The published path resolves the exact module and its inspection
+metadata explicitly before offline checks; it never substitutes the source checkout.
+The Go launcher's failure exit is not the binary's policy. See
+[deployment examples](../../../../../../../development/project-deployment.md).
 
-Only this minimal CLI dependency profile is qualified, not every Adapter.
+No complete SDK distribution profile is qualified by these tests.
 Versioned go install of the official tool currently rejects the supplying module's
 local replacements; use the supported source-checkout build path. No SDK distribution,
-new public API, other native OS, network filesystem or hostile-directory qualification
-is implied. Scope and preparation provenance: [#163](https://github.com/frost-leo/fathomry/issues/163).
+other native OS, network filesystem or hostile-directory qualification is implied.
+Scope: [#163](https://github.com/frost-leo/fathomry/issues/163) and
+[#167](https://github.com/frost-leo/fathomry/issues/167).

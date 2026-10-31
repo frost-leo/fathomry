@@ -148,5 +148,4 @@ See [loading](../../../../../framework/configuration/v1/load_configuration_test.
 [selection](../../../../../framework/configuration/v1/load_bootstrap_test.go) and
 [binding](../../../../../framework/configuration/v1/binding_test.go) tests.
 Candidate-source, isolated protocol-peer and published-consumer evidence remain
-separate. The new root-entry generator's published-module acceptance belongs to
-the subsequent integration, after this API has a real published revision.
+separate; generated-project acceptance does not qualify production services.

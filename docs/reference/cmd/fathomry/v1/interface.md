@@ -23,8 +23,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 **Audience:** official-tool and compiled-project entry authors.
 **Status:** implemented minimal shell and project configuration-check profile.
-The generator retains its existing shell; integration of the new profile follows
-publication of this API as an independently consumable module revision.
+The generator emits this source profile with an exact published API dependency.
 **Package:** `github.com/frost-leo/fathomry/cmd/fathomry/v1` (package `cli`).
 
 ## Shared entry and command structure
@@ -138,8 +137,7 @@ The existing [minimal-entry tests](../../../../../cmd/fathomry/v1/cli_test.go)
 and [invocation tests](../../../../../cmd/fathomry/internal/command/run_test.go)
 continue protecting the unchanged CLI foundation. The
 [actual generated consumer](../../../../../cmd/fathomry/internal/command/project/create/consumer_linux_test.go)
-continues qualifying the existing six-file shell against its exact published
-dependency, including cold resolution and standalone execution. The new root-entry
-generator and its published-module acceptance are a subsequent integration;
-the independent API fixture above is not a substitute for that gate. Production
-Nacos and real Kubernetes remain outside these claims.
+also exercises the root-entry template, validator changes, standalone execution,
+SIGTERM and projected Job inputs. Candidate-source and cold published consumers
+are distinct passing gates, not interchangeable evidence. Production Nacos and real
+Kubernetes remain outside these claims.

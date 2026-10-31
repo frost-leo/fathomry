@@ -54,7 +54,7 @@ func (result *report) finish() {
 		return
 	}
 	result.State = "partial"
-	if len(result.Files) != 6 || len(result.Directories) != 4 {
+	if len(result.Files) != len(templateFiles) || len(result.Directories) != len(projectDirectories)+1 {
 		return
 	}
 	for _, file := range result.Files {
@@ -102,7 +102,11 @@ func create(ctx context.Context, selected plan) (result report, err error) {
 type fileOpener func(*os.Root, string) (io.WriteCloser, error)
 
 func openFile(root *os.Root, path string) (io.WriteCloser, error) {
-	return root.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+	mode := fs.FileMode(0644)
+	if path == ".env" {
+		mode = 0600
+	}
+	return root.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
 }
 
 // The caller retains parent. The selected plan is already validated and rendered.
@@ -133,7 +137,7 @@ func createInParent(ctx context.Context, parent *os.Root, selected plan, open fi
 			err = fail(ErrCreate, "close_target", err, cause)
 		}
 	}()
-	for _, directory := range []string{"cmd", "cmd/" + selected.options.Name, "config"} {
+	for _, directory := range projectDirectories {
 		if err := cancellation(ctx); err != nil {
 			return result, err
 		}

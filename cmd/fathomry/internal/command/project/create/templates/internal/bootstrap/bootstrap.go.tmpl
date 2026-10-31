@@ -1,0 +1,62 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	"context"
+	"crypto/rand"
+	"os"
+
+	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"{{.Module}}/internal/setting"
+)
+
+var (
+	version  = "devel"
+	revision string
+	builtAt  string
+)
+
+// Run connects project declarations to Fathomry's shared command implementation.
+func Run(ctx context.Context, args []string, options cli.Options) error {
+	return cli.RunProject(ctx, args, cli.Project[setting.Config]{
+		Schema: schema, LookupEnv: os.LookupEnv,
+	}, options)
+}
+
+func schema(ctx context.Context, environment string) (configuration.Schema[setting.Config], error) {
+	if err := ctx.Err(); err != nil {
+		return configuration.Schema[setting.Config]{}, err
+	}
+	instance, present := os.LookupEnv("FATHOMRY_INSTANCE_ID")
+	if !present {
+		instance = rand.Text()
+	}
+	build := setting.Build{Version: version, Revision: revision, BuiltAt: builtAt}
+	identity := setting.Instance{ID: instance}
+	if err := build.Validate(); err != nil {
+		return configuration.Schema[setting.Config]{}, err
+	}
+	if err := identity.Validate(); err != nil {
+		return configuration.Schema[setting.Config]{}, err
+	}
+	return setting.Schema(build, environment, identity), nil
+}

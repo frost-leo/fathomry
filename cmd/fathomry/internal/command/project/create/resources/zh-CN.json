@@ -74,9 +74,9 @@
     },
     {
       "id": "fathomry.project_creation.flag_name",
-      "source": "4a22b4d8147a1ad6abb561dae4f4f27e4322c65c0bb7e0898e265baa10a61684",
+      "source": "10f4ae3c2149c6e3947ae6b1e799953b181179be5c3b20e346794593f90defe2",
       "forms": {
-        "other": "必填项目目录和命令名称（1–63 个小写 ASCII 字节）。"
+        "other": "必填项目目录和应用名称（1–63 个小写 ASCII 字节）。"
       }
     },
     {
@@ -88,9 +88,9 @@
     },
     {
       "id": "fathomry.project_creation.flag_version",
-      "source": "fb01374f825641b1938480792ac6b11cef5a277d4257f178d24a0cb0f697224d",
+      "source": "b7fd11701ef473462eba7f46ff531343d35b4503c7a2a066d43b260dc4ddbc80",
       "forms": {
-        "other": "必填且仅支持 Fathomry 版本：v0.0.0-20261028081050-b28e37d55e53。"
+        "other": "必填且仅支持 Fathomry 版本：v0.0.0-20261031064010-94997fff92da。"
       }
     },
     {

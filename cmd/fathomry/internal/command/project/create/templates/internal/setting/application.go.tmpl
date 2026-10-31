@@ -1,0 +1,150 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package setting
+
+import (
+	"errors"
+	"strings"
+	"time"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/frost-leo/fathomry/i18n/v1"
+)
+
+// ApplicationName is the declared project identity, not an instance or build ID.
+const ApplicationName = "{{.Name}}"
+
+// Application contains project data, not runtime clients or startup ownership.
+type Application struct {
+	Name        string           `json:"name"`
+	DisplayName string           `json:"display_name"`
+	Description string           `json:"description"`
+	Namespace   string           `json:"namespace"`
+	Build       Build            `json:"build"`
+	Deployment  Deployment       `json:"deployment"`
+	Instance    Instance         `json:"instance"`
+	Timezone    string           `json:"timezone"`
+	I18n        i18n.Preferences `json:"i18n"`
+}
+
+// Build identifies this application artifact, not Fathomry or a workflow version.
+// An empty Revision or BuiltAt means unknown; Version defaults to devel.
+type Build struct {
+	Version  string `json:"version"`
+	Revision string `json:"revision"`
+	BuiltAt  string `json:"built_at"`
+}
+
+// Deployment separates bootstrap's selected environment from optional location.
+// Empty location fields mean unspecified; they never infer endpoints or authority.
+type Deployment struct {
+	Environment string `json:"environment"`
+	Region      string `json:"region"`
+	Zone        string `json:"zone"`
+	Cluster     string `json:"cluster"`
+}
+
+// Instance identifies one startup, not a durable worker or workflow identity.
+type Instance struct {
+	ID string `json:"id"`
+}
+
+// Validate checks application data without reading files or changing process state.
+// Timezone checks identifier syntax; a time consumer must resolve it against its
+// explicit IANA catalog before use. It must not silently fall back to time.Local.
+func (value Application) Validate() error {
+	if value.Name != ApplicationName || !text(value.DisplayName, 128, false) ||
+		!text(value.Description, 1024, true) || !identifier(value.Namespace, 128, true) {
+		return errors.New("invalid application identity")
+	}
+	if err := value.Build.Validate(); err != nil { return err }
+	if !environment(value.Deployment.Environment) ||
+		!identifier(value.Deployment.Region, 128, true) || !identifier(value.Deployment.Zone, 128, true) ||
+		!identifier(value.Deployment.Cluster, 128, true) || value.Deployment.Zone != "" && value.Deployment.Region == "" {
+		return errors.New("invalid deployment location")
+	}
+	if err := value.Instance.Validate(); err != nil { return err }
+	if !timezoneName(value.Timezone) {
+		return errors.New("timezone must be UTC or an IANA area/location identifier")
+	}
+	return value.I18n.Validate()
+}
+
+// Validate checks compiled build facts independently of application defaults.
+func (value Build) Validate() error {
+	if !identifier(value.Version, 128, false) || !identifier(value.Revision, 128, true) {
+		return errors.New("invalid application build identity")
+	}
+	if value.BuiltAt != "" {
+		if !strings.HasSuffix(value.BuiltAt, "Z") {
+			return errors.New("build time must be a UTC RFC3339 timestamp")
+		}
+		if _, err := time.Parse(time.RFC3339Nano, value.BuiltAt); err != nil {
+			return errors.New("build time must be a UTC RFC3339 timestamp")
+		}
+	}
+	return nil
+}
+
+// Validate checks startup identity without requiring complete application settings.
+func (value Instance) Validate() error {
+	if !identifier(value.ID, 128, false) {
+		return errors.New("invalid startup instance identity")
+	}
+	return nil
+}
+
+func text(value string, maximum int, empty bool) bool {
+	if value == "" { return empty }
+	if len(value) > maximum || !utf8.ValidString(value) || strings.TrimSpace(value) != value { return false }
+	return strings.IndexFunc(value, unicode.IsControl) == -1
+}
+
+func identifier(value string, maximum int, empty bool) bool {
+	if value == "" { return empty }
+	if len(value) > maximum { return false }
+	for _, char := range value {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || strings.ContainsRune("._+-", char)) {
+			return false
+		}
+	}
+	return value != "." && value != ".."
+}
+
+func environment(value string) bool {
+	if len(value) == 0 || len(value) > 64 { return false }
+	for _, char := range value {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' ||
+			char >= '0' && char <= '9' || strings.ContainsRune("._-", char)) {
+			return false
+		}
+	}
+	return true
+}
+
+func timezoneName(value string) bool {
+	if value == "UTC" { return true }
+	if len(value) > 128 || !strings.Contains(value, "/") { return false }
+	for _, part := range strings.Split(value, "/") {
+		if !identifier(part, 64, false) { return false }
+	}
+	return true
+}
