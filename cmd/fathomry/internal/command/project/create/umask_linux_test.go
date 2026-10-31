@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"testing"
 )
@@ -33,11 +34,15 @@ func TestCreationRespectsUmask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	directory := t.TempDir()
-	command := exec.CommandContext(t.Context(), executable, "-test.run=^TestUmaskChild$", "-test.count=1")
-	command.Env = append(os.Environ(), "FATHOMRY_SCAFFOLD_UMASK_CHILD="+directory)
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("umask subprocess: %v\n%s", err, output)
+	for _, mask := range []string{"0000", "0077"} {
+		t.Run(mask, func(t *testing.T) {
+			directory := t.TempDir()
+			command := exec.CommandContext(t.Context(), executable, "-test.run=^TestUmaskChild$", "-test.count=1")
+			command.Env = append(os.Environ(), "FATHOMRY_SCAFFOLD_UMASK_CHILD="+directory, "FATHOMRY_SCAFFOLD_UMASK="+mask)
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Fatalf("umask subprocess: %v\n%s", err, output)
+			}
+		})
 	}
 }
 
@@ -46,7 +51,11 @@ func TestUmaskChild(t *testing.T) {
 	if directory == "" {
 		return
 	}
-	syscall.Umask(0077)
+	mask, err := strconv.ParseUint(os.Getenv("FATHOMRY_SCAFFOLD_UMASK"), 8, 9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	syscall.Umask(int(mask))
 	parent, err := os.OpenRoot(directory)
 	if err != nil {
 		t.Fatal(err)
@@ -60,11 +69,11 @@ func TestUmaskChild(t *testing.T) {
 		path string
 		mode os.FileMode
 	}{
-		{"demo", 0700}, {"demo/cmd", 0700}, {"demo/cmd/demo", 0700}, {"demo/config", 0700},
-		{"demo/go.mod", 0600}, {"demo/cmd/demo/main.go", 0600},
+		{"demo", 0755}, {"demo/internal", 0755}, {"demo/internal/bootstrap", 0755}, {"demo/config", 0755},
+		{"demo/go.mod", 0644}, {"demo/main.go", 0644}, {"demo/.env.example", 0644}, {"demo/.env", 0600},
 	} {
 		info, err := os.Stat(filepath.Join(directory, entry.path))
-		if err != nil || info.Mode().Perm() != entry.mode {
+		if err != nil || info.Mode().Perm() != entry.mode&^os.FileMode(mask) {
 			t.Fatal("umask ignored", entry.path, err)
 		}
 	}

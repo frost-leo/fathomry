@@ -71,7 +71,7 @@ func TestProjectCommandBoundaries(t *testing.T) {
 		}
 	}
 	var output, diagnostic bytes.Buffer
-	err := Run(context.Background(), []string{"--output=json", "project", "new", "--name=demo", "--module=example.com/demo", "--framework-version=v0.0.0-20261028081050-b28e37d55e53"}, command.Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic})
+	err := Run(context.Background(), []string{"--output=json", "project", "new", "--name=demo", "--module=example.com/demo", "--framework-version=v0.0.0-20261031064010-94997fff92da"}, command.Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic})
 	var result struct {
 		Data struct {
 			State       string
@@ -79,7 +79,7 @@ func TestProjectCommandBoundaries(t *testing.T) {
 			Files       []json.RawMessage
 		}
 	}
-	if err != nil || diagnostic.Len() != 0 || json.Unmarshal(output.Bytes(), &result) != nil || result.Data.State != "complete" || len(result.Data.Directories) != 4 || len(result.Data.Files) != 6 {
+	if err != nil || diagnostic.Len() != 0 || json.Unmarshal(output.Bytes(), &result) != nil || result.Data.State != "complete" || len(result.Data.Directories) != 6 || len(result.Data.Files) != 15 {
 		t.Fatal("actual command failed", err, output.String(), diagnostic.String())
 	}
 }

@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"{{.Module}}/internal/bootstrap"
 	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
 )
 
@@ -41,7 +42,7 @@ func run() int {
 }
 
 func execute(ctx context.Context, args []string, options cli.Options) int {
-	return cli.ExitCode(cli.Run(ctx, args, options))
+	return cli.ExitCode(bootstrap.Run(ctx, args, options))
 }
 
 func signalContext() (context.Context, func()) {

@@ -86,10 +86,10 @@ explicit language/output selection, bounded diagnostics and cleanup ownership.
 Framework, control-schema assets, project generation/build inspection and all old
 leaf commands were withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161).
 The official tool now adds [offline project creation](docs/reference/cmd/fathomry/internal/command/project/create/interface.md)
-through `project new`, retaining the six-file independent CLI project and its
-existing published dependency. Generation performs no dependency resolution or
-service initialization. Root-entry generation with dotenv and project-owned settings
-is a separate integration after the new public API is available as a module.
+through `project new`, producing a root-entry project with dotenv bootstrap,
+layered configuration and project-owned settings. It pins an actual published
+Framework API revision and is tested as a fresh independent module without a
+source replacement. Generation itself performs no dependency resolution or service initialization.
 Replacement workflows, modes and persistence are not implemented.
 Public foundations, Adapters and Internal integrations remain available.
 
@@ -100,8 +100,7 @@ or remote/Nacos sessions publish accepted snapshots and optionally observe chang
 The [project-aware Go CLI entry](docs/reference/cmd/fathomry/v1/interface.md)
 now adds `config check` for compiled project schemas, using explicit dotenv and
 [Resource-managed configuration loading](docs/reference/framework/configuration/v1/bootstrap.md).
-Project-owned entries can use this API without an application host or CLI proxy;
-the existing generator is not switched to it in this API-first integration.
+The template uses this entry without restoring an application host or CLI proxy.
 
 The earlier pre-release Adapter, failure, i18n, Framework, settings and CLI
 surfaces were withdrawn for redesign; failure/v1, settings/v1 and i18n/v1 are rebuilt,

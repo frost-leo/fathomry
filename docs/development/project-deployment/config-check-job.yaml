@@ -1,0 +1,100 @@
+# fathomry
+# Copyright (C) 2026  Frost Leo
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ordersync-config-v1
+immutable: true
+data:
+  bootstrap.env: |
+    FATHOMRY_BOOTSTRAP_VERSION=1
+    FATHOMRY_ENV=production
+    FATHOMRY_CONFIG_MODE=local
+    FATHOMRY_CONFIG_PROVIDER=viper
+    FATHOMRY_CONFIG_WATCH=false
+  base.yaml: |
+    application:
+      name: ordersync
+      timezone: UTC
+      i18n:
+        locale: en
+  production.yaml: "{}"
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ordersync-config-check-v1
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 75
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: check
+          image: example.invalid/ordersync:replace-with-immutable-reference
+          command: ["/usr/local/bin/fathomry"]
+          args: ["config", "check", "--bootstrap", "/run/fathomry/.env", "--output=json"]
+          env:
+            - name: FATHOMRY_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: "1"
+              memory: 128Mi
+          volumeMounts:
+            - name: configuration
+              mountPath: /run/fathomry
+              readOnly: true
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: configuration
+          configMap:
+            name: ordersync-config-v1
+            defaultMode: 0444
+            items:
+              - key: bootstrap.env
+                path: .env
+              - key: base.yaml
+                path: config/base.yaml
+              - key: production.yaml
+                path: config/environment/production.yaml
+        - name: temporary
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

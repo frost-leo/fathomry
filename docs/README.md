@@ -33,10 +33,10 @@ Framework and control-schema implementations and the old CLI leaf commands were
 withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161). The retained
 [CLI foundation](reference/cmd/fathomry/interface.md) supplies help and invocation
 mechanisms. The official tool's [project new](reference/cmd/fathomry/internal/command/project/create/interface.md)
-retains the bounded offline six-file CLI project and its existing published
-dependency. Root-entry generation with dotenv and typed settings follows the
-public API integration; it is not part of this first slice. No workflow execution
-or database installation is restored.
+now creates a bounded offline root-entry project with dotenv and typed settings.
+The profile pins a published Framework API revision; cold published-consumer
+checks remain separate from candidate-source tests. No workflow execution or
+database installation is restored.
 The library separately provides [thin Framework metadata preparation](reference/framework/v1/interface.md)
 and [typed local/Nacos configuration](reference/framework/configuration/v1/interface.md).
 The [project-aware Go entry](reference/cmd/fathomry/v1/interface.md) composes a
@@ -199,8 +199,7 @@ language/output handling, failure identity and bounded invocation/cleanup.
 The public `RunProject` entry adds only compiled-project configuration checking;
 no old workflow, configuration-host or database command is registered.
 The official-only [project group](reference/cmd/fathomry/internal/command/project/interface.md)
-owns the creation leaf; its current generated project binaries retain the minimal
-public shell. Project-owned entries can select the configuration-check profile.
+owns the creation leaf; generated project binaries use the configuration-check profile.
 Adapter Fixed/Follow fixtures now compose public Resource and operation owners
 directly; their historical fixture names do not imply an available Framework API.
 
@@ -462,6 +461,7 @@ implementation/tests; use `go doc -all ./internal/<package>` from the repository
 
 ## Development guides
 
+- [Package and check a project deployment](development/project-deployment.md), including non-root containers and a configuration-check Job.
 - [Develop and verify an SDK integration](development/sdk-integration.md).
 - [Run tests and verification](development/testing.md).
 - [Maintain public adapter errors](development/adapter-errors.md), including the private forwarding seam and contract checks.

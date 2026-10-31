@@ -100,7 +100,7 @@
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Required project directory and command name (1–63 lowercase ASCII bytes)."
+        "other": "Required project directory and application name (1–63 lowercase ASCII bytes)."
       }
     },
     {
@@ -120,7 +120,7 @@
       "args": {},
       "cardinal": false,
       "forms": {
-        "other": "Required exact supported Fathomry version: v0.0.0-20261028081050-b28e37d55e53."
+        "other": "Required exact supported Fathomry version: v0.0.0-20261031064010-94997fff92da."
       }
     },
     {

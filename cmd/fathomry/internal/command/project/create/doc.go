@@ -18,7 +18,7 @@
  */
 
 // Package create owns the official tool's offline project-new leaf.
-// It renders one fixed six-file profile and creates an absent child of the
+// It renders one fixed root-entry profile and creates an absent child of the
 // caller's trusted, stable cwd. It neither resolves dependencies nor loads
 // configuration, registers workflows or starts services.
 //

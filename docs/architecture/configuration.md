@@ -96,20 +96,19 @@ first complete configuration acceptance. The check does not invoke a formal
 application runner. Configuration Scope declarations seal on Apply; later service
 resources use their own scope and the accepted main-configuration View, not the
 bootstrap Input. This preserves the two-stage boundary without an App container.
-The official generator retains its existing six-file CLI profile until this API
-has an independently consumable published revision. Project-owned entries can
-already select the configuration-check profile. A bounded schema factory receives
-the admitted environment before application sources open and can capture
-startup-owned facts as pure validation constraints. Complete Config
+The official generator now emits the root-entry profile. Its project-owned
+Application groups build, deployment and instance data with editable application
+settings. A bounded schema factory receives the admitted environment before
+application sources open; pure validation rejects overrides of startup-owned facts.
+Only startup-owned facts are validated before acquisition. Complete Config
 validation runs after source layers merge, so required values need not have defaults.
 Application-facing Schema, Variable and Encoding contracts belong to the Framework
 configuration package. Their private translation reuses the existing technical
 preparation engine; it is neither a type alias hiding ownership nor another parser.
 Selected provider settings remain explicit public Adapter contracts instead of
 being mirrored into a second SDK-settings vocabulary.
-The root-entry generator is a subsequent integration under
-[#167](https://github.com/frost-leo/fathomry/issues/167), pinned to the actual API
-merge. Published-module qualification remains distinct from candidate-source tests.
+See the [generated application profile](../reference/cmd/fathomry/internal/command/project/create/application.md).
+Published dependency qualification remains distinct from candidate template tests.
 
 ## Configuration ownership and revisions
 

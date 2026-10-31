@@ -1,0 +1,52 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package setting
+
+import (
+	"context"
+	"errors"
+
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"github.com/frost-leo/fathomry/i18n/v1"
+)
+
+// Config is the project's complete configuration; add only capabilities it uses.
+type Config struct {
+	Application Application `json:"application"`
+}
+
+// Schema supplies typed defaults and pure validation, never source acquisition.
+// Bootstrap supplies immutable startup facts; configuration cannot replace them.
+func Schema(build Build, environment string, instance Instance) configuration.Schema[Config] {
+	return configuration.Schema[Config]{
+		Version: 1,
+		Defaults: Config{Application: Application{
+			Name: ApplicationName, DisplayName: ApplicationName, Build: build,
+			Deployment: Deployment{Environment: environment}, Instance: instance,
+			Timezone: "UTC", I18n: i18n.Preferences{Locale: "en"},
+		}},
+		Validate: func(ctx context.Context, value Config) error {
+			if value.Application.Build != build || value.Application.Deployment.Environment != environment || value.Application.Instance != instance {
+				return errors.New("configuration cannot replace startup-owned application facts")
+			}
+			return errors.Join(value.Application.Validate(), ctx.Err())
+		},
+	}
+}

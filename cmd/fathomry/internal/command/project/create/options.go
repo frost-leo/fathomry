@@ -27,7 +27,7 @@ import (
 
 const (
 	frameworkModule  = "github.com/frost-leo/fathomry"
-	frameworkVersion = "v0.0.0-20261028081050-b28e37d55e53"
+	frameworkVersion = "v0.0.0-20261031064010-94997fff92da"
 	goVersion        = "1.27.0"
 	maxRenderedBytes = 1 << 20
 	maxReportBytes   = 16 << 10
@@ -58,13 +58,13 @@ func validate(value options) error {
 	if err := module.CheckPath(value.Module); err != nil {
 		return fail(ErrInput, "validate", err)
 	}
-	for _, reserved := range []string{
-		frameworkModule, "github.com/spf13/cobra", "github.com/spf13/pflag",
-		"github.com/inconshreveable/mousetrap", "golang.org/x/text",
-	} {
-		if value.Module == reserved {
+	for _, component := range strings.Split(value.Module, "/") {
+		if component == "vendor" {
 			return fail(ErrInput, "module_identity")
 		}
+	}
+	if shadowsDependency(value.Module) {
+		return fail(ErrInput, "module_identity")
 	}
 	if len(value.FrameworkVersion) > 128 || value.FrameworkVersion != frameworkVersion {
 		return fail(ErrInput, "framework_version")

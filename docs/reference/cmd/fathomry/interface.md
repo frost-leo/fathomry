@@ -36,9 +36,9 @@ It does not load project configuration, start services or install database asset
 The entry captures `FATHOMRY_LANG`; an explicit `--lang` overrides it.
 
 The separate [public `RunProject` entry](v1/interface.md) can compose `config check`
-inside a program containing the project's schema. The generator retains its
-existing six-file shell until the new public API has a published dependency
-revision. This tool does not dynamically load project Go code.
+inside a program containing the project's schema. The generator emits that source
+profile with an exact published API dependency. This tool
+does not dynamically load project Go code.
 
 ```sh
 go run ./cmd/fathomry --help
@@ -49,7 +49,7 @@ The old `new`, `build`, workflow, schema, database, error-catalog and
 translation-query commands reject with a usage error. The only new leaf is
 `project new`, with three required name/module/exact-version flags; `project
 check/init` are not placeholders. The former `--fathomry-project=v1|v2` protocol
-also rejects. See the creation contract for the exact six-file/partial-effect profile.
+also rejects. See the creation contract for the exact root-entry/partial-effect profile.
 
 ## Invocation and cleanup
 

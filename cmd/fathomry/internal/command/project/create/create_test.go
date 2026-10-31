@@ -89,7 +89,7 @@ func TestCreateCompleteAndExistingTargets(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || result.State != "complete" || len(result.Directories) != 4 || len(result.Files) != 6 {
+			if err != nil || result.State != "complete" || len(result.Directories) != len(projectDirectories)+1 || len(result.Files) != len(templateFiles) {
 				t.Fatal(result, err)
 			}
 			count := 0
@@ -104,7 +104,7 @@ func TestCreateCompleteAndExistingTargets(t *testing.T) {
 			}); err != nil {
 				t.Fatal(err)
 			}
-			if count != 6 {
+			if count != len(templateFiles) {
 				t.Fatal("unexpected output files", count)
 			}
 			for index, file := range value.files {
@@ -207,7 +207,7 @@ func TestPartialWriteCloseAndCancellation(t *testing.T) {
 						wrapper.afterWrite = func() { cancel(cause) }
 					}
 				}
-				if kind == "after_last_close" && count == 6 {
+				if kind == "after_last_close" && count == len(templateFiles) {
 					wrapper.afterClose = func() { cancel(cause) }
 				}
 				wrapped = append(wrapped, wrapper)
@@ -217,7 +217,7 @@ func TestPartialWriteCloseAndCancellation(t *testing.T) {
 			if err == nil {
 				t.Fatal("fault was hidden")
 			}
-			if len(result.Directories) != 4 {
+			if len(result.Directories) != len(projectDirectories)+1 {
 				t.Fatal("directory facts lost", result)
 			}
 			if kind == "short" {
@@ -228,7 +228,7 @@ func TestPartialWriteCloseAndCancellation(t *testing.T) {
 				t.Fatal("original cause lost", err)
 			}
 			if kind == "after_last_close" {
-				if result.State != "complete" || len(result.Files) != 6 {
+				if result.State != "complete" || len(result.Files) != len(templateFiles) {
 					t.Fatal("complete effects erased by late cancel", result)
 				}
 			} else if result.State != "partial" || len(result.Files) != 1 {
@@ -303,7 +303,7 @@ func TestRepeatedRootCloseRetainsCompleteEffects(t *testing.T) {
 			return nil, err
 		}
 		count++
-		if count == 6 {
+		if count == len(templateFiles) {
 			return &faultyFile{WriteCloser: file, afterClose: func() { _ = root.Close() }}, nil
 		}
 		return file, nil

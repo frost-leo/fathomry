@@ -25,7 +25,8 @@ output and does not qualify the new template or published-module distribution.
 The parent test copies the project to an independent temporary module, points it
 at the candidate through an explicit local replacement, and checks root execution,
 project-owned schema behavior, readonly builds and a relocated standalone binary.
-The actual generator remains unchanged until its new API dependency is published.
+Actual generated-project and published-module acceptance are covered separately
+by the generator's consumer tests.
 
 The root entry supplies signals/streams, internal/bootstrap supplies project
 declarations, internal/setting owns pure data/validation, and the Fathomry command

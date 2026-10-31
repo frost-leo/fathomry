@@ -33,9 +33,19 @@ import (
 )
 
 //go:embed templates/go.mod.tmpl templates/README.md.tmpl templates/.gitignore.tmpl
-//go:embed templates/cmd/PROJECT_NAME/main.go.tmpl templates/cmd/PROJECT_NAME/main_test.go.tmpl
-//go:embed templates/config/README.md.tmpl
+//go:embed templates/main.go.tmpl templates/main_test.go.tmpl templates/.env.tmpl templates/.env.example.tmpl
+//go:embed templates/config/base.yaml.tmpl templates/config/environment/*.tmpl
+//go:embed templates/internal/bootstrap/*.tmpl templates/internal/setting/*.tmpl
 var templates embed.FS
+
+var templateFiles = []string{
+	"go.mod", "README.md", ".gitignore", "main.go", "main_test.go", ".env", ".env.example",
+	"config/base.yaml", "config/environment/development.yaml", "config/environment/production.yaml",
+	"internal/bootstrap/bootstrap.go", "internal/bootstrap/bootstrap_test.go",
+	"internal/setting/config.go", "internal/setting/application.go", "internal/setting/config_test.go",
+}
+
+var projectDirectories = []string{"config", "config/environment", "internal", "internal/bootstrap", "internal/setting"}
 
 type renderedFile struct {
 	path string
@@ -65,31 +75,24 @@ func prepare(ctx context.Context, value options) (plan, error) {
 
 func render(ctx context.Context, value options, sources fs.FS) (plan, error) {
 	result := plan{options: value}
-	paths := []struct{ source, target string }{
-		{"go.mod.tmpl", "go.mod"}, {"README.md.tmpl", "README.md"},
-		{".gitignore.tmpl", ".gitignore"},
-		{"cmd/PROJECT_NAME/main.go.tmpl", "cmd/" + value.Name + "/main.go"},
-		{"cmd/PROJECT_NAME/main_test.go.tmpl", "cmd/" + value.Name + "/main_test.go"},
-		{"config/README.md.tmpl", "config/README.md"},
-	}
 	total := 0
-	seen := make(map[string]bool, len(paths))
-	for _, file := range paths {
+	seen := make(map[string]bool, len(templateFiles))
+	for _, target := range templateFiles {
 		if err := cancellation(ctx); err != nil {
 			return plan{}, err
 		}
-		if !validRelative(file.target) || seen[file.target] {
+		if !validRelative(target) || seen[target] {
 			return plan{}, fail(ErrRender, "manifest")
 		}
-		seen[file.target] = true
-		raw, err := fs.ReadFile(sources, "templates/"+file.source)
+		seen[target] = true
+		raw, err := fs.ReadFile(sources, "templates/"+target+".tmpl")
 		if err != nil {
 			return plan{}, fail(ErrRender, "template", err)
 		}
 		if len(raw) > maxRenderedBytes {
 			return plan{}, fail(ErrRender, "template_limit")
 		}
-		parsed, err := template.New(file.source).Option("missingkey=error").Parse(string(raw))
+		parsed, err := template.New(target).Option("missingkey=error").Parse(string(raw))
 		if err != nil {
 			return plan{}, fail(ErrRender, "template", err)
 		}
@@ -102,13 +105,13 @@ func render(ctx context.Context, value options, sources fs.FS) (plan, error) {
 			return plan{}, fail(ErrRender, "render", err)
 		}
 		data := bytes.Clone(buffer.Bytes())
-		if strings.HasSuffix(file.target, ".go") {
+		if strings.HasSuffix(target, ".go") {
 			data, err = format.Source(data)
 			if err != nil {
 				return plan{}, fail(ErrRender, "format", err)
 			}
 		}
-		if file.target == "go.mod" {
+		if target == "go.mod" {
 			module, err := modfile.Parse("go.mod", data, nil)
 			if err != nil {
 				return plan{}, fail(ErrRender, "module", err)
@@ -116,7 +119,7 @@ func render(ctx context.Context, value options, sources fs.FS) (plan, error) {
 			if module.Module == nil || module.Module.Mod.Path != value.Module ||
 				module.Go == nil || module.Go.Version != goVersion ||
 				len(module.Require) != 1 || module.Require[0].Mod.Path != frameworkModule ||
-				module.Require[0].Mod.Version != frameworkVersion ||
+				module.Require[0].Mod.Version != value.FrameworkVersion ||
 				module.Require[0].Indirect || module.Toolchain != nil ||
 				len(module.Replace) != 0 || len(module.Exclude) != 0 ||
 				len(module.Retract) != 0 || len(module.Tool) != 0 ||
@@ -128,14 +131,14 @@ func render(ctx context.Context, value options, sources fs.FS) (plan, error) {
 			return plan{}, fail(ErrRender, "render_limit")
 		}
 		total += len(data)
-		result.files = append(result.files, renderedFile{path: file.target, data: data})
+		result.files = append(result.files, renderedFile{path: target, data: data})
 	}
 	maximum := newReport(value)
-	maximum.Directories = []string{".", "cmd", "cmd/" + value.Name, "config"}
+	maximum.Directories = append([]string{"."}, projectDirectories...)
 	for _, file := range result.files {
 		maximum.Files = append(maximum.Files, fileReport{Path: file.path, BytesWritten: int64(len(file.data)), Complete: true})
 	}
-	maximum.State, maximum.FailedPath = "not_started", "cmd/"+value.Name+"/main_test.go"
+	maximum.State, maximum.FailedPath = "not_started", "internal/bootstrap/bootstrap_test.go"
 	raw, err := json.Marshal(maximum)
 	if err != nil || len(raw) > maxReportBytes {
 		return plan{}, fail(ErrRender, "report_limit", err)

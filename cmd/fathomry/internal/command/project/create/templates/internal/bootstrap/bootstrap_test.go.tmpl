@@ -1,0 +1,144 @@
+/**
+ * fathomry
+ * Copyright (C) 2026  Frost Leo
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package bootstrap
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	cli "github.com/frost-leo/fathomry/cmd/fathomry/v1"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
+	"{{.Module}}/internal/setting"
+)
+
+func TestConfigurationEntry(t *testing.T) {
+	t.Setenv("FATHOMRY_INSTANCE_ID", "test-instance")
+	for _, key := range configuration.BootstrapKeys() {
+		t.Setenv(key, "")
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var output, diagnostic bytes.Buffer
+	err := Run(context.Background(), []string{"config", "check", "--bootstrap", filepath.Join("..", "..", ".env.example"), "--output=json"},
+		cli.Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic})
+	if err != nil || diagnostic.Len() != 0 {
+		t.Fatal("configuration check failed", err)
+	}
+	var result struct {
+		Data struct {
+			Accepted    bool   `json:"accepted"`
+			Application string `json:"application"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(output.Bytes(), &result) != nil || !result.Data.Accepted || result.Data.Application != setting.ApplicationName {
+		t.Fatal("configuration entry did not use the project schema")
+	}
+}
+
+func TestStartupFacts(t *testing.T) {
+	t.Setenv("FATHOMRY_INSTANCE_ID", "deployment-instance")
+	selected, err := schema(context.Background(), "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := selected.Defaults.Application
+	if value.Build.Version != version || value.Build.Revision != revision || value.Build.BuiltAt != builtAt ||
+		value.Deployment.Environment != "staging" || value.Instance.ID != "deployment-instance" {
+		t.Fatal("startup facts lost their sources")
+	}
+	if err := os.Unsetenv("FATHOMRY_INSTANCE_ID"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := schema(context.Background(), "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := schema(context.Background(), "development")
+	if err != nil || first.Defaults.Application.Instance.ID == "" || first.Defaults.Application.Instance.ID == second.Defaults.Application.Instance.ID {
+		t.Fatal("separate startups shared an invented static instance", err)
+	}
+	t.Setenv("FATHOMRY_INSTANCE_ID", "")
+	if _, err := schema(context.Background(), "development"); err == nil {
+		t.Fatal("explicit empty instance was treated as absent")
+	}
+}
+
+func TestConfigurationLayers(t *testing.T) {
+	t.Setenv("FATHOMRY_INSTANCE_ID", "test-instance")
+	for _, key := range configuration.BootstrapKeys() {
+		t.Setenv(key, "")
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatal(err)
+		}
+	}
+	directory := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(directory, "config/environment"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	bootstrap := filepath.Join(directory, ".env")
+	if err := os.WriteFile(bootstrap, []byte("FATHOMRY_ENV=development\nFATHOMRY_CONFIG_MODE=local\nFATHOMRY_CONFIG_PROVIDER=viper\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	environment := filepath.Join(directory, "config/environment/development.yaml")
+	if err := os.WriteFile(environment, []byte("{}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	base := filepath.Join(directory, "config/base.yaml")
+	run := func(body string) (error, []byte) {
+		t.Helper()
+		if err := os.WriteFile(base, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+		var output, diagnostic bytes.Buffer
+		err := Run(context.Background(), []string{"config", "check", "--bootstrap", bootstrap, "--output=json"},
+			cli.Options{Input: strings.NewReader(""), Output: &output, ErrorOutput: &diagnostic})
+		if strings.Contains(diagnostic.String(), directory) {
+			t.Fatal("private source path exposed")
+		}
+		return err, output.Bytes()
+	}
+	if err, output := run(`{"application":{"display_name":"Order synchronization","namespace":"commerce","deployment":{"region":"region-a","zone":"zone-b"},"timezone":"Asia/Shanghai"}}`); err != nil || !bytes.Contains(output, []byte(`"accepted":true`)) {
+		t.Fatal("valid source configuration rejected", err)
+	}
+	for _, body := range []string{
+		`{"build":{"version":"forged"}}`, `{"build":{"revision":"forged"}}`,
+		`{"build":{"built_at":"2025-01-01T00:00:00Z"}}`, `{"deployment":{"environment":"other"}}`,
+		`{"instance":{"id":"shared"}}`, `{"timezone":"Local"}`, `{"timezone":""}`,
+		`{"timezone":"../UTC"}`, `{"timezone":"Asia//Shanghai"}`, `{"deployment":{"zone":"zone-only"}}`,
+		`{"display_name":""}`, `{"namespace":"invalid namespace"}`, `{"name":"other"}`,
+		`{"description":"` + strings.Repeat("x", 1025) + `"}`, `{"unexpected":true}`,
+	} {
+		if err, output := run(`{"application":` + body + `}`); err == nil || len(output) != 0 {
+			t.Fatal("invalid source configuration admitted", body, err)
+		}
+	}
+	if err := os.WriteFile(environment, []byte(`{"application":{"display_name":"valid override"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err, output := run(`{"application":{"display_name":17}}`); err == nil || len(output) != 0 {
+		t.Fatal("later valid layer hid an invalid original field")
+	}
+}

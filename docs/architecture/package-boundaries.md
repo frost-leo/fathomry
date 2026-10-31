@@ -294,7 +294,7 @@ The Internal production mechanisms retain no public error dependency or all-SDK
 aggregator. Failure imports only the standard library. Compatibility assessment accepts the authoritative
 `*internal/resource.Access`; it does not introduce a public snapshot-assessment API.
 The original generated Boot and its runtime APIs remain withdrawn. The current
-project-aware entry keeps project choices/data separate from resource ownership.
+root-entry template keeps project choices/data separate from resource ownership.
 Configuration declarations explicitly select Viper or Nacos. The new startup
 binding supplies concrete construction/release callbacks to the public Resource
 scope, which owns the operation/evidence/source lifetime and cleanup continuation.
