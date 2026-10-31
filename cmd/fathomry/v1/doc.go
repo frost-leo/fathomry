@@ -17,12 +17,17 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package cli exposes the retained minimal Fathomry CLI foundation.
+// Package cli exposes shared Fathomry command entries.
 // Run supports help, explicit language/output selection, bounded diagnostics,
 // cancellation and resource-cleanup ownership. It constructs no service clients.
 //
-// Framework, project generation/build inspection, workflow, database/schema and
-// catalog-query commands are withdrawn. This package has no project registration,
+// RunProject composes configuration checks for a compiled project schema through
+// private command groups/leaves and Framework's configuration-only Resource binding.
+// It adds no alternate invocation owner, cleanup engine or process proxy.
+// ConfigurationCheckError preserves accepted data on a later failure; its cause
+// retains the original ExecutionError and cleanup continuation.
+// Project generation/build inspection, workflow, database/schema and catalog-query
+// commands remain unavailable here. This package has no project registration,
 // application Boot, command plugin or replacement execution protocol.
 //
 // Contexts, streams and optional prepared catalogs are borrowed for one invocation.

@@ -79,14 +79,14 @@ func TestInitialDeadlineIncludesQueuedAdmission(t *testing.T) {
 	write(t, path, "workers: 1")
 	selected := options()
 	selected.InitialTimeout = 30 * time.Millisecond
-	session, err := Start(context.Background(), localPlan(path, false), schema(), selected, Dependencies{Local: viper.Dependencies{Runtime: runtime, Evidence: evidence}})
+	session, err := startSession(context.Background(), localPlan(path, false), schema(), selected, Dependencies{Local: viper.Dependencies{Runtime: runtime, Evidence: evidence}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeSession(t, session, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); !errors.Is(err, context.DeadlineExceeded) {
+	if err := session.waitInitial(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("queued setup escaped initialization budget", err)
 	}
 	closeSession(t, session, true)
@@ -95,14 +95,14 @@ func TestBorrowedRuntimeTermination(t *testing.T) {
 	dependencies, _ := localDependencies(t, 16)
 	path := filepath.Join(t.TempDir(), "app.yaml")
 	write(t, path, "workers: 2")
-	session, err := Start(context.Background(), localPlan(path, true), schema(), options(), dependencies)
+	session, err := startSession(context.Background(), localPlan(path, true), schema(), options(), dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeSession(t, session, true)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); err != nil {
+	if err := session.waitInitial(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := dependencies.Local.Runtime.Close(ctx); err != nil {

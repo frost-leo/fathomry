@@ -24,6 +24,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"slices"
 	"sync"
 	"time"
 
@@ -75,19 +76,21 @@ type Status struct {
 	Latest   Update
 }
 
-// Session owns one selected configuration producer. Do not copy/overwrite a
-// live handle. Reader data may outlive Close; no writable Store is exposed.
+// Session owns the main-configuration producer returned by LoadConfiguration.
+// Even a failed load may return a live Session that must be closed. Do not copy
+// or overwrite a live handle. Accepted data may outlive Close; no writable Store
+// or application-service lifecycle is exposed.
 type Session[T any] struct{ state *sessionState[T] }
 
 type sessionState[T any] struct {
 	mu              sync.Mutex
 	ctx             context.Context
 	cancel          context.CancelCauseFunc
-	bootstrap       Bootstrap
+	plan            SourcePlan
 	schema          configsource.Schema[T]
 	variables       configsource.Layer
 	haveVariables   bool
-	options         Options
+	options         sessionOptions
 	dependencies    Dependencies
 	store           settings.Store[T]
 	phase           State
@@ -95,6 +98,7 @@ type sessionState[T any] struct {
 	initialDone     chan struct{}
 	initialSet      bool
 	initialErr      error
+	initialView     settings.View
 	workDone        chan struct{} // Acquisition and validation have stopped; cleanup may remain.
 	workerDone      chan struct{} // The worker's owned cleanup attempt has returned.
 	guardDone       chan struct{}
@@ -112,57 +116,6 @@ type sessionState[T any] struct {
 	observer        configsource.Observer
 	observerClosed  bool
 	owner           *nacos.Owner
-}
-
-// Start admits and detaches the plan/defaults/variables before application source
-// effects. Validate must be non-nil; its closure is borrowed, pure and bounded.
-// After admission, source/setup failures belong to the returned session.
-// lifetime owns the producer, not an individual WaitInitial/Next call.
-func Start[T any](lifetime context.Context, bootstrap Bootstrap, schema configsource.Schema[T], options Options, dependencies Dependencies) (*Session[T], error) {
-	if lifetime == nil || schema.Version == 0 || schema.Validate == nil || options.InitialTimeout <= 0 || options.CandidateTimeout <= 0 {
-		return nil, at(ErrDeclaration, "start", -1)
-	}
-	if err := lifetime.Err(); err != nil {
-		return nil, at(ErrClosed, "start", -1, err, context.Cause(lifetime))
-	}
-	selected, err := freezeBootstrap(lifetime, bootstrap)
-	if err != nil {
-		return nil, err
-	}
-	defaults, err := configsource.Prepare(lifetime, configsource.Schema[T]{Version: schema.Version, Defaults: schema.Defaults}, nil)
-	if err != nil {
-		return nil, err
-	}
-	schema.Defaults, err = defaults.ValueCopy()
-	if err != nil {
-		return nil, err
-	}
-	variables, err := configsource.BindVariables[T](options.Variables)
-	if err != nil {
-		return nil, err
-	}
-	if err := providerBudget(selected, dependencies); err != nil {
-		return nil, err
-	}
-	if err := lifetime.Err(); err != nil {
-		return nil, at(ErrClosed, "start", -1, err, context.Cause(lifetime))
-	}
-	ctx, cancel := context.WithCancelCause(lifetime)
-	state := &sessionState[T]{
-		ctx: ctx, cancel: cancel, bootstrap: selected, schema: schema,
-		variables: variables, haveVariables: len(options.Variables) != 0,
-		options:      Options{InitialTimeout: options.InitialTimeout, CandidateTimeout: options.CandidateTimeout},
-		dependencies: dependencies, store: settings.NewStore[T](), phase: Initializing, stage: Acquisition,
-		initialDone: make(chan struct{}), workDone: make(chan struct{}), workerDone: make(chan struct{}), guardDone: make(chan struct{}),
-		cleanupGate: make(chan struct{}, 1), changed: make(chan struct{}),
-	}
-	state.cleanupGate <- struct{}{}
-	state.initialDeadline = time.Now().Add(options.InitialTimeout)
-	timer := time.NewTimer(options.InitialTimeout)
-	session := &Session[T]{state: state}
-	go state.guard(timer)
-	go state.run()
-	return session, nil
 }
 
 func (state *sessionState[T]) guard(timer *time.Timer) {
@@ -228,7 +181,7 @@ func (state *sessionState[T]) active() bool {
 func (state *sessionState[T]) run() {
 	defer close(state.workerDone)
 	if state.active() {
-		source, owner, err := openSource(state.ctx, state.bootstrap, state.dependencies)
+		source, owner, err := openSource(state.ctx, state.plan, state.dependencies)
 		state.owner = owner
 		if err != nil {
 			problem := at(ErrSource, "open", -1, err)
@@ -246,7 +199,7 @@ func (state *sessionState[T]) run() {
 }
 
 func (state *sessionState[T]) consume(source configsource.Source) {
-	if !state.bootstrap.Watch {
+	if !state.plan.Watch {
 		batch, index, problem := source.Capture(state.ctx)
 		if state.process(configsource.Observation{Batch: batch, FailedIndex: index, Err: problem}) {
 			<-state.ctx.Done()
@@ -294,7 +247,7 @@ func (state *sessionState[T]) process(observation configsource.Observation) bool
 	state.sequence++
 	initial := state.publication == 0
 	state.mu.Unlock()
-	layers, err := originalLayers(observation.Batch, observation.FailedIndex, observation.Err, state.bootstrap.Documents, "application.acquire")
+	layers, err := originalLayers(observation.Batch, observation.FailedIndex, observation.Err, state.plan.Documents, "application.acquire")
 	if err != nil {
 		return state.reject(Acquisition, observation.Gap, err)
 	}
@@ -340,7 +293,23 @@ func (state *sessionState[T]) process(observation configsource.Observation) bool
 	state.publication++
 	state.phase = Ready
 	if !state.initialSet {
+		if state.options.accepted != nil {
+			value := Loaded{state: &loaded{view: snapshot.View(), reader: state.store.Reader(), info: Info{
+				Environment: state.plan.Environment, Mode: state.plan.Mode, Provider: state.plan.Provider,
+				Watching: state.plan.Watch, SchemaVersion: state.schema.Version, Documents: slices.Clone(state.plan.Documents),
+			}}}
+			accepted, err := settings.New(value, func(value Loaded) Loaded { return value })
+			if err == nil {
+				err = state.options.accepted.Publish(accepted)
+			}
+			if err != nil {
+				state.mu.Unlock()
+				state.stop(at(ErrPublish, "publish_result", -1, err))
+				return false
+			}
+		}
 		state.initialSet = true
+		state.initialView = snapshot.View()
 		close(state.initialDone)
 	}
 	state.reportLocked(Update{Sequence: state.sequence, Publication: state.publication, Stage: Publication,
@@ -392,9 +361,7 @@ func (session *Session[T]) Reader() settings.Reader {
 	return session.state.store.Reader()
 }
 
-// WaitInitial returns the recorded first outcome. Cancelling this wait does not
-// cancel initialization or observation; Close/lifetime own actual work.
-func (session *Session[T]) WaitInitial(ctx context.Context) error {
+func (session *Session[T]) waitInitial(ctx context.Context) error {
 	if session == nil || session.state == nil || ctx == nil {
 		return at(ErrHandle, "wait_initial", -1)
 	}
@@ -408,6 +375,25 @@ func (session *Session[T]) WaitInitial(ctx context.Context) error {
 	}
 }
 
+// InitialView returns the first accepted immutable View without waiting or
+// selecting a later Watch value. Successful LoadConfiguration guarantees its
+// availability. Failed loads preserve their initial error; a not-yet-settled
+// producer returns ErrWait and no usable View. Data remains valid after Close.
+func (session *Session[T]) InitialView() (settings.View, error) {
+	if session == nil || session.state == nil {
+		return settings.View{}, at(ErrHandle, "initial_view", -1)
+	}
+	session.state.mu.Lock()
+	defer session.state.mu.Unlock()
+	if !session.state.initialSet {
+		return settings.View{}, at(ErrWait, "initial_view", -1)
+	}
+	if session.state.initialErr != nil {
+		return settings.View{}, session.state.initialErr
+	}
+	return session.state.initialView, nil
+}
+
 // Status copies bounded local facts without I/O. Errors and Views retain their
 // original ownership contracts; explicit cause/value inspection is sensitive.
 func (session *Session[T]) Status() (Status, error) {
@@ -417,7 +403,7 @@ func (session *Session[T]) Status() (Status, error) {
 	state := session.state
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	return Status{State: state.phase, Watching: state.bootstrap.Watch,
+	return Status{State: state.phase, Watching: state.plan.Watch,
 		Accepted: state.publication != 0, Complete: state.completeLocked(), Latest: state.latest}, nil
 }
 
@@ -462,12 +448,18 @@ func (session *Session[T]) Next(ctx context.Context) (Update, error) {
 }
 
 // Close fences publication, requests stop and joins owned work. A timeout does
-// not discard the owner: call Close again. Borrowed Runtime/Inboxes are untouched.
+// not discard the owner: call Close again. Bootstrap's shutdown budget caps each
+// call in addition to its context. Borrowed Runtime/Inboxes remain untouched.
 func (session *Session[T]) Close(ctx context.Context) error {
 	if session == nil || session.state == nil || ctx == nil {
 		return at(ErrHandle, "close", -1)
 	}
 	state := session.state
+	if state.options.ShutdownTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, state.options.ShutdownTimeout)
+		defer cancel()
+	}
 	state.stop(nil)
 	result := state.cleanup(ctx)
 	select {

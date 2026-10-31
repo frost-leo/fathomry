@@ -31,7 +31,8 @@ import (
 )
 
 // Options supplies explicit invocation dependencies. All streams are required.
-// Empty Language selects English; zero CleanupTimeout selects five seconds.
+// Empty Language selects English. Run uses a five-second default cleanup budget;
+// RunProject documents its configuration profile's outer cleanup ceiling.
 // Errors and Messages must either both be nil or include Components and the
 // caller's chosen component metadata.
 type Options struct {

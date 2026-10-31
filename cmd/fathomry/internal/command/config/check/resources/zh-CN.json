@@ -1,0 +1,55 @@
+{
+  "license_notice": [
+    "fathomry",
+    "Copyright (C) 2026  Frost Leo",
+    "SPDX-License-Identifier: GPL-3.0-or-later",
+    "",
+    "This program is free software: you can redistribute it and/or modify",
+    "it under the terms of the GNU General Public License as published by",
+    "the Free Software Foundation, either version 3 of the License, or",
+    "(at your option) any later version.",
+    "",
+    "This program is distributed in the hope that it will be useful,",
+    "but WITHOUT ANY WARRANTY; without even the implied warranty of",
+    "MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the",
+    "GNU General Public License for more details.",
+    "",
+    "You should have received a copy of the GNU General Public License",
+    "along with this program. If not, see <http://www.gnu.org/licenses/>."
+  ],
+  "schema": "fathomry.messages/v1",
+  "profile": "scalar-cardinal/v1",
+  "module": "fathomry",
+  "component": "configuration_check",
+  "locale": "zh-CN",
+  "messages": [
+    {
+      "id": "fathomry.configuration_check.check",
+      "source": "b52176a557ef4f75c3025caf2bbec8d978ce76ffe2891c9539e21978e60ba6d2",
+      "forms": {
+        "other": "校验项目配置并关闭配置来源。"
+      }
+    },
+    {
+      "id": "fathomry.configuration_check.bootstrap",
+      "source": "7c3aaed32aea921a7ae661607256204814831ada688f9449c7d025bc8ddee10b",
+      "forms": {
+        "other": "必需的字面量引导文件路径。"
+      }
+    },
+    {
+      "id": "fathomry.configuration_check.environment",
+      "source": "cada2a6e4f1c9ccad7f093e8cdc0d64eb9fc3ae9dc8fb3a6c94ec63fe6fcd9a4",
+      "forms": {
+        "other": "显式覆盖所选环境。"
+      }
+    },
+    {
+      "id": "fathomry.configuration_check.accepted",
+      "source": "87dd9fdff5a42845a3cba47d410c31105a4b4528af27293a3b7b6fce003cbab3",
+      "forms": {
+        "other": "配置校验通过"
+      }
+    }
+  ]
+}

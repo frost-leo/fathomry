@@ -17,18 +17,32 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Package configuration loads explicit bootstrap inputs and publishes validated
-// project-owned settings through finite local/Viper or remote/Nacos sessions.
+// Package configuration loads an application's bootstrap and main configuration.
+// It is not a general business-configuration loader or an application host.
+// Schema, Variable and Encoding are application-facing contracts owned here;
+// technical preparation types are used only behind the loading boundary.
 //
-// LoadBootstrap borrows separate local dependencies. Start admits and copies its
-// inputs before launching work; WaitInitial observes the first outcome without
-// owning the session lifetime. Reader exposes accepted data, while Next and Status
-// report bounded source, validation and cleanup facts. Close fences publication
-// and joins owned work; retain incomplete owners and continue Close.
+// LoadBootstrap resolves the selected literal dotenv file and explicit overrides
+// into a source plan and phase budgets. LoadConfiguration uses that bootstrap and
+// the project's typed schema to return a Session after first acceptance. Watch
+// continues in that session when selected. The same loading path serves an
+// independent config check and later application startup; neither starts business
+// services, installs process defaults or mutates configuration sources.
 //
-// Projects supply a non-nil bounded, pure, non-panicking validator. Its closure
-// is borrowed behavior, not copied data. Providers own acquisition and recovery;
-// required evidence remains in caller-owned Inboxes until explicit reception/Ack.
-// No process defaults, environment scans, source writes, manual refresh, resource
-// reconstruction, application host or deterministic Workflow execution is provided.
+// Session owns source work, not its borrowed Runtime/Inboxes. Close must run even
+// when LoadConfiguration returns both a Session and an error. InitialView retains
+// the first accepted snapshot; Reader may observe later updates. Invalid updates
+// preserve last-good data. Status/Next expose source and acceptance facts separately
+// from resource readiness. A timeout retains the owner for continued cleanup.
+//
+// PrepareInput and BindConfiguration integrate the two loaders with an existing
+// Resource scope. This optional composition owns the configuration dependencies it
+// creates, including failed construction and required evidence delivery. It is
+// not a second lifecycle engine or the formal application-start entry. Binding
+// returns a Resource Ref and a separate read-only settings Reader of Loaded values;
+// accepted data remains obtainable without a lease, including after cancellation.
+//
+// Business-specific configuration, including credential observations, can use
+// public configuration-source Adapters, strict preparation and settings directly
+// without importing this application's bootstrap policy.
 package configuration

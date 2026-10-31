@@ -149,6 +149,8 @@ var _ = configuration.LoadBootstrap
 		"github.com/frost-leo/fathomry/cmd/fathomry/v1":                              true,
 		"github.com/frost-leo/fathomry/cmd/fathomry/internal/app":                    true,
 		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command":                true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/config":         true,
+		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/config/check":   true,
 		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project":        true,
 		"github.com/frost-leo/fathomry/cmd/fathomry/internal/command/project/create": true,
 	}
@@ -242,8 +244,17 @@ func TestCLIConsumesPublicCapabilities(t *testing.T) {
 			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/internal/") {
 				t.Errorf("CLI bypasses public capabilities: %s: %s", path, imported)
 			}
-			if strings.HasPrefix(imported, "github.com/frost-leo/fathomry/framework/") ||
-				strings.HasPrefix(imported, "github.com/frost-leo/fathomry/schema/") {
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			if imported == "github.com/frost-leo/fathomry/adapters/configsource/v1" &&
+				(filepath.ToSlash(relative) == "v1/project.go" || strings.HasPrefix(filepath.ToSlash(relative), "internal/command/config/")) {
+				t.Errorf("project configuration entry exposes technical preparation contracts: %s", path)
+			}
+			if (strings.HasPrefix(imported, "github.com/frost-leo/fathomry/framework/") ||
+				strings.HasPrefix(imported, "github.com/frost-leo/fathomry/schema/")) &&
+				!cliFrameworkImportAllowed(filepath.ToSlash(relative), imported) {
 				t.Errorf("CLI imports out-of-scope Framework/schema surface: %s: %s", path, imported)
 			}
 		}
@@ -251,5 +262,36 @@ func TestCLIConsumesPublicCapabilities(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func cliFrameworkImportAllowed(file, imported string) bool {
+	const configuration = "github.com/frost-leo/fathomry/framework/configuration/v1"
+	switch file {
+	case "v1/project.go":
+		return imported == configuration || imported == "github.com/frost-leo/fathomry/framework/v1"
+	case "v1/project_test.go", "internal/command/config/check/command.go", "internal/command/config/check/result.go", "internal/command/config/check/resources.go":
+		return imported == configuration
+	case "v1/testdata/project/internal/bootstrap/bootstrap.go", "v1/testdata/project/internal/setting/config.go":
+		return imported == configuration
+	default:
+		return false
+	}
+}
+
+func TestCLIFrameworkImportExceptionsAreNarrow(t *testing.T) {
+	const configuration = "github.com/frost-leo/fathomry/framework/configuration/v1"
+	if !cliFrameworkImportAllowed("internal/command/config/check/command.go", configuration) {
+		t.Fatal("implemented configuration leaf rejected")
+	}
+	for _, file := range []string{"internal/command/run.go", "v1/cli.go", "internal/app/app.go", "internal/command/project/create/command.go"} {
+		if cliFrameworkImportAllowed(file, configuration) {
+			t.Errorf("configuration exception escaped to %s", file)
+		}
+	}
+	for _, imported := range []string{"github.com/frost-leo/fathomry/framework/workflow/v1", "github.com/frost-leo/fathomry/schema/v1"} {
+		if cliFrameworkImportAllowed("v1/project.go", imported) {
+			t.Errorf("unselected capability admitted: %s", imported)
+		}
 	}
 }

@@ -90,8 +90,8 @@ func TestHistoricalDefinitionsAndPresentation(t *testing.T) {
 func TestSafeDiagnosticsAndSerialization(t *testing.T) {
 	sentinel := "private-data-canary"
 	values := []any{
-		Bootstrap{Environment: sentinel}, BootstrapInput{Environment: sentinel}, File{Path: sentinel},
-		Options{Variables: []configsource.Variable{{Value: sentinel}}},
+		SourcePlan{Environment: sentinel}, Bootstrap{Configuration: SourcePlan{Environment: sentinel}}, BootstrapInput{Path: sentinel},
+		Input{}, Policy{}, Evidence{}, Loaded{},
 		Status{Latest: Update{Err: errors.New(sentinel)}}, Update{Err: errors.New(sentinel)}, Session[application]{}, Dependencies{},
 	}
 	for _, value := range values {
@@ -104,17 +104,17 @@ func TestSafeDiagnosticsAndSerialization(t *testing.T) {
 			t.Fatal("log leaked")
 		}
 	}
-	for _, value := range []any{Options{}, Dependencies{}, Update{}, Status{}, Session[application]{}} {
+	for _, value := range []any{Input{}, Policy{}, Evidence{}, Loaded{}, Dependencies{}, Update{}, Status{}, Session[application]{}} {
 		if _, err := json.Marshal(value); !errors.Is(err, ErrSerialization) {
 			t.Fatal("opaque value serialized", err)
 		}
 	}
-	for _, value := range []any{&Options{}, &Dependencies{}, &Update{}, &Status{}, &Session[application]{}} {
+	for _, value := range []any{&Input{}, &Policy{}, &Evidence{}, &Loaded{}, &Dependencies{}, &Update{}, &Status{}, &Session[application]{}} {
 		if err := json.Unmarshal([]byte("{}"), value); !errors.Is(err, ErrSerialization) {
 			t.Fatal("opaque handle reconstruction accepted", err)
 		}
 	}
-	raw, err := json.Marshal(Bootstrap{Environment: sentinel})
+	raw, err := json.Marshal(SourcePlan{Environment: sentinel})
 	if err != nil || !bytes.Contains(raw, []byte(sentinel)) {
 		t.Fatal("deliberate loadable data serialization was removed")
 	}
@@ -127,11 +127,11 @@ func FuzzBootstrapPreparation(f *testing.F) {
 		if len(raw) > 8192 {
 			t.Skip()
 		}
-		prepared, err := configsource.Prepare(context.Background(), configsource.Schema[Bootstrap]{Version: 1, Validate: func(_ context.Context, value Bootstrap) error { return validateBootstrap(value) }},
+		prepared, err := configsource.Prepare(context.Background(), configsource.Schema[SourcePlan]{Version: 1, Validate: func(_ context.Context, value SourcePlan) error { return validatePlan(value) }},
 			[]configsource.Layer{{Kind: configsource.Base, Encoding: configsource.JSON, Content: raw}})
 		if err == nil {
 			value, err := prepared.ValueCopy()
-			if err != nil || validateBootstrap(value) != nil {
+			if err != nil || validatePlan(value) != nil {
 				t.Fatal("invalid accepted bootstrap", err)
 			}
 		}

@@ -42,14 +42,14 @@ func TestFiniteAndWatch(t *testing.T) {
 			write(t, path, "workers: 2\nlabels: [original]")
 			selected := options()
 			selected.InitialTimeout = 200 * time.Millisecond
-			session, err := Start(context.Background(), localPlan(path, watch), schema(), selected, dependencies)
+			session, err := startSession(context.Background(), localPlan(path, watch), schema(), selected, dependencies)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer closeSession(t, session, false)
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			if err := session.WaitInitial(ctx); err != nil {
+			if err := session.waitInitial(ctx); err != nil {
 				t.Fatal(err)
 			}
 			original, err := session.Reader().Capture()
@@ -98,7 +98,7 @@ func TestFiniteAndWatch(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := session.WaitInitial(ctx); err != nil {
+			if err := session.waitInitial(ctx); err != nil {
 				t.Fatal("historical first result changed", err)
 			}
 		})
@@ -112,7 +112,7 @@ func TestWaitCancellationAndLateValidator(t *testing.T) {
 	var once sync.Once
 	declared := schema()
 	declared.Validate = func(context.Context, application) error { once.Do(func() { close(entered) }); <-release; return nil }
-	session, err := Start(context.Background(), localPlan(path, true), declared, options(), dependencies)
+	session, err := startSession(context.Background(), localPlan(path, true), declared, options(), dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestWaitCancellationAndLateValidator(t *testing.T) {
 	}
 	cancelled, stop := context.WithCancel(context.Background())
 	stop()
-	if err := session.WaitInitial(cancelled); !errors.Is(err, context.Canceled) {
+	if err := session.waitInitial(cancelled); !errors.Is(err, context.Canceled) {
 		t.Fatal("wait cancellation lost")
 	}
 	status, _ := session.Status()
@@ -163,7 +163,7 @@ func TestInitializationTimeoutRetainsOwnership(t *testing.T) {
 	declared.Validate = func(context.Context, application) error { once.Do(func() { close(entered) }); <-release; return nil }
 	selected := options()
 	selected.InitialTimeout = time.Second
-	session, err := Start(context.Background(), localPlan(path, false), declared, selected, dependencies)
+	session, err := startSession(context.Background(), localPlan(path, false), declared, selected, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestInitializationTimeoutRetainsOwnership(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("not entered")
 	}
-	if err := session.WaitInitial(ctx); !errors.Is(err, context.DeadlineExceeded) {
+	if err := session.waitInitial(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("initial timeout not independent of validation", err)
 	}
 	if session.ShutdownComplete() {
@@ -206,13 +206,13 @@ func TestConcurrentWaitersAndClose(t *testing.T) {
 	dependencies, _ := localDependencies(t, 16)
 	path := filepath.Join(t.TempDir(), "app.yaml")
 	write(t, path, "workers: 2")
-	session, err := Start(context.Background(), localPlan(path, false), schema(), options(), dependencies)
+	session, err := startSession(context.Background(), localPlan(path, false), schema(), options(), dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); err != nil {
+	if err := session.waitInitial(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := session.Next(ctx); err != nil {
@@ -261,23 +261,23 @@ func TestFirstFailureAndCounters(t *testing.T) {
 	dependencies, _ := localDependencies(t, 16)
 	path := filepath.Join(t.TempDir(), "app.yaml")
 	write(t, path, "workers: 0")
-	session, err := Start(context.Background(), localPlan(path, true), schema(), options(), dependencies)
+	session, err := startSession(context.Background(), localPlan(path, true), schema(), options(), dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); !errors.Is(err, invalidWorkers) {
+	if err := session.waitInitial(ctx); !errors.Is(err, invalidWorkers) {
 		t.Fatal("validation cause lost", err)
 	}
 	closeSession(t, session, true)
 	write(t, path, "workers: 2")
-	session, err = Start(context.Background(), localPlan(path, true), schema(), options(), dependencies)
+	session, err = startSession(context.Background(), localPlan(path, true), schema(), options(), dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeSession(t, session, true)
-	if err := session.WaitInitial(ctx); err != nil {
+	if err := session.waitInitial(ctx); err != nil {
 		t.Fatal(err)
 	}
 	session.state.mu.Lock()
@@ -313,14 +313,14 @@ func TestCandidateTimeoutAndReportingCoalescing(t *testing.T) {
 	}
 	selected := options()
 	selected.CandidateTimeout = 20 * time.Millisecond
-	session, err := Start(context.Background(), localPlan(path, true), declared, selected, dependencies)
+	session, err := startSession(context.Background(), localPlan(path, true), declared, selected, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeSession(t, session, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); err != nil {
+	if err := session.waitInitial(ctx); err != nil {
 		t.Fatal(err)
 	}
 	write(t, path, "workers: 2")
@@ -360,7 +360,7 @@ func TestBatchContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	documents := []Document{{Kind: "base", Encoding: configsource.YAML}}
+	documents := []Document{{Kind: "base", Encoding: YAML}}
 	for _, index := range []int{-2, 0, 1} {
 		if _, err := originalLayers(batch, index, nil, documents, "fixture"); !errors.Is(err, ErrObservation) {
 			t.Fatal("invalid index accepted", err)

@@ -35,6 +35,11 @@ With no arguments it shows root help. Help and invalid invocations create no fil
 It does not load project configuration, start services or install database assets.
 The entry captures `FATHOMRY_LANG`; an explicit `--lang` overrides it.
 
+The separate [public `RunProject` entry](v1/interface.md) can compose `config check`
+inside a program containing the project's schema. The generator retains its
+existing six-file shell until the new public API has a published dependency
+revision. This tool does not dynamically load project Go code.
+
 ```sh
 go run ./cmd/fathomry --help
 go run ./cmd/fathomry --lang zh-CN --output json help
