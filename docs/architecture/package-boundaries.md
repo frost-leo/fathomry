@@ -71,8 +71,9 @@ Adapters or business implementations. Composition
 may know selected concrete implementations. All dependencies must remain acyclic.
 
 The former Framework, control-schema assets and business commands are withdrawn.
-The public `cmd/fathomry/v1` entry composes only the minimal command invocation
-foundation. It has no project registry, configuration Boot or database wiring.
+The public `cmd/fathomry/v1` keeps the minimal `Run` entry and adds `RunProject`
+for compiled-project configuration checks. Both use the existing command group,
+leaf and invocation structure, without a project registry or database wiring.
 The official app separately composes the private project group and its create
 subpackage for offline `project new`; generated programs do not import that leaf.
 Existing Adapter composition fixtures use `resource/v1` and `adapters/v1`
@@ -80,7 +81,10 @@ directly. The rebuilt `framework/v1` now provides only explicit offline metadata
 composition. `framework/configuration/v1` composes existing public configuration
 Sources, strict preparation and settings publication with its own bounded session
 lifetime. It owns neither borrowed Runtime/Inbox resources nor business resource
-adoption. Project settings/validators remain project-owned. See the
+adoption. Its optional `BindConfiguration` composition creates configuration dependencies
+inside the existing public Resource owner; the CLI does not gain a second cleanup
+owner or post-cleanup callback mechanism. Project settings/validators remain
+project-owned. See the
 [configuration contract](../reference/framework/configuration/v1/interface.md).
 This is not restoration of the former application runtime or other Framework roles.
 
@@ -289,13 +293,14 @@ internal/conformance      -> internal mechanisms, testing (test support only)
 The Internal production mechanisms retain no public error dependency or all-SDK
 aggregator. Failure imports only the standard library. Compatibility assessment accepts the authoritative
 `*internal/resource.Access`; it does not introduce a public snapshot-assessment API.
-The withdrawn generator supplies no current project API. A future host must keep
-project choices and data separate from capability/resource ownership.
-Framework Viper/Nacos declarations explicitly select the source implementation.
-Load/Watch constructs and owns that scenario's operation/evidence/source machinery.
+The original generated Boot and its runtime APIs remain withdrawn. The current
+project-aware entry keeps project choices/data separate from resource ownership.
+Configuration declarations explicitly select Viper or Nacos. The new startup
+binding supplies concrete construction/release callbacks to the public Resource
+scope, which owns the operation/evidence/source lifetime and cleanup continuation.
 There is no provider-name registry, ambient inference, global service locator or
 compatibility facade. Direct public Adapter use remains a separate supported path,
-not an extra assembly obligation on the generated Boot. Shared data contracts and
+not an extra assembly obligation on generated settings. Shared data contracts and
 scenario-specific policies must not expose native/runtime handles as settings.
 
 The [Adapter tree map](../../adapters/README.md) owns the role-specific file
@@ -335,8 +340,9 @@ mechanisms and concrete configsource Adapters now use those public foundations;
 strict public preparation is independent of Internal's engine. The former Framework
 composition and configuration scenarios are withdrawn. The official
 [CLI](../reference/cmd/fathomry/interface.md) combines shared invocation mechanisms
-with an official-only offline project creator. The public command entry remains
-the minimal shell, without the generator. No complete application/Worker
+with an official-only offline project creator. The public command entries provide
+the minimal shell and compiled-project configuration checks, without the generator.
+No complete application/Worker
 runtime or compatibility with withdrawn outer APIs is implied.
 
 ## Technical facts and future public meaning

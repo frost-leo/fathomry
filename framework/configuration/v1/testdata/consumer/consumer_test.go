@@ -29,7 +29,6 @@ import (
 
 	"example.org/configuration-consumer/setting"
 	nacos "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1"
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
 	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
@@ -65,33 +64,38 @@ func TestIndependentProject(t *testing.T) {
 			dependencies := configuration.Dependencies{Local: viper.Dependencies{Runtime: runtime, Evidence: localEvidence}}
 			dependencies.Remote = nacos.Dependencies{Runtime: runtime, Evidence: remoteEvidence}
 			dir := t.TempDir()
-			app := filepath.Join(dir, "application.yaml")
+			if err := os.MkdirAll(filepath.Join(dir, "config/environment"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			app := filepath.Join(dir, "config/base.yaml")
 			if err := os.WriteFile(app, []byte("application:\n workers: 2\n"), 0600); err != nil {
 				t.Fatal(err)
 			}
 			environment := "development"
-			plan := configuration.Bootstrap{Version: 1, Environment: environment, Mode: "local", Provider: "viper",
-				Documents: []configuration.Document{{Kind: "base", Encoding: configsource.YAML}},
-				Local:     &viper.WatchSettings{Paths: []string{app}}}
+			bootstrap := "FATHOMRY_ENV=development\nFATHOMRY_CONFIG_MODE=local\nFATHOMRY_CONFIG_PROVIDER=viper\n"
+			if err := os.WriteFile(filepath.Join(dir, "config/environment/development.yaml"), []byte("{}"), 0600); err != nil {
+				t.Fatal(err)
+			}
 			if remote {
 				environment = "production"
-				plan.Environment = environment
-				plan.Mode = "remote"
-				plan.Provider = "nacos"
-				plan.Local = nil
-				plan.Remote = &configuration.Remote{Settings: nacos.Settings{Name: "consumer", Servers: []nacos.Server{{HTTPURL: os.Getenv("FATHOMRY_TEST_NACOS_HTTP"), GRPCAddress: os.Getenv("FATHOMRY_TEST_NACOS_GRPC")}},
-					Keys: []nacos.Key{{DataID: "main"}}, AllowInsecure: true, RequestTimeout: time.Second}}
+				remoteSettings := nacos.Settings{Name: "consumer", Servers: []nacos.Server{{HTTPURL: os.Getenv("FATHOMRY_TEST_NACOS_HTTP"), GRPCAddress: os.Getenv("FATHOMRY_TEST_NACOS_GRPC")}},
+					Keys: []nacos.Key{{DataID: "main"}}, AllowInsecure: true, RequestTimeout: time.Second}
+				raw, err := json.Marshal(remoteSettings)
+				if err != nil {
+					t.Fatal(err)
+				}
+				documents, err := json.Marshal([]configuration.Document{{Kind: "base", Encoding: configuration.YAML}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				bootstrap = "FATHOMRY_ENV=production\nFATHOMRY_CONFIG_MODE=remote\nFATHOMRY_CONFIG_PROVIDER=nacos\n" +
+					"FATHOMRY_CONFIG_DOCUMENTS_JSON='" + string(documents) + "'\nFATHOMRY_NACOS_SETTINGS_JSON='" + string(raw) + "'\n"
 			}
-			raw, err := json.Marshal(plan)
-			if err != nil {
+			path := filepath.Join(dir, "bootstrap-"+environment+".env")
+			if err := os.WriteFile(path, []byte(bootstrap), 0600); err != nil {
 				t.Fatal(err)
 			}
-			path := filepath.Join(dir, "bootstrap-"+environment+".json")
-			if err := os.WriteFile(path, raw, 0600); err != nil {
-				t.Fatal(err)
-			}
-			selected, err := configuration.LoadBootstrap(ctx, configuration.BootstrapInput{Environment: environment,
-				Files: []configuration.File{{Path: path, Document: configuration.Document{Kind: "base", Encoding: configsource.JSON}}}}, dependencies.Local)
+			selected, err := configuration.LoadBootstrap(ctx, configuration.BootstrapInput{Path: path}, dependencies.Local)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -102,21 +106,20 @@ func TestIndependentProject(t *testing.T) {
 			if err := delivery.Ack(); err != nil {
 				t.Fatal(err)
 			}
-			session, err := configuration.Start(ctx, selected, setting.Schema(), configuration.Options{InitialTimeout: 3 * time.Second, CandidateTimeout: time.Second}, dependencies)
-			if err != nil {
-				t.Fatal(err)
-			}
+			session, err := configuration.LoadConfiguration(ctx, selected, setting.Schema(), nil, dependencies)
 			t.Cleanup(func() {
 				finish, stop := context.WithTimeout(context.Background(), 3*time.Second)
 				defer stop()
-				if err := session.Close(finish); err != nil {
-					t.Error(err)
+				if session != nil {
+					if err := session.Close(finish); err != nil {
+						t.Error(err)
+					}
 				}
 				if err := runtime.Close(finish); err != nil {
 					t.Error(err)
 				}
 			})
-			if err := session.WaitInitial(ctx); err != nil {
+			if err != nil {
 				t.Fatal(err)
 			}
 			reader := session.Reader()

@@ -20,49 +20,40 @@
 package configuration
 
 import (
-	"time"
-
 	nacos "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1"
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
 	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
 )
 
-// Document declares one original layer. Kind is base/environment/local; Encoding
-// is yaml/json/toml. Optional=false requires positive presence, not nonempty data.
+// Encoding identifies a supported main-configuration document format.
+type Encoding string
+
+const (
+	JSON Encoding = "json"
+	YAML Encoding = "yaml"
+	TOML Encoding = "toml"
+)
+
+// Document selects one main-configuration layer. Kind is base/environment/local;
+// Encoding is yaml/json/toml. Optional=false requires positive source presence.
 type Document struct {
-	Kind     string                `json:"kind"`
-	Encoding configsource.Encoding `json:"encoding"`
-	Optional bool                  `json:"optional"`
+	Kind     string   `json:"kind"`
+	Encoding Encoding `json:"encoding"`
+	Optional bool     `json:"optional"`
 }
 
-// File selects an absolute local path and its layer. Path is sensitive input;
-// neither filenames nor environment locations are discovered.
-type File struct {
-	Path     string
-	Document Document
-}
-
-// BootstrapInput selects one environment and one to three unique local layers.
-// Variables are already captured authorized values, never process lookups.
-// Input storage is borrowed only for LoadBootstrap; do not mutate it concurrently.
-type BootstrapInput struct {
-	Environment string
-	Files       []File
-	Variables   []configsource.Variable
-}
-
-// Remote contains the selected read-only, fixed-key Nacos profile. Settings.Keys
-// alone owns ordered targets; Observation's queue zero selects two.
+// Remote selects read-only, fixed-key Nacos configuration. Settings.Keys owns
+// the ordered documents; an observation queue of zero selects the native default.
 type Remote struct {
 	Settings    nacos.Settings       `json:"settings"`
 	Observation nacos.ObserveOptions `json:"observation"`
 }
 
-// Bootstrap is sensitive loadable version-1 data. Mode/provider must be
-// local/viper or remote/nacos, with exactly the matching non-nil branch.
-// Documents match Local.Paths or Remote.Settings.Keys in order. Watch observes
-// application documents, not this bootstrap. Explicit JSON may contain secrets.
-type Bootstrap struct {
+// SourcePlan describes where the application's main configuration comes from,
+// not its Config value or running services. Version is the source-plan format,
+// not an application version. Mode/provider is local/viper or remote/nacos, with
+// exactly the corresponding non-nil branch. Watch applies to these documents,
+// never to bootstrap selection. Explicit field/JSON access may reveal secrets.
+type SourcePlan struct {
 	Version     uint32               `json:"version"`
 	Environment string               `json:"environment"`
 	Mode        string               `json:"mode"`
@@ -73,20 +64,11 @@ type Bootstrap struct {
 	Remote      *Remote              `json:"remote"`
 }
 
-// Options supplies session budgets and captured application variables.
-// Both durations must be positive; no implicit timeout or environment lookup.
-// Start copies variables. Callbacks which ignore cancellation can delay cleanup.
-type Options struct {
-	InitialTimeout   time.Duration
-	CandidateTimeout time.Duration
-	Variables        []configsource.Variable
-}
-
-// Dependencies borrows only the selected application's public Runtime/Inbox.
-// Bootstrap acquisition has separate Viper dependencies. Inboxes stay caller-owned;
-// use NextReleased to receive finite evidence behind retained Nacos Open records.
-// A non-nil selected Observer must be initialized. A sealed Observer remains valid
-// optional diagnostics; unselected provider dependencies are not inspected.
+// Dependencies borrows only the selected provider's Runtime, evidence Inbox and
+// optional observer. LoadConfiguration never closes or acknowledges these owners.
+// Use NextReleased to receive finite evidence behind retained Nacos Open records,
+// and close the Session before its borrowed dependencies. Unselected dependencies
+// are not inspected. A non-nil observer must be initialized.
 type Dependencies struct {
 	Local  viper.Dependencies
 	Remote nacos.Dependencies

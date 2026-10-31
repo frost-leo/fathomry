@@ -17,191 +17,215 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
 -->
 
-# Typed application configuration
+# Application bootstrap and main configuration
 
 [Documentation](../../../../README.md) / Public package reference
 
-**Audience:** project authors with explicit local or Nacos configuration sources.
-**Status:** implemented; local-file and isolated plaintext Nacos protocol-peer
-checks, not real-service TLS/auth/failover or published-module qualification.
+**Audience:** application-entry and framework-command authors.
+**Status:** implemented source candidate; local and isolated Nacos protocol-peer
+verification, not published-module or production-service qualification.
 **Package:** `github.com/frost-leo/fathomry/framework/configuration/v1`.
 
-## Responsibilities
+## Responsibility
 
-Projects own their `setting` types, defaults and semantic validator.
-Configuration owns explicit bootstrap/source admission, one ordered acceptance
-path, publication and source cleanup. Public Viper/Nacos Adapters own native
-acquisition/observation/recovery. Existing
-[configsource preparation](../../../adapters/configsource/v1/interface.md)
-and [settings snapshots](../../../settings/v1/interface.md) remain independent.
+This package supplies two application-configuration operations:
 
-The implementation imports both supported providers; selecting local at runtime
-does not promise a local-only dependency closure. It adds no App/Boot container,
-global provider registry, process default, source writes, manual refresh,
-source retargeting, business resource adoption or Workflow logic.
+1. `LoadBootstrap` reads the selected literal dotenv input and resolves where and
+   how the application's main configuration will be loaded.
+2. `LoadConfiguration` applies the project's schema and returns after accepting
+   the first complete main configuration, or with a truthful failure.
 
-## Bootstrap is separate from application data
+Neither operation starts application services. An independent `config check`
+and a future application runner can share these operations without calling each
+other. Business-specific documents, such as SP-API credential observations, use
+public configuration-source Adapters and existing preparation/settings mechanisms
+directly; they do not need this application's bootstrap policy.
 
-`LoadBootstrap` synchronously reads one to three explicit absolute file paths
-using borrowed Viper dependencies. This remains necessary even when the resulting
-application plan is remote. Caller-selected environment names contain 1..64 ASCII
-letters/digits/dot/underscore/hyphen. No filenames, cwd, HOME or environment
-variables are discovered.
+Adapters own original reads/observations and native recovery.
+[Strict preparation](../../../adapters/configsource/v1/interface.md) owns decoding,
+original-layer admission and merging.
+[Settings](../../../settings/v1/interface.md) owns immutable accepted data.
+This package orders application acceptance and owns its source Session.
 
-Each `File` supplies a `Document`: unique kind base/environment/local, encoding
-yaml/json/toml, and Optional (false means required). File paths are at most 4096
-bytes, valid UTF-8, absolute and free of NUL; duplicate paths reject.
-Source existence/readability is checked during acquisition, not promised by
-declarative preflight.
+Application declarations use this package's concrete Schema[T], Variable and
+Encoding contracts. They are not aliases of Adapter preparation types. The loader
+translates them at its private preparation boundary and reuses the existing strict
+engine; it does not introduce another parser or merger. Generated bootstrap and
+setting code therefore do not import adapters/configsource.
 
-Bootstrap version must be 1. Its environment defaults only to the caller-selected
-label, and an explicit mismatch rejects. Supported mode/provider pairs are
-local/viper and remote/nacos. Exactly the selected branch must be non-nil.
-The ordered Documents correspond exactly to Local.Paths or Remote.Settings.Keys.
+Provider-specific settings and borrowed Dependencies remain explicit Adapter
+contracts for advanced integration. They are not copied into a second set of
+Framework SDK settings, nor are they required in an application declaration.
 
-Local interval zero means 1 second (nonzero range 10 ms..5 min), local queue zero
-means 16 (nonzero range 1..64). Nacos observation queue zero means 2 (range 1..16).
-Other Nacos settings retain their public defaults/validation and nanosecond units.
-Remote Writable and DynamicKeys must both be false.
+## Call sequence
 
-```json
-{
-  "version": 1,
-  "mode": "local",
-  "provider": "viper",
-  "watch": false,
-  "documents": [{"kind": "base", "encoding": "yaml"}],
-  "local": {"paths": ["/explicit/application.yaml"]}
-}
-```
+### Load bootstrap
 
-Input Variables are explicitly captured `configsource.Variable` values. Their
-Path uses the existing slash syntax, for example `/application/workers`;
-non-string values need JSON=true. Neither dotenv parsing nor variable binding
-authorizes ambient scanning. Defaults/layers obey existing strict preparation,
-including unknown-original-field rejection and absent/empty/null distinctions.
+Pass `BootstrapInput` with an absolute selected dotenv path, already captured
+allowlisted variables and an optional explicit environment override. The caller's
+context bounds acquisition. Viper dependencies are borrowed; released acquisition
+evidence stays in their Inbox until the owner handles and acknowledges it.
 
-Bootstrap loading is synchronous and cooperatively cancellable. Cancellation
-cannot forcibly interrupt a blocked filesystem syscall. Returned bootstrap is
-detached data; explicit JSON/value access may contain credentials. Ordinary
-formatting/logging is restricted.
+The result is `Bootstrap`: a detached `SourcePlan` under Configuration and the
+initial/candidate/shutdown budgets. It contains no clients, goroutines or other
+resource handles. Ordinary formatting is restricted; deliberate field/JSON access
+may reveal sensitive remote settings.
 
-## Start, wait and read
+See [bootstrap selection](bootstrap.md) for the exact literal grammar, precedence,
+key inventory and source constraints. Bootstrap selection is fixed for a load;
+main-configuration Watch does not reload it.
 
-Selected non-nil diagnostic Observers must be initialized; invalid handles reject
-synchronously as ErrDeclaration with the original cause. Nil remains optional,
-and a valid sealed Observer remains admissible because diagnostics are lossy.
-Unselected application provider dependencies are not inspected.
+### Load and consume main configuration
 
-Call `Start[T]` with a lifetime context, Bootstrap, project `Schema[T]`,
-Options and selected application Dependencies. InitialTimeout and CandidateTimeout
-must both be positive. A non-nil project validator is mandatory; an explicit
-successful callback represents no extra semantic constraints.
+Pass the Bootstrap, the project's `configuration.Schema[T]`, explicit captured
+application variables and borrowed `Dependencies` to `LoadConfiguration`.
+The schema must have a nonzero version and a pure, bounded, non-panicking validator.
 
-Start structurally freezes the supported defaults without calling the semantic
-validator on incomplete data. Plan/provider data, variable containers and defaults
-are detached during admission; callers must not mutate them during that call.
-Afterward mutations of originals do not affect future candidates. The callback's
-closure is borrowed behavior: pure, bounded, non-panicking and cooperative.
+Defaults may be incomplete. The loader first detaches them structurally, acquires
+the selected original documents, admits every original layer, applies the allowed
+overlays, and only then invokes semantic validation on the complete candidate.
+Startup-owned build/environment/instance facts are not editable configuration.
 
-Admission failures return no session and no application-source effects.
-Successful admission returns an owner before asynchronous setup/acquisition.
-`WaitInitial` waits for one sticky first result; cancelling that wait does not
-cancel the producer. Reader reports settings.ErrUnconfigured until acceptance.
+A nil error guarantees the returned `Session[T]` already has an accepted
+`InitialView()`; callers do not need a separate start/wait protocol.
+`Reader()` exposes later accepted data, and neither method installs a process
+settings default. A caller can use `settings.As[T]` and `ValueCopy` for explicit
+typed access.
 
-The initialization deadline includes queued setup and first validation. Its
-failure decision and first publication share a fence; an expired old initialization
-timer cannot cancel a successfully initialized watcher. CandidateTimeout limits
-preparation/validation cooperatively. Late results cannot publish after the
-session's close fence.
+A failed load can return a non-nil Session. Always retain and close it, even on
+error: a timeout or cancellation can precede actual producer termination.
+Pre-acquisition declaration errors return no Session and perform no source I/O.
+Borrowed Runtime/Inboxes remain caller-owned.
 
-One-shot sessions capture once and retain owned source cleanup until Close or
-parent cancellation. Watch sessions consume the provider's initial complete batch,
-then subsequent complete observations, without redundant Capture or another
-reconnection/polling engine. Another finite load requires a new explicit session.
+### Observe updates and close
 
-## Publication and reporting
+Watch=false captures once; Watch=true consumes the provider's initial complete
+observation and then its updates. Completing LoadConfiguration does not cancel a
+valid watcher. There is no duplicate native polling/refetch/recovery engine.
 
-The Store is session-private. Only successful complete preparation and project
-validation publish; rejected updates retain the previous accepted value.
-No `settings.Configure` call is implicit. Old Views and Reader data remain valid
-after later updates and source cleanup.
+`Next(ctx)` consumes one bounded latest report; only one simultaneous waiter is
+allowed. Publication reports carry their exact View. Errors inside Update describe
+source/preparation/cleanup outcomes; the outer error describes the wait.
+Coalesced reports retain Gap/Skipped, not an invented lossless event journal.
+After final reporting Next preserves io.EOF.
 
-`Status` separates initializing/ready/closing/closed, accepted data and confirmed
-completion. `Next` admits one waiter; overlap rejects with ErrLimit.
-A successful publication report carries its exact View and publication sequence.
-Other reports carry no new View. Update.Err describes a candidate/source/cleanup
-failure; the outer Next error describes the wait. Cancellation does not consume
-the pending report or cancel the producer.
+`Status()` distinguishes source lifetime, accepted data and confirmed completion.
+An accepted Reader does not prove that the configuration source is healthy.
 
-There is one pending latest report. Replacements count Skipped and preserve source
-Gap until consumption; this is not a journal of all changes. Sequences are local
-uint64 counts, not source timestamps, hashes or versions. Exhaustion seals instead
-of wrapping. After final reporting, Next preserves io.EOF.
+`Close(ctx)` fences publication, requests stop and joins owned source work.
+Bootstrap's shutdown budget caps each close call in addition to the supplied
+context. A timed-out owner remains reachable; continue Close with a fresh context.
+`ShutdownComplete()` distinguishes completed failure from unfinished work.
+Old Views and accepted Reader data remain usable after source shutdown.
 
-Publication is not a same-time multi-document transaction, backend readiness,
-credential validity or atomic resource adoption. Consumers explicitly coordinate
-any resource bindings with accepted Views.
+## One initial acceptance cutoff
 
-## Ownership and cleanup
+Bootstrap's InitialTimeout includes main-configuration admission/default
+detachment, source setup/acquisition, validation and first publication.
+The Resource integration also includes the project schema-factory work in that
+same absolute cutoff. It is not restarted after each phase.
 
-Each session has one source/acceptance worker and one bounded lifetime/deadline
-guard, plus the selected provider's existing owned work. There is no worker per
-update. Close seals admission/publication, requests stop, joins owned work and
-continues incomplete source cleanup. Observer cleanup precedes explicit owned-source
-cleanup. Parent/provider autonomous cancellation retains existing contracts.
+CandidateTimeout bounds each complete candidate and is capped by the initial
+deadline before first acceptance. The acceptance fence checks the absolute time,
+not just eventual timer delivery. Producer lifetime is separate: an initialized
+Watch session must survive expiry/cancellation of the temporary initial wait.
 
-Close timeout does not abandon the session. Keep it and call Close again.
-ShutdownComplete is independent of retained producer/cleanup errors: completion
-may coexist with a non-nil error. A non-cooperative callback can delay completion;
-it cannot authorize a late publication. The first and latest cleanup errors remain
-inspectable, not an unbounded journal of retries.
+Contexts and callbacks are cooperative. They do not forcibly stop a blocked syscall
+or foreign callback, and that limitation does not authorize a late publication.
 
-Borrowed Runtime and Inboxes are never closed or silently drained. Required native
-facts remain receivable until the caller acknowledges them. Finite bootstrap
-evidence also remains charged until Ack. Use NextReleased to receive later finite
-records behind a still-live Nacos Open; admission-order delivery can wait behind it.
+## Existing Resource integration
 
-Minimum configured envelopes, excluding other callers' existing reservations:
+`PrepareInput` admits and detaches the selected bootstrap input and captured
+application variables into a settings snapshot, without source I/O.
+`BindConfiguration` registers a Fixed configuration binding on an existing
+[Resource scope](../../../resource/v1/interface.md). Binding has no unused request
+context: the Scope owns its lifetime, and Apply starts the work.
+
+The binding calls LoadBootstrap, constructs the project's schema through
+`SchemaFactory`, then loads the main configuration using the same acceptance
+path as LoadConfiguration. A schema factory may capture explicitly declared
+process inputs once; it cannot create business resource owners.
+
+The binding returns a Resource Ref and a separate read-only `settings.Reader`.
+The latter captures a `settings.Snapshot[Loaded]` after main acceptance, before
+Resource adoption or any cancelable lease acquisition. Until acceptance Capture
+returns `settings.ErrUnconfigured`; failed validation creates no accepted result.
+The Reader retains data through cleanup, not resource authority. An explicit
+Ref.Retry may publish a later accepted construction; old Views stay unchanged.
+
+The captured `Loaded` value is non-owning. InitialView retains the exact first
+main snapshot; its Reader may see later accepted Watch updates; Info copies safe
+selection metadata. The Scope keeps cleanup authority, including failed construction.
+There is no second application container, cleanup registry or service locator.
+
+The configuration Scope seals its declarations on Apply. Its Input is bootstrap
+selection, not the application's Config. Later business resources therefore use
+a separate scope supplied with the accepted main-configuration View; they are
+not registered into an already-applied configuration scope. The public load
+operations also remain usable without this optional binding composition.
+
+`Policy` supplies finite bootstrap/early-cleanup budgets and an optional required
+evidence receiver. [Bootstrap and custody details](bootstrap.md) define its limits.
+
+## Sources, admission and compatibility
+
+SourcePlan supports local/viper or remote/nacos with exactly one matching branch.
+Documents correspond to selected local paths or fixed remote keys in order:
+one to three distinct base/environment/local layers, encoded as YAML/JSON/TOML.
+Paths are absolute, unique, UTF-8, NUL-free and at most 4096 bytes.
+Environment is 1-64 ASCII letters/digits/dot/underscore/hyphen.
+
+Native provider settings retain their contracts and nanosecond units. Nacos is
+read-only/fixed-key; no inferred gRPC endpoint, fallback provider, native cache
+substitution or implicit write probe is added. Publication is not a same-time
+transaction across independently acquired files/remote keys.
+
+Preflight checks declared Runtime/Inbox capacity, not currently free capacity:
 
 | Profile | Active roots | Work | Evidence |
 | --- | --- | --- | --- |
-| Local bootstrap/finite | 1 | 8 MiB | 1 x 64 KiB |
+| Bootstrap/local finite | 1 | 8 MiB | 1 x 64 KiB |
 | Local Watch | 1 | 24 MiB | 1 x 64 KiB |
-| Nacos Open + finite capture | 2 | 17 MiB | 2 x 64 KiB |
+| Nacos Open + finite | 2 | 17 MiB | 2 x 64 KiB |
 | Nacos Open + Watch | 2 | (17 + 4q) MiB | 2 x 64 KiB |
 
-q is normalized Nacos observation capacity. q>=12 does not fit the default
-64 MiB Runtime alongside Open. Preflight validates ceilings, not currently free
-capacity; busy or subsequently closed borrowed resources can still reject work.
-Declared budgets do not certify process RSS or arbitrary callback/cause-graph size.
+q is the Nacos observation capacity (default 2). Declared work limits are not
+process-RSS or arbitrary-callback memory guarantees.
 
-## Errors, privacy and compatibility
+This is an intentional pre-release source API replacement under #167:
 
-The existing configuration owner/facility 0x045, local codes 1..11, identifiers,
-Revision 1 and `fathomry.configuration.details/v1` are preserved.
-SourceIndex is a selected slot or -1; operation names distinguish bootstrap and
-application acquisition. The retired assembly codes are not reused.
+- The former layered YAML/JSON/TOML bootstrap-plan loader and File/BootstrapInput
+  shape are withdrawn. LoadBootstrap now names the literal dotenv bootstrap profile.
+- The former plan-only Bootstrap data is SourcePlan. Bootstrap now carries that
+  selected plan and its phase budgets together.
+- The former Start/Options contract is replaced by LoadConfiguration, which
+  returns after first acceptance; no compatibility alias retains the old protocol.
+- Application schema/override declarations now use configuration.Schema and
+  configuration.Variable, with configuration.JSON/YAML/TOML document encodings.
+  Technical configsource contracts remain independently available to Adapter
+  consumers; project declarations are converted internally rather than aliased.
+- WaitInitial/WaitInitialView are not public workflow steps. Use InitialView on
+  the returned Session and retain failed Sessions for cleanup.
+- Resource integration uses PrepareInput, BindConfiguration and Policy, not
+  application-start naming. BindConfiguration now returns both the Resource Ref
+  and a read-only accepted-result Reader before the error result. Existing generated
+  projects are not rewritten.
 
-Definitions, Resources and Component support explicit offline metadata composition.
-English and zh-CN messages describe safe component facts. Original project/native
-causes remain available through errors.Is/As. Opaque session/report/status/options
-values refuse JSON reconstruction and safe diagnostics do not format those causes.
-Deliberate raw-cause or accepted-value inspection is sensitive.
+The package path and existing configuration failure facility/codes 1-11,
+identifiers and details revision remain unchanged. Original errors.Is/As causes
+remain inspectable. Retired assembly codes are not reused.
 
-The restored package path does not restore the former application Boot API.
-Schema, bootstrap, package, module and publication versions are different axes.
+## Evidence
 
-## Executable evidence
+[Public loading tests](../../../../../framework/configuration/v1/load_configuration_test.go)
+exercise accepted results, failed-session ownership, bootstrap budgets and Watch
+after load completion.
+[Bootstrap tests](../../../../../framework/configuration/v1/load_bootstrap_test.go)
+cover selection, rejecting layers and projected-file recovery.
+[Binding tests](../../../../../framework/configuration/v1/binding_test.go) cover
+shared absolute deadlines, custody continuation and Resource integration.
+The [independent consumer](../../../../../framework/configuration/v1/testdata/consumer/README.md)
+uses both primary operations through public APIs.
 
-[Configuration loading tests](../../../../../framework/configuration/v1/load_test.go),
-[session tests](../../../../../framework/configuration/v1/session_test.go),
-[protocol peers](../../../../../framework/configuration/v1/provider_test.go),
-[identity/privacy/fuzz tests](../../../../../framework/configuration/v1/error_test.go)
-and [independent consumer](../../../../../framework/configuration/v1/integration_test.go)
-exercise the public path and failure controls. The consumer defines its own setting
-package, uses a separate module with local replacement, and tests both supported
-pairs without importing Internal or changing generated projects.
-
-These checks do not certify live Nacos deployments or published-module distribution.
-See [#165](https://github.com/frost-leo/fathomry/issues/165) for the selected contract.
+These are configuration checks, not application/Worker readiness, real Kubernetes,
+production Nacos TLS/auth/failover, or workflow replay qualification.

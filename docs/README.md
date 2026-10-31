@@ -33,11 +33,15 @@ Framework and control-schema implementations and the old CLI leaf commands were
 withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161). The retained
 [CLI foundation](reference/cmd/fathomry/interface.md) supplies help and invocation
 mechanisms. The official tool's [project new](reference/cmd/fathomry/internal/command/project/create/interface.md)
-now creates a bounded offline six-file project; it does not restore workflow
-execution, configuration bootstrap or database installation through the CLI.
+retains the bounded offline six-file CLI project and its existing published
+dependency. Root-entry generation with dotenv and typed settings follows the
+public API integration; it is not part of this first slice. No workflow execution
+or database installation is restored.
 The library separately provides [thin Framework metadata preparation](reference/framework/v1/interface.md)
-and [typed local/Nacos configuration](reference/framework/configuration/v1/interface.md),
-without an application host or generator changes. Workflow/control-schema
+and [typed local/Nacos configuration](reference/framework/configuration/v1/interface.md).
+The [project-aware Go entry](reference/cmd/fathomry/v1/interface.md) composes a
+finite `config check` through [bootstrap and main-configuration loading](reference/framework/configuration/v1/bootstrap.md),
+without an application host or CLI proxy. Workflow/control-schema
 reconstruction remains working material, not current APIs.
 
 The [Mail Adapter](reference/adapters/notification/mail/v1/interface.md) provides
@@ -192,9 +196,11 @@ budget and attribution vocabulary. Service and deployment limits remain explicit
 The [minimal CLI](reference/cmd/fathomry/interface.md) and its
 [public Go entry](reference/cmd/fathomry/v1/interface.md) retain help, explicit
 language/output handling, failure identity and bounded invocation/cleanup.
-No old project, workflow, configuration-host or database command is registered.
+The public `RunProject` entry adds only compiled-project configuration checking;
+no old workflow, configuration-host or database command is registered.
 The official-only [project group](reference/cmd/fathomry/internal/command/project/interface.md)
-owns the new creation leaf; generated project binaries retain the minimal public shell.
+owns the creation leaf; its current generated project binaries retain the minimal
+public shell. Project-owned entries can select the configuration-check profile.
 Adapter Fixed/Follow fixtures now compose public Resource and operation owners
 directly; their historical fixture names do not imply an available Framework API.
 
@@ -416,7 +422,7 @@ the existing S01-S12 identifiers and links each to its canonical topic.
 | [`adapters/configsource/v1`](reference/adapters/configsource/v1/interface.md) | Complete raw batch/source contracts and independent strict layered preparation |
 | [`adapters/configsource/viper/v1`](reference/adapters/configsource/viper/v1/interface.md) | Explicit local acquisition, native live/captured queries, weak Decode and owned file Watch |
 | [`adapters/configsource/nacos/v1`](reference/adapters/configsource/nacos/v1/interface.md) | Complete supported remote reads/observations/management/search, effect evidence and resource-backed borrowing |
-| [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Minimal CLI entry with explicit streams, locale, diagnostics and cleanup |
+| [`cmd/fathomry/v1`](reference/cmd/fathomry/v1/interface.md) | Shared CLI entries, including compiled-project configuration checks with existing cleanup ownership |
 
 ## Internal package reference
 

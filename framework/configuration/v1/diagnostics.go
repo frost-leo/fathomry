@@ -26,22 +26,46 @@ import (
 
 func restricted(state fmt.State, name string) { _, _ = state.Write([]byte("configuration." + name)) }
 
-func (Bootstrap) Format(state fmt.State, _ rune) { restricted(state, "Bootstrap") }
-func (Bootstrap) LogValue() slog.Value           { return slog.StringValue("configuration.Bootstrap") }
+func (Schema[T]) Format(state fmt.State, _ rune) { restricted(state, "Schema") }
+func (Schema[T]) LogValue() slog.Value           { return slog.StringValue("configuration.Schema") }
+func (Schema[T]) MarshalJSON() ([]byte, error) {
+	return nil, at(ErrSerialization, "marshal_schema", -1)
+}
+func (*Schema[T]) UnmarshalJSON([]byte) error   { return at(ErrSerialization, "unmarshal_schema", -1) }
+func (Variable) Format(state fmt.State, _ rune) { restricted(state, "Variable") }
+func (Variable) LogValue() slog.Value           { return slog.StringValue("configuration.Variable") }
 
 func (BootstrapInput) Format(state fmt.State, _ rune) { restricted(state, "BootstrapInput") }
 func (BootstrapInput) LogValue() slog.Value           { return slog.StringValue("configuration.BootstrapInput") }
 
-func (File) Format(state fmt.State, _ rune) { restricted(state, "File") }
-func (File) LogValue() slog.Value           { return slog.StringValue("configuration.File") }
+func (Bootstrap) Format(state fmt.State, _ rune) { restricted(state, "Bootstrap") }
+func (Bootstrap) LogValue() slog.Value           { return slog.StringValue("configuration.Bootstrap") }
+
+func (SourcePlan) Format(state fmt.State, _ rune) { restricted(state, "SourcePlan") }
+func (SourcePlan) LogValue() slog.Value           { return slog.StringValue("configuration.SourcePlan") }
 
 func (Remote) Format(state fmt.State, _ rune) { restricted(state, "Remote") }
 func (Remote) LogValue() slog.Value           { return slog.StringValue("configuration.Remote") }
 
-func (Options) Format(state fmt.State, _ rune) { restricted(state, "Options") }
-func (Options) LogValue() slog.Value           { return slog.StringValue("configuration.Options") }
-func (Options) MarshalJSON() ([]byte, error)   { return nil, at(ErrSerialization, "marshal", -1) }
-func (*Options) UnmarshalJSON([]byte) error    { return at(ErrSerialization, "unmarshal", -1) }
+func (Input) Format(state fmt.State, _ rune) { restricted(state, "Input") }
+func (Input) LogValue() slog.Value           { return slog.StringValue("configuration.Input") }
+func (Input) MarshalJSON() ([]byte, error)   { return nil, at(ErrSerialization, "marshal", -1) }
+func (*Input) UnmarshalJSON([]byte) error    { return at(ErrSerialization, "unmarshal", -1) }
+
+func (Policy) Format(state fmt.State, _ rune) { restricted(state, "Policy") }
+func (Policy) LogValue() slog.Value           { return slog.StringValue("configuration.Policy") }
+func (Policy) MarshalJSON() ([]byte, error)   { return nil, at(ErrSerialization, "marshal", -1) }
+func (*Policy) UnmarshalJSON([]byte) error    { return at(ErrSerialization, "unmarshal", -1) }
+
+func (Evidence) Format(state fmt.State, _ rune) { restricted(state, "Evidence") }
+func (Evidence) LogValue() slog.Value           { return slog.StringValue("configuration.Evidence") }
+func (Evidence) MarshalJSON() ([]byte, error)   { return nil, at(ErrSerialization, "marshal", -1) }
+func (*Evidence) UnmarshalJSON([]byte) error    { return at(ErrSerialization, "unmarshal", -1) }
+
+func (Loaded) Format(state fmt.State, _ rune) { restricted(state, "Loaded") }
+func (Loaded) LogValue() slog.Value           { return slog.StringValue("configuration.Loaded") }
+func (Loaded) MarshalJSON() ([]byte, error)   { return nil, at(ErrSerialization, "marshal", -1) }
+func (*Loaded) UnmarshalJSON([]byte) error    { return at(ErrSerialization, "unmarshal", -1) }
 
 func (Dependencies) Format(state fmt.State, _ rune) { restricted(state, "Dependencies") }
 func (Dependencies) LogValue() slog.Value           { return slog.StringValue("configuration.Dependencies") }

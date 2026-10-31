@@ -86,9 +86,30 @@ withdrawn. They are not a compatibility requirement for the replacement design.
 Public Viper/Nacos acquisition, strict preparation, settings publication and
 Resource adoption remain separate independently usable capabilities.
 
-A future project bootstrap must preserve explicit source selection, caller-owned
-inputs, last-good data, bounded lifetimes and truthful cleanup/effect evidence.
-The minimal CLI does not currently generate or launch that bootstrap.
+The [application configuration profile](../reference/framework/configuration/v1/bootstrap.md)
+preserves explicit source selection, detached inputs, last-good data and truthful
+cleanup/evidence. A caller-owned Resource scope manages its constructor, borrows
+and continued cleanup. The public project entry composes `config check` through
+existing private command groups/leaves, not another CLI lifecycle engine.
+LoadBootstrap selects the source and phase policy; LoadConfiguration returns after
+first complete configuration acceptance. The check does not invoke a formal
+application runner. Configuration Scope declarations seal on Apply; later service
+resources use their own scope and the accepted main-configuration View, not the
+bootstrap Input. This preserves the two-stage boundary without an App container.
+The official generator retains its existing six-file CLI profile until this API
+has an independently consumable published revision. Project-owned entries can
+already select the configuration-check profile. A bounded schema factory receives
+the admitted environment before application sources open and can capture
+startup-owned facts as pure validation constraints. Complete Config
+validation runs after source layers merge, so required values need not have defaults.
+Application-facing Schema, Variable and Encoding contracts belong to the Framework
+configuration package. Their private translation reuses the existing technical
+preparation engine; it is neither a type alias hiding ownership nor another parser.
+Selected provider settings remain explicit public Adapter contracts instead of
+being mirrored into a second SDK-settings vocabulary.
+The root-entry generator is a subsequent integration under
+[#167](https://github.com/frost-leo/fathomry/issues/167), pinned to the actual API
+merge. Published-module qualification remains distinct from candidate-source tests.
 
 ## Configuration ownership and revisions
 

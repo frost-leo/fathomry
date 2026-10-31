@@ -35,7 +35,6 @@ import (
 	"time"
 
 	nacos "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1"
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	wire "github.com/nacos-group/nacos-sdk-go/v2/api/grpc"
 	request "github.com/nacos-group/nacos-sdk-go/v2/common/remote/rpc/rpc_request"
@@ -134,9 +133,9 @@ func (value *peer) RequestBiStream(stream wire.BiRequestStream_RequestBiStreamSe
 	<-stream.Context().Done()
 	return stream.Context().Err()
 }
-func (value *peer) plan(watch bool) Bootstrap {
-	return Bootstrap{Version: 1, Environment: "fixture", Mode: "remote", Provider: "nacos", Watch: watch,
-		Documents: []Document{{Kind: "base", Encoding: configsource.YAML}},
+func (value *peer) plan(watch bool) SourcePlan {
+	return SourcePlan{Version: 1, Environment: "fixture", Mode: "remote", Provider: "nacos", Watch: watch,
+		Documents: []Document{{Kind: "base", Encoding: YAML}},
 		Remote: &Remote{Settings: nacos.Settings{Name: "fixture", Servers: []nacos.Server{{HTTPURL: value.http.URL + "/nacos", GRPCAddress: value.address}},
 			Keys: []nacos.Key{{DataID: "main"}}, AllowInsecure: true, RequestTimeout: time.Second, RetryDelay: time.Millisecond, ReconcileInterval: time.Second}}}
 }
@@ -176,14 +175,14 @@ func TestRemoteProfiles(t *testing.T) {
 		t.Run(map[bool]string{false: "finite", true: "watch"}[watch], func(t *testing.T) {
 			fixture := newPeer(t)
 			dependencies, inbox := remoteDependencies(t, 16, 64<<20)
-			session, err := Start(context.Background(), fixture.plan(watch), schema(), options(), dependencies)
+			session, err := startSession(context.Background(), fixture.plan(watch), schema(), options(), dependencies)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer closeSession(t, session, false)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := session.WaitInitial(ctx); err != nil {
+			if err := session.waitInitial(ctx); err != nil {
 				t.Fatal(err)
 			}
 			if read(t, session.Reader()).Workers != 2 {
@@ -243,14 +242,14 @@ func TestRemoteInitialObservationDoesNotRefetch(t *testing.T) {
 	dependencies, _ := remoteDependencies(t, 16, 64<<20)
 	plan := fixture.plan(true)
 	plan.Remote.Settings.ReconcileInterval = time.Minute
-	session, err := Start(context.Background(), plan, schema(), options(), dependencies)
+	session, err := startSession(context.Background(), plan, schema(), options(), dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeSession(t, session, false)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); err != nil {
+	if err := session.waitInitial(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if fixture.queries.Load() != 1 {
@@ -263,13 +262,13 @@ func TestRemotePermissionsAndBudgets(t *testing.T) {
 		name     string
 		capacity int
 		work     int64
-		change   func(*Bootstrap)
+		change   func(*SourcePlan)
 	}{
-		{"one_evidence_record", 1, 64 << 20, func(*Bootstrap) {}},
-		{"undersized_work", 2, 16 << 20, func(*Bootstrap) {}},
-		{"oversized_observation_queue", 2, 64 << 20, func(value *Bootstrap) { value.Watch = true; value.Remote.Observation.QueueCapacity = 12 }},
-		{"writes", 2, 64 << 20, func(value *Bootstrap) { value.Remote.Settings.Writable = true }},
-		{"dynamic_keys", 2, 64 << 20, func(value *Bootstrap) { value.Remote.Settings.DynamicKeys = true }},
+		{"one_evidence_record", 1, 64 << 20, func(*SourcePlan) {}},
+		{"undersized_work", 2, 16 << 20, func(*SourcePlan) {}},
+		{"oversized_observation_queue", 2, 64 << 20, func(value *SourcePlan) { value.Watch = true; value.Remote.Observation.QueueCapacity = 12 }},
+		{"writes", 2, 64 << 20, func(value *SourcePlan) { value.Remote.Settings.Writable = true }},
+		{"dynamic_keys", 2, 64 << 20, func(value *SourcePlan) { value.Remote.Settings.DynamicKeys = true }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			dependencies, inbox := remoteDependencies(t, test.capacity, test.work)
@@ -279,7 +278,7 @@ func TestRemotePermissionsAndBudgets(t *testing.T) {
 			if test.name == "writes" || test.name == "dynamic_keys" {
 				want = ErrDeclaration
 			}
-			if session, err := Start(context.Background(), plan, schema(), options(), dependencies); !errors.Is(err, want) || session != nil {
+			if session, err := startSession(context.Background(), plan, schema(), options(), dependencies); !errors.Is(err, want) || session != nil {
 				t.Fatal("invalid remote admission did not fail for the intended reason", err)
 			}
 			evidence, _ := inbox.Inspect()
@@ -295,7 +294,7 @@ func TestSelectedObserverAdmission(t *testing.T) {
 		t.Run(map[bool]string{false: "local", true: "remote"}[remote], func(t *testing.T) {
 			var dependencies Dependencies
 			var inspect func() (adapters.EvidenceStatus, error)
-			var plan Bootstrap
+			var plan SourcePlan
 			if remote {
 				fixture := newPeer(t)
 				plan = fixture.plan(false)
@@ -319,7 +318,7 @@ func TestSelectedObserverAdmission(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			session, err := Start(context.Background(), plan, schema(), options(), dependencies)
+			session, err := startSession(context.Background(), plan, schema(), options(), dependencies)
 			if session != nil {
 				closeSession(t, session, true)
 			}
@@ -351,7 +350,7 @@ func TestObserverSelectionAndOptionality(t *testing.T) {
 					}
 				}
 				var dependencies Dependencies
-				var plan Bootstrap
+				var plan SourcePlan
 				if remote {
 					plan = newPeer(t).plan(false)
 					dependencies, _ = remoteDependencies(t, 16, 64<<20)
@@ -365,14 +364,14 @@ func TestObserverSelectionAndOptionality(t *testing.T) {
 					dependencies.Local.Observer = observer
 					dependencies.Remote.Observer = &adapters.Observer{}
 				}
-				session, err := Start(context.Background(), plan, schema(), options(), dependencies)
+				session, err := startSession(context.Background(), plan, schema(), options(), dependencies)
 				if err != nil {
 					t.Fatal(err)
 				}
 				defer closeSession(t, session, false)
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 				defer cancel()
-				if err := session.WaitInitial(ctx); err != nil {
+				if err := session.waitInitial(ctx); err != nil {
 					t.Fatal(err)
 				}
 				if read(t, session.Reader()).Workers != 2 {

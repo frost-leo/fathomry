@@ -23,6 +23,13 @@ import (
 	"embed"
 	"io/fs"
 
+	nacos "github.com/frost-leo/fathomry/adapters/configsource/nacos/v1"
+	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
+	"github.com/frost-leo/fathomry/adapters/v1"
+	"github.com/frost-leo/fathomry/failure/v1"
+	"github.com/frost-leo/fathomry/resource/v1"
+
 	"github.com/frost-leo/fathomry/i18n/v1"
 )
 
@@ -37,4 +44,22 @@ func Resources() fs.FS { return resources }
 func Component() i18n.Component {
 	return i18n.Component{Module: "fathomry", Name: "configuration", BaseLocale: "en",
 		Resources: Resources(), Directory: "resources", Definitions: Definitions()}
+}
+
+// Components returns the configuration-loading profile's explicit metadata,
+// excluding i18n.CoreComponents. It opens no configuration sources or resources.
+func Components() []i18n.Component {
+	return []i18n.Component{
+		Component(),
+		dependencyComponent(resource.Resources(), resource.Definitions()),
+		dependencyComponent(adapters.Resources(), adapters.Definitions()),
+		dependencyComponent(configsource.Resources(), configsource.Definitions()),
+		dependencyComponent(viper.Resources(), viper.Definitions()),
+		dependencyComponent(nacos.Resources(), nacos.Definitions()),
+	}
+}
+
+func dependencyComponent(resources fs.FS, definitions []failure.Definition) i18n.Component {
+	return i18n.Component{Module: definitions[0].Module, Name: definitions[0].Component, BaseLocale: "en",
+		Resources: resources, Directory: "resources", Definitions: definitions}
 }

@@ -22,13 +22,11 @@ package configuration
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
 	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
 	"github.com/frost-leo/fathomry/adapters/v1"
 	"github.com/frost-leo/fathomry/settings/v1"
@@ -43,16 +41,31 @@ type application struct {
 
 var invalidWorkers = errors.New("private-validator-canary")
 
-func schema() configsource.Schema[application] {
-	return configsource.Schema[application]{Version: 1, Validate: func(ctx context.Context, value application) error {
+func schema() Schema[application] {
+	return Schema[application]{Version: 1, Validate: func(ctx context.Context, value application) error {
 		if value.Workers < 1 {
 			return invalidWorkers
 		}
 		return ctx.Err()
 	}}
 }
-func options() Options {
-	return Options{InitialTimeout: 3 * time.Second, CandidateTimeout: time.Second}
+
+type testSessionOptions struct {
+	InitialTimeout time.Duration
+	sessionOptions
+}
+
+func options() testSessionOptions {
+	return testSessionOptions{InitialTimeout: 3 * time.Second, sessionOptions: sessionOptions{CandidateTimeout: time.Second}}
+}
+
+func startSession[T any](lifetime context.Context, plan SourcePlan, schema Schema[T], options testSessionOptions, dependencies Dependencies) (*Session[T], error) {
+	if lifetime == nil || options.InitialTimeout <= 0 {
+		return nil, at(ErrDeclaration, "start", -1)
+	}
+	initial, cancel := context.WithTimeout(lifetime, options.InitialTimeout)
+	defer cancel()
+	return startSessionBefore(lifetime, initial, plan, schema, options.sessionOptions, dependencies)
 }
 func localDependencies(t *testing.T, capacity int) (Dependencies, *adapters.Inbox[viper.Evidence]) {
 	t.Helper()
@@ -84,9 +97,9 @@ func localDependencies(t *testing.T, capacity int) (Dependencies, *adapters.Inbo
 	})
 	return Dependencies{Local: viper.Dependencies{Runtime: runtime, Evidence: inbox}}, inbox
 }
-func localPlan(path string, watch bool) Bootstrap {
-	return Bootstrap{Version: 1, Environment: "development", Mode: "local", Provider: "viper", Watch: watch,
-		Documents: []Document{{Kind: "base", Encoding: configsource.YAML}},
+func localPlan(path string, watch bool) SourcePlan {
+	return SourcePlan{Version: 1, Environment: "development", Mode: "local", Provider: "viper", Watch: watch,
+		Documents: []Document{{Kind: "base", Encoding: YAML}},
 		Local:     &viper.WatchSettings{Paths: []string{path}, Interval: 10 * time.Millisecond}}
 }
 func write(t *testing.T, path, value string) {
@@ -127,34 +140,30 @@ func closeSession(t *testing.T, session *Session[application], allowError bool) 
 }
 func TestBootstrap(t *testing.T) {
 	dependencies, inbox := localDependencies(t, 16)
-	dir := t.TempDir()
-	app := filepath.Join(dir, "application.yaml")
-	write(t, app, "workers: 2")
-	first := filepath.Join(dir, "bootstrap.yaml")
-	write(t, first, fmt.Sprintf("version: 1\nmode: local\nprovider: viper\ndocuments:\n - kind: base\n   encoding: yaml\nlocal:\n paths: [%q]\n", app))
-	input := BootstrapInput{Environment: "development", Files: []File{{Path: first, Document: Document{Kind: "base", Encoding: configsource.YAML}}}}
+	path := filepath.Join(t.TempDir(), ".env")
+	write(t, path, "FATHOMRY_ENV=development\nFATHOMRY_CONFIG_MODE=local\nFATHOMRY_CONFIG_PROVIDER=viper\n")
+	input := BootstrapInput{Path: path}
 	value, err := LoadBootstrap(context.Background(), input, dependencies.Local)
-	if err != nil || value.Environment != "development" {
+	if err != nil || value.Configuration.Environment != "development" {
 		t.Fatal(err)
 	}
-	prod := input
-	prod.Environment = "production"
-	other, err := LoadBootstrap(context.Background(), prod, dependencies.Local)
-	if err != nil || other.Environment != "production" {
-		t.Fatal("explicit environment selection failed", err)
+	production := "production"
+	input.Environment = &production
+	other, err := LoadBootstrap(context.Background(), input, dependencies.Local)
+	if err != nil || other.Configuration.Environment != production {
+		t.Fatal("explicit selection failed", err)
 	}
 	status, _ := inbox.Inspect()
 	if status.Queued != 2 {
 		t.Fatal("bootstrap evidence was silently acknowledged")
 	}
-	input.Variables = []configsource.Variable{{Path: "/environment", Present: true, Value: "different"}}
+	write(t, path, "FATHOMRY_ENV=../invalid\nFATHOMRY_CONFIG_MODE=local\nFATHOMRY_CONFIG_PROVIDER=viper\n")
 	if _, err := LoadBootstrap(context.Background(), input, dependencies.Local); !errors.Is(err, ErrDeclaration) {
-		t.Fatal("environment override accepted", err)
+		t.Fatal("invalid original environment hidden by an override", err)
 	}
-	input.Variables = nil
-	input.Files[0].Path = filepath.Join(dir, "missing")
+	input.Path = filepath.Join(t.TempDir(), "missing")
 	if _, err := LoadBootstrap(context.Background(), input, dependencies.Local); !errors.Is(err, ErrMissing) {
-		t.Fatal("missing was not distinguished", err)
+		t.Fatal("missing bootstrap was not distinguished", err)
 	}
 }
 func TestAdmissionAndInputIsolation(t *testing.T) {
@@ -166,17 +175,17 @@ func TestAdmissionAndInputIsolation(t *testing.T) {
 	declared := schema()
 	declared.Defaults = application{Labels: []string{"original"}, Defaults: map[string]string{"key": "original"}, Optional: &defaultValue}
 	selected := options()
-	selected.Variables = []configsource.Variable{{Path: "/workers", Present: true, JSON: true, Value: "3"}}
+	selected.Variables = []Variable{{Path: "/workers", Present: true, JSON: true, Value: "3"}}
 	badSchema := declared
 	badSchema.Validate = nil
-	if value, err := Start(context.Background(), plan, badSchema, selected, dependencies); value != nil || !errors.Is(err, ErrDeclaration) {
+	if value, err := startSession(context.Background(), plan, badSchema, selected, dependencies); value != nil || !errors.Is(err, ErrDeclaration) {
 		t.Fatal("nil validator admitted", err)
 	}
 	state, _ := inbox.Inspect()
 	if state.Queued != 0 {
 		t.Fatal("rejected declaration created evidence")
 	}
-	session, err := Start(context.Background(), plan, declared, selected, dependencies)
+	session, err := startSession(context.Background(), plan, declared, selected, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +197,7 @@ func TestAdmissionAndInputIsolation(t *testing.T) {
 	selected.Variables[0].Value = "9"
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); err != nil {
+	if err := session.waitInitial(ctx); err != nil {
 		t.Fatal(err)
 	}
 	value := read(t, session.Reader())
@@ -225,14 +234,14 @@ func TestBootstrapEvidencePressure(t *testing.T) {
 	if _, _, err := source.Capture(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	session, err := Start(context.Background(), localPlan(path, false), schema(), options(), dependencies)
+	session, err := startSession(context.Background(), localPlan(path, false), schema(), options(), dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer closeSession(t, session, true)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if err := session.WaitInitial(ctx); err == nil {
+	if err := session.waitInitial(ctx); err == nil {
 		t.Fatal("pending evidence was discarded")
 	}
 	if _, err := session.Reader().Capture(); !errors.Is(err, settings.ErrUnconfigured) {
@@ -242,18 +251,18 @@ func TestBootstrapEvidencePressure(t *testing.T) {
 func TestRejectedPlans(t *testing.T) {
 	dependencies, _ := localDependencies(t, 16)
 	path := filepath.Join(t.TempDir(), "application.yaml")
-	for _, mutate := range []func(*Bootstrap){
-		func(value *Bootstrap) { value.Version = 2 },
-		func(value *Bootstrap) { value.Environment = "../bad" },
-		func(value *Bootstrap) { value.Provider = "nacos" },
-		func(value *Bootstrap) { value.Documents = append(value.Documents, value.Documents[0]) },
-		func(value *Bootstrap) { value.Local.QueueCapacity = 65 },
-		func(value *Bootstrap) { value.Local.Interval = time.Nanosecond },
-		func(value *Bootstrap) { value.Local.Paths = []string{"relative"} },
+	for _, mutate := range []func(*SourcePlan){
+		func(value *SourcePlan) { value.Version = 2 },
+		func(value *SourcePlan) { value.Environment = "../bad" },
+		func(value *SourcePlan) { value.Provider = "nacos" },
+		func(value *SourcePlan) { value.Documents = append(value.Documents, value.Documents[0]) },
+		func(value *SourcePlan) { value.Local.QueueCapacity = 65 },
+		func(value *SourcePlan) { value.Local.Interval = time.Nanosecond },
+		func(value *SourcePlan) { value.Local.Paths = []string{"relative"} },
 	} {
 		plan := localPlan(path, false)
 		mutate(&plan)
-		if session, err := Start(context.Background(), plan, schema(), options(), dependencies); err == nil || session != nil {
+		if session, err := startSession(context.Background(), plan, schema(), options(), dependencies); err == nil || session != nil {
 			t.Fatal("invalid source plan admitted")
 		}
 	}

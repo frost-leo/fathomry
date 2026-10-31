@@ -23,7 +23,7 @@ import (
 	"context"
 	"errors"
 
-	configsource "github.com/frost-leo/fathomry/adapters/configsource/v1"
+	configuration "github.com/frost-leo/fathomry/framework/configuration/v1"
 )
 
 // Config belongs to this independent project, not the configuration library.
@@ -33,8 +33,8 @@ type Config struct {
 	Cache       Cache       `json:"cache"`
 }
 
-func Schema() configsource.Schema[Config] {
-	return configsource.Schema[Config]{Version: 1, Validate: func(ctx context.Context, value Config) error {
+func Schema() configuration.Schema[Config] {
+	return configuration.Schema[Config]{Version: 1, Validate: func(ctx context.Context, value Config) error {
 		if value.Application.Workers < 1 {
 			return errors.New("workers must be positive")
 		}

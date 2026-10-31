@@ -54,7 +54,7 @@ func localBudget(dependencies viper.Dependencies, watch bool) error {
 	}
 	return budget(dependencies.Runtime, dependencies.Evidence, dependencies.Observer, 1, work)
 }
-func providerBudget(value Bootstrap, dependencies Dependencies) error {
+func providerBudget(value SourcePlan, dependencies Dependencies) error {
 	if value.Local != nil {
 		return localBudget(dependencies.Local, value.Watch)
 	}
@@ -69,7 +69,7 @@ func providerBudget(value Bootstrap, dependencies Dependencies) error {
 	return budget(dependencies.Remote.Runtime, dependencies.Remote.Evidence, dependencies.Remote.Observer, 2, work)
 }
 
-func openSource(ctx context.Context, value Bootstrap, dependencies Dependencies) (configsource.Source, *nacos.Owner, error) {
+func openSource(ctx context.Context, value SourcePlan, dependencies Dependencies) (configsource.Source, *nacos.Owner, error) {
 	if value.Local != nil {
 		client, err := viper.New(dependencies.Local)
 		if err != nil {

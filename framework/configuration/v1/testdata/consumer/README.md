@@ -31,9 +31,10 @@ go test -race -count=1 ./framework/configuration/v1 -run '^TestIndependentConsum
 
 The harness creates an isolated loopback Nacos protocol peer, copies this fixture
 to a temporary independent Go module, and supplies only that peer's explicit test
-endpoints. The consumer defines two explicit environment/input plans, loads local
-bootstrap data, starts local or remote application configuration, validates and
-reads typed snapshots, then closes owned work and acknowledges provider evidence.
+endpoints. The consumer loads explicit literal bootstrap data with LoadBootstrap,
+then obtains local or remote main configuration through LoadConfiguration. A
+successful load already has its first validated snapshot. It then closes owned
+sessions and acknowledges provider evidence on the borrowed dependencies.
 
 The harness checks module tidiness, vet/race behavior and dependency boundaries.
 It uses a local replacement of the candidate source; this proves public API

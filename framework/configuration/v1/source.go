@@ -31,78 +31,17 @@ import (
 	viper "github.com/frost-leo/fathomry/adapters/configsource/viper/v1"
 )
 
-// LoadBootstrap reads explicit local inputs synchronously using borrowed Viper
-// dependencies, including when the resulting application plan is remote.
-// Cancellation is cooperative, not forced interruption of blocked filesystem I/O.
-// Required acquisition evidence remains in the supplied Inbox until caller Ack.
-func LoadBootstrap(ctx context.Context, input BootstrapInput, dependencies viper.Dependencies) (Bootstrap, error) {
-	if ctx == nil || !environment(input.Environment) || len(input.Files) < 1 || len(input.Files) > 3 {
-		return Bootstrap{}, at(ErrDeclaration, "bootstrap", -1)
-	}
-	paths := make([]string, len(input.Files))
-	documents := make([]Document, len(input.Files))
-	for index, file := range input.Files {
-		paths[index], documents[index] = file.Path, file.Document
-	}
-	if err := validateDocuments(documents); err != nil {
-		return Bootstrap{}, err
-	}
-	if err := validatePaths(paths); err != nil {
-		return Bootstrap{}, err
-	}
-	variables, err := configsource.BindVariables[Bootstrap](input.Variables)
-	if err != nil {
-		return Bootstrap{}, err
-	}
-	if err := localBudget(dependencies, false); err != nil {
-		return Bootstrap{}, err
-	}
-	if err := ctx.Err(); err != nil {
-		return Bootstrap{}, at(ErrWait, "bootstrap", -1, err, context.Cause(ctx))
-	}
-	client, err := viper.New(dependencies)
-	if err != nil {
-		return Bootstrap{}, err
-	}
-	source, err := client.Source(viper.WatchSettings{Paths: paths})
-	if err != nil {
-		return Bootstrap{}, err
-	}
-	batch, index, problem := source.Capture(ctx)
-	layers, err := originalLayers(batch, index, problem, documents, "bootstrap.acquire")
-	if err != nil {
-		return Bootstrap{}, err
-	}
-	if len(input.Variables) != 0 {
-		layers = append(layers, variables)
-	}
-	schema := configsource.Schema[Bootstrap]{
-		Version: 1, Defaults: Bootstrap{Environment: input.Environment},
-		Validate: func(_ context.Context, value Bootstrap) error {
-			if value.Environment != input.Environment {
-				return at(ErrDeclaration, "environment", -1)
-			}
-			return validateBootstrap(value)
-		},
-	}
-	prepared, err := configsource.Prepare(ctx, schema, layers)
-	if err != nil {
-		return Bootstrap{}, err
-	}
-	return prepared.ValueCopy()
-}
-
-func freezeBootstrap(ctx context.Context, value Bootstrap) (Bootstrap, error) {
-	prepared, err := configsource.Prepare(ctx, configsource.Schema[Bootstrap]{
-		Version: 1, Defaults: value, Validate: func(_ context.Context, candidate Bootstrap) error { return validateBootstrap(candidate) },
+func preparePlan(ctx context.Context, value SourcePlan) (SourcePlan, error) {
+	prepared, err := configsource.Prepare(ctx, configsource.Schema[SourcePlan]{
+		Version: 1, Defaults: value, Validate: func(_ context.Context, candidate SourcePlan) error { return validatePlan(candidate) },
 	}, nil)
 	if err != nil {
-		return Bootstrap{}, err
+		return SourcePlan{}, err
 	}
 	return prepared.ValueCopy()
 }
 
-func validateBootstrap(value Bootstrap) error {
+func validatePlan(value SourcePlan) error {
 	if value.Version != 1 || !environment(value.Environment) {
 		return at(ErrDeclaration, "bootstrap", -1)
 	}
@@ -181,7 +120,7 @@ func validateDocuments(documents []Document) error {
 	seen := make(map[string]bool, len(documents))
 	for index, document := range documents {
 		if layerKind(document.Kind) == 0 || seen[document.Kind] ||
-			document.Encoding != configsource.YAML && document.Encoding != configsource.JSON && document.Encoding != configsource.TOML {
+			document.Encoding != YAML && document.Encoding != JSON && document.Encoding != TOML {
 			return at(ErrDeclaration, "document", index)
 		}
 		seen[document.Kind] = true
@@ -211,7 +150,7 @@ func originalLayers(batch configsource.Batch, index int, problem error, document
 			}
 			continue
 		}
-		layers = append(layers, configsource.Layer{Kind: layerKind(documents[index].Kind), Encoding: documents[index].Encoding, Content: value.Content})
+		layers = append(layers, configsource.Layer{Kind: layerKind(documents[index].Kind), Encoding: configsource.Encoding(documents[index].Encoding), Content: value.Content})
 	}
 	return layers, nil
 }

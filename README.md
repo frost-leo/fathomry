@@ -86,16 +86,22 @@ explicit language/output selection, bounded diagnostics and cleanup ownership.
 Framework, control-schema assets, project generation/build inspection and all old
 leaf commands were withdrawn in [#161](https://github.com/frost-leo/fathomry/issues/161).
 The official tool now adds [offline project creation](docs/reference/cmd/fathomry/internal/command/project/create/interface.md)
-through `project new`, producing a six-file independent CLI project. Dependency
-resolution remains explicit; no configuration loader or service initialization is
-included. Replacement workflows, modes and persistence are not implemented.
+through `project new`, retaining the six-file independent CLI project and its
+existing published dependency. Generation performs no dependency resolution or
+service initialization. Root-entry generation with dotenv and project-owned settings
+is a separate integration after the new public API is available as a module.
+Replacement workflows, modes and persistence are not implemented.
 Public foundations, Adapters and Internal integrations remain available.
 
 The library now adds [thin Framework metadata preparation](docs/reference/framework/v1/interface.md)
 and [typed configuration loading](docs/reference/framework/configuration/v1/interface.md).
 Independent projects provide their own settings and validation; explicit local/Viper
 or remote/Nacos sessions publish accepted snapshots and optionally observe changes.
-These APIs do not restore application Boot, alter generated projects or add commands.
+The [project-aware Go CLI entry](docs/reference/cmd/fathomry/v1/interface.md)
+now adds `config check` for compiled project schemas, using explicit dotenv and
+[Resource-managed configuration loading](docs/reference/framework/configuration/v1/bootstrap.md).
+Project-owned entries can use this API without an application host or CLI proxy;
+the existing generator is not switched to it in this API-first integration.
 
 The earlier pre-release Adapter, failure, i18n, Framework, settings and CLI
 surfaces were withdrawn for redesign; failure/v1, settings/v1 and i18n/v1 are rebuilt,
